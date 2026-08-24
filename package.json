@@ -1,0 +1,29 @@
+{
+  "name": "oc-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp run web#build",
+    "check": "vp check && knip",
+    "dev": "vp run web#dev",
+    "format": "vp fmt",
+    "knip": "knip",
+    "lint": "vp lint",
+    "opencode:server": "opencode2 serve",
+    "opencode:version": "opencode2 --version",
+    "ready": "vp check && knip && vp run web#build"
+  },
+  "devDependencies": {
+    "@opencode-ai/cli": "0.0.0-beta-18050",
+    "@types/node": "^26.2.0",
+    "knip": "^6.32.2",
+    "oxlint-plugin-effect": "^0.11.0",
+    "typescript": "^7.0.2",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@11.23.0"
+}

@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Tool caches
+.vite/
+.vite-plus/
+.cache/
+
+# Local files
+*.local
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store

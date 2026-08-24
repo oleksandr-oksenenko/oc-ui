@@ -1,0 +1,28 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc && vp build",
+    "check": "vp check",
+    "dev": "vp dev",
+    "preview": "vp preview"
+  },
+  "dependencies": {
+    "@effect/atom-react": "4.0.0-rc.111",
+    "@opencode-ai/client": "0.0.0-beta-18050",
+    "effect": "4.0.0-rc.111",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "scheduler": "^0.27.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
+    "typescript": "^7.0.2",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
