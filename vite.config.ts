@@ -1,17 +1,11 @@
-import { recommended } from "oxlint-plugin-effect/presets/recommended";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  defaultPackage: "./apps/web",
+  defaultPackage: "./apps/desktop",
   fmt: {},
   lint: {
-    plugins: ["react"],
-    jsPlugins: [
-      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
-      "oxlint-plugin-effect/plugin",
-    ],
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
-      ...recommended,
       "vite-plus/prefer-vite-plus-imports": "error",
     },
     options: {

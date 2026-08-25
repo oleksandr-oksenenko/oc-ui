@@ -1,14 +1,10 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
 import { Effect } from "effect";
+import { render } from "solid-js/web";
 
 import { App } from "./App.tsx";
+import "@opencode-ai/ui/styles";
 import "./styles.css";
 
 const root = Effect.runSync(Effect.fromNullishOr(document.querySelector<HTMLDivElement>("#root")));
 
-createRoot(root).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+render(() => <App />, root);

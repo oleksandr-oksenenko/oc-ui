@@ -5,7 +5,14 @@ packages:
 catalogMode: prefer
 
 catalog:
+  "@opencode-ai/ui": 0.0.0-beta-18155
+  "@solidjs/meta": ^0.29.4
+  electron: 42.3.3
+  electron-vite: 6.0.0-beta.1
+  jsdom: ^30.0.1
+  solid-js: ^1.9.15
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
+  vite-plugin-solid: 2.11.14
   vite-plus: 0.3.0
 
 overrides:
@@ -19,6 +26,8 @@ peerDependencyRules:
 
 allowBuilds:
   "@opencode-ai/cli": true
+  electron: true
+  esbuild: true
   msgpackr-extract: false
 
 minimumReleaseAgeExclude:
@@ -32,20 +41,21 @@ minimumReleaseAgeExclude:
   - "@voidzero-dev/vite-plus-win32-arm64-msvc@0.3.0"
   - "@voidzero-dev/vite-plus-win32-x64-msvc@0.3.0"
   - "vite-plus@0.3.0"
-  - "@opencode-ai/cli-darwin-arm64@0.0.0-beta-18050"
-  - "@opencode-ai/cli-darwin-x64-baseline@0.0.0-beta-18050"
-  - "@opencode-ai/cli-darwin-x64@0.0.0-beta-18050"
-  - "@opencode-ai/cli-linux-arm64-musl@0.0.0-beta-18050"
-  - "@opencode-ai/cli-linux-arm64@0.0.0-beta-18050"
-  - "@opencode-ai/cli-linux-x64-baseline-musl@0.0.0-beta-18050"
-  - "@opencode-ai/cli-linux-x64-baseline@0.0.0-beta-18050"
-  - "@opencode-ai/cli-linux-x64-musl@0.0.0-beta-18050"
-  - "@opencode-ai/cli-linux-x64@0.0.0-beta-18050"
-  - "@opencode-ai/cli-windows-arm64@0.0.0-beta-18050"
-  - "@opencode-ai/cli-windows-x64-baseline@0.0.0-beta-18050"
-  - "@opencode-ai/cli-windows-x64@0.0.0-beta-18050"
-  - "@opencode-ai/cli@0.0.0-beta-18050"
-  - "@opencode-ai/client@0.0.0-beta-18050"
-  - "@opencode-ai/protocol@0.0.0-beta-18050"
-  - "@opencode-ai/schema@0.0.0-beta-18050"
-  - "@types/react-dom@19.2.5"
+  - "@opencode-ai/cli-darwin-arm64@0.0.0-beta-18155"
+  - "@opencode-ai/cli-darwin-x64-baseline@0.0.0-beta-18155"
+  - "@opencode-ai/cli-darwin-x64@0.0.0-beta-18155"
+  - "@opencode-ai/cli-linux-arm64-musl@0.0.0-beta-18155"
+  - "@opencode-ai/cli-linux-arm64@0.0.0-beta-18155"
+  - "@opencode-ai/cli-linux-x64-baseline-musl@0.0.0-beta-18155"
+  - "@opencode-ai/cli-linux-x64-baseline@0.0.0-beta-18155"
+  - "@opencode-ai/cli-linux-x64-musl@0.0.0-beta-18155"
+  - "@opencode-ai/cli-linux-x64@0.0.0-beta-18155"
+  - "@opencode-ai/cli-windows-arm64@0.0.0-beta-18155"
+  - "@opencode-ai/cli-windows-x64-baseline@0.0.0-beta-18155"
+  - "@opencode-ai/cli-windows-x64@0.0.0-beta-18155"
+  - "@opencode-ai/cli@0.0.0-beta-18155"
+  - "@opencode-ai/client@0.0.0-beta-18155"
+  - "@opencode-ai/protocol@0.0.0-beta-18155"
+  - "@opencode-ai/schema@0.0.0-beta-18155"
+  - "@opencode-ai/ui@0.0.0-beta-18155"
+  - "@types/node@26.3.0"

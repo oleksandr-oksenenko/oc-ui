@@ -4,21 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp run web#build",
+    "build": "vp run desktop#build",
     "check": "vp check && knip",
-    "dev": "vp run web#dev",
+    "dev": "vp run desktop#dev",
     "format": "vp fmt",
     "knip": "knip",
     "lint": "vp lint",
     "opencode:server": "opencode2 serve",
     "opencode:version": "opencode2 --version",
-    "ready": "vp check && knip && vp run web#build"
+    "ready": "vp check && knip && vp run desktop#test && vp run desktop#build",
+    "test": "vp run desktop#test"
   },
   "devDependencies": {
-    "@opencode-ai/cli": "0.0.0-beta-18050",
-    "@types/node": "^26.2.0",
+    "@opencode-ai/cli": "0.0.0-beta-18155",
+    "@types/node": "^26.3.0",
     "knip": "^6.32.2",
-    "oxlint-plugin-effect": "^0.11.0",
     "typescript": "^7.0.2",
     "vite-plus": "catalog:"
   },

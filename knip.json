@@ -1,8 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
-    "apps/web": {
-      "ignoreDependencies": ["@opencode-ai/client"]
+    "apps/desktop": {
+      "ignoreDependencies": ["jsdom"]
     }
   }
 }

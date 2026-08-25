@@ -1,0 +1,125 @@
+import { createClientConnection, createData } from "@opencode-ai/client/solid";
+import type { Data, ClientConnectionStatus } from "@opencode-ai/client/solid";
+import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import { createEffect, getOwner, onCleanup } from "solid-js";
+import { createOpenCodeEventSource } from "./event-source";
+import type { OpenCodeEventSource } from "./event-source";
+import { mapConnectionFailure } from "./connection";
+import { createSessionCatalog, syncActiveStatuses } from "./session-catalog";
+import type { SessionCatalog } from "./session-catalog";
+import { syncSessionTranscript } from "./transcript";
+
+type RuntimeConnection = {
+  readonly api: OpenCodeClient;
+  readonly defaultLocation: LocationRef;
+};
+
+export type ConnectedRuntime = {
+  readonly api: OpenCodeClient;
+  readonly data: Data;
+  readonly defaultLocation: LocationRef;
+  readonly stream: {
+    readonly status: () => ClientConnectionStatus;
+    readonly attempt: () => number;
+    readonly error: () => string | undefined;
+  };
+  readonly sessions: SessionCatalog;
+  /** Resolves after the event stream receives its first server.connected event. */
+  readonly ready: Promise<void>;
+  readonly syncTranscript: (
+    sessionID: string,
+    options?: { readonly isCurrent?: () => boolean },
+  ) => Promise<void>;
+  readonly hydrateAfterReconnect: (selectedSessionID?: string) => Promise<string | undefined>;
+};
+
+type RuntimeFactoryInput = RuntimeConnection & {
+  readonly events?: OpenCodeEventSource;
+};
+
+/**
+ * Create one OpenCode data runtime. Call this from a mounted Solid component
+ * or another Solid owner; the public client uses that owner for stream cleanup.
+ */
+export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRuntime {
+  if (!getOwner()) {
+    throw new Error("createConnectedRuntime must run inside a Solid owner");
+  }
+
+  const events = input.events ?? createOpenCodeEventSource();
+  const stream = createClientConnection(input.api, { onEvent: events.emit });
+  const data = createData({
+    api: () => input.api,
+    directory: input.defaultLocation.directory,
+    event: events,
+    connection: { status: stream.status },
+  });
+  const sessions = createSessionCatalog({
+    api: input.api,
+    data,
+    defaultLocation: input.defaultLocation,
+    events,
+  });
+
+  let resolveReady!: () => void;
+  let rejectReady!: (reason: unknown) => void;
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  let connected = false;
+  const stopReady = events.on("server.connected", () => {
+    if (connected) return;
+    connected = true;
+    resolveReady();
+    // createData also preloads location on this event. This explicit call
+    // makes the remote workspace-aware default location authoritative here.
+    void data.location.syncInfo(input.defaultLocation).catch(() => undefined);
+  });
+
+  // The first failed handshake is terminal for initial setup. Once connected,
+  // the public client owns retries and exposes reconnecting status to callers.
+  createEffect(() => {
+    if (!connected && stream.status() === "reconnecting" && stream.attempt() > 0) {
+      rejectReady(
+        mapConnectionFailure(
+          new Error(stream.error() ?? "The OpenCode event stream handshake failed."),
+          "stream",
+        ),
+      );
+    }
+  });
+
+  // createClientConnection and createData register their own lifecycle hooks.
+  // This hook only owns the bridge created by this module.
+  onCleanup(() => {
+    stopReady();
+    if (!input.events) events.close();
+  });
+
+  const syncTranscript = (sessionID: string, options?: { readonly isCurrent?: () => boolean }) =>
+    syncSessionTranscript(data, sessionID, options);
+
+  async function hydrateAfterReconnect(selectedSessionID?: string): Promise<string | undefined> {
+    await data.location.syncInfo(input.defaultLocation);
+    await sessions.sync();
+    await syncActiveStatuses({ api: input.api, data, sessionIDs: sessions.ids() });
+    const next =
+      selectedSessionID && sessions.ids().includes(selectedSessionID)
+        ? selectedSessionID
+        : sessions.ids()[0];
+    if (next) await syncTranscript(next);
+    return next;
+  }
+
+  return {
+    api: input.api,
+    data,
+    defaultLocation: input.defaultLocation,
+    stream,
+    sessions,
+    ready,
+    syncTranscript,
+    hydrateAfterReconnect,
+  };
+}

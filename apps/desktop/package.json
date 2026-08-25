@@ -1,0 +1,30 @@
+{
+  "name": "desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "build": "tsc -b && electron-vite build",
+    "check": "vp check",
+    "dev": "electron-vite dev",
+    "preview": "electron-vite preview",
+    "test": "vp test run --passWithNoTests"
+  },
+  "dependencies": {
+    "@opencode-ai/client": "0.0.0-beta-18155",
+    "@opencode-ai/ui": "catalog:",
+    "@solidjs/meta": "catalog:",
+    "effect": "4.0.0-rc.111",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "electron": "catalog:",
+    "electron-vite": "catalog:",
+    "jsdom": "catalog:",
+    "typescript": "^7.0.2",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
