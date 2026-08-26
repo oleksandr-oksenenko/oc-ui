@@ -5,11 +5,7 @@ import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session } from "electron";
 import { Context, Effect, ManagedRuntime } from "effect";
 
-import type {
-  LoadedConnection,
-  SaveConnectionInput,
-  SaveConnectionResult,
-} from "../shared/desktop-api.ts";
+import type { SaveConnectionInput } from "../shared/desktop-api.ts";
 import { IPC_CHANNELS } from "../shared/desktop-api.ts";
 import { makeSettingsLayer, normalizeServerUrl, Settings, validatePassword } from "./settings.ts";
 
@@ -69,9 +65,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("connection.load does not accept arguments"));
     }
-    return runSettings(withSettings((service) => service.load())) as Promise<
-      LoadedConnection | undefined
-    >;
+    return runSettings(withSettings((service) => service.load()));
   });
 
   ipcMain.handle(IPC_CHANNELS.connectionSave, (_event, input: unknown) => {
@@ -84,9 +78,7 @@ const installIpcHandlers = (): void => {
       serverUrl: normalizeServerUrl(input.serverUrl),
       password: validatePassword(input.password),
     };
-    return runSettings(
-      withSettings((service) => service.save(validated)),
-    ) as Promise<SaveConnectionResult>;
+    return runSettings(withSettings((service) => service.save(validated)));
   });
 
   ipcMain.handle(IPC_CHANNELS.connectionClear, (_event, ...args: unknown[]) => {
@@ -186,6 +178,7 @@ const createMainWindow = async (): Promise<void> => {
     height: 860,
     minWidth: 800,
     minHeight: 600,
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,

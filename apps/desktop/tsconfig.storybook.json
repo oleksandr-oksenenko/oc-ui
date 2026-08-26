@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.renderer.json",
+  "compilerOptions": {
+    "composite": true
+  },
+  "include": [
+    ".storybook/**/*.ts",
+    "stories/**/*.ts",
+    "stories/**/*.tsx",
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.tsx"
+  ]
+}

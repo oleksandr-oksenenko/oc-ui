@@ -1,0 +1,20 @@
+.shell-session-tree {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1px 4px 8px;
+  scrollbar-color: #2a2a2a transparent;
+}
+
+.shell-session-children {
+  position: relative;
+}
+
+.shell-session-children::before {
+  position: absolute;
+  top: 0;
+  bottom: 12px;
+  left: calc(var(--session-depth, 1) * 11px - 6px);
+  width: 1px;
+  background: #2a2a2a;
+  content: "";
+}

@@ -6,22 +6,30 @@
   "main": "out/main/index.js",
   "scripts": {
     "build": "tsc -b && electron-vite build",
+    "build-storybook": "storybook build --output-dir storybook-static --disable-telemetry",
     "check": "vp check",
     "dev": "electron-vite dev",
     "preview": "electron-vite preview",
+    "storybook": "storybook dev --port 6006 --disable-telemetry",
+    "storybook:preview": "vp preview --outDir storybook-static --host 127.0.0.1 --port 4174",
     "test": "vp test run --passWithNoTests"
   },
   "dependencies": {
     "@opencode-ai/client": "0.0.0-beta-18155",
     "@opencode-ai/ui": "catalog:",
     "@solidjs/meta": "catalog:",
+    "@tabler/icons-solidjs": "catalog:",
     "effect": "4.0.0-rc.111",
     "solid-js": "catalog:"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
     "electron": "catalog:",
     "electron-vite": "catalog:",
     "jsdom": "catalog:",
+    "storybook": "catalog:",
+    "storybook-solidjs-vite": "10.7.1",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:",

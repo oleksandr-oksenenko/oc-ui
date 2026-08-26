@@ -2,6 +2,8 @@ import { Button } from "@opencode-ai/ui/button";
 import { TextInput } from "@opencode-ai/ui/text-input";
 import { Show } from "solid-js";
 
+import "./ConnectionForm.css";
+
 export type ConnectionFormProps = {
   readonly serverUrl: string;
   readonly password: string;
@@ -19,7 +21,11 @@ function isNonLoopbackHttp(value: string) {
     const url = new URL(value);
     if (url.protocol !== "http:") return false;
     return (
-      url.hostname !== "localhost" && url.hostname !== "::1" && !url.hostname.startsWith("127.")
+      url.hostname !== "localhost" &&
+      url.hostname !== "127.0.0.1" &&
+      url.hostname !== "::1" &&
+      url.hostname !== "[::1]" &&
+      !url.hostname.startsWith("127.")
     );
   } catch {
     return false;
@@ -33,18 +39,20 @@ export function ConnectionForm(props: ConnectionFormProps) {
   };
 
   return (
-    <main class="connection-page">
-      <section class="connection-card" aria-labelledby="connection-title">
-        <div class="connection-heading">
-          <p class="eyebrow">OpenCode desktop</p>
-          <h1 id="connection-title">Connect to a server</h1>
-          <p>Use an existing OpenCode 2 server to browse sessions and send prompts.</p>
-        </div>
+    <main class="connection-form-page">
+      <section class="connection-form-column" aria-labelledby="connection-form-title">
+        <header class="connection-form-heading">
+          <p class="connection-form-eyebrow">OpenCode desktop</p>
+          <h1 id="connection-form-title">Connect to a server</h1>
+          <p>Use an existing OpenCode server to browse sessions and send prompts.</p>
+        </header>
 
-        <form class="connection-form" onSubmit={submit}>
-          <label class="field">
+        <form class="connection-form-fields" onSubmit={submit}>
+          <label class="connection-form-field" for="connection-server-url">
             <span>Server URL</span>
             <TextInput
+              id="connection-server-url"
+              class="connection-form-input"
               appearance="large"
               autocomplete="url"
               disabled={props.busy}
@@ -56,9 +64,18 @@ export function ConnectionForm(props: ConnectionFormProps) {
             />
           </label>
 
-          <label class="field">
+          <Show when={isNonLoopbackHttp(props.serverUrl)}>
+            <p class="connection-form-warning" role="note">
+              This is an HTTP connection to another device. Your password is not encrypted in
+              transit.
+            </p>
+          </Show>
+
+          <label class="connection-form-field" for="connection-password">
             <span>Password</span>
             <TextInput
+              id="connection-password"
+              class="connection-form-input"
               appearance="large"
               autocomplete="current-password"
               disabled={props.busy}
@@ -70,29 +87,23 @@ export function ConnectionForm(props: ConnectionFormProps) {
             />
           </label>
 
-          <Show when={isNonLoopbackHttp(props.serverUrl)}>
-            <p class="connection-warning" role="note">
-              Plain HTTP does not encrypt this password in transit. Connect only through a network
-              or tunnel you trust.
-            </p>
-          </Show>
-
           <Show when={props.error}>
             {(error) => (
-              <p class="operation-error" role="alert">
+              <p class="connection-form-error" role="alert">
                 {error()}
               </p>
             )}
           </Show>
 
-          <div class="connection-actions">
+          <div class="connection-form-actions">
             <Button
+              class="connection-form-submit"
               type="submit"
               size="large"
               variant={props.busy ? "loading" : "contrast"}
               disabled={props.busy}
             >
-              {props.busy ? "Connecting" : "Connect"}
+              {props.busy ? "Connecting" : props.error ? "Retry" : "Connect"}
             </Button>
             <Show when={props.hasSavedConnection}>
               <Button

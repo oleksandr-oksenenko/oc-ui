@@ -73,6 +73,7 @@ describe("session catalog reconciliation", () => {
             expect(sync).toHaveBeenCalledWith("new");
             dispose();
             resolveTest();
+            return undefined;
           })
           .catch(rejectTest);
       });

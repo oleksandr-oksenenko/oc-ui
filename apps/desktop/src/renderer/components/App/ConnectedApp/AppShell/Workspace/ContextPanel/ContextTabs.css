@@ -1,0 +1,56 @@
+.context-tabs {
+  position: relative;
+  display: grid;
+  grid-row: 1;
+  grid-template-columns: 76px 76px minmax(0, 1fr);
+  width: 100%;
+  height: 32px;
+  padding-right: 26px;
+  border-bottom: 1px solid #22242a;
+  background: #080808;
+}
+
+.context-tab {
+  position: relative;
+  border: 0;
+  color: #777b85;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+.context-panel-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.context-panel-close:disabled {
+  visibility: hidden;
+}
+
+.context-tab:hover {
+  color: #c4c7ce;
+}
+
+.context-tab:focus-visible {
+  color: #c4c7ce;
+  outline: 2px solid #74a7ff;
+  outline-offset: -2px;
+}
+
+.context-tab.active {
+  color: #f0f1f3;
+}
+
+.context-tab.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: #9aa7ff;
+  content: "";
+}
