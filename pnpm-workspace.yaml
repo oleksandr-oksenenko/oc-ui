@@ -7,10 +7,13 @@ catalogMode: prefer
 catalog:
   "@opencode-ai/ui": 0.0.0-beta-18155
   "@solidjs/meta": ^0.29.4
+  "@storybook/addon-a11y": 10.5.10
+  "@testing-library/jest-dom": 6.9.1
   electron: 42.3.3
   electron-vite: 6.0.0-beta.1
   jsdom: ^30.0.1
   solid-js: ^1.9.15
+  storybook: 10.5.10
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
   vite-plugin-solid: 2.11.14
   vite-plus: 0.3.0

@@ -1,0 +1,143 @@
+.shell-session-tree-item {
+  position: relative;
+  min-width: 0;
+}
+
+.shell-session-children > .shell-session-tree-item::before {
+  position: absolute;
+  top: 12px;
+  left: calc(var(--session-depth, 0) * 11px - 6px);
+  width: 6px;
+  height: 1px;
+  background: #2a2a2a;
+  content: "";
+}
+
+.shell-session-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  width: calc(100% - var(--session-depth, 0) * 11px);
+  height: 25px;
+  min-width: 0;
+  margin-left: calc(var(--session-depth, 0) * 11px);
+  padding: 0 6px 0 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.shell-session-row:hover {
+  color: #e5e5e5;
+  background: #151515;
+}
+
+.shell-session-row.selected {
+  background: #0c121a;
+  box-shadow: inset 2px 0 #7f8b99;
+}
+
+.shell-session-main[data-component="button-v2"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  width: 100%;
+  height: 25px;
+  min-width: 0;
+  gap: 0;
+  padding: 0 0 0 2px;
+  border: 0;
+  color: #a3a3a3;
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-session-main:hover,
+.shell-session-main:focus-visible {
+  color: #e5e5e5;
+  outline: none;
+}
+
+.shell-session-row.selected .shell-session-main {
+  color: #f5f5f5;
+}
+
+.shell-session-main:focus-visible {
+  outline: 2px solid #74a7ff;
+  outline-offset: -2px;
+}
+
+.shell-session-disclosure-slot,
+.shell-session-status {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 25px;
+}
+
+.shell-session-disclosure[data-slot="collapsible-trigger"] {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  color: #737373;
+  background: transparent;
+  cursor: pointer;
+}
+
+.shell-session-disclosure [data-slot="collapsible-arrow"] {
+  width: 18px;
+  height: 18px;
+  opacity: 1;
+}
+
+.shell-session-disclosure [data-slot="collapsible-arrow-icon"] {
+  color: inherit;
+}
+
+.shell-session-disclosure:hover {
+  color: #e5e5e5;
+  background: #2a2a2a;
+}
+
+.shell-session-disclosure:focus-visible {
+  color: #e5e5e5;
+  background: #2a2a2a;
+  outline: 2px solid #74a7ff;
+  outline-offset: -2px;
+}
+
+.shell-session-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-session-main svg,
+.shell-session-status svg {
+  width: 13px;
+  height: 13px;
+}
+
+.shell-session-status {
+  color: #a3a3a3;
+}
+
+.shell-session-status[data-status="running"],
+.shell-session-status[data-status="creating"] {
+  color: #f5b942;
+}
+
+.shell-session-status[data-status="needs-input"] {
+  color: #74a7ff;
+}
+
+.shell-session-row.selected .shell-session-status {
+  color: #d4d4d4;
+}

@@ -5,12 +5,19 @@ node_modules/
 dist/
 dist-ssr/
 out/
+storybook-static/
 *.tsbuildinfo
 
 # Tool caches
 .vite/
 .vite-plus/
 .cache/
+
+# Local visual QA output
+audit-live/
+design-qa-live/
+design-qa.md
+design-qa-*.png
 
 # Local files
 *.local

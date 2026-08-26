@@ -1,0 +1,200 @@
+.composer-v2 {
+  --composer-bg: #0a0a0a;
+  --composer-hover: #101010;
+  --composer-surface: #0a0a0a;
+  --composer-border: #29292f;
+  --composer-text: #f4f4f5;
+  --composer-muted: #96969f;
+
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(calc(100% - 32px), 820px);
+  min-height: 76px;
+  margin: 0 auto 16px;
+  padding: 3px 6px;
+  border: 1px solid var(--composer-border);
+  border-radius: 6px;
+  color: var(--composer-text);
+  background: var(--composer-bg);
+}
+
+.composer-v2-editor-row {
+  display: flex;
+  align-items: flex-end;
+  min-height: 40px;
+}
+
+.composer-v2-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px !important;
+  border-radius: 4px !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.composer-v2-input [data-slot="textarea-v2-textarea"] {
+  box-sizing: border-box;
+  min-height: 40px !important;
+  height: 40px;
+  max-height: 168px;
+  padding: 10px 2px !important;
+  resize: none;
+  overflow-y: hidden;
+  color: var(--composer-text);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.composer-v2-input:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.composer-v2:focus-within {
+  border-color: #3d3d43;
+}
+
+.composer-v2-input [data-slot="textarea-v2-textarea"]::placeholder {
+  color: var(--composer-muted);
+}
+
+.composer-v2-send {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0 !important;
+  border: 1px solid var(--composer-border);
+  border-radius: 5px;
+  color: #ffffff !important;
+  background: var(--composer-bg) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.composer-v2-send:hover:not(:disabled) {
+  background: var(--composer-hover) !important;
+}
+
+.composer-v2-send:focus-visible {
+  outline: 1px solid #4a4a50;
+  outline-offset: 1px;
+}
+
+.composer-picker-control[data-component="select-v2"]:focus-within {
+  outline: 1px solid #4a4a50 !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+
+.composer-v2-send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.composer-v2-send svg {
+  width: 16px;
+  height: 16px;
+}
+
+.composer-v2-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  min-height: 22px;
+}
+
+.composer-v2-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+}
+
+.composer-picker {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 5px;
+  min-width: 0;
+  color: var(--composer-muted);
+  font-size: 11px;
+  line-height: 20px;
+}
+
+.composer-picker-control[data-component="select-v2"] {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  width: max-content;
+  height: 22px;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.composer-picker-control[data-component="select-v2"] [data-slot="select-v2-value-text"] {
+  width: max-content;
+  height: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 0 0 7px;
+  border: 0;
+  border-radius: inherit;
+  color: var(--composer-text);
+  background: transparent;
+  font: inherit;
+  line-height: 22px;
+  outline: none;
+}
+
+.composer-picker-control[data-component="select-v2"] [data-slot="select-v2-chevron"] {
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  color: var(--composer-muted);
+}
+
+.composer-picker-control[data-component="select-v2"] [data-slot="select-v2-chevron"] svg {
+  width: 14px;
+  height: 14px;
+}
+
+.composer-picker + .composer-picker {
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--composer-border);
+}
+
+.composer-picker-control[data-component="select-v2"][data-disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.composer-v2-status {
+  margin: 0;
+  color: var(--composer-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.composer-v2-status--error {
+  color: #fca5a5;
+}
+
+@media (max-width: 620px) {
+  .composer-v2 {
+    width: calc(100% - 20px);
+  }
+
+  .composer-v2-picker-row {
+    flex-wrap: wrap;
+  }
+}

@@ -9,7 +9,7 @@ describe("Composer", () => {
     const host = document.createElement("div");
     const [value, setValue] = createSignal("   \n");
     const [disabled, setDisabled] = createSignal(false);
-    const submit = vi.fn();
+    const submit = vi.fn<() => void>();
     document.body.append(host);
     const dispose = render(
       () => (
@@ -41,7 +41,7 @@ describe("Composer", () => {
 
   it("submits with Ctrl+Enter but keeps ordinary Enter for newlines", () => {
     const host = document.createElement("div");
-    const submit = vi.fn();
+    const submit = vi.fn<() => void>();
     document.body.append(host);
     const dispose = render(
       () => (
