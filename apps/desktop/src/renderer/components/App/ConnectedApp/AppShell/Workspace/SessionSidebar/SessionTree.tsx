@@ -37,12 +37,13 @@ export function SessionTree(props: SessionTreeProps) {
             expanded={isExpanded(node.id)}
             onSelect={props.onSelect}
             onToggleExpanded={props.onToggleExpanded}
-          />
-          {node.children && node.children.length > 0 && isExpanded(node.id) ? (
-            <div class="shell-session-children" style={{ "--session-depth": `${depth + 1}` }}>
-              {renderNodes(node.children, depth + 1)}
-            </div>
-          ) : null}
+          >
+            {node.children && node.children.length > 0 ? (
+              <div class="shell-session-children" style={{ "--session-depth": `${depth + 1}` }}>
+                {renderNodes(node.children, depth + 1)}
+              </div>
+            ) : null}
+          </SessionTreeItem>
         </>
       )}
     </For>

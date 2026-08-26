@@ -1,7 +1,6 @@
 .shell-session-tree-item {
   position: relative;
   min-width: 0;
-  padding-left: calc(var(--session-depth, 0) * 11px);
 }
 
 .shell-session-children > .shell-session-tree-item::before {
@@ -18,9 +17,10 @@
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
-  width: 100%;
+  width: calc(100% - var(--session-depth, 0) * 11px);
   height: 25px;
   min-width: 0;
+  margin-left: calc(var(--session-depth, 0) * 11px);
   padding: 0 6px 0 2px;
   border: 0;
   border-radius: 4px;
@@ -77,7 +77,7 @@
   height: 25px;
 }
 
-.shell-session-disclosure[data-component="icon-button-v2"][data-size="small"] {
+.shell-session-disclosure[data-slot="collapsible-trigger"] {
   display: grid;
   width: 18px;
   height: 18px;
@@ -88,6 +88,16 @@
   color: #737373;
   background: transparent;
   cursor: pointer;
+}
+
+.shell-session-disclosure [data-slot="collapsible-arrow"] {
+  width: 18px;
+  height: 18px;
+  opacity: 1;
+}
+
+.shell-session-disclosure [data-slot="collapsible-arrow-icon"] {
+  color: inherit;
 }
 
 .shell-session-disclosure:hover {
