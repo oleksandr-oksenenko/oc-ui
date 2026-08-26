@@ -2,6 +2,7 @@ import { createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
 import { AppShell } from "../src/renderer/components/App/ConnectedApp/AppShell.tsx";
+import { createShellPanelState } from "../src/renderer/components/App/ConnectedApp/AppShell/createShellPanelState.ts";
 import { Titlebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Titlebar.tsx";
 import { Workspace } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace.tsx";
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
@@ -310,8 +311,7 @@ const meta = {
 export default meta;
 
 function WorkspaceShowcaseFixture() {
-  const [leftOpen, setLeftOpen] = createSignal(true);
-  const [rightOpen, setRightOpen] = createSignal(true);
+  const panelState = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("diff");
   const [expandedSessions, setExpandedSessions] = createSignal<readonly string[]>([
     "refactor-utils",
@@ -340,7 +340,7 @@ function WorkspaceShowcaseFixture() {
   };
 
   return (
-    <div data-platform="macos" style={{ width: "100vw", height: "100vh", "min-width": "720px" }}>
+    <div data-platform="macos" style={{ width: "100vw", height: "100vh" }}>
       <AppShell
         titlebar={
           <Titlebar
@@ -350,27 +350,29 @@ function WorkspaceShowcaseFixture() {
                 canCreate
                 creating={false}
                 onCreate={() => undefined}
-                onHide={() => setLeftOpen(false)}
+                onHide={() => panelState.setLeftSidebarOpen(false)}
               />
             }
             rightControls={
               <ContextTabs
                 activeTab={activeTab()}
                 onTabChange={setActiveTab}
-                onClose={() => setRightOpen(false)}
+                onClose={() => panelState.setRightPanelOpen(false)}
               />
             }
-            leftSidebarOpen={leftOpen()}
-            rightPanelOpen={rightOpen()}
+            mobile={panelState.mobile()}
+            leftSidebarOpen={panelState.leftSidebarOpen()}
+            rightPanelOpen={panelState.rightPanelOpen()}
             rightPanelAvailable
-            onToggleLeftSidebar={() => setLeftOpen((value) => !value)}
-            onToggleRightPanel={() => setRightOpen((value) => !value)}
+            onToggleLeftSidebar={panelState.toggleLeftSidebar}
+            onToggleRightPanel={panelState.toggleRightPanel}
           />
         }
         workspace={
           <Workspace
-            leftSidebarOpen={leftOpen()}
-            rightPanelOpen={rightOpen()}
+            mobile={panelState.mobile()}
+            leftSidebarOpen={panelState.leftSidebarOpen()}
+            rightPanelOpen={panelState.rightPanelOpen()}
             sidebar={
               <SessionSidebar
                 nodes={sessions}
@@ -379,14 +381,17 @@ function WorkspaceShowcaseFixture() {
                 loading={false}
                 canCreate
                 creating={false}
-                showHeader={false}
+                showHeader={panelState.mobile()}
+                autoFocusClose={panelState.mobile()}
                 serverName="Local server"
                 serverStatus="connected"
-                onSelect={() => undefined}
+                onSelect={() => {
+                  if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
+                }}
                 onToggleExpanded={toggle}
                 onCreate={() => undefined}
                 onRetry={() => undefined}
-                onHide={() => setLeftOpen(false)}
+                onHide={() => panelState.setLeftSidebarOpen(false)}
                 onSelectServer={() => undefined}
               />
             }
@@ -436,8 +441,9 @@ function WorkspaceShowcaseFixture() {
               <ContextPanel
                 activeTab={activeTab()}
                 onTabChange={setActiveTab}
-                onClose={() => setRightOpen(false)}
-                showTabs={false}
+                onClose={() => panelState.setRightPanelOpen(false)}
+                showTabs={panelState.mobile()}
+                autoFocusClose={panelState.mobile()}
                 diff={{
                   files: diff,
                   loading: false,

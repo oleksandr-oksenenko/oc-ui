@@ -4,6 +4,7 @@ import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from
 import { AppShell } from "./ConnectedApp/AppShell.tsx";
 import { Titlebar } from "./ConnectedApp/AppShell/Titlebar.tsx";
 import { Workspace } from "./ConnectedApp/AppShell/Workspace.tsx";
+import { createShellPanelState } from "./ConnectedApp/AppShell/createShellPanelState.ts";
 import { SessionPane } from "./ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { SessionHeader } from "./ConnectedApp/AppShell/Workspace/SessionSidebar/SessionHeader.tsx";
 import {
@@ -43,8 +44,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
   const [createError, setCreateError] = createSignal<string>();
   const [submittingID, setSubmittingID] = createSignal<string>();
   const [promptError, setPromptError] = createSignal<string>();
-  const [leftSidebarOpen, setLeftSidebarOpen] = createSignal(true);
-  const [rightPanelOpen, setRightPanelOpen] = createSignal(false);
+  const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: false });
   const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>([]);
   let alive = true;
   let hydration = 0;
@@ -286,20 +286,22 @@ export function ConnectedApp(props: ConnectedAppProps) {
               canCreate={streamConnected() && runtime.sessions.state() === "ready"}
               creating={creating()}
               onCreate={() => void createSession()}
-              onHide={() => setLeftSidebarOpen(false)}
+              onHide={() => panels.setLeftSidebarOpen(false)}
             />
           }
-          leftSidebarOpen={leftSidebarOpen()}
-          rightPanelOpen={rightPanelOpen()}
+          leftSidebarOpen={panels.leftSidebarOpen()}
+          rightPanelOpen={panels.rightPanelOpen()}
           rightPanelAvailable={false}
-          onToggleLeftSidebar={() => setLeftSidebarOpen((value) => !value)}
-          onToggleRightPanel={() => setRightPanelOpen((value) => !value)}
+          mobile={panels.mobile()}
+          onToggleLeftSidebar={panels.toggleLeftSidebar}
+          onToggleRightPanel={panels.toggleRightPanel}
         />
       }
       workspace={
         <Workspace
-          leftSidebarOpen={leftSidebarOpen()}
-          rightPanelOpen={rightPanelOpen()}
+          leftSidebarOpen={panels.leftSidebarOpen()}
+          rightPanelOpen={panels.rightPanelOpen()}
+          mobile={panels.mobile()}
           sidebar={
             <SessionSidebar
               nodes={sessionNodes()}
@@ -309,11 +311,14 @@ export function ConnectedApp(props: ConnectedAppProps) {
               error={createError() ?? runtime.sessions.error()}
               canCreate={streamConnected() && runtime.sessions.state() === "ready"}
               creating={creating()}
-              showHeader={false}
+              showHeader={panels.mobile()}
+              autoFocusClose={panels.mobile()}
               serverName={friendlyServerName(props.server.serverUrl)}
               serverStatus={streamConnected() ? "connected" : "reconnecting"}
               onSelect={(sessionID) => {
-                if (streamConnected()) selectSession(sessionID);
+                if (!streamConnected()) return;
+                selectSession(sessionID);
+                if (panels.mobile()) panels.setLeftSidebarOpen(false);
               }}
               onToggleExpanded={toggleExpanded}
               onCreate={() => void createSession()}
@@ -321,7 +326,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
                 if (createError()) void createSession();
                 else void syncCatalog();
               }}
-              onHide={() => setLeftSidebarOpen(false)}
+              onHide={() => panels.setLeftSidebarOpen(false)}
               onSelectServer={props.onChangeServer}
             />
           }

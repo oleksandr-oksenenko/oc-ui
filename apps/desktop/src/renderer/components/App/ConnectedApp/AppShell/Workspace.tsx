@@ -8,6 +8,7 @@ export type WorkspaceProps = {
   readonly context?: JSX.Element;
   readonly leftSidebarOpen: boolean;
   readonly rightPanelOpen: boolean;
+  readonly mobile?: boolean;
 };
 
 type ResizeSide = "left" | "right";
@@ -37,6 +38,8 @@ export function Workspace(props: WorkspaceProps) {
   const [resizing, setResizing] = createSignal<ResizeSide>();
   const sidebarPresent = () => props.sidebar != null;
   const contextOpen = () => props.context != null && props.rightPanelOpen;
+  const mobileOverlayOpen = () =>
+    props.mobile === true && ((props.leftSidebarOpen && sidebarPresent()) || contextOpen());
 
   const widthBounds = (side: ResizeSide) => {
     const minimum = side === "left" ? LEFT_MIN : RIGHT_MIN;
@@ -123,48 +126,73 @@ export function Workspace(props: WorkspaceProps) {
       classList={{
         "left-sidebar-open": props.leftSidebarOpen && sidebarPresent(),
         "right-panel-open": contextOpen(),
+        mobile: props.mobile === true,
         resizing: resizing() !== undefined,
       }}
     >
       {props.leftSidebarOpen && sidebarPresent() ? (
         <>
-          <div class="shell-left-sidebar">{props.sidebar}</div>
           <div
-            class="shell-resize-handle shell-left-resize-handle"
-            role="separator"
-            aria-label="Resize sessions sidebar"
-            aria-orientation="vertical"
-            aria-valuemin={LEFT_MIN}
-            aria-valuemax={widthBounds("left").maximum}
-            aria-valuenow={leftWidth()}
-            tabIndex={0}
-            onPointerDown={(event) => beginResize("left", event)}
-            onPointerMove={continueResize}
-            onPointerUp={finishResize}
-            onLostPointerCapture={finishResize}
-            onKeyDown={(event) => resizeWithKeyboard("left", event)}
-          />
+            class="shell-left-sidebar"
+            role={props.mobile ? "dialog" : undefined}
+            aria-modal={props.mobile ? "true" : undefined}
+            aria-label={props.mobile ? "Sessions" : undefined}
+          >
+            {props.sidebar}
+          </div>
+          {props.mobile ? null : (
+            <div
+              class="shell-resize-handle shell-left-resize-handle"
+              role="separator"
+              aria-label="Resize sessions sidebar"
+              aria-orientation="vertical"
+              aria-valuemin={LEFT_MIN}
+              aria-valuemax={widthBounds("left").maximum}
+              aria-valuenow={leftWidth()}
+              tabIndex={0}
+              onPointerDown={(event) => beginResize("left", event)}
+              onPointerMove={continueResize}
+              onPointerUp={finishResize}
+              onLostPointerCapture={finishResize}
+              onKeyDown={(event) => resizeWithKeyboard("left", event)}
+            />
+          )}
         </>
       ) : null}
-      <section class="shell-main">{props.main}</section>
+      <section
+        class="shell-main"
+        aria-hidden={mobileOverlayOpen() ? "true" : undefined}
+        inert={mobileOverlayOpen()}
+      >
+        {props.main}
+      </section>
       {contextOpen() ? (
         <>
+          {props.mobile ? null : (
+            <div
+              class="shell-resize-handle shell-right-resize-handle"
+              role="separator"
+              aria-label="Resize context sidebar"
+              aria-orientation="vertical"
+              aria-valuemin={RIGHT_MIN}
+              aria-valuemax={widthBounds("right").maximum}
+              aria-valuenow={rightWidth()}
+              tabIndex={0}
+              onPointerDown={(event) => beginResize("right", event)}
+              onPointerMove={continueResize}
+              onPointerUp={finishResize}
+              onLostPointerCapture={finishResize}
+              onKeyDown={(event) => resizeWithKeyboard("right", event)}
+            />
+          )}
           <div
-            class="shell-resize-handle shell-right-resize-handle"
-            role="separator"
-            aria-label="Resize context sidebar"
-            aria-orientation="vertical"
-            aria-valuemin={RIGHT_MIN}
-            aria-valuemax={widthBounds("right").maximum}
-            aria-valuenow={rightWidth()}
-            tabIndex={0}
-            onPointerDown={(event) => beginResize("right", event)}
-            onPointerMove={continueResize}
-            onPointerUp={finishResize}
-            onLostPointerCapture={finishResize}
-            onKeyDown={(event) => resizeWithKeyboard("right", event)}
-          />
-          <div class="shell-right-panel">{props.context}</div>
+            class="shell-right-panel"
+            role={props.mobile ? "dialog" : undefined}
+            aria-modal={props.mobile ? "true" : undefined}
+            aria-label={props.mobile ? "Workspace context" : undefined}
+          >
+            {props.context}
+          </div>
         </>
       ) : null}
     </div>

@@ -176,8 +176,8 @@ const createMainWindow = async (): Promise<void> => {
   mainWindow = new BrowserWindow({
     width: 1_280,
     height: 860,
-    minWidth: 800,
-    minHeight: 600,
+    minWidth: 360,
+    minHeight: 480,
     ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),

@@ -1,5 +1,5 @@
 import { IconLayoutSidebarLeftExpand, IconLayoutSidebarRightExpand } from "@tabler/icons-solidjs";
-import type { JSX } from "solid-js";
+import { createEffect, type JSX } from "solid-js";
 
 import "./Titlebar.css";
 
@@ -10,12 +10,32 @@ export type TitlebarProps = {
   readonly leftSidebarOpen: boolean;
   readonly rightPanelOpen: boolean;
   readonly rightPanelAvailable: boolean;
+  readonly mobile?: boolean;
   readonly onToggleLeftSidebar: () => void;
   readonly onToggleRightPanel: () => void;
 };
 
 export function Titlebar(props: TitlebarProps): JSX.Element {
+  let leftToggle: HTMLButtonElement | undefined;
+  let rightToggle: HTMLButtonElement | undefined;
+  let previousLeftOpen = props.leftSidebarOpen;
+  let previousRightOpen = props.rightPanelOpen;
   const rightLabel = () => (props.rightPanelOpen ? "Hide context" : "Show context");
+
+  createEffect(() => {
+    const leftOpen = props.leftSidebarOpen;
+    const rightOpen = props.rightPanelOpen;
+    if (props.mobile) {
+      if (previousLeftOpen && !leftOpen) {
+        queueMicrotask(() => leftToggle?.focus());
+      }
+      if (previousRightOpen && !rightOpen) {
+        queueMicrotask(() => rightToggle?.focus());
+      }
+    }
+    previousLeftOpen = leftOpen;
+    previousRightOpen = rightOpen;
+  });
 
   return (
     <header
@@ -23,13 +43,21 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
       classList={{
         "left-sidebar-open": props.leftSidebarOpen,
         "right-panel-open": props.rightPanelOpen,
+        mobile: props.mobile === true,
       }}
+      aria-hidden={
+        props.mobile && (props.leftSidebarOpen || props.rightPanelOpen) ? "true" : undefined
+      }
+      inert={props.mobile === true && (props.leftSidebarOpen || props.rightPanelOpen)}
     >
       <div class="titlebar-left-region">
         {props.leftSidebarOpen ? (
           props.leftControls
         ) : (
           <button
+            ref={(element) => {
+              leftToggle = element;
+            }}
             class="titlebar-icon-button"
             type="button"
             aria-label="Show sessions"
@@ -54,6 +82,9 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
           <div class="titlebar-actions">
             {props.rightPanelAvailable && (
               <button
+                ref={(element) => {
+                  rightToggle = element;
+                }}
                 class="titlebar-icon-button"
                 type="button"
                 aria-label={rightLabel()}

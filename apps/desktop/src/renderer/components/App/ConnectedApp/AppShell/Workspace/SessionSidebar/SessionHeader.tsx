@@ -7,6 +7,7 @@ import "./SessionHeader.css";
 export type SessionHeaderProps = {
   readonly canCreate: boolean;
   readonly creating: boolean;
+  readonly autoFocusClose?: boolean;
   readonly onCreate: () => void;
   readonly onHide: () => void;
 };
@@ -37,6 +38,7 @@ export function SessionHeader(props: SessionHeaderProps) {
         type="button"
         aria-label="Hide sessions"
         title="Hide sessions"
+        autofocus={props.autoFocusClose}
         onClick={props.onHide}
       >
         <IconLayoutSidebarLeftCollapse size={16} stroke="1.8" aria-hidden="true" />

@@ -24,6 +24,7 @@ export type SessionSidebarProps = {
   readonly canCreate: boolean;
   readonly creating: boolean;
   readonly showHeader?: boolean;
+  readonly autoFocusClose?: boolean;
   readonly serverName: string;
   readonly serverStatus: SessionSidebarStatus;
   readonly onSelect: (sessionID: string) => void;
@@ -47,6 +48,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
         <SessionHeader
           canCreate={props.canCreate}
           creating={props.creating}
+          autoFocusClose={props.autoFocusClose}
           onCreate={props.onCreate}
           onHide={props.onHide}
         />

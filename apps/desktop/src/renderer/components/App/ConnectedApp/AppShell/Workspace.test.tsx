@@ -58,4 +58,39 @@ describe("Workspace", () => {
     expect(host.querySelectorAll('[role="separator"]')).toHaveLength(0);
     dispose();
   });
+
+  it("uses modal dialogs, inert main content, and no resize handles on mobile", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Workspace
+          mobile
+          leftSidebarOpen
+          rightPanelOpen
+          sidebar={<div>Sessions</div>}
+          main={<button type="button">Transcript action</button>}
+          context={<div>Context</div>}
+        />
+      ),
+      host,
+    );
+
+    expect(
+      host.querySelector('[role="dialog"][aria-label="Sessions"]')?.getAttribute("aria-modal"),
+    ).toBe("true");
+    expect(
+      host
+        .querySelector('[role="dialog"][aria-label="Workspace context"]')
+        ?.getAttribute("aria-modal"),
+    ).toBe("true");
+    expect(host.querySelector(".shell-main")?.getAttribute("aria-hidden")).toBe("true");
+    expect((host.querySelector(".shell-main") as HTMLElement & { inert?: boolean })?.inert).toBe(
+      true,
+    );
+    expect(host.querySelectorAll('[role="separator"]')).toHaveLength(0);
+
+    dispose();
+    host.remove();
+  });
 });

@@ -8,6 +8,7 @@ export type ContextPanelTab = "diff" | "files";
 
 export type ContextTabsProps = {
   readonly activeTab: ContextPanelTab;
+  readonly autoFocusClose?: boolean;
   readonly onTabChange: (tab: ContextPanelTab) => void;
   readonly onClose?: () => void;
 };
@@ -40,6 +41,7 @@ export function ContextTabs(props: ContextTabsProps) {
         type="button"
         aria-label="Hide context panel"
         title="Hide context panel"
+        autofocus={props.autoFocusClose}
         disabled={props.onClose === undefined}
         onClick={() => props.onClose?.()}
       >

@@ -14,6 +14,7 @@ export type ContextPanelProps = {
   readonly onTabChange: (tab: ContextPanelTab) => void;
   readonly onClose?: () => void;
   readonly showTabs?: boolean;
+  readonly autoFocusClose?: boolean;
   readonly diff: DiffViewProps;
   readonly files: FilesViewProps;
 };
@@ -24,6 +25,7 @@ export function ContextPanel(props: ContextPanelProps) {
       <Show when={props.showTabs !== false}>
         <ContextTabs
           activeTab={props.activeTab}
+          autoFocusClose={props.autoFocusClose}
           onTabChange={props.onTabChange}
           onClose={props.onClose}
         />

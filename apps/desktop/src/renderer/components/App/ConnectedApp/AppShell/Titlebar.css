@@ -104,6 +104,7 @@
   width: 100%;
   height: 32px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .titlebar-left-region {
@@ -119,4 +120,36 @@
 [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open) .titlebar-left-region {
   justify-content: flex-end;
   padding-right: 4px;
+}
+
+@media (max-width: 719px) {
+  .shell-titlebar,
+  .shell-titlebar.left-sidebar-open,
+  .shell-titlebar.right-panel-open,
+  [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open),
+  [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open).right-panel-open {
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+  }
+
+  .shell-titlebar.left-sidebar-open:not(.right-panel-open) {
+    grid-template-columns: minmax(0, 1fr) 0 0;
+  }
+
+  .shell-titlebar.right-panel-open {
+    grid-template-columns: 0 0 minmax(0, 1fr);
+  }
+
+  .shell-titlebar.left-sidebar-open.right-panel-open {
+    grid-template-columns: 0 0 minmax(0, 1fr);
+  }
+
+  [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open) .titlebar-left-region {
+    justify-content: flex-start;
+    padding-right: 0;
+  }
+
+  .shell-titlebar.left-sidebar-open .titlebar-left-region,
+  .shell-titlebar.right-panel-open .titlebar-right-region {
+    padding: 0;
+  }
 }
