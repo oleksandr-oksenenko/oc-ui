@@ -21,7 +21,7 @@ export function SessionHeader(props: SessionHeaderProps) {
       <Button
         class="shell-create-session"
         type="button"
-        size="small"
+        size="normal"
         variant="ghost-muted"
         aria-label={props.creating ? "Creating session" : "Create session"}
         title={props.creating ? "Creating session" : "Create session"}
@@ -39,6 +39,7 @@ export function SessionHeader(props: SessionHeaderProps) {
       <IconButton
         class="shell-sidebar-toggle-button"
         type="button"
+        size="small"
         variant="ghost-muted"
         icon={<Icon name="layout-left" />}
         aria-label="Hide sessions"

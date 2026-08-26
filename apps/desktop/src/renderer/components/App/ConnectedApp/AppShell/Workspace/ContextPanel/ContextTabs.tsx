@@ -57,7 +57,7 @@ export function ContextTabs(props: ContextTabsProps) {
           </Tabs.List>
           <IconButton
             class="context-panel-close shell-sidebar-toggle-button"
-            size="small"
+            size="normal"
             variant="ghost"
             icon={<Icon name="layout-right-partial" size="small" aria-hidden="true" />}
             aria-label="Hide context panel"

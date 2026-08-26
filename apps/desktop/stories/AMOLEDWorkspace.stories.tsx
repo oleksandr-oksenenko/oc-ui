@@ -270,14 +270,65 @@ const diff: readonly DiffFileData[] = [
     additions: 4,
     deletions: 1,
     defaultExpanded: false,
-    lines: [],
+    lines: [
+      { kind: "context", oldLine: 42, newLine: 42, content: "  expect(tree).toHaveLength(3);" },
+      { kind: "deletion", oldLine: 43, content: "  expect(rows).toHaveLength(6);" },
+      { kind: "addition", newLine: 43, content: "  expect(rows).toHaveLength(9);" },
+      {
+        kind: "addition",
+        newLine: 44,
+        content: "  expect(rows[3]).toHaveTextContent('Trace Root Cause');",
+      },
+      {
+        kind: "addition",
+        newLine: 45,
+        content: "  expect(rows[4]).toHaveTextContent('Collect Logs');",
+      },
+      {
+        kind: "addition",
+        newLine: 46,
+        content: "  expect(rows[5]).toHaveTextContent('Analyze Stack');",
+      },
+    ],
   },
   {
     path: "src/components/Composer.test.tsx",
-    additions: 0,
-    deletions: 0,
+    additions: 3,
+    deletions: 2,
     defaultExpanded: false,
-    lines: [],
+    lines: [
+      {
+        kind: "context",
+        oldLine: 78,
+        newLine: 78,
+        content: "  const composer = screen.getByRole('textbox');",
+      },
+      {
+        kind: "deletion",
+        oldLine: 79,
+        content: "  expect(composer).toHaveStyle({ height: '52px' });",
+      },
+      {
+        kind: "deletion",
+        oldLine: 80,
+        content: "  expect(screen.getByText('Cmd+Enter to send')).toBeVisible();",
+      },
+      {
+        kind: "addition",
+        newLine: 79,
+        content: "  expect(composer).toHaveStyle({ minHeight: '78px' });",
+      },
+      {
+        kind: "addition",
+        newLine: 80,
+        content: "  expect(screen.getByRole('group', { name: 'Model' })).toBeVisible();",
+      },
+      {
+        kind: "addition",
+        newLine: 81,
+        content: "  expect(screen.getByRole('group', { name: 'Reasoning' })).toBeVisible();",
+      },
+    ],
   },
 ];
 
