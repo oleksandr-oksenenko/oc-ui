@@ -1,5 +1,6 @@
 import { Button } from "@opencode-ai/ui/button";
-import { IconLoader2 } from "@tabler/icons-solidjs";
+import { Loader } from "@opencode-ai/ui/loader";
+import { ScrollView } from "@opencode-ai/ui/scroll-view";
 import { For, Show, createEffect, type JSX } from "solid-js";
 
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
@@ -52,17 +53,18 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   const retry = () => props.onRetry?.();
 
   return (
-    <div
+    <ScrollView
       class="transcript-view"
-      ref={(element) => {
+      viewportRef={(element) => {
         scroller = element;
       }}
       onScroll={trackScroll}
       aria-busy={props.loading === true}
+      thumbVisibility="hover"
     >
       <Show when={props.loading === true && props.items.length === 0}>
         <output class="transcript-state" aria-live="polite">
-          <IconLoader2 class="transcript-state-loader" size={18} aria-label="Loading transcript" />
+          <Loader class="transcript-state-loader" width={18} height={18} aria-hidden="true" />
           <span>Loading transcript</span>
         </output>
       </Show>
@@ -98,12 +100,12 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
           <Show when={props.working === true}>
             <output class="transcript-working" aria-live="polite">
-              <IconLoader2 class="transcript-working-loader" size={16} aria-label="Working" />
+              <Loader class="transcript-working-loader" aria-hidden="true" />
               <span>{props.workingLabel ?? "Working"}</span>
             </output>
           </Show>
         </div>
       </Show>
-    </div>
+    </ScrollView>
   );
 }

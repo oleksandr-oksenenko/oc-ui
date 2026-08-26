@@ -55,14 +55,22 @@
   font-weight: 530;
 }
 
+.connection-form-field [data-slot="field-v2-label"] {
+  min-height: 0;
+  font-size: 12px;
+  line-height: normal;
+}
+
 .connection-form-input {
   width: 100%;
 }
 
 .connection-form-warning,
 .connection-form-error {
+  margin-top: 6px;
   font-size: 12px;
   line-height: 1.45;
+  user-select: text;
 }
 
 .connection-form-warning {

@@ -1,6 +1,7 @@
 import type { Preview } from "storybook-solidjs-vite";
 
 import "@opencode-ai/ui/styles";
+import "@opencode-ai/ui/styles/tokens";
 import "../src/renderer/styles.css";
 
 // The production renderer marks the document for the native macOS titlebar inset.

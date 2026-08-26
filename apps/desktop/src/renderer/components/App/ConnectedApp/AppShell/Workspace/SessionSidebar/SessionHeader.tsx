@@ -1,4 +1,7 @@
-import { IconLayoutSidebarLeftCollapse, IconLoader2, IconPlus } from "@tabler/icons-solidjs";
+import { Button } from "@opencode-ai/ui/button";
+import { Icon } from "@opencode-ai/ui/icon";
+import { IconButton } from "@opencode-ai/ui/icon-button";
+import { Loader } from "@opencode-ai/ui/loader";
 import { Show } from "solid-js";
 
 import "../../SidebarToggleButton.css";
@@ -15,9 +18,11 @@ export type SessionHeaderProps = {
 export function SessionHeader(props: SessionHeaderProps) {
   return (
     <div class="shell-session-header">
-      <button
+      <Button
         class="shell-create-session"
         type="button"
+        size="small"
+        variant="ghost-muted"
         aria-label={props.creating ? "Creating session" : "Create session"}
         title={props.creating ? "Creating session" : "Create session"}
         disabled={!props.canCreate || props.creating}
@@ -25,24 +30,22 @@ export function SessionHeader(props: SessionHeaderProps) {
       >
         <Show
           when={!props.creating}
-          fallback={
-            <IconLoader2 class="session-header-spin" size={16} stroke="1.8" aria-hidden="true" />
-          }
+          fallback={<Loader class="session-header-spin" width={16} height={16} />}
         >
-          <IconPlus size={16} stroke="1.8" aria-hidden="true" />
+          <Icon name="plus" />
         </Show>
         <span>New Session</span>
-      </button>
-      <button
+      </Button>
+      <IconButton
         class="shell-sidebar-toggle-button"
         type="button"
+        variant="ghost-muted"
+        icon={<Icon name="layout-left" />}
         aria-label="Hide sessions"
         title="Hide sessions"
         autofocus={props.autoFocusClose}
         onClick={props.onHide}
-      >
-        <IconLayoutSidebarLeftCollapse size={16} stroke="1.8" aria-hidden="true" />
-      </button>
+      />
     </div>
   );
 }

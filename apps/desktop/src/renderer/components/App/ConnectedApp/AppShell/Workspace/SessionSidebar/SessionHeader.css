@@ -9,14 +9,14 @@
   padding: 2px 4px;
 }
 
-.shell-create-session {
+.shell-create-session[data-component="button-v2"][data-size="small"] {
   border: 0;
   color: #a3a3a3;
   background: transparent;
   cursor: pointer;
 }
 
-.shell-create-session {
+.shell-create-session[data-component="button-v2"][data-size="small"] {
   display: flex;
   align-items: center;
   width: fit-content;
@@ -55,17 +55,4 @@
 
 .session-header-spin {
   flex: none;
-  animation: session-header-spin 0.85s linear infinite;
-}
-
-@keyframes session-header-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .session-header-spin {
-    animation: none;
-  }
 }

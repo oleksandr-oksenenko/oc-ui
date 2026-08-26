@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { Show, createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
 import { AppShell } from "../src/renderer/components/App/ConnectedApp/AppShell.tsx";
@@ -311,6 +311,7 @@ const meta = {
 export default meta;
 
 function WorkspaceShowcaseFixture() {
+  const contextTabsId = "showcase-workspace-context";
   const panelState = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("diff");
   const [expandedSessions, setExpandedSessions] = createSignal<readonly string[]>([
@@ -354,11 +355,14 @@ function WorkspaceShowcaseFixture() {
               />
             }
             rightControls={
-              <ContextTabs
-                activeTab={activeTab()}
-                onTabChange={setActiveTab}
-                onClose={() => panelState.setRightPanelOpen(false)}
-              />
+              <Show when={!panelState.mobile()}>
+                <ContextTabs
+                  activeTab={activeTab()}
+                  idBase={contextTabsId}
+                  onTabChange={setActiveTab}
+                  onClose={() => panelState.setRightPanelOpen(false)}
+                />
+              </Show>
             }
             mobile={panelState.mobile()}
             leftSidebarOpen={panelState.leftSidebarOpen()}
@@ -444,6 +448,7 @@ function WorkspaceShowcaseFixture() {
                 onClose={() => panelState.setRightPanelOpen(false)}
                 showTabs={panelState.mobile()}
                 autoFocusClose={panelState.mobile()}
+                tabsIdBase={contextTabsId}
                 diff={{
                   files: diff,
                   loading: false,

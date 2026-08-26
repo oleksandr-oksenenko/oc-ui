@@ -1,5 +1,4 @@
-import { IconChevronDown } from "@tabler/icons-solidjs";
-import { For } from "solid-js";
+import { Select } from "@opencode-ai/ui/select";
 
 type ComposerPickerOption = {
   readonly value: string;
@@ -14,28 +13,22 @@ export type ComposerPickerProps = {
   readonly disabled?: boolean;
 };
 
-/** A compact native selector that stays usable with keyboard and screen readers. */
+/** A compact selector that stays usable with keyboard and screen readers. */
 export function ComposerPicker(props: ComposerPickerProps) {
   return (
-    <label class="composer-picker">
-      <span class="composer-picker-control">
-        <select
-          aria-label={props.label}
-          value={props.value}
-          disabled={props.disabled ?? false}
-          onChange={(event) => props.onChange(event.currentTarget.value)}
-        >
-          <For each={props.options}>
-            {(option) => <option value={option.value}>{option.label}</option>}
-          </For>
-        </select>
-        <IconChevronDown
-          class="composer-picker-chevron"
-          aria-hidden="true"
-          size={14}
-          strokeWidth={1.8}
-        />
-      </span>
-    </label>
+    <div class="composer-picker">
+      <Select
+        class="composer-picker-control"
+        aria-label={props.label}
+        options={[...props.options]}
+        current={props.options.find((option) => option.value === props.value)}
+        value={(option) => option.value}
+        label={(option) => option.label}
+        disabled={props.disabled ?? false}
+        onSelect={(option) => {
+          if (option) props.onChange(option.value);
+        }}
+      />
+    </div>
   );
 }

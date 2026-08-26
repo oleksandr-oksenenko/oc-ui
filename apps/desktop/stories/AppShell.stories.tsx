@@ -1,4 +1,4 @@
-import { createEffect, createSignal } from "solid-js";
+import { Show, createEffect, createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
 import { AppShell } from "../src/renderer/components/App/ConnectedApp/AppShell.tsx";
@@ -126,6 +126,7 @@ export default meta;
 type MobileStoryState = "transcript" | "sessions" | "context";
 
 function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
+  const contextTabsId = "app-shell-workspace-context";
   const panelState = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   createEffect(() => {
     if (panelState.mobile()) {
@@ -174,11 +175,14 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
               />
             }
             rightControls={
-              <ContextTabs
-                activeTab={activeTab()}
-                onTabChange={setActiveTab}
-                onClose={() => panelState.setRightPanelOpen(false)}
-              />
+              <Show when={!panelState.mobile()}>
+                <ContextTabs
+                  activeTab={activeTab()}
+                  idBase={contextTabsId}
+                  onTabChange={setActiveTab}
+                  onClose={() => panelState.setRightPanelOpen(false)}
+                />
+              </Show>
             }
             mobile={panelState.mobile()}
             leftSidebarOpen={panelState.leftSidebarOpen()}
@@ -259,6 +263,7 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                 onClose={() => panelState.setRightPanelOpen(false)}
                 showTabs={panelState.mobile()}
                 autoFocusClose={panelState.mobile()}
+                tabsIdBase={contextTabsId}
                 diff={{ files: diffFiles, loading: false }}
                 files={{
                   nodes: fileNodes,

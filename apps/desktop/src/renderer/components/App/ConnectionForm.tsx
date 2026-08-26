@@ -1,4 +1,5 @@
 import { Button } from "@opencode-ai/ui/button";
+import { Field } from "@opencode-ai/ui/field";
 import { TextInput } from "@opencode-ai/ui/text-input";
 import { Show } from "solid-js";
 
@@ -48,52 +49,52 @@ export function ConnectionForm(props: ConnectionFormProps) {
         </header>
 
         <form class="connection-form-fields" onSubmit={submit}>
-          <label class="connection-form-field" for="connection-server-url">
-            <span>Server URL</span>
-            <TextInput
-              id="connection-server-url"
-              class="connection-form-input"
-              appearance="large"
-              autocomplete="url"
-              disabled={props.busy}
-              invalid={props.error !== undefined}
-              placeholder="http://homie:4096"
-              spellcheck={false}
-              value={props.serverUrl}
-              onInput={(event) => props.onServerUrlInput(event.currentTarget.value)}
-            />
-          </label>
+          <Field class="connection-form-field" invalid={props.error !== undefined}>
+            <Field.Label>Server URL</Field.Label>
+            <Field.Control>
+              <TextInput
+                class="connection-form-input"
+                appearance="large"
+                autocomplete="url"
+                disabled={props.busy}
+                invalid={props.error !== undefined}
+                placeholder="http://homie:4096"
+                spellcheck={false}
+                value={props.serverUrl}
+                onInput={(event) => props.onServerUrlInput(event.currentTarget.value)}
+              />
+            </Field.Control>
+            <Show when={isNonLoopbackHttp(props.serverUrl)}>
+              <Field.Suffix class="connection-form-warning" role="note">
+                This is an HTTP connection to another device. Your password is not encrypted in
+                transit.
+              </Field.Suffix>
+            </Show>
+          </Field>
 
-          <Show when={isNonLoopbackHttp(props.serverUrl)}>
-            <p class="connection-form-warning" role="note">
-              This is an HTTP connection to another device. Your password is not encrypted in
-              transit.
-            </p>
-          </Show>
-
-          <label class="connection-form-field" for="connection-password">
-            <span>Password</span>
-            <TextInput
-              id="connection-password"
-              class="connection-form-input"
-              appearance="large"
-              autocomplete="current-password"
-              disabled={props.busy}
-              invalid={props.error !== undefined}
-              placeholder="OpenCode server password"
-              type="password"
-              value={props.password}
-              onInput={(event) => props.onPasswordInput(event.currentTarget.value)}
-            />
-          </label>
-
-          <Show when={props.error}>
-            {(error) => (
-              <p class="connection-form-error" role="alert">
-                {error()}
-              </p>
-            )}
-          </Show>
+          <Field class="connection-form-field" invalid={props.error !== undefined}>
+            <Field.Label>Password</Field.Label>
+            <Field.Control>
+              <TextInput
+                class="connection-form-input"
+                appearance="large"
+                autocomplete="current-password"
+                disabled={props.busy}
+                invalid={props.error !== undefined}
+                placeholder="OpenCode server password"
+                type="password"
+                value={props.password}
+                onInput={(event) => props.onPasswordInput(event.currentTarget.value)}
+              />
+            </Field.Control>
+            <Show when={props.error}>
+              {(error) => (
+                <Field.Suffix class="connection-form-error" role="alert">
+                  {error()}
+                </Field.Suffix>
+              )}
+            </Show>
+          </Field>
 
           <div class="connection-form-actions">
             <Button

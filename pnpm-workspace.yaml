@@ -8,7 +8,6 @@ catalog:
   "@opencode-ai/ui": 0.0.0-beta-18155
   "@solidjs/meta": ^0.29.4
   "@storybook/addon-a11y": 10.5.10
-  "@tabler/icons-solidjs": 3.46.0
   "@testing-library/jest-dom": 6.9.1
   electron: 42.3.3
   electron-vite: 6.0.0-beta.1

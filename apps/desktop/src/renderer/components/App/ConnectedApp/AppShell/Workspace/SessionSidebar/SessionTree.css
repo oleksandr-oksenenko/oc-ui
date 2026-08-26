@@ -1,8 +1,12 @@
 .shell-session-tree {
+  grid-row: 2;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
+}
+
+.shell-session-tree-content {
+  min-height: 100%;
   padding: 1px 4px 8px;
-  scrollbar-color: #2a2a2a transparent;
 }
 
 .shell-session-children {

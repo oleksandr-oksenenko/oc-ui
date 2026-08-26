@@ -1,14 +1,7 @@
-import {
-  IconAlertTriangle,
-  IconCheck,
-  IconChevronDown,
-  IconDots,
-  IconFileText,
-  IconLoader2,
-  IconSearch,
-  IconTerminal2,
-} from "@tabler/icons-solidjs";
-import { createSignal, Show, type JSX } from "solid-js";
+import { Collapsible } from "@opencode-ai/ui/collapsible";
+import { Icon } from "@opencode-ai/ui/icon";
+import { Loader } from "@opencode-ai/ui/loader";
+import { Show, type JSX } from "solid-js";
 import type { ToolCallKind } from "../../transcript-types.ts";
 
 export type ToolCallProps = {
@@ -22,22 +15,16 @@ export type ToolCallProps = {
 };
 
 export function ToolCall(props: ToolCallProps): JSX.Element {
-  const [expanded, setExpanded] = createSignal(props.defaultExpanded ?? false);
   const expandable = () => props.output !== undefined && props.output.length > 0;
   const statusLabel = () =>
     props.status === "done" ? "Done" : props.status === "failed" ? "Failed" : "Running";
 
   return (
-    <section class={`transcript-tool-call transcript-tool-${props.status}`}>
-      <button
-        class="transcript-tool-header"
-        type="button"
-        aria-expanded={expandable() ? expanded() : undefined}
-        disabled={!expandable()}
-        onClick={() => {
-          if (expandable()) setExpanded((current) => !current);
-        }}
-      >
+    <Collapsible
+      class={`transcript-tool-call transcript-tool-${props.status}`}
+      defaultOpen={props.defaultExpanded ?? false}
+    >
+      <Collapsible.Trigger class="transcript-tool-header" disabled={!expandable()}>
         {renderToolIcon(props.toolKind)}
         <span class="transcript-tool-copy">
           <span class="transcript-tool-name">{props.name}</span>
@@ -51,36 +38,40 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
         <span class="transcript-tool-status">
           <Show
             when={props.status !== "running"}
-            fallback={<IconLoader2 class="transcript-tool-loader" size={14} aria-label="Running" />}
+            fallback={
+              <Loader class="transcript-tool-loader" width={14} height={14} aria-hidden="true" />
+            }
           >
             {props.status === "done" ? (
-              <IconCheck size={14} aria-hidden="true" />
+              <Icon name="check" size="small" aria-hidden="true" />
             ) : (
-              <IconAlertTriangle size={14} aria-hidden="true" />
+              <Icon name="warning" size="small" aria-hidden="true" />
             )}
           </Show>
           <span>{statusLabel()}</span>
         </span>
         <Show when={expandable()}>
-          <IconChevronDown size={15} aria-hidden="true" />
+          <Collapsible.Arrow />
         </Show>
-      </button>
-      <Show when={expandable() && expanded()}>
-        <pre class="transcript-tool-output">{props.output}</pre>
-      </Show>
-    </section>
+      </Collapsible.Trigger>
+      <Collapsible.Content>
+        <Show when={expandable()}>
+          <pre class="transcript-tool-output">{props.output}</pre>
+        </Show>
+      </Collapsible.Content>
+    </Collapsible>
   );
 }
 
 function renderToolIcon(kind: ToolCallKind | undefined): JSX.Element {
   switch (kind) {
     case "read":
-      return <IconFileText size={15} aria-hidden="true" />;
+      return <Icon name="file-tree" size="small" aria-hidden="true" />;
     case "search":
-      return <IconSearch size={15} aria-hidden="true" />;
+      return <Icon name="magnifying-glass" size="small" aria-hidden="true" />;
     case "command":
-      return <IconTerminal2 size={15} aria-hidden="true" />;
+      return <Icon name="terminal" size="small" aria-hidden="true" />;
     default:
-      return <IconDots size={15} aria-hidden="true" />;
+      return <Icon name="outline-dots" size="small" aria-hidden="true" />;
   }
 }

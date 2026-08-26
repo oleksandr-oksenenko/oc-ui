@@ -1,3 +1,4 @@
+import { ScrollView } from "@opencode-ai/ui/scroll-view";
 import { For } from "solid-js";
 
 import { SessionTreeItem } from "./SessionTree/SessionTreeItem.tsx";
@@ -48,8 +49,10 @@ export function SessionTree(props: SessionTreeProps) {
   );
 
   return (
-    <nav class="shell-session-tree" aria-label="Sessions">
-      {renderNodes(props.nodes, 0)}
-    </nav>
+    <ScrollView class="shell-session-tree">
+      <nav class="shell-session-tree-content" aria-label="Sessions">
+        {renderNodes(props.nodes, 0)}
+      </nav>
+    </ScrollView>
   );
 }

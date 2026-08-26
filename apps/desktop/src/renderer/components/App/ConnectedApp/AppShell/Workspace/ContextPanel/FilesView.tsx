@@ -1,5 +1,7 @@
 import { For, Show } from "solid-js";
-import { IconAlertCircle, IconLoader2 } from "@tabler/icons-solidjs";
+import { Button } from "@opencode-ai/ui/button";
+import { Icon } from "@opencode-ai/ui/icon";
+import { Loader } from "@opencode-ai/ui/loader";
 
 import { FileTreeItem } from "./FilesView/FileTreeItem.tsx";
 import type { FileTreeNode } from "./FilesView/FileTreeItem.tsx";
@@ -19,12 +21,18 @@ export function FilesView(props: FilesViewProps) {
       <Show when={props.error}>
         {(error) => (
           <div class="context-state error-state" role="alert">
-            <IconAlertCircle aria-hidden="true" size="18" stroke="1.7" />
+            <Icon aria-hidden="true" name="warning" size="small" />
             <p>{error()}</p>
             <Show when={props.onRetry}>
-              <button class="context-retry" type="button" onClick={() => props.onRetry?.()}>
+              <Button
+                class="context-retry"
+                size="small"
+                variant="outline"
+                type="button"
+                onClick={() => props.onRetry?.()}
+              >
                 Retry
-              </button>
+              </Button>
             </Show>
           </div>
         )}
@@ -32,7 +40,7 @@ export function FilesView(props: FilesViewProps) {
 
       <Show when={!props.error && props.loading && props.nodes.length === 0}>
         <output class="context-state loading-state">
-          <IconLoader2 class="context-spinner" aria-hidden="true" size="18" stroke="1.7" />
+          <Loader class="context-spinner" width="18" height="18" aria-hidden="true" />
           <span>Loading files</span>
         </output>
       </Show>

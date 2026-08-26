@@ -1,5 +1,6 @@
-import { IconArrowUp, IconLoader2 } from "@tabler/icons-solidjs";
-import { Button } from "@opencode-ai/ui/button";
+import { IconButton } from "@opencode-ai/ui/icon-button";
+import { Icon } from "@opencode-ai/ui/icon";
+import { Loader } from "@opencode-ai/ui/loader";
 import { Textarea } from "@opencode-ai/ui/textarea";
 import { Show, createEffect, on } from "solid-js";
 
@@ -76,25 +77,25 @@ export function Composer(props: ComposerProps) {
             <Show when={props.reasoning}>{(reasoning) => <ComposerPicker {...reasoning()} />}</Show>
           </div>
         </Show>
-        <Button
+        <IconButton
           class="composer-v2-send"
           type="submit"
           variant="contrast"
+          size="large"
           aria-label="Send"
           title="Send"
           disabled={
             props.disabled || props.submitting || props.running || props.value.trim() === ""
           }
-        >
-          <Show
-            when={!props.submitting}
-            fallback={
-              <IconLoader2 class="composer-v2-send-icon--loading" aria-hidden="true" size={16} />
-            }
-          >
-            <IconArrowUp aria-hidden="true" size={16} />
-          </Show>
-        </Button>
+          icon={
+            <Show
+              when={!props.submitting}
+              fallback={<Loader class="composer-v2-send-icon--loading" aria-hidden="true" />}
+            >
+              <Icon name="arrow-up" aria-hidden="true" />
+            </Show>
+          }
+        />
       </div>
 
       <Show when={props.error}>

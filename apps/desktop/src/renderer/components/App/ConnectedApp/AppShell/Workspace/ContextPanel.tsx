@@ -1,4 +1,4 @@
-import { Show } from "solid-js";
+import { ScrollView } from "@opencode-ai/ui/scroll-view";
 
 import { ContextTabs } from "./ContextPanel/ContextTabs.tsx";
 import type { ContextPanelTab } from "./ContextPanel/ContextTabs.tsx";
@@ -14,6 +14,7 @@ export type ContextPanelProps = {
   readonly onTabChange: (tab: ContextPanelTab) => void;
   readonly onClose?: () => void;
   readonly showTabs?: boolean;
+  readonly tabsIdBase?: string;
   readonly autoFocusClose?: boolean;
   readonly diff: DiffViewProps;
   readonly files: FilesViewProps;
@@ -22,22 +23,24 @@ export type ContextPanelProps = {
 export function ContextPanel(props: ContextPanelProps) {
   return (
     <aside class="context-panel" aria-label="Workspace context panel">
-      <Show when={props.showTabs !== false}>
-        <ContextTabs
-          activeTab={props.activeTab}
-          autoFocusClose={props.autoFocusClose}
-          onTabChange={props.onTabChange}
-          onClose={props.onClose}
-        />
-      </Show>
-      <div class="context-panel-body">
-        <Show when={props.activeTab === "diff"}>
-          <DiffView {...props.diff} />
-        </Show>
-        <Show when={props.activeTab === "files"}>
-          <FilesView {...props.files} />
-        </Show>
-      </div>
+      <ContextTabs
+        activeTab={props.activeTab}
+        autoFocusClose={props.autoFocusClose}
+        diffContent={
+          <ScrollView class="context-panel-body" thumbVisibility="hover">
+            <DiffView {...props.diff} />
+          </ScrollView>
+        }
+        filesContent={
+          <ScrollView class="context-panel-body" thumbVisibility="hover">
+            <FilesView {...props.files} />
+          </ScrollView>
+        }
+        idBase={props.tabsIdBase}
+        onTabChange={props.onTabChange}
+        onClose={props.onClose}
+        showHeader={props.showTabs !== false}
+      />
     </aside>
   );
 }

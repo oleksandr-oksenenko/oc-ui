@@ -1,9 +1,7 @@
-import {
-  IconChevronDown,
-  IconChevronRight,
-  IconLoader2,
-  IconMessageCircleQuestion,
-} from "@tabler/icons-solidjs";
+import { Icon } from "@opencode-ai/ui/icon";
+import { IconButton } from "@opencode-ai/ui/icon-button";
+import { Button } from "@opencode-ai/ui/button";
+import { Loader } from "@opencode-ai/ui/loader";
 
 import type { SessionNode } from "../SessionTree.tsx";
 import "./SessionTreeItem.css";
@@ -36,26 +34,25 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
       <div class="shell-session-row" classList={{ selected: props.selected }}>
         <span class="shell-session-disclosure-slot">
           {hasChildren() ? (
-            <button
+            <IconButton
               class="shell-session-disclosure"
               type="button"
+              size="small"
+              variant="ghost-muted"
+              icon={<Icon name={props.expanded ? "chevron-down" : "chevron-right"} size="small" />}
               aria-label={
                 props.expanded ? `Collapse ${props.node.title}` : `Expand ${props.node.title}`
               }
               aria-expanded={props.expanded}
               onClick={() => props.onToggleExpanded(props.node.id)}
-            >
-              {props.expanded ? (
-                <IconChevronDown size={13} stroke="1.8" aria-hidden="true" />
-              ) : (
-                <IconChevronRight size={13} stroke="1.8" aria-hidden="true" />
-              )}
-            </button>
+            />
           ) : null}
         </span>
-        <button
+        <Button
           class="shell-session-main"
           type="button"
+          size="small"
+          variant="ghost-muted"
           aria-current={props.selected ? "page" : undefined}
           aria-label={`${props.node.title}, ${statusLabel()}`}
           onClick={() => props.onSelect(props.node.id)}
@@ -68,12 +65,12 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             title={statusLabel()}
           >
             {props.node.needsInput === true ? (
-              <IconMessageCircleQuestion size={13} stroke="1.8" aria-hidden="true" />
+              <Icon name="prompt" size="small" />
             ) : props.node.status === "running" || props.node.status === "creating" ? (
-              <IconLoader2 class="shell-spin" size={13} stroke="1.8" aria-hidden="true" />
+              <Loader width={13} height={13} />
             ) : null}
           </span>
-        </button>
+        </Button>
       </div>
     </div>
   );

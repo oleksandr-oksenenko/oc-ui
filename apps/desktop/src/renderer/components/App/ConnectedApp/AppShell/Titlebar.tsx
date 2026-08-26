@@ -1,4 +1,5 @@
-import { IconLayoutSidebarLeftExpand, IconLayoutSidebarRightExpand } from "@tabler/icons-solidjs";
+import { Icon } from "@opencode-ai/ui/icon";
+import { IconButton } from "@opencode-ai/ui/icon-button";
 import { createEffect, type JSX } from "solid-js";
 
 import "./Titlebar.css";
@@ -54,18 +55,18 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
         {props.leftSidebarOpen ? (
           props.leftControls
         ) : (
-          <button
+          <IconButton
             ref={(element) => {
               leftToggle = element;
             }}
             class="titlebar-icon-button"
             type="button"
+            variant="ghost-muted"
+            icon={<Icon name="layout-left" />}
             aria-label="Show sessions"
             title="Show sessions"
             onClick={props.onToggleLeftSidebar}
-          >
-            <IconLayoutSidebarLeftExpand size={16} stroke="1.8" aria-hidden="true" />
-          </button>
+          />
         )}
       </div>
 
@@ -81,18 +82,18 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
         ) : (
           <div class="titlebar-actions">
             {props.rightPanelAvailable && (
-              <button
+              <IconButton
                 ref={(element) => {
                   rightToggle = element;
                 }}
                 class="titlebar-icon-button"
                 type="button"
+                variant="ghost-muted"
+                icon={<Icon name="layout-right" />}
                 aria-label={rightLabel()}
                 title={rightLabel()}
                 onClick={props.onToggleRightPanel}
-              >
-                <IconLayoutSidebarRightExpand size={16} stroke="1.8" aria-hidden="true" />
-              </button>
+              />
             )}
           </div>
         )}
