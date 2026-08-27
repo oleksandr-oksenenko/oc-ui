@@ -161,6 +161,16 @@ describe("TranscriptView", () => {
         (trigger) => trigger.getAttribute("aria-expanded") === "false",
       ),
     ).toBe(true);
+    expect(
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          ".transcript-reasoning, .transcript-tool-call, .transcript-shell-message, .transcript-skill-message, .transcript-compaction, .transcript-context-message",
+        ),
+      ].every((element) => element.dataset.component === "collapsible"),
+    ).toBe(true);
+    expect(
+      host.querySelector('.transcript-reasoning [data-slot="collapsible-arrow-icon"]'),
+    ).not.toBeNull();
     dispose();
     host.remove();
     vi.unstubAllGlobals();
