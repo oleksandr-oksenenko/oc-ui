@@ -1,3 +1,4 @@
+import { recommended as effectRecommended } from "@effect/tsgo/oxlint-presets";
 import { defineConfig } from "vite-plus";
 
 const jsxA11yRules = {
@@ -26,19 +27,69 @@ const jsxA11yRules = {
   "jsx-a11y/tabindex-no-positive": "error",
 } as const;
 
+// These areas deliberately use framework or host APIs rather than modeling their
+// entire lifecycle as Effect programs. Effect correctness rules still apply.
+const effectPromiseBoundaryRules = {
+  "effecttsgo/async-function": "off",
+  "effecttsgo/extends-native-error": "off",
+  "effecttsgo/global-fetch": "off",
+  "effecttsgo/global-timers": "off",
+  "effecttsgo/new-promise": "off",
+} as const;
+
+const effectNodeBoundaryRules = {
+  "effecttsgo/async-function": "off",
+  "effecttsgo/node-builtin-import": "off",
+  "effecttsgo/process-env": "off",
+} as const;
+
 export default defineConfig({
   defaultPackage: "./apps/desktop",
-  fmt: {},
+  fmt: {
+    ignorePatterns: ["tools/oxlint/anti-slop/**"],
+  },
   lint: {
+    extends: [effectRecommended],
+    ignorePatterns: ["tools/oxlint/anti-slop/**"],
     plugins: ["unicorn", "typescript", "oxc", "import", "promise"],
     categories: {
       correctness: "error",
       suspicious: "error",
     },
-    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    jsPlugins: [
+      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
+      { name: "anti-slop", specifier: "./tools/oxlint/anti-slop/index.ts" },
+      {
+        name: "anti-slop-effect",
+        specifier: "./tools/oxlint/anti-slop/effect/index.ts",
+      },
+    ],
     rules: {
+      "anti-slop-effect/no-service-constructor-imports": "error",
+      "anti-slop/no-chained-type-assertions": "error",
+      "anti-slop/no-conditional-empty-object-spread": "error",
+      "anti-slop/no-known-value-widening": "error",
+      "anti-slop/no-module-mocking": "error",
+      "anti-slop/no-object-parameters": "error",
+      "anti-slop/no-reflect-apply": "error",
+      "anti-slop/no-reflect-get": "error",
+      "anti-slop/no-runtime-typeof": "error",
+      "anti-slop/no-shape-in-symbol-names": "error",
+      "anti-slop/no-unknown-parameters": "error",
+      "anti-slop/no-unknown-returns": "error",
+      "anti-slop/no-unknown-type-aliases": "error",
+      "anti-slop/no-unsafe-dictionary-type": "error",
+      "anti-slop/no-widen-then-assert": "error",
+      "anti-slop/require-safety-comment-for-type-assertion": "error",
+      "eslint/complexity": ["error", { max: 20 }],
       "eslint/no-underscore-dangle": "off",
-      "typescript/no-unsafe-type-assertion": "off",
+      "import/no-unassigned-import": [
+        "error",
+        {
+          allow: ["**/*.css", "@opencode-ai/ui/styles", "@opencode-ai/ui/styles/tokens"],
+        },
+      ],
+      "typescript/no-unsafe-type-assertion": "error",
       "react/react-in-jsx-scope": "off",
       "vite-plus/prefer-vite-plus-imports": "error",
     },
@@ -49,10 +100,8 @@ export default defineConfig({
     },
     overrides: [
       {
-        files: ["apps/desktop/src/renderer/**/*.tsx"],
-        rules: {
-          "import/no-unassigned-import": "off",
-        },
+        files: ["apps/desktop/src/renderer/**/*.{ts,tsx}"],
+        rules: effectPromiseBoundaryRules,
       },
       {
         files: [
@@ -62,8 +111,9 @@ export default defineConfig({
         plugins: ["unicorn", "typescript", "oxc", "import", "promise", "react", "jsx-a11y"],
         rules: {
           ...jsxA11yRules,
-          "import/no-unassigned-import": "off",
           "react/immutability": "off",
+          // Solid tracks list identity through <For>; React's key model does not apply.
+          "react/jsx-key": "off",
           "react/no-multi-comp": "error",
           "react/react-in-jsx-scope": "off",
           "unicorn/filename-case": ["error", { case: "pascalCase" }],
@@ -78,7 +128,6 @@ export default defineConfig({
         plugins: ["unicorn", "typescript", "oxc", "import", "promise", "react", "jsx-a11y"],
         rules: {
           ...jsxA11yRules,
-          "import/no-unassigned-import": "off",
           "react/immutability": "off",
           "react/no-multi-comp": "off",
           "react/react-in-jsx-scope": "off",
@@ -89,7 +138,9 @@ export default defineConfig({
         files: ["apps/desktop/src/**/*.test.ts", "apps/desktop/src/**/*.test.tsx"],
         plugins: ["unicorn", "typescript", "oxc", "import", "promise", "vitest"],
         rules: {
-          "import/no-unassigned-import": "off",
+          ...effectPromiseBoundaryRules,
+          "effecttsgo/node-builtin-import": "off",
+          "effecttsgo/strict-effect-provide": "off",
           "react/immutability": "off",
           "react/no-multi-comp": "off",
           "react/react-in-jsx-scope": "off",
@@ -99,6 +150,18 @@ export default defineConfig({
       {
         files: ["apps/desktop/src/main/**/*.ts", "apps/desktop/src/preload/**/*.ts"],
         plugins: ["unicorn", "typescript", "oxc", "import", "promise", "node"],
+        rules: effectNodeBoundaryRules,
+      },
+      {
+        files: ["apps/desktop/electron.vite.config.ts"],
+        rules: effectNodeBoundaryRules,
+      },
+      {
+        files: ["tools/**/*.mjs"],
+        rules: {
+          "effecttsgo/global-console": "off",
+          "effecttsgo/node-builtin-import": "off",
+        },
       },
     ],
   },

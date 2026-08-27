@@ -4,17 +4,17 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { syncSessionTranscript } from "./transcript.ts";
 
 const makeData = (more: () => boolean) => {
-  const syncSession = vi.fn(() => Promise.resolve());
-  const syncPending = vi.fn(() => Promise.resolve());
-  const syncMessages = vi.fn(() => Promise.resolve());
-  const loadMore = vi.fn(() => Promise.resolve());
+  const syncSession = vi.fn<Data["session"]["sync"]>(() => Promise.resolve());
+  const syncPending = vi.fn<Data["session"]["pending"]["sync"]>(() => Promise.resolve());
+  const syncMessages = vi.fn<Data["session"]["message"]["sync"]>(() => Promise.resolve());
+  const loadMore = vi.fn<Data["session"]["message"]["loadMore"]>(() => Promise.resolve());
   const data = {
     session: {
       sync: syncSession,
       pending: { sync: syncPending },
       message: { sync: syncMessages, more, loadMore },
     },
-  } as unknown as Data;
+  };
   return { data, syncSession, syncPending, syncMessages, loadMore };
 };
 

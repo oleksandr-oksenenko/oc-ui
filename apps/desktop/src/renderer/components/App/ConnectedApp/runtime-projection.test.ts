@@ -1,18 +1,8 @@
-import type { SessionInfo } from "@opencode-ai/client";
 import { describe, expect, it } from "vite-plus/test";
 
 import { projectRuntimeSessionNodes } from "./runtime-projection.ts";
 
-const session = (id: string, title?: string): SessionInfo =>
-  ({
-    id,
-    title,
-    projectID: "project",
-    cost: 0,
-    tokens: {},
-    time: { created: 1, updated: 1 },
-    location: { directory: "/workspace" },
-  }) as SessionInfo;
+const session = (id: string, title?: string) => ({ id, title });
 
 describe("runtime presentation projection", () => {
   it("maps runtime sessions as a flat list without fixture-only state", () => {

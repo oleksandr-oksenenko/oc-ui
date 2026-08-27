@@ -7,14 +7,14 @@ import { Workspace } from "./Workspace.tsx";
 function pointerEvent(
   type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
   options: { readonly pointerID: number; readonly clientX: number; readonly button?: number },
-): PointerEvent {
+): MouseEvent {
   const event = new MouseEvent(type, {
     bubbles: true,
     button: options.button ?? 0,
     clientX: options.clientX,
   });
   Object.defineProperty(event, "pointerId", { value: options.pointerID });
-  return event as PointerEvent;
+  return event;
 }
 
 describe("Workspace", () => {
@@ -188,9 +188,7 @@ describe("Workspace", () => {
         ?.getAttribute("aria-modal"),
     ).toBe("true");
     expect(host.querySelector(".shell-main")?.getAttribute("aria-hidden")).toBe("true");
-    expect((host.querySelector(".shell-main") as HTMLElement & { inert?: boolean })?.inert).toBe(
-      true,
-    );
+    expect(host.querySelector<HTMLElement>(".shell-main")?.inert).toBe(true);
     expect(host.querySelectorAll('[role="separator"]')).toHaveLength(0);
 
     dispose();

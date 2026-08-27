@@ -63,10 +63,7 @@ const isComponentDeclaration = (declaration) =>
     (ts.isArrowFunction(declaration.initializer) ||
       ts.isFunctionExpression(declaration.initializer)));
 
-const exportedComponentNames = (sourceFile) => {
-  const names = new Set();
-  const localDeclarations = new Map();
-
+const collectLocalDeclarations = (sourceFile, names, localDeclarations) => {
   for (const statement of sourceFile.statements) {
     if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) {
       if (statement.name) localDeclarations.set(statement.name.text, statement);
@@ -84,7 +81,9 @@ const exportedComponentNames = (sourceFile) => {
       if (exported && isComponentDeclaration(declaration)) names.add(declaration.name.text);
     }
   }
+};
 
+const collectNamedExports = (sourceFile, names, localDeclarations) => {
   for (const statement of sourceFile.statements) {
     if (!ts.isExportDeclaration(statement) || !statement.exportClause) continue;
     if (!ts.isNamedExports(statement.exportClause)) continue;
@@ -96,13 +95,23 @@ const exportedComponentNames = (sourceFile) => {
       }
     }
   }
+};
 
+const collectDefaultExport = (sourceFile, names, localDeclarations) => {
   for (const statement of sourceFile.statements) {
     if (!ts.isExportAssignment(statement) || statement.isExportEquals) continue;
     if (!ts.isIdentifier(statement.expression)) continue;
     const declaration = localDeclarations.get(statement.expression.text);
     if (declaration && isComponentDeclaration(declaration)) names.add(statement.expression.text);
   }
+};
+
+const exportedComponentNames = (sourceFile) => {
+  const names = new Set();
+  const localDeclarations = new Map();
+  collectLocalDeclarations(sourceFile, names, localDeclarations);
+  collectNamedExports(sourceFile, names, localDeclarations);
+  collectDefaultExport(sourceFile, names, localDeclarations);
 
   return [...names].filter((name) => /^[A-Z][A-Za-z0-9]*$/.test(name));
 };

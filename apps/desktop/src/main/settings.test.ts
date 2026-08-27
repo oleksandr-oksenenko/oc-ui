@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { makeSettingsLayer, Settings } from "./settings.ts";
+import { settingsLayer, Settings } from "./settings.ts";
 import type { SecureStorage } from "./settings.ts";
 
 const temporaryDirectories: string[] = [];
@@ -43,7 +43,7 @@ const unavailableStorage: SecureStorage = {
 describe("connection settings", () => {
   it("round-trips an encrypted password without writing plaintext", async () => {
     const directory = await makeDirectory();
-    const layer = makeSettingsLayer(directory, encryptedStorage);
+    const layer = settingsLayer(directory, encryptedStorage);
     const input = { serverUrl: "http://homie:4096", password: "super secret" };
 
     const result = await Effect.runPromise(
@@ -56,7 +56,7 @@ describe("connection settings", () => {
     const loaded = await Effect.runPromise(
       Effect.gen(function* () {
         const settings = yield* Settings;
-        return yield* settings.load();
+        return yield* settings.load;
       }).pipe(Effect.provide(layer)),
     );
 
@@ -67,7 +67,7 @@ describe("connection settings", () => {
 
   it("stores only the URL when secure encryption is unavailable", async () => {
     const directory = await makeDirectory();
-    const layer = makeSettingsLayer(directory, unavailableStorage);
+    const layer = settingsLayer(directory, unavailableStorage);
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -79,7 +79,7 @@ describe("connection settings", () => {
     const loaded = await Effect.runPromise(
       Effect.gen(function* () {
         const settings = yield* Settings;
-        return yield* settings.load();
+        return yield* settings.load;
       }).pipe(Effect.provide(layer)),
     );
 

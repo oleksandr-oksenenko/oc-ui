@@ -32,11 +32,11 @@ export type SessionSidebarProps = {
   readonly onSelectServer: () => void;
 };
 
-const statusLabel: Record<SessionSidebarStatus, string> = {
+const statusLabel = {
   connected: "Connected",
   reconnecting: "Reconnecting",
   failed: "Connection failed",
-};
+} satisfies Record<SessionSidebarStatus, string>;
 
 export function SessionSidebar(props: SessionSidebarProps) {
   return (

@@ -19,8 +19,8 @@ type CatalogMutation =
   | { readonly kind: "remove"; readonly sessionID: string };
 
 type SessionCatalogInput = {
-  readonly api: OpenCodeClient;
-  readonly data: Data;
+  readonly api: { readonly session: Pick<OpenCodeClient["session"], "list"> };
+  readonly data: { readonly session: Pick<Data["session"], "remember" | "sync"> };
   readonly defaultLocation: LocationRef;
   readonly events: Pick<OpenCodeEventSource, "on">;
 };
