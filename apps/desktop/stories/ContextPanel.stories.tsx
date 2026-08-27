@@ -12,36 +12,32 @@ const diffFiles: readonly DiffFileData[] = [
     path: "src/renderer/components/Workspace.tsx",
     additions: 3,
     deletions: 1,
+    status: "modified",
     defaultExpanded: true,
-    lines: [
-      {
-        kind: "context",
-        oldLine: 28,
-        newLine: 28,
-        content: "  const columns = createMemo(() => layout());",
-      },
-      { kind: "deletion", oldLine: 29, content: '  return <main class="workspace">' },
-      {
-        kind: "addition",
-        newLine: 29,
-        content: '  return <main class="workspace" data-layout={columns()}>',
-      },
-      { kind: "addition", newLine: 30, content: "    <ContextPanel {...context} />" },
-      { kind: "context", oldLine: 30, newLine: 31, content: "  </main>;" },
-    ],
+    patch: `diff --git a/src/renderer/components/Workspace.tsx b/src/renderer/components/Workspace.tsx
+--- a/src/renderer/components/Workspace.tsx
++++ b/src/renderer/components/Workspace.tsx
+@@ -28,3 +28,4 @@
+   const columns = createMemo(() => layout());
+-  return <main class="workspace">
++  return <main class="workspace" data-layout={columns()}>
++    <ContextPanel {...context} />
+   </main>;
+`,
   },
   {
     path: "src/renderer/styles.css",
     additions: 1,
     deletions: 0,
+    status: "added",
     defaultExpanded: true,
-    lines: [
-      {
-        kind: "addition",
-        newLine: 74,
-        content: ".workspace { grid-template-columns: 270px minmax(0, 1fr) 360px; }",
-      },
-    ],
+    patch: `diff --git a/src/renderer/styles.css b/src/renderer/styles.css
+new file mode 100644
+--- /dev/null
++++ b/src/renderer/styles.css
+@@ -0,0 +1 @@
++.workspace { grid-template-columns: 270px minmax(0, 1fr) 360px; }
+`,
   },
 ];
 
@@ -86,7 +82,7 @@ const meta = {
   parameters: { layout: "centered" },
   decorators: [
     ((Story) => (
-      <div style={{ height: "620px", display: "flex", "align-items": "stretch" }}>
+      <div style={{ width: "520px", height: "620px", display: "flex", "align-items": "stretch" }}>
         <Story />
       </div>
     )) satisfies Decorator,
@@ -121,8 +117,30 @@ export const Loading: Story = {
   args: {
     activeTab: "diff",
     onTabChange: noopTabChange,
-    diff: { files: [], loading: true },
+    diff: {
+      files: [],
+      loading: true,
+      comparison: "working",
+      comparisonOptions: [
+        { value: "working", label: "Working changes" },
+        { value: "branch", label: "Changes vs main" },
+      ],
+    },
     files: { ...baseFiles, loading: true, nodes: [] },
+  },
+};
+
+export const NoSession: Story = {
+  args: {
+    activeTab: "diff",
+    onTabChange: noopTabChange,
+    diff: {
+      files: [],
+      loading: false,
+      emptyMessage: "Select a session to view changes",
+      emptyDescription: "The Diff panel follows the selected session's workspace location.",
+    },
+    files: baseFiles,
   },
 };
 
@@ -181,6 +199,58 @@ export const Error: Story = {
   },
 };
 
+export const Refreshing: Story = {
+  args: {
+    activeTab: "diff",
+    onTabChange: noopTabChange,
+    diff: { files: diffFiles, loading: true, stale: true },
+    files: baseFiles,
+  },
+};
+
+export const RefreshError: Story = {
+  args: {
+    activeTab: "diff",
+    onTabChange: noopTabChange,
+    diff: {
+      files: diffFiles,
+      loading: false,
+      stale: true,
+      error: "The latest changes could not be loaded.",
+      onRetry: () => undefined,
+    },
+    files: baseFiles,
+  },
+};
+
+export const CachedStale: Story = {
+  args: {
+    activeTab: "diff",
+    onTabChange: noopTabChange,
+    diff: { files: diffFiles, loading: false, stale: true },
+    files: baseFiles,
+  },
+};
+
+export const BranchEmpty: Story = {
+  args: {
+    activeTab: "diff",
+    onTabChange: noopTabChange,
+    diff: {
+      files: [],
+      loading: false,
+      comparison: "branch",
+      comparisonOptions: [
+        { value: "working", label: "Working changes" },
+        { value: "branch", label: "Changes vs main" },
+      ],
+      emptyMessage: "No changes against main",
+      emptyDescription: "The working copy matches its merge base with main.",
+    },
+    files: baseFiles,
+  },
+};
+
 export const FilesError: Story = {
   args: {
     activeTab: "files",
@@ -204,18 +274,24 @@ export const DiffEdgeCases: Story = {
           path: "src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/very-long-file-name.tsx",
           additions: 0,
           deletions: 2,
+          status: "deleted",
           defaultExpanded: false,
-          lines: [
-            { kind: "deletion", oldLine: 40, content: "  const obsolete = true;" },
-            { kind: "deletion", oldLine: 41, content: "  return obsolete;" },
-          ],
+          patch: `diff --git a/src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/very-long-file-name.tsx b/src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/very-long-file-name.tsx
+deleted file mode 100644
+--- a/src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/very-long-file-name.tsx
++++ /dev/null
+@@ -40,2 +0,0 @@
+-  const obsolete = true;
+-  return obsolete;
+`,
         },
         {
           path: "README.md",
           additions: 0,
           deletions: 0,
+          status: "modified",
           defaultExpanded: true,
-          lines: [{ kind: "context", oldLine: 1, newLine: 1, content: "# Context panel" }],
+          patch: "",
         },
       ],
       loading: false,
@@ -240,7 +316,7 @@ export const FilesEdgeCases: Story = {
   },
 };
 
-export const ScopeControl: Story = {
+export const ComparisonControl: Story = {
   args: {
     activeTab: "diff",
     onTabChange: noopTabChange,
@@ -248,7 +324,7 @@ export const ScopeControl: Story = {
     files: baseFiles,
   },
   render: () => {
-    const [scope, setScope] = createSignal("all");
+    const [comparison, setComparison] = createSignal("working");
     return (
       <ContextPanel
         activeTab="diff"
@@ -256,12 +332,12 @@ export const ScopeControl: Story = {
         diff={{
           files: diffFiles,
           loading: false,
-          scope: scope(),
-          scopeOptions: [
-            { value: "all", label: "All changes" },
-            { value: "staged", label: "Staged changes" },
+          comparison: comparison(),
+          comparisonOptions: [
+            { value: "working", label: "Working changes" },
+            { value: "branch", label: "Changes vs main" },
           ],
-          onScopeChange: setScope,
+          onComparisonChange: setComparison,
         }}
         files={baseFiles}
       />

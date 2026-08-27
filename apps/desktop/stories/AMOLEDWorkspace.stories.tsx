@@ -107,123 +107,79 @@ const diff: readonly DiffFileData[] = [
     path: "lazygit/config.yml",
     additions: 2,
     deletions: 2,
+    status: "modified",
     defaultExpanded: true,
-    lines: [
-      { kind: "context", oldLine: 8, newLine: 8, content: "    reverse: true" },
-      { kind: "context", oldLine: 9, newLine: 9, content: "    notARepo: 'skip'" },
-      { kind: "context", oldLine: 10, newLine: 10, content: "  git:" },
-      { kind: "deletion", oldLine: 11, content: "    pagers:" },
-      { kind: "addition", newLine: 11, content: "    diffRenderers:" },
-      { kind: "context", oldLine: 12, newLine: 12, content: "      colorArg: always" },
-      {
-        kind: "deletion",
-        oldLine: 13,
-        content: "      pager: '~/.config/git/delta-theme --paging=never'",
-      },
-      {
-        kind: "addition",
-        newLine: 13,
-        content: "      command: '~/.config/git/delta-theme --paging=never'",
-      },
-    ],
+    patch: `diff --git a/lazygit/config.yml b/lazygit/config.yml
+--- a/lazygit/config.yml
++++ b/lazygit/config.yml
+@@ -8,6 +8,6 @@
+     reverse: true
+     notARepo: 'skip'
+   git:
+-    pagers:
++    diffRenderers:
+       colorArg: always
+-      pager: '~/.config/git/delta-theme --paging=never'
++      command: '~/.config/git/delta-theme --paging=never'
+`,
   },
   {
     path: "nix/hosts/personal/flake.lock",
     additions: 39,
     deletions: 39,
+    status: "modified",
     defaultExpanded: true,
-    lines: [
-      { kind: "context", oldLine: 186, newLine: 186, content: '      "locked": {' },
-      { kind: "deletion", oldLine: 187, content: '        "lastModified": 1785627969,' },
-      {
-        kind: "deletion",
-        oldLine: 188,
-        content: '        "narHash": "sha256-4doxXwMulePeqvVn...",',
-      },
-      { kind: "addition", newLine: 187, content: '        "lastModified": 1787559586,' },
-      { kind: "addition", newLine: 188, content: '        "narHash": "sha256-onuMeLWoYp7...",' },
-      { kind: "context", oldLine: 189, newLine: 189, content: '        "owner": "hercules-ci",' },
-      { kind: "context", oldLine: 190, newLine: 190, content: '        "repo": "flake-parts",' },
-      { kind: "deletion", oldLine: 191, content: '        "rev": "420b74bd94355fdf..."' },
-      { kind: "addition", newLine: 191, content: '        "rev": "90d87a72c2374f89..."' },
-      { kind: "context", oldLine: 192, newLine: 192, content: '        "type": "github"' },
-      { kind: "context", oldLine: 193, newLine: 193, content: "      }," },
-      { kind: "context", oldLine: 194, newLine: 194, content: '      "original": {' },
-      { kind: "context", oldLine: 298, newLine: 298, content: '      "locked": {' },
-      { kind: "deletion", oldLine: 299, content: '        "lastModified": 1786381233,' },
-      { kind: "deletion", oldLine: 300, content: '        "narHash": "sha256-T0OoLT...",' },
-      { kind: "addition", newLine: 299, content: '        "lastModified": 1786983494,' },
-      { kind: "addition", newLine: 300, content: '        "narHash": "sha256-n2QYWf...",' },
-      { kind: "context", oldLine: 301, newLine: 301, content: '        "owner": "nix-community",' },
-      { kind: "context", oldLine: 302, newLine: 302, content: '        "repo": "home-manager",' },
-      { kind: "deletion", oldLine: 303, content: '        "rev": "7834e825886e0eca..."' },
-      { kind: "addition", newLine: 303, content: '        "rev": "ec161155d76f7ecc..."' },
-    ],
+    patch: `diff --git a/nix/hosts/personal/flake.lock b/nix/hosts/personal/flake.lock
+--- a/nix/hosts/personal/flake.lock
++++ b/nix/hosts/personal/flake.lock
+@@ -186,8 +186,8 @@
+       "locked": {
+-        "lastModified": 1785627969,
+-        "narHash": "sha256-4doxXwMulePeqvVn...",
++        "lastModified": 1787559586,
++        "narHash": "sha256-onuMeLWoYp7...",
+         "owner": "hercules-ci",
+         "repo": "flake-parts",
+-        "rev": "420b74bd94355fdf..."
++        "rev": "90d87a72c2374f89..."
+         "type": "github"
+`,
   },
   {
     path: "src/components/SessionList.test.tsx",
     additions: 4,
     deletions: 1,
+    status: "modified",
     defaultExpanded: false,
-    lines: [
-      { kind: "context", oldLine: 42, newLine: 42, content: "  expect(tree).toHaveLength(3);" },
-      { kind: "deletion", oldLine: 43, content: "  expect(rows).toHaveLength(6);" },
-      { kind: "addition", newLine: 43, content: "  expect(rows).toHaveLength(9);" },
-      {
-        kind: "addition",
-        newLine: 44,
-        content: "  expect(rows[3]).toHaveTextContent('Trace Root Cause');",
-      },
-      {
-        kind: "addition",
-        newLine: 45,
-        content: "  expect(rows[4]).toHaveTextContent('Collect Logs');",
-      },
-      {
-        kind: "addition",
-        newLine: 46,
-        content: "  expect(rows[5]).toHaveTextContent('Analyze Stack');",
-      },
-    ],
+    patch: `diff --git a/src/components/SessionList.test.tsx b/src/components/SessionList.test.tsx
+--- a/src/components/SessionList.test.tsx
++++ b/src/components/SessionList.test.tsx
+@@ -42,2 +42,5 @@
+   expect(tree).toHaveLength(3);
+-  expect(rows).toHaveLength(6);
++  expect(rows).toHaveLength(9);
++  expect(rows[3]).toHaveTextContent('Trace Root Cause');
++  expect(rows[4]).toHaveTextContent('Collect Logs');
++  expect(rows[5]).toHaveTextContent('Analyze Stack');
+`,
   },
   {
     path: "src/components/Composer.test.tsx",
     additions: 3,
     deletions: 2,
+    status: "modified",
     defaultExpanded: false,
-    lines: [
-      {
-        kind: "context",
-        oldLine: 78,
-        newLine: 78,
-        content: "  const composer = screen.getByRole('textbox');",
-      },
-      {
-        kind: "deletion",
-        oldLine: 79,
-        content: "  expect(composer).toHaveStyle({ height: '52px' });",
-      },
-      {
-        kind: "deletion",
-        oldLine: 80,
-        content: "  expect(screen.getByText('Cmd+Enter to send')).toBeVisible();",
-      },
-      {
-        kind: "addition",
-        newLine: 79,
-        content: "  expect(composer).toHaveStyle({ minHeight: '78px' });",
-      },
-      {
-        kind: "addition",
-        newLine: 80,
-        content: "  expect(screen.getByRole('group', { name: 'Model' })).toBeVisible();",
-      },
-      {
-        kind: "addition",
-        newLine: 81,
-        content: "  expect(screen.getByRole('group', { name: 'Reasoning' })).toBeVisible();",
-      },
-    ],
+    patch: `diff --git a/src/components/Composer.test.tsx b/src/components/Composer.test.tsx
+--- a/src/components/Composer.test.tsx
++++ b/src/components/Composer.test.tsx
+@@ -78,3 +78,4 @@
+   const composer = screen.getByRole('textbox');
+-  expect(composer).toHaveStyle({ height: '52px' });
+-  expect(screen.getByText('Cmd+Enter to send')).toBeVisible();
++  expect(composer).toHaveStyle({ minHeight: '78px' });
++  expect(screen.getByRole('group', { name: 'Model' })).toBeVisible();
++  expect(screen.getByRole('group', { name: 'Reasoning' })).toBeVisible();
+`,
   },
 ];
 
@@ -271,7 +227,7 @@ function WorkspaceShowcaseFixture() {
   ]);
   const [expandedFiles, setExpandedFiles] = createSignal<readonly string[]>(["src", "renderer"]);
   const [draft, setDraft] = createSignal("");
-  const [diffScope, setDiffScope] = createSignal("all");
+  const [diffComparison, setDiffComparison] = createSignal("working");
 
   const toggle = (id: string) => {
     setExpandedSessions((current) =>
@@ -369,9 +325,12 @@ function WorkspaceShowcaseFixture() {
                 diff={{
                   files: diff,
                   loading: false,
-                  scope: diffScope(),
-                  scopeOptions: [{ value: "all", label: "All changes" }],
-                  onScopeChange: setDiffScope,
+                  comparison: diffComparison(),
+                  comparisonOptions: [
+                    { value: "working", label: "Working changes" },
+                    { value: "branch", label: "Changes vs main" },
+                  ],
+                  onComparisonChange: setDiffComparison,
                 }}
                 files={{
                   nodes: files,

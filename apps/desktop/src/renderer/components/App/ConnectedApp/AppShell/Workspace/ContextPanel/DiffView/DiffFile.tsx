@@ -1,31 +1,27 @@
-import { For, createSignal } from "solid-js";
+import { parsePatchFiles, processFile } from "@pierre/diffs";
+import type { FileDiffMetadata } from "@pierre/diffs";
+import { Show, createMemo, createSignal } from "solid-js";
 import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { DiffChanges } from "@opencode-ai/ui/diff-changes";
-import { Icon } from "@opencode-ai/ui/icon";
 
-type DiffLineKind = "context" | "addition" | "deletion";
-
-type DiffLine = {
-  readonly kind: DiffLineKind;
-  readonly content: string;
-  readonly oldLine?: number;
-  readonly newLine?: number;
-};
+import { PierreDiffBody } from "./PierreDiffBody.tsx";
 
 export type DiffFileData = {
   readonly path: string;
+  readonly patch: string;
   readonly additions: number;
   readonly deletions: number;
-  readonly lines: readonly DiffLine[];
+  readonly status: "added" | "deleted" | "modified";
   readonly defaultExpanded?: boolean;
 };
 
-export type DiffFileProps = {
+type DiffFileProps = {
   readonly file: DiffFileData;
 };
 
 export function DiffFile(props: DiffFileProps) {
   const [expanded, setExpanded] = createSignal(props.file.defaultExpanded ?? true);
+  const parsed = createMemo(() => parseFilePatch(props.file));
 
   return (
     <article class="diff-file">
@@ -59,34 +55,34 @@ export function DiffFile(props: DiffFileProps) {
         </header>
 
         <Collapsible.Content class="diff-file-content">
-          <table class="diff-lines" aria-label={`Changes in ${props.file.path}`}>
-            <tbody>
-              <For each={props.file.lines}>
-                {(line) => (
-                  <tr class={`diff-line ${line.kind}`}>
-                    <td class="diff-line-number old" aria-hidden="true">
-                      {line.oldLine ?? ""}
-                    </td>
-                    <td class="diff-line-number new" aria-hidden="true">
-                      {line.newLine ?? ""}
-                    </td>
-                    <td class="diff-line-marker" aria-hidden="true">
-                      {line.kind === "addition" ? (
-                        <Icon name="plus-small" size="small" />
-                      ) : line.kind === "deletion" ? (
-                        <Icon name="dash" size="small" />
-                      ) : null}
-                    </td>
-                    <td>
-                      <code class="diff-line-content">{line.content || " "}</code>
-                    </td>
-                  </tr>
-                )}
-              </For>
-            </tbody>
-          </table>
+          <Show
+            when={parsed()}
+            fallback={<p class="diff-file-unavailable">This patch could not be displayed.</p>}
+          >
+            {(fileDiff) => <PierreDiffBody fileDiff={fileDiff()} path={props.file.path} />}
+          </Show>
         </Collapsible.Content>
       </Collapsible>
     </article>
   );
+}
+
+export function parseFilePatch(file: DiffFileData): FileDiffMetadata | undefined {
+  try {
+    const candidates = parsePatchFiles(file.patch, undefined, true).flatMap((patch) => patch.files);
+    const parsed = candidates.find((candidate) => candidate.name === file.path) ?? candidates[0];
+    const fallback =
+      parsed ??
+      processFile(`--- a/${file.path}\n+++ b/${file.path}\n${file.patch}`, {
+        throwOnError: true,
+      });
+    if (!fallback || fallback.hunks.length === 0) return undefined;
+    return {
+      ...fallback,
+      name: file.path,
+      type: file.status === "added" ? "new" : file.status === "deleted" ? "deleted" : "change",
+    };
+  } catch {
+    return undefined;
+  }
 }

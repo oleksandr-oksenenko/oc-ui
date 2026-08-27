@@ -18,6 +18,7 @@
     "@opencode-ai/cli": "catalog:",
     "@opencode-ai/client": "catalog:",
     "@opencode-ai/ui": "catalog:",
+    "@pierre/diffs": "catalog:",
     "@solidjs/meta": "catalog:",
     "dompurify": "catalog:",
     "effect": "4.0.0-rc.111",

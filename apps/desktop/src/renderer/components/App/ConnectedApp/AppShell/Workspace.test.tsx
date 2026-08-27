@@ -74,10 +74,10 @@ describe("Workspace", () => {
     rightSeparator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
 
     expect(leftSeparator.getAttribute("aria-valuenow")).toBe("236");
-    expect(rightSeparator.getAttribute("aria-valuenow")).toBe("376");
+    expect(rightSeparator.getAttribute("aria-valuenow")).toBe("536");
     const shell = host.querySelector<HTMLElement>(".app-shell-v2");
     expect(shell?.style.getPropertyValue("--shell-left-sidebar-width")).toBe("236px");
-    expect(shell?.style.getPropertyValue("--shell-right-panel-width")).toBe("376px");
+    expect(shell?.style.getPropertyValue("--shell-right-panel-width")).toBe("536px");
 
     dispose();
     host.remove();
@@ -126,7 +126,7 @@ describe("Workspace", () => {
       host
         .querySelector<HTMLElement>(".app-shell-v2")
         ?.style.getPropertyValue("--shell-right-panel-width"),
-    ).toBe("400px");
+    ).toBe("560px");
     window.dispatchEvent(pointerEvent("pointerup", { pointerID: 8, clientX: 600 }));
 
     left.dispatchEvent(pointerEvent("pointerdown", { pointerID: 9, clientX: 260 }));

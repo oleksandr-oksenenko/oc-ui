@@ -1,0 +1,156 @@
+import type {
+  FileDiffInfo,
+  LocationRef,
+  OpenCodeClient,
+  OpenCodeEvent,
+  VcsDiffOutput,
+} from "@opencode-ai/client";
+import { createRoot } from "solid-js";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+import { createOpenCodeEventSource } from "./event-source.ts";
+import { createVcsDiffStore } from "./vcs-diff.ts";
+
+type DiffRequest = OpenCodeClient["vcs"]["diff"];
+
+const location = (directory: string, workspaceID?: string): LocationRef => ({
+  directory,
+  workspaceID,
+});
+
+const file = (name: string): FileDiffInfo => ({
+  file: name,
+  patch: `--- a/${name}\n+++ b/${name}\n@@ -1 +1 @@\n-old\n+new\n`,
+  additions: 1,
+  deletions: 1,
+  status: "modified",
+});
+
+const response = (ref: LocationRef, files: FileDiffInfo[]): VcsDiffOutput => ({
+  location: {
+    directory: ref.directory,
+    workspaceID: ref.workspaceID,
+    project: { id: "project", directory: ref.directory, canonical: ref.directory },
+  },
+  data: files,
+});
+
+const setup = (diff: DiffRequest) => {
+  const events = createOpenCodeEventSource();
+  return createRoot((dispose) => ({
+    dispose,
+    events,
+    store: createVcsDiffStore({ diff, events }),
+  }));
+};
+
+describe("VCS diff store", () => {
+  it("maps workspaceID to the generated API request and caches by mode", async () => {
+    const ref = location("/workspace", "worktree-1");
+    const diff = vi.fn<DiffRequest>(() => Promise.resolve(response(ref, [file("src/a.ts")])));
+    const { dispose, store } = setup(diff);
+
+    await Promise.all([store.sync(ref, "working"), store.sync(ref, "working")]);
+    expect(diff).toHaveBeenCalledOnce();
+    expect(diff.mock.calls[0]?.[0]).toEqual({
+      location: { directory: "/workspace", workspace: "worktree-1" },
+      mode: "working",
+    });
+    expect(diff.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(store.state(ref, "working")).toMatchObject({
+      status: "ready",
+      stale: false,
+      files: [{ file: "src/a.ts" }],
+    });
+
+    await store.sync(ref, "branch");
+    expect(diff).toHaveBeenCalledTimes(2);
+    expect(diff.mock.calls[1]?.[0].mode).toBe("branch");
+    dispose();
+  });
+
+  it("refresh aborts and replaces only the same cache entry", async () => {
+    const ref = location("/workspace");
+    let firstSignal: AbortSignal | undefined;
+    const diff = vi
+      .fn<DiffRequest>()
+      .mockImplementationOnce((_input, options) => {
+        if (!options?.signal) return Promise.reject(new Error("Missing abort signal"));
+        firstSignal = options.signal;
+        return new Promise((_, reject) => {
+          options.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        });
+      })
+      .mockResolvedValueOnce(response(ref, [file("latest.ts")]));
+    const { dispose, store } = setup(diff);
+
+    void store.sync(ref, "working");
+    await store.refresh(ref, "working");
+    expect(firstSignal?.aborted).toBe(true);
+    expect(store.state(ref, "working").files[0]?.file).toBe("latest.ts");
+    expect(store.state(ref, "working").status).toBe("ready");
+    dispose();
+  });
+
+  it("invalidates matching locations and conservatively invalidates all unscoped events", async () => {
+    const first = location("/first");
+    const second = location("/second");
+    const diff = vi.fn<DiffRequest>((input) => {
+      const ref = input.location?.directory === "/first" ? first : second;
+      return Promise.resolve(response(ref, [file(`${ref.directory}.ts`)]));
+    });
+    const { dispose, events, store } = setup(diff);
+
+    await Promise.all([store.sync(first, "working"), store.sync(second, "working")]);
+    events.emit({
+      id: "file-change",
+      created: 1,
+      type: "filesystem.changed",
+      location: first,
+      data: { file: "a.ts", event: "change" },
+    } satisfies OpenCodeEvent);
+    expect(store.state(first, "working").stale).toBe(true);
+    expect(store.state(second, "working").stale).toBe(false);
+
+    events.emit({
+      id: "branch-change",
+      created: 2,
+      type: "vcs.branch.updated",
+      data: { branch: "feature" },
+    } satisfies OpenCodeEvent);
+    expect(store.state(second, "working").stale).toBe(true);
+
+    await Promise.all([store.sync(first, "working"), store.sync(second, "working")]);
+    expect(store.state(first, "working").stale).toBe(false);
+    expect(store.state(second, "working").stale).toBe(false);
+    events.emit({
+      id: "connected",
+      type: "server.connected",
+      data: {},
+    } satisfies OpenCodeEvent);
+    expect(store.state(first, "working").stale).toBe(true);
+    expect(store.state(second, "working").stale).toBe(true);
+    dispose();
+  });
+
+  it("keeps cached files when a refresh fails", async () => {
+    const ref = location("/workspace");
+    const diff = vi
+      .fn<DiffRequest>()
+      .mockResolvedValueOnce(response(ref, [file("cached.ts")]))
+      .mockRejectedValueOnce(new Error("server unavailable"));
+    const { dispose, store } = setup(diff);
+
+    await store.sync(ref, "working");
+    await store.refresh(ref, "working");
+    expect(store.state(ref, "working")).toMatchObject({
+      status: "failed",
+      stale: true,
+      error: "server unavailable",
+      files: [{ file: "cached.ts" }],
+    });
+    dispose();
+  });
+});

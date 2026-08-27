@@ -123,7 +123,23 @@
   font-size: 10px;
 }
 
-.diff-scope-select {
+.diff-refresh-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  color: #8a8e99;
+  font-size: 11px;
+}
+
+.diff-refresh-state.error-state {
+  justify-content: space-between;
+  color: #e6aab1;
+  background: rgba(124, 54, 64, 0.16);
+}
+
+.diff-comparison-select {
   min-width: 134px;
   height: 32px;
   margin-right: auto;
@@ -138,12 +154,12 @@
   font: inherit;
 }
 
-.diff-scope-select option {
+.diff-comparison-select option {
   color: var(--v2-text-text-base, #d0d0d0);
   background: var(--v2-background-bg-layer-01, #0a0a0a);
 }
 
-.diff-scope-select:focus-visible {
+.diff-comparison-select:focus-visible {
   border-color: var(--v2-border-border-focus, #74a7ff);
   outline: none;
   box-shadow: none;
@@ -256,68 +272,23 @@
   color: #ff7b72;
 }
 
-.diff-lines {
+.pierre-diff-host,
+.pierre-diff-host > diffs-container {
+  display: block;
   width: 100%;
-  overflow: hidden;
-  padding: 3px 0;
-  border-spacing: 0;
-  background: #000;
-  font-family: var(--font-family-mono, ui-monospace, monospace);
-  font-size: 10px;
-  line-height: 16px;
-}
-
-.diff-line td {
-  padding-block: 0;
-}
-
-.diff-line td:last-child {
   min-width: 0;
-  padding-inline: 0;
 }
 
-.diff-line {
-  display: grid;
-  grid-template-columns: 30px 30px 14px minmax(0, 1fr);
-  min-height: 16px;
-  color: #a4a8b1;
-}
-
-.diff-line.addition {
-  color: #98bda4;
-  background: rgba(55, 111, 71, 0.15);
-}
-.diff-line.deletion {
-  color: #c8959c;
-  background: rgba(124, 54, 64, 0.16);
-}
-
-.diff-line-number {
-  padding-right: 5px;
-  color: #525761;
-  text-align: right;
-  user-select: none;
-}
-
-.diff-line-marker {
-  display: grid;
-  place-items: center;
-  color: #666b74;
-  user-select: none;
-}
-
-.diff-line.addition .diff-line-marker {
-  color: #83af90;
-}
-.diff-line.deletion .diff-line-marker {
-  color: #bc828b;
-}
-
-.diff-line-content {
+.diff-file-content {
+  min-width: 0;
   overflow: hidden;
-  padding-right: 10px;
-  white-space: pre;
-  text-overflow: ellipsis;
+}
+
+.diff-file-unavailable {
+  margin: 0;
+  padding: 12px;
+  color: #8a8e99;
+  font-size: 11px;
 }
 
 .file-tree {

@@ -10,6 +10,7 @@ catalog:
   "@opencode-ai/client": 0.0.0-beta-18155
   "@opencode-ai/ui": 0.0.0-beta-18155
   "@oxlint/plugins": 1.79.0
+  "@pierre/diffs": 1.2.10
   "@solidjs/meta": ^0.29.4
   "@storybook/addon-a11y": 10.5.10
   "@testing-library/jest-dom": 6.9.1

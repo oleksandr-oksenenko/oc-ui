@@ -52,15 +52,15 @@ const diffFiles: readonly DiffFileData[] = [
     path: "src/renderer/components/Workspace.tsx",
     additions: 2,
     deletions: 1,
-    lines: [
-      { kind: "context", oldLine: 28, newLine: 28, content: "  const layout = createLayout();" },
-      { kind: "deletion", oldLine: 29, content: '  return <main class="workspace">' },
-      {
-        kind: "addition",
-        newLine: 29,
-        content: '  return <main class="workspace" data-layout={layout}>',
-      },
-    ],
+    status: "modified",
+    patch: `diff --git a/src/renderer/components/Workspace.tsx b/src/renderer/components/Workspace.tsx
+--- a/src/renderer/components/Workspace.tsx
++++ b/src/renderer/components/Workspace.tsx
+@@ -28,2 +28,2 @@
+   const layout = createLayout();
+-  return <main class="workspace">
++  return <main class="workspace" data-layout={layout}>
+`,
   },
 ];
 

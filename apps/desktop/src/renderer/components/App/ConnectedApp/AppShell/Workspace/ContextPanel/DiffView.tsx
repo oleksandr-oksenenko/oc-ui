@@ -14,25 +14,59 @@ export type DiffViewProps = {
   readonly emptyMessage?: string;
   readonly emptyDescription?: string;
   readonly onRetry?: () => void;
-  readonly scope?: string;
-  readonly scopeOptions?: readonly { readonly value: string; readonly label: string }[];
-  readonly onScopeChange?: (value: string) => void;
+  readonly stale?: boolean;
+  readonly comparison?: string;
+  readonly comparisonOptions?: readonly { readonly value: string; readonly label: string }[];
+  readonly onComparisonChange?: (value: string) => void;
 };
 
-const defaultScopeOptions = [{ value: "all", label: "All changes" }] as const;
+const defaultComparisonOptions = [{ value: "working", label: "Working changes" }] as const;
 
 export function DiffView(props: DiffViewProps) {
   const additions = () => props.files.reduce((total, file) => total + file.additions, 0);
   const deletions = () => props.files.reduce((total, file) => total + file.deletions, 0);
-  const scopeOptions = (): { readonly value: string; readonly label: string }[] =>
-    props.scopeOptions && props.scopeOptions.length > 0
-      ? props.scopeOptions.map((option) => option)
-      : [...defaultScopeOptions];
-  const scope = () => props.scope ?? scopeOptions()[0]?.value ?? "all";
+  const comparisonOptions = (): { readonly value: string; readonly label: string }[] =>
+    props.comparisonOptions && props.comparisonOptions.length > 0
+      ? props.comparisonOptions.map((option) => option)
+      : [...defaultComparisonOptions];
+  const comparison = () => props.comparison ?? comparisonOptions()[0]?.value ?? "working";
 
   return (
     <section class="context-view diff-view" aria-label="Diff">
-      <Show when={props.error}>
+      <Show when={props.files.length > 0 || comparisonOptions().length > 1}>
+        <div class="diff-summary">
+          <Show when={comparisonOptions().length > 1}>
+            <select
+              class="diff-comparison-select"
+              aria-label="Diff comparison"
+              value={comparison()}
+              onChange={(event) => props.onComparisonChange?.(event.currentTarget.value)}
+            >
+              <For each={comparisonOptions()}>
+                {(option) => <option value={option.value}>{option.label}</option>}
+              </For>
+            </select>
+          </Show>
+          <Show when={props.files.length > 0}>
+            <span class="diff-summary-count">
+              {props.files.length} {props.files.length === 1 ? "file" : "files"}
+            </span>
+            <div class="diff-summary-changes">
+              <span class="sr-only">
+                {additions()} additions, {deletions()} deletions
+              </span>
+              <div aria-hidden="true">
+                <DiffChanges
+                  changes={{ additions: additions(), deletions: deletions() }}
+                  appearance="compact"
+                />
+              </div>
+            </div>
+          </Show>
+        </div>
+      </Show>
+
+      <Show when={props.error && props.files.length === 0}>
         {(error) => (
           <div class="context-state error-state" role="alert">
             <Icon aria-hidden="true" name="warning" size="small" />
@@ -61,37 +95,40 @@ export function DiffView(props: DiffViewProps) {
 
       <Show when={!props.error && !props.loading && props.files.length === 0}>
         <div class="context-state empty-state">
-          <p>{props.emptyMessage ?? "No changes in this session"}</p>
+          <p>{props.emptyMessage ?? "No working tree changes"}</p>
           <Show when={props.emptyDescription}>{(description) => <span>{description()}</span>}</Show>
         </div>
       </Show>
 
-      <Show when={!props.error && props.files.length > 0}>
+      <Show when={props.files.length > 0}>
         <>
-          <div class="diff-summary">
-            <select
-              class="diff-scope-select"
-              aria-label="Diff scope"
-              value={scope()}
-              onChange={(event) => props.onScopeChange?.(event.currentTarget.value)}
-            >
-              <For each={scopeOptions()}>
-                {(option) => <option value={option.value}>{option.label}</option>}
-              </For>
-            </select>
-            <span class="diff-summary-count">{props.files.length} files</span>
-            <div class="diff-summary-changes">
-              <span class="sr-only">
-                {additions()} additions, {deletions()} deletions
-              </span>
-              <div aria-hidden="true">
-                <DiffChanges
-                  changes={{ additions: additions(), deletions: deletions() }}
-                  appearance="compact"
-                />
+          <Show when={props.loading}>
+            <output class="diff-refresh-state">
+              <Loader class="context-spinner" width="14" height="14" aria-hidden="true" />
+              <span>Refreshing diff</span>
+            </output>
+          </Show>
+          <Show when={props.error}>
+            {(error) => (
+              <div class="diff-refresh-state error-state" role="alert">
+                <span>{error()}</span>
+                <Show when={props.onRetry}>
+                  <Button
+                    class="context-retry"
+                    size="small"
+                    variant="outline"
+                    type="button"
+                    onClick={() => props.onRetry?.()}
+                  >
+                    Retry
+                  </Button>
+                </Show>
               </div>
-            </div>
-          </div>
+            )}
+          </Show>
+          <Show when={props.stale && !props.loading && !props.error}>
+            <p class="diff-refresh-state">Showing cached changes</p>
+          </Show>
           <div class="diff-file-list">
             <For each={props.files}>{(file) => <DiffFile file={file} />}</For>
           </div>

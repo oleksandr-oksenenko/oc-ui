@@ -8,6 +8,8 @@ import { mapConnectionFailure } from "./connection";
 import { createSessionCatalog } from "./session-catalog";
 import type { SessionCatalog } from "./session-catalog";
 import { syncSessionTranscript } from "./transcript";
+import { createVcsDiffStore } from "./vcs-diff";
+import type { VcsDiffStore } from "./vcs-diff";
 
 type RuntimeConnection = {
   readonly api: OpenCodeClient;
@@ -24,6 +26,7 @@ export type ConnectedRuntime = {
     readonly error: () => string | undefined;
   };
   readonly sessions: SessionCatalog;
+  readonly diffs: VcsDiffStore;
   /** Resolves after the event stream receives its first server.connected event. */
   readonly ready: Promise<void>;
   readonly syncTranscript: (
@@ -58,6 +61,7 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
     data,
     events,
   });
+  const diffs = createVcsDiffStore({ diff: input.api.vcs.diff, events });
 
   let resolveReady!: () => void;
   let rejectReady!: (cause: unknown) => void;
@@ -104,6 +108,7 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
     defaultLocation: input.defaultLocation,
     stream,
     sessions,
+    diffs,
     ready,
     syncTranscript,
   };

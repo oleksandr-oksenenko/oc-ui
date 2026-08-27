@@ -17,8 +17,8 @@ const LEFT_MIN = 220;
 const LEFT_MAX = 420;
 const LEFT_DEFAULT = 220;
 const RIGHT_MIN = 280;
-const RIGHT_MAX = 560;
-const RIGHT_DEFAULT = 360;
+const RIGHT_MAX = 840;
+const RIGHT_DEFAULT = 520;
 const MAIN_MIN = 420;
 const KEYBOARD_STEP = 16;
 
