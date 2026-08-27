@@ -1,5 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": ["tools/oxlint/anti-slop/**"],
+  "ignoreDependencies": ["oxlint", "oxlint-tsgolint"],
   "workspaces": {
     "apps/desktop": {
       "entry": ["stories/**/*.stories.{ts,tsx}"],

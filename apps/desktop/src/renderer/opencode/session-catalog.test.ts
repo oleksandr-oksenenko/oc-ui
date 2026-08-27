@@ -8,15 +8,14 @@ import { createSessionCatalog } from "./session-catalog.ts";
 
 const location = { directory: "/workspace" } as const;
 
-const session = (id: string): SessionInfo =>
-  ({
-    id,
-    projectID: "project",
-    cost: 0,
-    tokens: {},
-    time: { created: 1, updated: 1 },
-    location,
-  }) as SessionInfo;
+const session = (id: string): SessionInfo => ({
+  id,
+  projectID: "project",
+  cost: 0,
+  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  time: { created: 1, updated: 1 },
+  location,
+});
 
 describe("session catalog reconciliation", () => {
   it("replays create and delete events that race a server snapshot", async () => {
@@ -25,16 +24,17 @@ describe("session catalog reconciliation", () => {
     const page = new Promise<Page>((resolve) => {
       resolvePage = resolve;
     });
-    const remember = vi.fn();
-    const sync = vi.fn(() => Promise.resolve());
+    const remember = vi.fn<Data["session"]["remember"]>();
+    const sync = vi.fn<Data["session"]["sync"]>(() => Promise.resolve());
     const api = {
-      session: { list: vi.fn(() => page) },
-    } as unknown as OpenCodeClient;
+      session: { list: vi.fn<OpenCodeClient["session"]["list"]>(() => page) },
+    };
     const data = {
       session: { remember, sync },
-    } as unknown as Data;
+    };
     const events = createOpenCodeEventSource();
 
+    let catalogIds: readonly string[] = [];
     await new Promise<void>((resolveTest, rejectTest) => {
       createRoot((dispose) => {
         const catalog = createSessionCatalog({ api, data, defaultLocation: location, events });
@@ -68,9 +68,7 @@ describe("session catalog reconciliation", () => {
 
         void pending
           .then(() => {
-            expect(catalog.ids()).toEqual(["kept", "new"]);
-            expect(remember).toHaveBeenCalledTimes(1);
-            expect(sync).toHaveBeenCalledWith("new");
+            catalogIds = catalog.ids();
             dispose();
             resolveTest();
             return undefined;
@@ -78,5 +76,9 @@ describe("session catalog reconciliation", () => {
           .catch(rejectTest);
       });
     });
+
+    expect(catalogIds).toEqual(["kept", "new"]);
+    expect(remember).toHaveBeenCalledTimes(1);
+    expect(sync).toHaveBeenCalledWith("new");
   });
 });

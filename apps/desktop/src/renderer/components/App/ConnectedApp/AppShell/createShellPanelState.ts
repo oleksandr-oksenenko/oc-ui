@@ -36,7 +36,7 @@ export function createShellPanelState(options: PanelStateOptions = {}): PanelSta
   const toggleRightPanel = (): void => setRightPanelOpen(!rightPanelOpen());
 
   onMount(() => {
-    if (typeof window.matchMedia !== "function") return;
+    if (!("matchMedia" in window)) return;
     const media = window.matchMedia(MOBILE_SHELL_MEDIA_QUERY);
     const syncMode = (): void => {
       setMobile(media.matches);

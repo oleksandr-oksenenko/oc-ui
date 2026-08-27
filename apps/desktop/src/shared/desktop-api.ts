@@ -1,16 +1,24 @@
-export type LoadedConnection = {
-  readonly serverUrl: string;
-  readonly password?: string;
-};
+import { Schema } from "effect";
 
-export type SaveConnectionInput = {
-  readonly serverUrl: string;
-  readonly password: string;
-};
+const LoadedConnectionSchema = Schema.Struct({
+  serverUrl: Schema.String,
+  password: Schema.optionalKey(Schema.String),
+});
 
-export type SaveConnectionResult = {
-  readonly passwordSaved: boolean;
-};
+export type LoadedConnection = typeof LoadedConnectionSchema.Type;
+
+const SaveConnectionInputSchema = Schema.Struct({
+  serverUrl: Schema.String,
+  password: Schema.String,
+});
+
+export type SaveConnectionInput = typeof SaveConnectionInputSchema.Type;
+
+const SaveConnectionResultSchema = Schema.Struct({
+  passwordSaved: Schema.Boolean,
+});
+
+export type SaveConnectionResult = typeof SaveConnectionResultSchema.Type;
 
 export type DesktopApi = {
   readonly connection: {
@@ -25,3 +33,22 @@ export const IPC_CHANNELS = {
   connectionSave: "desktop:connection:save",
   connectionClear: "desktop:connection:clear",
 } as const;
+
+const ipcParseOptions = { onExcessProperty: "error" } as const;
+
+export const parseSaveConnectionInput = Schema.decodeUnknownSync(
+  SaveConnectionInputSchema,
+  ipcParseOptions,
+);
+export const parseConnectionLoadResult = Schema.decodeUnknownSync(
+  Schema.UndefinedOr(LoadedConnectionSchema),
+  ipcParseOptions,
+);
+export const parseConnectionSaveResult = Schema.decodeUnknownSync(
+  SaveConnectionResultSchema,
+  ipcParseOptions,
+);
+export const parseConnectionClearResult = Schema.decodeUnknownSync(
+  Schema.Undefined,
+  ipcParseOptions,
+);

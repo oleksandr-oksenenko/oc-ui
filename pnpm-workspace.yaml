@@ -5,13 +5,17 @@ packages:
 catalogMode: prefer
 
 catalog:
+  "@effect/tsgo": 0.38.0
   "@opencode-ai/ui": 0.0.0-beta-18155
+  "@oxlint/plugins": 1.79.0
   "@solidjs/meta": ^0.29.4
   "@storybook/addon-a11y": 10.5.10
   "@testing-library/jest-dom": 6.9.1
   electron: 42.3.3
   electron-vite: 6.0.0-beta.1
   jsdom: ^30.0.1
+  oxlint: 1.79.0
+  oxlint-tsgolint: 7.0.2001
   solid-js: ^1.9.15
   storybook: 10.5.10
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
@@ -62,3 +66,11 @@ minimumReleaseAgeExclude:
   - "@opencode-ai/schema@0.0.0-beta-18155"
   - "@opencode-ai/ui@0.0.0-beta-18155"
   - "@types/node@26.3.0"
+  - "@effect/tsgo-darwin-arm64@0.38.0"
+  - "@effect/tsgo-darwin-x64@0.38.0"
+  - "@effect/tsgo-linux-arm64@0.38.0"
+  - "@effect/tsgo-linux-arm@0.38.0"
+  - "@effect/tsgo-linux-x64@0.38.0"
+  - "@effect/tsgo-win32-arm64@0.38.0"
+  - "@effect/tsgo-win32-x64@0.38.0"
+  - "@effect/tsgo@0.38.0"

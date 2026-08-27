@@ -62,7 +62,7 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
   });
 
   let resolveReady!: () => void;
-  let rejectReady!: (reason: unknown) => void;
+  let rejectReady!: (cause: unknown) => void;
   const ready = new Promise<void>((resolve, reject) => {
     resolveReady = resolve;
     rejectReady = reject;

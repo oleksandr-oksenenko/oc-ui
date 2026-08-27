@@ -4,11 +4,14 @@ import { join, normalize, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session } from "electron";
-import { Context, Effect, ManagedRuntime } from "effect";
+import type { BrowserWindowConstructorOptions } from "electron";
+import { Effect, ManagedRuntime } from "effect";
 
 import type { SaveConnectionInput } from "../shared/desktop-api.ts";
-import { IPC_CHANNELS } from "../shared/desktop-api.ts";
-import { makeSettingsLayer, normalizeServerUrl, Settings, validatePassword } from "./settings.ts";
+import { IPC_CHANNELS, parseSaveConnectionInput } from "../shared/desktop-api.ts";
+import type { SettingsService } from "./settings.ts";
+import type { SettingsError } from "./settings.ts";
+import { normalizeServerUrl, settingsLayer, Settings, validatePassword } from "./settings.ts";
 
 const RENDERER_SCHEME = "oc";
 const RENDERER_HOST = "renderer";
@@ -36,7 +39,6 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-type SettingsService = Context.Service.Shape<typeof Settings>;
 type DesktopRuntime = ManagedRuntime.ManagedRuntime<SettingsService, never>;
 
 let mainWindow: BrowserWindow | undefined;
@@ -45,30 +47,18 @@ let removeIpcHandlers: (() => void) | undefined;
 let rendererProtocolInstalled = false;
 
 const withSettings = <A>(
-  operation: (service: SettingsService) => Effect.Effect<A, unknown>,
-): Effect.Effect<A, unknown, SettingsService> =>
+  operation: (service: SettingsService) => Effect.Effect<A, SettingsError>,
+): Effect.Effect<A, SettingsError, SettingsService> =>
   Effect.gen(function* () {
     const service = yield* Settings;
     return yield* operation(service);
   });
 
-const runSettings = <A>(program: Effect.Effect<A, unknown, SettingsService>): Promise<A> => {
+const runSettings = <A>(program: Effect.Effect<A, SettingsError, SettingsService>): Promise<A> => {
   if (desktopRuntime === undefined) {
     return Promise.reject(new Error("Desktop services are not ready"));
   }
   return desktopRuntime.runPromise(program);
-};
-
-const isSaveConnectionInput = (value: unknown): value is SaveConnectionInput => {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const record = value as Record<string, unknown>;
-  return (
-    Object.keys(record).length === 2 &&
-    typeof record.serverUrl === "string" &&
-    typeof record.password === "string"
-  );
 };
 
 const installIpcHandlers = (): void => {
@@ -76,11 +66,14 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("connection.load does not accept arguments"));
     }
-    return runSettings(withSettings((service) => service.load()));
+    return runSettings(withSettings((service) => service.load));
   });
 
-  ipcMain.handle(IPC_CHANNELS.connectionSave, (_event, input: unknown) => {
-    if (!isSaveConnectionInput(input)) {
+  ipcMain.handle(IPC_CHANNELS.connectionSave, (_event, rawInput) => {
+    let input: SaveConnectionInput;
+    try {
+      input = parseSaveConnectionInput(rawInput);
+    } catch {
       return Promise.reject(new TypeError("invalid connection settings"));
     }
 
@@ -96,7 +89,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("connection.clear does not accept arguments"));
     }
-    return runSettings(withSettings((service) => service.clear()));
+    return runSettings(withSettings((service) => service.clear));
   });
 
   removeIpcHandlers = () => {
@@ -184,19 +177,22 @@ const createMainWindow = async (): Promise<void> => {
   const developmentOrigin =
     developmentUrl === undefined ? undefined : new URL(developmentUrl).origin;
 
-  mainWindow = new BrowserWindow({
+  const windowOptions: BrowserWindowConstructorOptions = {
     width: 1_280,
     height: 860,
     minWidth: 360,
     minHeight: 480,
-    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
-  });
+  };
+  if (process.platform === "darwin") {
+    windowOptions.titleBarStyle = "hiddenInset";
+  }
+  mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event, url) => {
@@ -226,7 +222,7 @@ const createMainWindow = async (): Promise<void> => {
 const start = async (): Promise<void> => {
   await app.whenReady();
   configurePermissions();
-  desktopRuntime = ManagedRuntime.make(makeSettingsLayer(app.getPath("userData"), safeStorage));
+  desktopRuntime = ManagedRuntime.make(settingsLayer(app.getPath("userData"), safeStorage));
   installIpcHandlers();
   await createMainWindow();
 

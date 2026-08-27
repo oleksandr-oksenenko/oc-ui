@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 
 import type {
   LoadedConnection,
@@ -21,68 +21,55 @@ export interface SecureStorage {
 }
 
 export interface SettingsService {
-  readonly load: () => Effect.Effect<LoadedConnection | undefined, unknown>;
-  readonly save: (input: SaveConnectionInput) => Effect.Effect<SaveConnectionResult, unknown>;
-  readonly clear: () => Effect.Effect<void, unknown>;
+  readonly load: Effect.Effect<LoadedConnection | undefined, SettingsError>;
+  readonly save: (input: SaveConnectionInput) => Effect.Effect<SaveConnectionResult, SettingsError>;
+  readonly clear: Effect.Effect<void, SettingsError>;
 }
 
 export const Settings = Context.Service<SettingsService>("ocui/Settings");
 
-type StoredSettings = {
-  readonly serverUrl: string;
-  readonly encryptedPassword?: string;
-};
+export class SettingsError extends Schema.TaggedError<SettingsError>()("SettingsError", {
+  cause: Schema.Defect(),
+}) {}
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+const StoredSettingsSchema = Schema.Struct({
+  serverUrl: Schema.String,
+  encryptedPassword: Schema.optionalKey(Schema.NonEmptyString),
+});
+type StoredSettings = typeof StoredSettingsSchema.Type;
+const StoredSettingsJsonSchema = Schema.fromJsonString(StoredSettingsSchema);
+const parseStoredSettings = Schema.decodeUnknownSync(StoredSettingsJsonSchema, {
+  onExcessProperty: "error",
+});
+const encodeStoredSettings = Schema.encodeSync(StoredSettingsJsonSchema);
 
-const decodeStoredSettings = (value: unknown): StoredSettings | undefined => {
-  if (!isRecord(value) || typeof value.serverUrl !== "string") {
-    return undefined;
-  }
+const readSettings = (filePath: string): Effect.Effect<StoredSettings | undefined> =>
+  Effect.promise(async () => {
+    let contents: string;
+    try {
+      contents = await readFile(filePath, "utf8");
+    } catch {
+      return undefined;
+    }
 
-  if (
-    value.encryptedPassword !== undefined &&
-    (typeof value.encryptedPassword !== "string" || value.encryptedPassword.length === 0)
-  ) {
-    return undefined;
-  }
-
-  return {
-    serverUrl: value.serverUrl,
-    ...(value.encryptedPassword === undefined
-      ? {}
-      : { encryptedPassword: value.encryptedPassword }),
-  };
-};
-
-const readSettings = (filePath: string): Effect.Effect<StoredSettings | undefined, unknown> =>
-  Effect.tryPromise({
-    try: async () => {
-      let contents: string;
-      try {
-        contents = await readFile(filePath, "utf8");
-      } catch {
-        return undefined;
-      }
-
-      try {
-        return decodeStoredSettings(JSON.parse(contents) as unknown);
-      } catch {
-        return undefined;
-      }
-    },
-    catch: (cause) => cause,
+    try {
+      return parseStoredSettings(contents);
+    } catch {
+      return undefined;
+    }
   });
 
-const writeSettings = (filePath: string, settings: StoredSettings): Effect.Effect<void, unknown> =>
+const writeSettings = (
+  filePath: string,
+  settings: StoredSettings,
+): Effect.Effect<void, SettingsError> =>
   Effect.tryPromise({
     try: async () => {
       const directory = dirname(filePath);
       await mkdir(directory, { recursive: true });
 
       const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-      const contents = `${JSON.stringify(settings)}\n`;
+      const contents = `${encodeStoredSettings(settings)}\n`;
 
       try {
         await writeFile(temporaryPath, contents, { encoding: "utf8", mode: 0o600 });
@@ -92,16 +79,16 @@ const writeSettings = (filePath: string, settings: StoredSettings): Effect.Effec
           // Windows and some filesystems do not support POSIX permissions.
         }
         await rename(temporaryPath, filePath);
-      } catch (error) {
+      } catch (cause) {
         try {
           await unlink(temporaryPath);
         } catch {
           // The original write error is the useful failure for the caller.
         }
-        throw error;
+        throw cause;
       }
     },
-    catch: (cause) => cause,
+    catch: (cause) => new SettingsError({ cause }),
   });
 
 const makeSettingsService = (
@@ -110,93 +97,106 @@ const makeSettingsService = (
 ): SettingsService => {
   const filePath = join(userDataPath, SETTINGS_FILE_NAME);
 
+  const load = Effect.gen(function* () {
+    const stored = yield* readSettings(filePath);
+    if (stored === undefined) {
+      return undefined;
+    }
+
+    const serverUrl = normalizeStoredServerUrl(stored.serverUrl);
+    if (serverUrl === undefined) {
+      return undefined;
+    }
+
+    const password = decryptStoredPassword(stored, secureStorage);
+    return password === undefined ? { serverUrl } : { serverUrl, password };
+  });
+
+  const save = Effect.fn("Settings.save")(function* (input: SaveConnectionInput) {
+    const serverUrl = normalizeServerUrl(input.serverUrl);
+    const password = validatePassword(input.password);
+    const encryptedPassword = encryptPassword(password, secureStorage);
+
+    yield* writeSettings(
+      filePath,
+      encryptedPassword === undefined ? { serverUrl } : { serverUrl, encryptedPassword },
+    );
+    return { passwordSaved: encryptedPassword !== undefined };
+  });
+
+  const clear = Effect.tryPromise({
+    try: async () => {
+      try {
+        await unlink(filePath);
+      } catch (cause) {
+        if (!isNodeError(cause) || cause.code !== "ENOENT") {
+          throw cause;
+        }
+      }
+    },
+    catch: (cause) => new SettingsError({ cause }),
+  });
+
   return {
-    load: () =>
-      Effect.gen(function* () {
-        const stored = yield* readSettings(filePath);
-        if (stored === undefined) {
-          return undefined;
-        }
-
-        let serverUrl: string;
-        try {
-          serverUrl = normalizeServerUrl(stored.serverUrl);
-        } catch {
-          return undefined;
-        }
-
-        if (stored.encryptedPassword === undefined || !secureStorage.isEncryptionAvailable()) {
-          return { serverUrl };
-        }
-
-        try {
-          const encryptedPassword = Buffer.from(stored.encryptedPassword, "base64");
-          if (encryptedPassword.length === 0) {
-            return { serverUrl };
-          }
-          const password = secureStorage.decryptString(encryptedPassword);
-          return password.length > 0 ? { serverUrl, password } : { serverUrl };
-        } catch {
-          // A credential can become undecryptable after an OS profile migration.
-          // Keep the URL so the user can re-enter the password.
-          return { serverUrl };
-        }
-      }),
-
-    save: (input) =>
-      Effect.gen(function* () {
-        const serverUrl = normalizeServerUrl(input.serverUrl);
-        const password = validatePassword(input.password);
-        let encryptedPassword: string | undefined;
-        let passwordSaved = false;
-
-        if (secureStorage.isEncryptionAvailable()) {
-          try {
-            encryptedPassword = secureStorage.encryptString(password).toString("base64");
-            passwordSaved = encryptedPassword.length > 0;
-          } catch {
-            // Never fall back to writing the plaintext password.
-            encryptedPassword = undefined;
-          }
-        }
-
-        yield* writeSettings(
-          filePath,
-          encryptedPassword === undefined ? { serverUrl } : { serverUrl, encryptedPassword },
-        );
-        return { passwordSaved };
-      }),
-
-    clear: () =>
-      Effect.tryPromise({
-        try: async () => {
-          try {
-            await unlink(filePath);
-          } catch (error) {
-            if (!isNodeError(error) || error.code !== "ENOENT") {
-              throw error;
-            }
-          }
-        },
-        catch: (cause) => cause,
-      }),
+    load,
+    save,
+    clear,
   };
 };
 
-const isNodeError = (value: unknown): value is NodeJS.ErrnoException =>
-  value instanceof Error && "code" in value;
+const normalizeStoredServerUrl = (value: string): string | undefined => {
+  try {
+    return normalizeServerUrl(value);
+  } catch {
+    return undefined;
+  }
+};
 
-export const makeSettingsLayer = (
+const decryptStoredPassword = (
+  stored: StoredSettings,
+  secureStorage: SecureStorage,
+): string | undefined => {
+  if (stored.encryptedPassword === undefined || !secureStorage.isEncryptionAvailable()) {
+    return undefined;
+  }
+
+  try {
+    const encryptedPassword = Buffer.from(stored.encryptedPassword, "base64");
+    if (encryptedPassword.length === 0) {
+      return undefined;
+    }
+    const password = secureStorage.decryptString(encryptedPassword);
+    return password.length > 0 ? password : undefined;
+  } catch {
+    // A credential can become undecryptable after an OS profile migration.
+    return undefined;
+  }
+};
+
+const encryptPassword = (password: string, secureStorage: SecureStorage): string | undefined => {
+  if (!secureStorage.isEncryptionAvailable()) {
+    return undefined;
+  }
+
+  try {
+    const encryptedPassword = secureStorage.encryptString(password).toString("base64");
+    return encryptedPassword.length > 0 ? encryptedPassword : undefined;
+  } catch {
+    // Never fall back to writing the plaintext password.
+    return undefined;
+  }
+};
+
+const isNodeError = (cause: unknown): cause is NodeJS.ErrnoException =>
+  cause instanceof Error && "code" in cause;
+
+export const settingsLayer = (
   userDataPath: string,
   secureStorage: SecureStorage,
 ): Layer.Layer<SettingsService> =>
   Layer.succeed(Settings, makeSettingsService(userDataPath, secureStorage));
 
-export const normalizeServerUrl = (value: unknown): string => {
-  if (typeof value !== "string") {
-    throw new TypeError("serverUrl must be a string");
-  }
-
+export const normalizeServerUrl = (value: string): string => {
   const input = value.trim();
   if (input.length === 0 || input.length > MAX_URL_LENGTH) {
     throw new TypeError("serverUrl is invalid");
@@ -224,8 +224,8 @@ export const normalizeServerUrl = (value: unknown): string => {
   return `${url.protocol}//${url.host}`;
 };
 
-export const validatePassword = (value: unknown): string => {
-  if (typeof value !== "string" || value.length === 0 || value.length > MAX_PASSWORD_LENGTH) {
+export const validatePassword = (value: string): string => {
+  if (value.length === 0 || value.length > MAX_PASSWORD_LENGTH) {
     throw new TypeError("password is invalid");
   }
   return value;

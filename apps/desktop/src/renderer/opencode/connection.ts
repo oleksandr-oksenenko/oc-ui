@@ -1,5 +1,6 @@
 import { OpenCode } from "@opencode-ai/client";
 import type { LocationGetOutput, OpenCodeClient } from "@opencode-ai/client";
+import { Predicate } from "effect";
 
 const OPENCODE_VERSION = "0.0.0-beta-18155" as const;
 const HEALTH_TIMEOUT_MS = 10_000;
@@ -169,19 +170,19 @@ export async function verifyServer(input: VerifyServerInput): Promise<VerifiedSe
 }
 
 export function mapConnectionFailure(
-  error: unknown,
+  cause: unknown,
   phase: Exclude<ConnectionFailurePhase, "url">,
 ): OpenCodeConnectionError {
-  if (error instanceof OpenCodeConnectionError) return error;
+  if (cause instanceof OpenCodeConnectionError) return cause;
 
-  const status = findStatus(error);
-  if (status === 401 || hasTag(error, "UnauthorizedError")) {
+  const status = findStatus(cause);
+  if (status === 401 || hasTag(cause, "UnauthorizedError")) {
     return new OpenCodeConnectionError("unauthorized", "The server rejected the password.", phase, {
-      cause: error,
+      cause,
     });
   }
 
-  if (isTimeout(error) || isTransportFailure(error)) {
+  if (isTimeout(cause) || isTransportFailure(cause)) {
     return new OpenCodeConnectionError(
       phase === "stream" ? "stream-handshake" : "unreachable",
       phase === "health"
@@ -190,7 +191,7 @@ export function mapConnectionFailure(
           ? "The server could not be reached."
           : "The event stream could not be established.",
       phase,
-      { cause: error },
+      { cause },
     );
   }
 
@@ -202,7 +203,7 @@ export function mapConnectionFailure(
         ? "The server location check failed."
         : "The event stream handshake failed.",
     phase,
-    { cause: error },
+    { cause },
   );
 }
 
@@ -225,25 +226,25 @@ async function withTimeout<T>(
   }
 }
 
-function hasTag(error: unknown, tag: string): boolean {
-  return typeof error === "object" && error !== null && "_tag" in error && error._tag === tag;
+function hasTag(cause: unknown, tag: string): boolean {
+  return Predicate.isObject(cause) && "_tag" in cause && cause._tag === tag;
 }
 
-function findStatus(error: unknown): number | undefined {
-  if (typeof error !== "object" || error === null) return undefined;
-  if ("status" in error && typeof error.status === "number") return error.status;
-  if ("cause" in error) return findStatus(error.cause);
+function findStatus(cause: unknown): number | undefined {
+  if (!Predicate.isObject(cause)) return undefined;
+  if ("status" in cause && Predicate.isNumber(cause.status)) return cause.status;
+  if ("cause" in cause) return findStatus(cause.cause);
   return undefined;
 }
 
-function isTimeout(error: unknown): boolean {
-  return error instanceof OpenCodeConnectionError && error.reason === "unreachable";
+function isTimeout(cause: unknown): boolean {
+  return cause instanceof OpenCodeConnectionError && cause.reason === "unreachable";
 }
 
-function isTransportFailure(error: unknown): boolean {
-  if (error instanceof TypeError) return true;
-  if (error instanceof DOMException && error.name === "AbortError") return true;
-  if (typeof error !== "object" || error === null) return false;
-  if ("reason" in error && error.reason === "Transport") return true;
-  return "cause" in error && isTransportFailure(error.cause);
+function isTransportFailure(cause: unknown): boolean {
+  if (cause instanceof TypeError) return true;
+  if (cause instanceof DOMException && cause.name === "AbortError") return true;
+  if (!Predicate.isObject(cause)) return false;
+  if ("reason" in cause && cause.reason === "Transport") return true;
+  return "cause" in cause && isTransportFailure(cause.cause);
 }

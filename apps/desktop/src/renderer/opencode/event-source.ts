@@ -12,6 +12,11 @@ export type OpenCodeEventSource = {
   readonly close: () => void;
 };
 
+const isEventType = <Type extends OpenCodeEvent["type"]>(
+  event: OpenCodeEvent,
+  type: Type,
+): event is Extract<OpenCodeEvent, { type: Type }> => event.type === type;
+
 /**
  * A small, typed bridge between the client's event stream and createData.
  * It deliberately owns no OpenCode state: createData remains the reducer and
@@ -39,7 +44,9 @@ export function createOpenCodeEventSource(): OpenCodeEventSource {
     if (closed) return () => undefined;
 
     const handlers = typed.get(type) ?? new Set<(event: OpenCodeEvent) => void>();
-    const callback = handler as (event: OpenCodeEvent) => void;
+    const callback = (event: OpenCodeEvent): void => {
+      if (isEventType(event, type)) handler(event);
+    };
     handlers.add(callback);
     typed.set(type, handlers);
     return () => handlers.delete(callback);
