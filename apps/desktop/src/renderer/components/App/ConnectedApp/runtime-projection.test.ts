@@ -17,10 +17,4 @@ describe("runtime presentation projection", () => {
     ]);
     expect(nodes.every((node) => !("children" in node) && !("needsInput" in node))).toBe(true);
   });
-
-  it("projects the creating state ahead of the server running state", () => {
-    expect(projectRuntimeSessionNodes([session("new")], () => "running", "new")).toEqual([
-      { id: "new", title: "Untitled session", status: "creating" },
-    ]);
-  });
 });

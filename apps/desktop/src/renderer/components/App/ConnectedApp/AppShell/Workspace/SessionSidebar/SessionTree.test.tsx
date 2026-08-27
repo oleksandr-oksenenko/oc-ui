@@ -80,7 +80,6 @@ describe("SessionSidebar", () => {
           expandedIDs={[]}
           loading={false}
           canCreate
-          creating={false}
           serverName="Local server"
           serverStatus="connected"
           onSelect={() => undefined}

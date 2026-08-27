@@ -18,6 +18,14 @@ const makeData = (more: () => boolean) => {
   return { data, syncSession, syncPending, syncMessages, loadMore };
 };
 
+const deferred = () => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
+
 describe("syncSessionTranscript", () => {
   it("loads every older message page after the first snapshot", async () => {
     let remaining = 2;
@@ -37,5 +45,46 @@ describe("syncSessionTranscript", () => {
     await syncSessionTranscript(fixture.data, "old-session", { isCurrent: () => false });
 
     expect(fixture.loadMore).not.toHaveBeenCalled();
+  });
+
+  it("serializes overlapping pagination for the same session", async () => {
+    const page = deferred();
+    let loading = false;
+    let pageAvailable = true;
+    let checks = 0;
+    const fixture = makeData(() => pageAvailable && checks++ < 4);
+    fixture.loadMore.mockImplementation(async () => {
+      if (loading) return;
+      loading = true;
+      await page.promise;
+      pageAvailable = false;
+      loading = false;
+    });
+
+    const first = syncSessionTranscript(fixture.data, "session");
+    await vi.waitFor(() => expect(fixture.loadMore).toHaveBeenCalledTimes(1));
+    const second = syncSessionTranscript(fixture.data, "session");
+    await Promise.resolve();
+
+    expect(fixture.loadMore).toHaveBeenCalledTimes(1);
+
+    page.resolve();
+    await Promise.all([first, second]);
+
+    expect(fixture.loadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows a queued retry after an earlier sync fails", async () => {
+    const fixture = makeData(() => false);
+    fixture.syncMessages
+      .mockRejectedValueOnce(new Error("first sync failed"))
+      .mockResolvedValueOnce(undefined);
+
+    const first = syncSessionTranscript(fixture.data, "session");
+    const retry = syncSessionTranscript(fixture.data, "session");
+
+    await expect(first).rejects.toThrow("first sync failed");
+    await expect(retry).resolves.toBeUndefined();
+    expect(fixture.syncMessages).toHaveBeenCalledTimes(2);
   });
 });

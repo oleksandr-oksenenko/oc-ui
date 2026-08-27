@@ -33,6 +33,13 @@ apps/desktop/src/renderer/
               SessionTree.tsx
               SessionTree/
                 SessionTreeItem.tsx
+              NewSessionFlow.tsx
+              NewSessionFlow/
+                AddProjectDialog.tsx
+                NewSessionDialog.tsx
+                NewSessionDialog/
+                  ProjectSelection.tsx
+                  WorktreeForm.tsx
             SessionPane.tsx
             SessionPane/
               TranscriptView.tsx
@@ -56,18 +63,25 @@ apps/desktop/src/renderer/
                 FileTreeItem.tsx
 ```
 
+Shared renderer UI lives under `apps/desktop/src/renderer/ui/`. `ServerDirectoryBrowser` is shared
+by the Add project and worktree forms. It reads the connected server filesystem through the
+OpenCode file API and reports successfully resolved directories.
+
 ### Ownership
 
 - `App` owns saved-connection setup and the connected/disconnected boundary.
 - `ConnectedApp` owns OpenCode-backed controller state: catalog hydration, selection, drafts,
-  prompt submission, and reconnection.
+  prompt submission, reconnection, and opening the new-session flow.
 - `ConnectedApp` owns the production left/right visibility signals; the full showcase owns its own
   fixture visibility signals.
 - `AppShell` is the presentation-only frame. `Titlebar` renders the selected session title, panel
   callbacks, and the friendly server selector.
 - `Workspace` renders the three-pane grid from controlled visibility props. Its caller decides when
   the right panel collapses first at a narrow width.
-- `SessionSidebar` owns loading, empty, error, creation, and tree presentation.
+- `SessionSidebar` owns loading, empty, error, and tree presentation.
+- `NewSessionFlow` owns project refresh, project registration, direct session creation, worktree
+  creation, session admission, and retry rules. `AddProjectDialog` and `NewSessionDialog` own their
+  modal and form presentation. Neither component reads the Electron host filesystem.
 - `SessionTree` is a controlled recursive renderer; its caller owns expanded node IDs.
   `SessionTreeItem` owns one row, disclosure, depth, selection, and its single status glyph.
 - `SessionPane` owns transcript/composer placement and the no-selection state.
@@ -138,8 +152,13 @@ Stories are grouped under `apps/desktop/stories/`:
 - `Shell/Titlebar`: connected, reconnecting, long server name, and both panel visibility states.
 - `App/ConnectionForm`: blank, connecting, saved URL, non-loopback warning, unauthorized,
   unreachable, and incompatible-version errors.
-- `Sessions/SessionSidebar`: loading, empty, error, creating, flat production list, four-level
+- `Sessions/SessionSidebar`: loading, empty, error, flat production list, four-level
   hierarchy, selected, running, needs-input, and needs-input precedence.
+- `Projects/AddProjectDialog`: server-directory browsing, loading, validation,
+  add-project failure, and mutation.
+- `Sessions/NewSessionDialog`: project selection, empty catalog, direct and worktree choices,
+  worktree inputs and preview, both mutation phases, validation and creation failures, and
+  orphan-worktree retry.
 - `Session/SessionPane`: no selection and selected transcript/composer placement.
 - `Transcript/TranscriptView`: empty, loading, text, streaming, failure, rich
   prose/list/quote/link, reasoning, tool calls, and expanded output.

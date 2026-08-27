@@ -1,0 +1,123 @@
+.server-directory-browser-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.server-directory-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.server-directory-error,
+.server-directory-listing-error {
+  color: var(--v2-state-fg-danger);
+}
+
+.server-directory-entries button {
+  min-width: 0;
+  max-width: 100%;
+  justify-content: flex-start;
+}
+
+.server-directory-browser {
+  display: flex;
+  flex-direction: column;
+  min-height: 152px;
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--v2-background-bg-base);
+}
+
+.server-directory-browser-header {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  gap: 8px;
+  padding: 4px 8px 4px 12px;
+  border-bottom: 1px solid var(--v2-border-border-base);
+}
+
+.server-directory-browser-path {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--v2-text-text-muted);
+}
+
+.server-directory-entries {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  scrollbar-color: var(--v2-border-border-base) transparent;
+  scrollbar-width: thin;
+  list-style: none;
+}
+
+.server-directory-entries::-webkit-scrollbar {
+  width: 10px;
+}
+
+.server-directory-entries::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.server-directory-entries::-webkit-scrollbar-thumb {
+  border: 2px solid var(--v2-background-bg-base);
+  border-radius: 999px;
+  background: var(--v2-border-border-base);
+}
+
+.server-directory-entries li + li {
+  border-top: 1px solid var(--v2-border-border-base);
+}
+
+.server-directory-entries button {
+  width: 100%;
+  min-height: 36px;
+}
+
+.server-directory-entries span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.server-directory-entry-name {
+  color: var(--v2-text-text-base);
+}
+
+.server-directory-entry-name-hidden {
+  color: var(--v2-text-text-muted);
+}
+
+.server-directory-entry-chevron {
+  flex-shrink: 0;
+  color: var(--v2-text-text-muted);
+}
+
+.server-directory-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 112px;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--v2-text-text-muted);
+}

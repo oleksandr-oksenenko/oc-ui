@@ -1,7 +1,6 @@
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
-import { Loader } from "@opencode-ai/ui/loader";
 import { Show } from "solid-js";
 
 import "../../SidebarToggleButton.css";
@@ -9,7 +8,6 @@ import "./SessionHeader.css";
 
 export type SessionHeaderProps = {
   readonly canCreate: boolean;
-  readonly creating: boolean;
   readonly autoFocusClose?: boolean;
   readonly onCreate: () => void;
   readonly onHide?: () => void;
@@ -23,17 +21,12 @@ export function SessionHeader(props: SessionHeaderProps) {
         type="button"
         size="small"
         variant="ghost-muted"
-        aria-label={props.creating ? "Creating session" : "Create session"}
-        title={props.creating ? "Creating session" : "Create session"}
-        disabled={!props.canCreate || props.creating}
+        aria-label="Create session"
+        title="Create session"
+        disabled={!props.canCreate}
         onClick={props.onCreate}
       >
-        <Show
-          when={!props.creating}
-          fallback={<Loader class="session-header-spin" width={16} height={16} />}
-        >
-          <Icon name="plus" />
-        </Show>
+        <Icon name="plus" />
         <span>New Session</span>
       </Button>
       <Show when={props.onHide}>

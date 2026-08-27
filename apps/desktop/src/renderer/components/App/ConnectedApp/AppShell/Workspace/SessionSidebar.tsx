@@ -19,7 +19,6 @@ export type SessionSidebarProps = {
   readonly loading: boolean;
   readonly error?: string;
   readonly canCreate: boolean;
-  readonly creating: boolean;
   readonly showHeader?: boolean;
   readonly autoFocusClose?: boolean;
   readonly serverName: string;
@@ -44,7 +43,6 @@ export function SessionSidebar(props: SessionSidebarProps) {
       <Show when={props.showHeader !== false}>
         <SessionHeader
           canCreate={props.canCreate}
-          creating={props.creating}
           autoFocusClose={props.autoFocusClose}
           onCreate={props.onCreate}
           onHide={props.onHide}
@@ -77,7 +75,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
 
       <Show when={!props.loading && !props.error && props.nodes.length === 0}>
         <div class="shell-sidebar-message">
-          <p>No sessions in this directory yet.</p>
+          <p>No sessions yet.</p>
         </div>
       </Show>
 

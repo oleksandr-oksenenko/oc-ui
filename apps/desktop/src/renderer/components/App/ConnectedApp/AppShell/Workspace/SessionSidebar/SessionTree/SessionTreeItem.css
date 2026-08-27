@@ -139,8 +139,7 @@
   color: var(--icon-base, #a3a3a3);
 }
 
-.shell-session-status[data-status="running"],
-.shell-session-status[data-status="creating"] {
+.shell-session-status[data-status="running"] {
   color: var(--v2-state-fg-warning, #f5b942);
 }
 

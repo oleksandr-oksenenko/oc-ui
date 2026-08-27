@@ -44,9 +44,7 @@ const meta = {
 } satisfies Meta<typeof SessionSidebar>;
 
 export default meta;
-type StoryOptions = Partial<
-  Pick<SessionSidebarProps, "loading" | "error" | "canCreate" | "creating">
-> & {
+type StoryOptions = Partial<Pick<SessionSidebarProps, "loading" | "error" | "canCreate">> & {
   readonly selectedID?: string;
   readonly expandedIDs?: readonly string[];
 };
@@ -64,7 +62,6 @@ function interactiveSidebar(nodes: readonly SessionNode[], options: StoryOptions
         loading={options.loading ?? false}
         error={options.error}
         canCreate={options.canCreate ?? true}
-        creating={options.creating ?? false}
         serverName="Local server"
         serverStatus="connected"
         onSelect={setSelectedID}
@@ -110,17 +107,12 @@ export const Error = {
     interactiveSidebar([], { error: "Sessions could not be loaded.", canCreate: false }),
 };
 
-export const Creating = {
-  render: () => interactiveSidebar(flatNodes, { creating: true }),
-};
-
 export const StatusGlyphs = {
   render: () =>
     interactiveSidebar([
       { id: "idle", title: "Idle session", status: "idle" },
       { id: "running", title: "Running session", status: "running" },
       { id: "input", title: "Needs input", status: "running", needsInput: true },
-      { id: "creating", title: "Creating session", status: "creating" },
     ]),
 };
 

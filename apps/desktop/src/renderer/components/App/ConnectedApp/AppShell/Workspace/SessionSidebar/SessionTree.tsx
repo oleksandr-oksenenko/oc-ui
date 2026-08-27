@@ -4,7 +4,7 @@ import { For } from "solid-js";
 import { SessionTreeItem } from "./SessionTree/SessionTreeItem.tsx";
 import "./SessionTree.css";
 
-type SessionNodeStatus = "idle" | "running" | "creating";
+type SessionNodeStatus = "idle" | "running";
 
 export type SessionNode = {
   readonly id: string;
