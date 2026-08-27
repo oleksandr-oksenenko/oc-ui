@@ -4,7 +4,7 @@ Status: Implemented for milestone 1.
 
 ## Product direction
 
-`oc-ui` is an Electron desktop client for OpenCode. It is a place to
+Ocui is an Electron desktop client for OpenCode. It is a place to
 experiment with coding-agent interfaces while keeping OpenCode responsible for
 agent execution and server-side state.
 

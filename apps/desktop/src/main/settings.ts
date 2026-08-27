@@ -26,7 +26,7 @@ export interface SettingsService {
   readonly clear: () => Effect.Effect<void, unknown>;
 }
 
-export const Settings = Context.Service<SettingsService>("oc-ui/Settings");
+export const Settings = Context.Service<SettingsService>("ocui/Settings");
 
 type StoredSettings = {
   readonly serverUrl: string;

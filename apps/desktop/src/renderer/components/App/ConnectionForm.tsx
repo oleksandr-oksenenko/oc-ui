@@ -43,7 +43,7 @@ export function ConnectionForm(props: ConnectionFormProps) {
     <main class="connection-form-page">
       <section class="connection-form-column" aria-labelledby="connection-form-title">
         <header class="connection-form-heading">
-          <p class="connection-form-eyebrow">OpenCode desktop</p>
+          <p class="connection-form-eyebrow">Ocui</p>
           <h1 id="connection-form-title">Connect to a server</h1>
           <p>Use an existing OpenCode server to browse sessions and send prompts.</p>
         </header>

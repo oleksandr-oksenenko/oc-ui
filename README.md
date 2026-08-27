@@ -1,6 +1,6 @@
-# oc-ui
+# Ocui
 
-A pnpm workspace for the OpenCode UI.
+An Electron desktop client for OpenCode.
 
 ## Product documentation
 

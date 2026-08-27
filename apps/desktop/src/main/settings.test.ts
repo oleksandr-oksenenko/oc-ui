@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 const makeDirectory = async (): Promise<string> => {
-  const directory = await mkdtemp(join(tmpdir(), "oc-ui-settings-"));
+  const directory = await mkdtemp(join(tmpdir(), "ocui-settings-"));
   temporaryDirectories.push(directory);
   return directory;
 };

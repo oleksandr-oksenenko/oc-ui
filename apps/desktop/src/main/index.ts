@@ -12,7 +12,7 @@ import { makeSettingsLayer, normalizeServerUrl, Settings, validatePassword } fro
 
 const RENDERER_SCHEME = "oc";
 const RENDERER_HOST = "renderer";
-const APP_NAME = "OpenCode UI";
+const APP_NAME = "Ocui";
 
 // Raw development launches otherwise inherit Electron's shared profile. Give
 // this app the same isolated identity and Chromium state it will have packaged.
