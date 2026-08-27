@@ -80,6 +80,45 @@ const streamingAssistant: SessionMessageInfo = {
   ],
 };
 
+const markdownAssistant: SessionMessageInfo = {
+  id: "assistant-markdown",
+  time: { created: 1, completed: 2 },
+  type: "assistant",
+  agent: "build",
+  model: { providerID: "openai", id: "gpt-5" },
+  content: [
+    {
+      type: "text",
+      text: [
+        "# Release review",
+        "",
+        "The release is **ready to ship**. The remaining notes are *informational*.",
+        "",
+        "## What changed",
+        "",
+        "- Added Markdown rendering",
+        "- Sanitized generated HTML",
+        "- Styled `inline code` and code blocks",
+        "",
+        "> All required checks passed. No blocking issues remain.",
+        "",
+        "```ts",
+        'const release = { status: "ready", checks: 3 };',
+        "```",
+        "",
+        "| Check | Status |",
+        "| --- | --- |",
+        "| Types | Passed |",
+        "| Tests | Passed |",
+        "| Build | Passed |",
+        "",
+        "Read the [release notes](https://example.com/releases) for the full details.",
+      ].join("\n"),
+    },
+  ],
+  finish: "stop",
+};
+
 const richItems: readonly SessionMessageInfo[] = [
   { id: "system-1", time: { created: 0 }, type: "system", text: "System context" },
   {
@@ -157,6 +196,10 @@ const renderTranscript = (args: TranscriptViewProps) => (
 
 export const Rich: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
+  render: renderTranscript,
+};
+export const Markdown: Story = {
+  args: { messages: [markdownAssistant], sessionStatus: "idle", loading: false },
   render: renderTranscript,
 };
 export const Loading: Story = {

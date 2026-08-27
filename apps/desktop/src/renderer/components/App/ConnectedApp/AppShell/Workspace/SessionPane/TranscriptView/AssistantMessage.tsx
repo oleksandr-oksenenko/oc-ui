@@ -7,6 +7,7 @@ import type {
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { For, Show, type JSX } from "solid-js";
 
+import { Markdown } from "./AssistantMessage/Markdown.tsx";
 import { ReasoningBlock } from "./AssistantMessage/ReasoningBlock.tsx";
 import { ToolCall } from "./AssistantMessage/ToolCall.tsx";
 
@@ -50,7 +51,7 @@ function renderContent(
 ): JSX.Element {
   switch (content.type) {
     case "text":
-      return <p class="transcript-paragraph">{content.text}</p>;
+      return <Markdown text={content.text} />;
     case "reasoning":
       return <ReasoningBlock reasoning={content} />;
     case "tool":

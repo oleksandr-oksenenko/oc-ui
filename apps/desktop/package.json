@@ -19,7 +19,9 @@
     "@opencode-ai/client": "catalog:",
     "@opencode-ai/ui": "catalog:",
     "@solidjs/meta": "catalog:",
+    "dompurify": "catalog:",
     "effect": "4.0.0-rc.111",
+    "marked": "catalog:",
     "solid-js": "catalog:"
   },
   "devDependencies": {
