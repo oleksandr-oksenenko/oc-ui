@@ -1,9 +1,6 @@
 import type { SessionInfo } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
-
-import type { TranscriptItem } from "../../../domain/transcript.ts";
 import type { SessionNode } from "./AppShell/Workspace/SessionSidebar.tsx";
-import type { TranscriptMessage } from "./AppShell/Workspace/SessionPane/transcript-types.ts";
+import type { DataSessionStatus } from "@opencode-ai/client/solid";
 
 type SessionStatusLookup = (sessionID: string) => DataSessionStatus;
 
@@ -23,20 +20,4 @@ export function projectRuntimeSessionNodes(
           ? "running"
           : "idle",
   }));
-}
-
-/** Projects the supported text-only runtime transcript into the richer view contract. */
-export function projectRuntimeTranscript(
-  items: readonly TranscriptItem[],
-): readonly TranscriptMessage[] {
-  return items.map((item): TranscriptMessage =>
-    item.kind === "user"
-      ? item
-      : {
-          kind: "assistant",
-          id: item.id,
-          state: item.state,
-          blocks: item.textBlocks.map((text) => ({ kind: "paragraph", content: text })),
-        },
-  );
 }

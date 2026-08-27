@@ -108,8 +108,26 @@ export function createBasicAuthorization(password: string): string {
 function createAuthenticatedClient(serverUrl: string, password: string): OpenCodeClient {
   return OpenCode.make({
     baseUrl: normalizeServerUrl(serverUrl),
+    // The beta client discards HTTP status when an error response has no JSON
+    // content type (the server's 401 response is intentionally empty). Keep
+    // the status available so the connection form can give the right advice.
+    fetch: async (input, init) => {
+      const response = await fetch(input, init);
+      if (response.status === 401) throw new HttpStatusError(response.status);
+      return response;
+    },
     headers: { Authorization: createBasicAuthorization(password) },
   });
+}
+
+class HttpStatusError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`OpenCode server returned HTTP ${status}.`);
+    this.name = "HttpStatusError";
+    this.status = status;
+  }
 }
 
 /** Verify health, exact protocol version, and the server's default location. */

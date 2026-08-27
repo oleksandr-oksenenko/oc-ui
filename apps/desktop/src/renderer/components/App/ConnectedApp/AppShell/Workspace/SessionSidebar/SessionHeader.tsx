@@ -12,16 +12,16 @@ export type SessionHeaderProps = {
   readonly creating: boolean;
   readonly autoFocusClose?: boolean;
   readonly onCreate: () => void;
-  readonly onHide: () => void;
+  readonly onHide?: () => void;
 };
 
 export function SessionHeader(props: SessionHeaderProps) {
   return (
-    <div class="shell-session-header">
+    <div class="shell-session-header" classList={{ "has-close": props.onHide !== undefined }}>
       <Button
         class="shell-create-session"
         type="button"
-        size="normal"
+        size="small"
         variant="ghost-muted"
         aria-label={props.creating ? "Creating session" : "Create session"}
         title={props.creating ? "Creating session" : "Create session"}
@@ -36,17 +36,21 @@ export function SessionHeader(props: SessionHeaderProps) {
         </Show>
         <span>New Session</span>
       </Button>
-      <IconButton
-        class="shell-sidebar-toggle-button"
-        type="button"
-        size="small"
-        variant="ghost-muted"
-        icon={<Icon name="layout-left" />}
-        aria-label="Hide sessions"
-        title="Hide sessions"
-        autofocus={props.autoFocusClose}
-        onClick={props.onHide}
-      />
+      <Show when={props.onHide}>
+        {(onHide) => (
+          <IconButton
+            class="shell-sidebar-toggle-button"
+            type="button"
+            size="small"
+            variant="ghost-muted"
+            icon={<Icon name="layout-left-partial" />}
+            aria-label="Hide sessions"
+            title="Hide sessions"
+            autofocus={props.autoFocusClose}
+            onClick={onHide()}
+          />
+        )}
+      </Show>
     </div>
   );
 }

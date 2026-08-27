@@ -1,68 +1,35 @@
+import type { LocationRef, SessionMessageInfo } from "@opencode-ai/client";
+import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { Button } from "@opencode-ai/ui/button";
 import { Loader } from "@opencode-ai/ui/loader";
-import { ScrollView } from "@opencode-ai/ui/scroll-view";
-import { For, Show, createEffect, type JSX } from "solid-js";
+import { Show, type JSX } from "solid-js";
 
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
+import { CompactionMessage } from "./TranscriptView/CompactionMessage.tsx";
+import { ContextMessage } from "./TranscriptView/ContextMessage.tsx";
+import { ShellMessage } from "./TranscriptView/ShellMessage.tsx";
+import { SkillMessage } from "./TranscriptView/SkillMessage.tsx";
+import { TimelineRow } from "./TranscriptView/TimelineRow.tsx";
 import { UserMessage } from "./TranscriptView/UserMessage.tsx";
-import type { TranscriptMessage } from "./transcript-types.ts";
 
 import "./SessionPane.css";
 
 export type TranscriptViewProps = {
-  readonly items: readonly TranscriptMessage[];
+  readonly messages: readonly SessionMessageInfo[];
+  readonly sessionStatus: DataSessionStatus;
   readonly loading?: boolean;
   readonly error?: string;
-  readonly working?: boolean;
   readonly workingLabel?: string;
   readonly onRetry?: () => void;
   readonly emptyMessage?: string;
 };
 
 export function TranscriptView(props: TranscriptViewProps): JSX.Element {
-  let scroller: HTMLDivElement | undefined;
-  let pinned = true;
-  let previousFirst: string | undefined;
-  let previousHeight = 0;
-
-  const trackScroll = () => {
-    if (!scroller) return;
-    pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 72;
-    previousHeight = scroller.scrollHeight;
-  };
-
-  createEffect(() => {
-    const first = props.items[0]?.id;
-    const last = props.items.at(-1)?.id;
-    const count = props.items.length;
-    void last;
-    void count;
-
-    queueMicrotask(() => {
-      if (!scroller) return;
-      if (pinned || previousFirst === undefined) {
-        scroller.scrollTop = scroller.scrollHeight;
-      } else if (first !== previousFirst) {
-        scroller.scrollTop += scroller.scrollHeight - previousHeight;
-      }
-      previousFirst = first;
-      previousHeight = scroller.scrollHeight;
-    });
-  });
-
-  const retry = () => props.onRetry?.();
+  const working = () => props.sessionStatus === "running";
 
   return (
-    <ScrollView
-      class="transcript-view"
-      viewportRef={(element) => {
-        scroller = element;
-      }}
-      onScroll={trackScroll}
-      aria-busy={props.loading === true}
-      thumbVisibility="hover"
-    >
-      <Show when={props.loading === true && props.items.length === 0}>
+    <div class="transcript-view" aria-busy={props.loading === true}>
+      <Show when={props.loading === true && props.messages.length === 0}>
         <output class="transcript-state" aria-live="polite">
           <Loader class="transcript-state-loader" width={18} height={18} aria-hidden="true" />
           <span>Loading transcript</span>
@@ -73,32 +40,26 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
         <div class="transcript-state transcript-error-state" role="alert">
           <p>{props.error}</p>
           <Show when={props.onRetry !== undefined}>
-            <Button type="button" size="small" variant="outline" onClick={retry}>
+            <Button type="button" size="small" variant="outline" onClick={() => props.onRetry?.()}>
               Retry
             </Button>
           </Show>
         </div>
       </Show>
 
-      <Show when={props.loading !== true && props.error === undefined && props.items.length === 0}>
+      <Show
+        when={props.loading !== true && props.error === undefined && props.messages.length === 0}
+      >
         <div class="transcript-state transcript-empty-state">
           <p>{props.emptyMessage ?? "Start this session with a prompt"}</p>
         </div>
       </Show>
 
-      <Show when={props.items.length > 0 || props.working === true}>
+      <Show when={props.messages.length > 0 || working()}>
         <div class="transcript-document">
-          <For each={props.items}>
-            {(item) =>
-              item.kind === "user" ? (
-                <UserMessage id={item.id} text={item.text} />
-              ) : (
-                <AssistantMessage id={item.id} blocks={item.blocks} state={item.state} />
-              )
-            }
-          </For>
+          {props.messages.map((message) => renderMessage(message, props.sessionStatus))}
 
-          <Show when={props.working === true}>
+          <Show when={working()}>
             <output class="transcript-working" aria-live="polite">
               <Loader class="transcript-working-loader" aria-hidden="true" />
               <span>{props.workingLabel ?? "Working"}</span>
@@ -106,6 +67,78 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
           </Show>
         </div>
       </Show>
-    </ScrollView>
+    </div>
   );
+}
+
+function renderMessage(message: SessionMessageInfo, sessionStatus: DataSessionStatus): JSX.Element {
+  switch (message.type) {
+    case "user":
+      return <UserMessage message={message} />;
+    case "assistant":
+      return <AssistantMessage message={message} sessionStatus={sessionStatus} />;
+    case "shell":
+      return <ShellMessage message={message} />;
+    case "skill":
+      return <SkillMessage message={message} />;
+    case "agent-switched":
+      return (
+        <TimelineRow
+          id={message.id}
+          icon="prompt"
+          label="Agent switched"
+          detail={`${message.previous ? `${message.previous} → ` : ""}${message.agent}`}
+        />
+      );
+    case "model-switched":
+      return (
+        <TimelineRow
+          id={message.id}
+          icon="outline-dots"
+          label="Model switched"
+          detail={`${message.previous ? `${modelName(message.previous)} → ` : ""}${modelName(message.model)}`}
+        />
+      );
+    case "location-switched":
+      return (
+        <TimelineRow
+          id={message.id}
+          icon="folder"
+          label="Location switched"
+          detail={locationName(message.location)}
+        />
+      );
+    case "compaction":
+      return <CompactionMessage message={message} />;
+    case "system":
+      return (
+        <ContextMessage
+          id={message.id}
+          label="System context"
+          text={message.text}
+          description={message.description}
+        />
+      );
+    case "synthetic":
+      return (
+        <ContextMessage
+          id={message.id}
+          label="Context"
+          text={message.text}
+          description={message.description}
+        />
+      );
+    default: {
+      const unreachable: never = message;
+      return unreachable;
+    }
+  }
+}
+
+function modelName(model: { readonly providerID: string; readonly id: string }): string {
+  return `${model.providerID}/${model.id}`;
+}
+
+function locationName(location: LocationRef): string {
+  return location.directory;
 }

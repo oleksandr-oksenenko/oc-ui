@@ -144,6 +144,25 @@ export const Empty: Story = {
   },
 };
 
+export const Unavailable: Story = {
+  args: {
+    activeTab: "diff",
+    onTabChange: noopTabChange,
+    diff: {
+      files: [],
+      loading: false,
+      emptyMessage: "Diff unavailable",
+      emptyDescription: "OpenCode diff data is not connected yet.",
+    },
+    files: {
+      ...baseFiles,
+      nodes: [],
+      emptyMessage: "Files unavailable",
+      emptyDescription: "OpenCode file data is not connected yet.",
+    },
+  },
+};
+
 export const FilesEmpty: Story = {
   args: {
     activeTab: "files",

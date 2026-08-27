@@ -28,7 +28,7 @@ export type SessionSidebarProps = {
   readonly onToggleExpanded: (sessionID: string) => void;
   readonly onCreate: () => void;
   readonly onRetry: () => void;
-  readonly onHide: () => void;
+  readonly onHide?: () => void;
   readonly onSelectServer: () => void;
 };
 

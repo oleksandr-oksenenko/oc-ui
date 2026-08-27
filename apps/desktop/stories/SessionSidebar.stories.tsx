@@ -75,7 +75,6 @@ function interactiveSidebar(nodes: readonly SessionNode[], options: StoryOptions
         }
         onCreate={() => setSelectedID("new-session")}
         onRetry={() => undefined}
-        onHide={() => undefined}
         onSelectServer={() => undefined}
       />
     </div>

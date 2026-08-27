@@ -1,74 +1,151 @@
+import type { SessionMessageInfo } from "@opencode-ai/client";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import {
   TranscriptView,
   type TranscriptViewProps,
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
-import type { TranscriptMessage } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/transcript-types.ts";
 
-const richItems = [
+const assistant = (
+  id: string,
+  status: "completed" | "error" = "completed",
+): SessionMessageInfo => ({
+  id,
+  time: { created: 2, completed: 3 },
+  type: "assistant",
+  agent: "build",
+  model: { providerID: "openai", id: "gpt-5" },
+  content: [
+    {
+      type: "text",
+      text:
+        status === "error"
+          ? "The verification could not finish."
+          : "I reviewed the release notes and the related changes.",
+    },
+    {
+      type: "reasoning",
+      text: "Compared the changed paths with the release checklist.",
+      time: { created: 2, completed: 3 },
+    },
+    {
+      type: "tool",
+      id: `${id}-tool`,
+      name: "release-check",
+      time: { created: 2, ran: 2, completed: 3 },
+      state:
+        status === "error"
+          ? {
+              status: "error",
+              input: { command: "pnpm test" },
+              error: { type: "test", message: "One suite failed", status: 1 },
+              content: [{ type: "text", text: "Failure output" }],
+            }
+          : {
+              status: "completed",
+              input: { command: "pnpm test" },
+              content: [
+                { type: "text", text: "migrations: ready\nbackground job: passed" },
+                {
+                  type: "file",
+                  uri: "file:///tmp/report.txt",
+                  mime: "text/plain",
+                  name: "report.txt",
+                },
+              ],
+            },
+    },
+  ],
+  ...(status === "error"
+    ? { finish: "error" as const, error: { type: "test", message: "One suite failed", status: 1 } }
+    : { finish: "stop" as const }),
+});
+
+const streamingAssistant: SessionMessageInfo = {
+  id: "assistant-streaming",
+  time: { created: 12 },
+  type: "assistant",
+  agent: "build",
+  model: { providerID: "openai", id: "gpt-5" },
+  content: [
+    { type: "text", text: "I am checking the latest changes now…" },
+    { type: "reasoning", text: "Reviewing the changed paths.", time: { created: 12 } },
+    {
+      type: "tool",
+      id: "assistant-streaming-tool",
+      name: "git-diff",
+      time: { created: 12, ran: 12 },
+      state: { status: "running", input: { command: "git diff" }, metadata: {} },
+    },
+  ],
+};
+
+const richItems: readonly SessionMessageInfo[] = [
+  { id: "system-1", time: { created: 0 }, type: "system", text: "System context" },
   {
-    kind: "user",
     id: "user-1",
-    text: "Can you review the release notes and call out the risks before we ship?",
-  },
-  {
-    kind: "assistant",
-    id: "assistant-1",
-    state: "complete",
-    blocks: [
-      {
-        kind: "paragraph",
-        content: [
-          "I reviewed the release notes and the related changes. The release looks ready with two items worth watching: ",
-          { kind: "link", text: "the migration guide", href: "https://example.com/migration" },
-          " should be updated, and the background job needs a final smoke test.",
-        ],
-      },
-      { kind: "heading", level: 2, content: "What changed" },
-      {
-        kind: "list",
-        items: [
-          "The new session view keeps the transcript readable as responses stream in.",
-          "Tool output is available inline when a check needs investigation.",
-          "Failed responses preserve their visible text and explain the state.",
-        ],
-      },
-      {
-        kind: "quote",
-        content: "Small, observable changes are easier to ship and easier to recover.",
-      },
-      {
-        kind: "reasoning",
-        label: "Reasoning summary",
-        duration: "11s",
-        summary: "Compared the changed paths with the release checklist.",
-        defaultOpen: true,
-      },
-      {
-        kind: "tool",
-        name: "release-check",
-        toolKind: "command",
-        target: "release checklist",
-        detail: "3 checks",
-        status: "done",
-        output: "migrations: ready\nbackground job: passed\ndocs: follow-up recommended",
-        defaultExpanded: true,
-      },
-      {
-        kind: "paragraph",
-        content: "Recommendation: ship after the smoke test, then follow up on the docs.",
-      },
+    time: { created: 1 },
+    type: "user",
+    text: "Can you review the release notes?",
+    files: [
+      { data: "omitted", mime: "text/plain", source: { type: "inline" }, name: "release.md" },
     ],
   },
-] as const satisfies readonly TranscriptMessage[];
+  assistant("assistant-1"),
+  {
+    id: "shell-1",
+    time: { created: 4, completed: 5 },
+    type: "shell",
+    shellID: "shell-1",
+    command: "pnpm test",
+    status: "exited",
+    exit: 0,
+    output: { output: "3 suites passed", cursor: 14, size: 14, truncated: false },
+  },
+  {
+    id: "skill-1",
+    time: { created: 6 },
+    type: "skill",
+    skill: "review",
+    name: "Review checklist",
+    text: "Check migrations and docs.",
+  },
+  { id: "agent-1", time: { created: 7 }, type: "agent-switched", agent: "plan", previous: "build" },
+  {
+    id: "model-1",
+    time: { created: 8 },
+    type: "model-switched",
+    model: { providerID: "openai", id: "gpt-5" },
+  },
+  {
+    id: "location-1",
+    time: { created: 9 },
+    type: "location-switched",
+    location: { directory: "/workspace" },
+  },
+  {
+    id: "compaction-1",
+    time: { created: 10 },
+    type: "compaction",
+    status: "completed",
+    reason: "auto",
+    summary: "Conversation summarized.",
+    recent: "Recent release discussion.",
+  },
+  {
+    id: "synthetic-1",
+    time: { created: 11 },
+    type: "synthetic",
+    text: "Generated context",
+    description: "Inserted by the session",
+  },
+];
 
 const meta = {
   title: "Transcript/TranscriptView",
   component: TranscriptView,
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof TranscriptView>;
-
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -79,143 +156,49 @@ const renderTranscript = (args: TranscriptViewProps) => (
 );
 
 export const Rich: Story = {
-  args: { items: richItems, loading: false, working: false },
+  args: { messages: richItems, sessionStatus: "idle", loading: false },
   render: renderTranscript,
 };
-
 export const Loading: Story = {
-  args: { items: [], loading: true, working: false },
+  args: { messages: [], sessionStatus: "idle", loading: true },
   render: renderTranscript,
 };
-
 export const Empty: Story = {
-  args: { items: [], loading: false, working: false },
+  args: { messages: [], sessionStatus: "idle", loading: false },
   render: renderTranscript,
 };
-
 export const Failure: Story = {
   args: {
-    items: [],
+    messages: [],
+    sessionStatus: "idle",
     loading: false,
-    error: "This transcript could not be loaded. Check the connection and try again.",
+    error: "This transcript could not be loaded.",
     onRetry: () => undefined,
   },
   render: renderTranscript,
 };
-
 export const Streaming: Story = {
   args: {
-    items: [
-      richItems[0],
-      {
-        kind: "assistant",
-        id: "assistant-streaming",
-        state: "streaming",
-        blocks: [
-          { kind: "paragraph", content: "I am checking the latest changes now…" },
-          {
-            kind: "tool",
-            name: "git-diff",
-            toolKind: "command",
-            target: "working tree",
-            status: "running",
-          },
-        ],
-      },
-    ],
+    messages: [...richItems, streamingAssistant],
+    sessionStatus: "running",
     loading: false,
     workingLabel: "Generating the transcript…",
-    working: true,
   },
   render: renderTranscript,
 };
-
-export const ExpandedReasoning: Story = {
-  args: {
-    items: [
-      {
-        kind: "assistant",
-        id: "assistant-reasoning",
-        state: "complete",
-        blocks: [
-          {
-            kind: "reasoning",
-            label: "Reasoning summary",
-            duration: "11s",
-            summary: "Reviewed layout metrics and validated the spacing tokens.",
-            defaultOpen: true,
-          },
-          {
-            kind: "tool",
-            name: "Read file",
-            toolKind: "read",
-            target: "src/layout/App.tsx",
-            detail: "12 lines",
-            status: "done",
-          },
-          {
-            kind: "tool",
-            name: "Search code",
-            toolKind: "search",
-            target: "layout density",
-            detail: "14 matches",
-            status: "done",
-          },
-          {
-            kind: "tool",
-            name: "Run command",
-            toolKind: "command",
-            target: "pnpm test",
-            detail: "3 suites passed",
-            status: "done",
-          },
-          {
-            kind: "tool",
-            name: "Follow-up",
-            toolKind: "generic",
-            detail: "Review required",
-            status: "done",
-          },
-        ],
-      },
-    ],
-    loading: false,
-    working: false,
-  },
-  render: renderTranscript,
-};
-
 export const FailedStates: Story = {
   args: {
-    items: [
-      {
-        kind: "assistant",
-        id: "assistant-failed",
-        state: "failed",
-        blocks: [
-          { kind: "paragraph", content: "The verification could not finish." },
-          {
-            kind: "tool",
-            name: "test-runner",
-            toolKind: "command",
-            target: "pnpm test",
-            detail: "exit code 1",
-            status: "failed",
-          },
-        ],
-      },
-    ],
+    messages: [assistant("assistant-failed", "error")],
+    sessionStatus: "idle",
     loading: false,
-    working: false,
   },
   render: renderTranscript,
 };
-
 export const DescriptiveWorking: Story = {
   args: {
-    items: [],
+    messages: [],
+    sessionStatus: "running",
     loading: false,
-    working: true,
     workingLabel: "Generating visual regression report…",
   },
   render: renderTranscript,

@@ -30,6 +30,10 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
         return "Idle";
     }
   };
+  const showsStatus = () =>
+    props.node.needsInput === true ||
+    props.node.status === "running" ||
+    props.node.status === "creating";
 
   return (
     <div class="shell-session-tree-item" style={{ "--session-depth": `${props.depth}` }}>
@@ -41,9 +45,12 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
           if (hasChildren() && open !== props.expanded) props.onToggleExpanded(props.node.id);
         }}
       >
-        <div class="shell-session-row" classList={{ selected: props.selected }}>
-          <span class="shell-session-disclosure-slot">
-            {hasChildren() ? (
+        <div
+          class="shell-session-row"
+          classList={{ selected: props.selected, "has-children": hasChildren() }}
+        >
+          {hasChildren() ? (
+            <span class="shell-session-disclosure-slot">
               <Collapsible.Trigger
                 class="shell-session-disclosure"
                 type="button"
@@ -53,8 +60,8 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               >
                 <Collapsible.Arrow />
               </Collapsible.Trigger>
-            ) : null}
-          </span>
+            </span>
+          ) : null}
           <Button
             class="shell-session-main"
             type="button"
@@ -65,18 +72,20 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             onClick={() => props.onSelect(props.node.id)}
           >
             <span class="shell-session-title">{props.node.title.trim() || "Untitled session"}</span>
-            <span
-              class="shell-session-status"
-              data-status={props.node.needsInput === true ? "needs-input" : props.node.status}
-              aria-label={statusLabel()}
-              title={statusLabel()}
-            >
-              {props.node.needsInput === true ? (
-                <Icon name="prompt" size="small" />
-              ) : props.node.status === "running" || props.node.status === "creating" ? (
-                <Loader width={13} height={13} />
-              ) : null}
-            </span>
+            {showsStatus() ? (
+              <span
+                class="shell-session-status"
+                data-status={props.node.needsInput === true ? "needs-input" : props.node.status}
+                aria-label={statusLabel()}
+                title={statusLabel()}
+              >
+                {props.node.needsInput === true ? (
+                  <Icon name="prompt" size="small" />
+                ) : (
+                  <Loader width={13} height={13} />
+                )}
+              </span>
+            ) : null}
           </Button>
         </div>
         <Collapsible.Content>{props.children}</Collapsible.Content>

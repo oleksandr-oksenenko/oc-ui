@@ -16,11 +16,10 @@ import {
   SessionSidebar,
   type SessionNode,
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
-import { SessionHeader } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/SessionHeader.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
-import type { TranscriptMessage } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/transcript-types.ts";
+import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 
 const sessions: readonly SessionNode[] = [
   {
@@ -101,110 +100,6 @@ const sessions: readonly SessionNode[] = [
   { id: "integrate-stripe", title: "Integrate Stripe", status: "running", children: [] },
   { id: "optimize-query", title: "Optimize Query", status: "idle", needsInput: true, children: [] },
   { id: "security-audit", title: "Security Audit", status: "idle", needsInput: true, children: [] },
-];
-
-const transcript: readonly TranscriptMessage[] = [
-  {
-    kind: "user",
-    id: "user-1",
-    text: "Can you summarize the recent changes in this project?",
-  },
-  {
-    kind: "assistant",
-    id: "assistant-1",
-    state: "complete",
-    blocks: [
-      { kind: "heading", level: 2, content: "UI Layout Updates" },
-      {
-        kind: "paragraph",
-        content:
-          "We reduced vertical density, standardized spacing, and removed extra chrome. Session rows are tighter, the composer has a more comfortable writing area, and the layout fills the window efficiently.",
-      },
-      {
-        kind: "list",
-        items: [
-          "Sidebar rows use 24px height with 2px selection rule and tiny running indicators.",
-          "Main transcript uses an 888px content measure with 12px padding.",
-          "Composer uses a 78px default height with room to draft.",
-        ],
-      },
-      { kind: "heading", level: 3, content: "Key Measurements" },
-      {
-        kind: "list",
-        ordered: true,
-        items: ["Sidebar width: resizable.", "Row height: 24px.", "Composer height: 78px."],
-      },
-      {
-        kind: "quote",
-        content: "These values reflect the current implementation.",
-      },
-      {
-        kind: "paragraph",
-        content: [
-          "See the ",
-          { kind: "link", text: "design notes", href: "https://example.com/design-notes" },
-          " for spacing and typography details.",
-        ],
-      },
-      {
-        kind: "reasoning",
-        label: "Reasoning summary",
-        duration: "11s",
-        summary: "Reviewed layout metrics, compared before/after, and validated spacing tokens.",
-        defaultOpen: true,
-      },
-      {
-        kind: "tool",
-        toolKind: "read",
-        name: "Read file",
-        target: "src/layout/App.tsx",
-        status: "done",
-      },
-      {
-        kind: "tool",
-        toolKind: "search",
-        name: "Searched code",
-        target: "layout density",
-        detail: "14 matches",
-        status: "done",
-      },
-      {
-        kind: "tool",
-        toolKind: "command",
-        name: "Ran command",
-        target: "pnpm test",
-        status: "done",
-        output:
-          "PASS: src/layout/App.test.tsx\nPASS: src/components/SessionList.test.tsx\nPASS: src/components/Composer.test.tsx\nTest Suites: 3 passed, 3 total\nTests:       28 passed, 28 total\nTime:        1.42 s",
-        defaultExpanded: true,
-      },
-    ],
-  },
-  {
-    kind: "user",
-    id: "user-2",
-    text: "Any follow-ups or risks I should be aware of?",
-  },
-  {
-    kind: "assistant",
-    id: "assistant-2",
-    state: "complete",
-    blocks: [
-      {
-        kind: "paragraph",
-        content:
-          "A few follow-ups remain. The main risk is over-compression, which could hurt scanability on large displays.",
-      },
-      {
-        kind: "list",
-        items: [
-          "Follow-up: validate with users on 1440p and 4K monitors.",
-          "Risk: too little spacing may reduce readability; monitor feedback.",
-          "Next: finalize color tokens and ensure sufficient contrast.",
-        ],
-      },
-    ],
-  },
 ];
 
 const diff: readonly DiffFileData[] = [
@@ -376,8 +271,6 @@ function WorkspaceShowcaseFixture() {
   ]);
   const [expandedFiles, setExpandedFiles] = createSignal<readonly string[]>(["src", "renderer"]);
   const [draft, setDraft] = createSignal("");
-  const [model, setModel] = createSignal("gpt-5.6-sol");
-  const [reasoning, setReasoning] = createSignal("medium");
   const [diffScope, setDiffScope] = createSignal("all");
 
   const toggle = (id: string) => {
@@ -397,14 +290,6 @@ function WorkspaceShowcaseFixture() {
         titlebar={
           <Titlebar
             selectedTitle="Compact Ledger Transcript"
-            leftControls={
-              <SessionHeader
-                canCreate
-                creating={false}
-                onCreate={() => undefined}
-                onHide={() => panelState.setLeftSidebarOpen(false)}
-              />
-            }
             rightControls={
               <Show when={!panelState.mobile()}>
                 <ContextTabs
@@ -436,7 +321,6 @@ function WorkspaceShowcaseFixture() {
                 loading={false}
                 canCreate
                 creating={false}
-                showHeader={panelState.mobile()}
                 autoFocusClose={panelState.mobile()}
                 serverName="Local server"
                 serverStatus="connected"
@@ -446,7 +330,9 @@ function WorkspaceShowcaseFixture() {
                 onToggleExpanded={toggle}
                 onCreate={() => undefined}
                 onRetry={() => undefined}
-                onHide={() => panelState.setLeftSidebarOpen(false)}
+                onHide={
+                  panelState.mobile() ? () => panelState.setLeftSidebarOpen(false) : undefined
+                }
                 onSelectServer={() => undefined}
               />
             }
@@ -456,8 +342,8 @@ function WorkspaceShowcaseFixture() {
                 title="Compact Ledger Transcript"
                 transcript={
                   <TranscriptView
-                    items={transcript}
-                    working
+                    messages={transcript}
+                    sessionStatus="running"
                     workingLabel="Generating visual regression report…"
                   />
                 }
@@ -467,25 +353,6 @@ function WorkspaceShowcaseFixture() {
                     disabled={false}
                     submitting={false}
                     running={false}
-                    model={{
-                      label: "Model",
-                      value: model(),
-                      options: [
-                        { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
-                        { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
-                      ],
-                      onChange: setModel,
-                    }}
-                    reasoning={{
-                      label: "Reasoning",
-                      value: reasoning(),
-                      options: [
-                        { value: "low", label: "Low" },
-                        { value: "medium", label: "Medium" },
-                        { value: "high", label: "High" },
-                      ],
-                      onChange: setReasoning,
-                    }}
                     onInput={setDraft}
                     onSubmit={() => setDraft("")}
                   />

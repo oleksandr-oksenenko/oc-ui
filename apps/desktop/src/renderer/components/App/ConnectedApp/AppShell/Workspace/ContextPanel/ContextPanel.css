@@ -37,12 +37,7 @@
   width: 100%;
   min-width: 0;
   height: 100%;
-  overflow: hidden;
-}
-
-.context-panel-body .scroll-view__viewport {
-  width: 100%;
-  min-width: 0;
+  overflow: auto;
   scrollbar-color: #30333c transparent;
   scrollbar-width: thin;
 }
@@ -128,28 +123,30 @@
   font-size: 10px;
 }
 
-.diff-scope-select[data-component="select-v2"] {
+.diff-scope-select {
   min-width: 134px;
   height: 32px;
   margin-right: auto;
   padding: 0 6px;
-  border: 1px solid #25272d;
+  border: 1px solid var(--v2-border-border-base, #242424);
   border-radius: 5px;
-  color: #d7d9df;
-  background: #0a0a0a;
+  color: var(--v2-text-text-base, #d0d0d0);
+  outline: none;
+  background: var(--v2-background-bg-layer-01, #0a0a0a);
+  box-shadow: none;
+  color-scheme: dark;
   font: inherit;
 }
 
-.context-panel .diff-scope-select [data-slot="select-v2-value-text"] {
-  color: inherit;
-  font: inherit;
-  font-size: 10px;
+.diff-scope-select option {
+  color: var(--v2-text-text-base, #d0d0d0);
+  background: var(--v2-background-bg-layer-01, #0a0a0a);
 }
 
-.diff-scope-select:focus-visible,
-.diff-scope-select:focus-within {
-  outline: 2px solid #74a7ff;
-  outline-offset: 1px;
+.diff-scope-select:focus-visible {
+  border-color: var(--v2-border-border-focus, #74a7ff);
+  outline: none;
+  box-shadow: none;
 }
 
 .diff-summary-changes {

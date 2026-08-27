@@ -1,4 +1,4 @@
-import { createSignal, type JSX } from "solid-js";
+import { createSignal, onCleanup, type JSX } from "solid-js";
 
 import "./Workspace.css";
 
@@ -13,9 +13,9 @@ export type WorkspaceProps = {
 
 type ResizeSide = "left" | "right";
 
-const LEFT_MIN = 160;
+const LEFT_MIN = 220;
 const LEFT_MAX = 420;
-const LEFT_DEFAULT = 200;
+const LEFT_DEFAULT = 220;
 const RIGHT_MIN = 280;
 const RIGHT_MAX = 560;
 const RIGHT_DEFAULT = 360;
@@ -23,6 +23,11 @@ const MAIN_MIN = 420;
 const KEYBOARD_STEP = 16;
 
 export function Workspace(props: WorkspaceProps) {
+  // These slots are fixed for the lifetime of a mounted workspace. Resolve
+  // each JSX getter once so presence checks do not recreate live children.
+  const sidebar = props.sidebar;
+  const main = props.main;
+  const context = props.context;
   let workspace: HTMLDivElement | undefined;
   let drag:
     | {
@@ -36,10 +41,16 @@ export function Workspace(props: WorkspaceProps) {
   const [leftWidth, setLeftWidth] = createSignal(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = createSignal(RIGHT_DEFAULT);
   const [resizing, setResizing] = createSignal<ResizeSide>();
-  const sidebarPresent = () => props.sidebar != null;
-  const contextOpen = () => props.context != null && props.rightPanelOpen;
+  const sidebarPresent = sidebar != null;
+  const contextOpen = () => context != null && props.rightPanelOpen;
   const mobileOverlayOpen = () =>
-    props.mobile === true && ((props.leftSidebarOpen && sidebarPresent()) || contextOpen());
+    props.mobile === true && ((props.leftSidebarOpen && sidebarPresent) || contextOpen());
+
+  function removePointerListeners() {
+    window.removeEventListener("pointermove", continueResize);
+    window.removeEventListener("pointerup", finishResize);
+    window.removeEventListener("pointercancel", finishResize);
+  }
 
   const widthBounds = (side: ResizeSide) => {
     const minimum = side === "left" ? LEFT_MIN : RIGHT_MIN;
@@ -49,7 +60,7 @@ export function Workspace(props: WorkspaceProps) {
         ? contextOpen()
           ? rightWidth()
           : 0
-        : props.leftSidebarOpen && sidebarPresent()
+        : props.leftSidebarOpen && sidebarPresent
           ? leftWidth()
           : 0;
     const workspaceWidth = workspace?.clientWidth ?? 0;
@@ -77,7 +88,6 @@ export function Workspace(props: WorkspaceProps) {
   const beginResize = (side: ResizeSide, event: PointerEvent) => {
     if (event.button !== 0) return;
     event.preventDefault();
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     drag = {
       pointerID: event.pointerId,
       side,
@@ -85,19 +95,26 @@ export function Workspace(props: WorkspaceProps) {
       startWidth: side === "left" ? leftWidth() : rightWidth(),
     };
     setResizing(side);
+    removePointerListeners();
+    window.addEventListener("pointermove", continueResize);
+    window.addEventListener("pointerup", finishResize);
+    window.addEventListener("pointercancel", finishResize);
   };
 
-  const continueResize = (event: PointerEvent) => {
+  function continueResize(event: PointerEvent) {
     if (!drag || drag.pointerID !== event.pointerId) return;
     const movement = event.clientX - drag.startX;
     setWidth(drag.side, drag.startWidth + (drag.side === "left" ? movement : -movement));
-  };
+  }
 
-  const finishResize = (event: PointerEvent) => {
+  function finishResize(event: PointerEvent) {
     if (!drag || drag.pointerID !== event.pointerId) return;
     drag = undefined;
     setResizing(undefined);
-  };
+    removePointerListeners();
+  }
+
+  onCleanup(removePointerListeners);
 
   const resizeWithKeyboard = (side: ResizeSide, event: KeyboardEvent) => {
     const currentWidth = side === "left" ? leftWidth() : rightWidth();
@@ -124,13 +141,15 @@ export function Workspace(props: WorkspaceProps) {
       }}
       class="shell-workspace"
       classList={{
-        "left-sidebar-open": props.leftSidebarOpen && sidebarPresent(),
+        "left-sidebar-open": props.leftSidebarOpen && sidebarPresent,
         "right-panel-open": contextOpen(),
         mobile: props.mobile === true,
         resizing: resizing() !== undefined,
+        "resizing-left": resizing() === "left",
+        "resizing-right": resizing() === "right",
       }}
     >
-      {props.leftSidebarOpen && sidebarPresent() ? (
+      {props.leftSidebarOpen && sidebarPresent ? (
         <>
           <div
             class="shell-left-sidebar"
@@ -138,7 +157,7 @@ export function Workspace(props: WorkspaceProps) {
             aria-modal={props.mobile ? "true" : undefined}
             aria-label={props.mobile ? "Sessions" : undefined}
           >
-            {props.sidebar}
+            {sidebar}
           </div>
           {props.mobile ? null : (
             <div
@@ -151,9 +170,6 @@ export function Workspace(props: WorkspaceProps) {
               aria-valuenow={leftWidth()}
               tabIndex={0}
               onPointerDown={(event) => beginResize("left", event)}
-              onPointerMove={continueResize}
-              onPointerUp={finishResize}
-              onLostPointerCapture={finishResize}
               onKeyDown={(event) => resizeWithKeyboard("left", event)}
             />
           )}
@@ -164,7 +180,7 @@ export function Workspace(props: WorkspaceProps) {
         aria-hidden={mobileOverlayOpen() ? "true" : undefined}
         inert={mobileOverlayOpen()}
       >
-        {props.main}
+        {main}
       </section>
       {contextOpen() ? (
         <>
@@ -179,9 +195,6 @@ export function Workspace(props: WorkspaceProps) {
               aria-valuenow={rightWidth()}
               tabIndex={0}
               onPointerDown={(event) => beginResize("right", event)}
-              onPointerMove={continueResize}
-              onPointerUp={finishResize}
-              onLostPointerCapture={finishResize}
               onKeyDown={(event) => resizeWithKeyboard("right", event)}
             />
           )}
@@ -191,7 +204,7 @@ export function Workspace(props: WorkspaceProps) {
             aria-modal={props.mobile ? "true" : undefined}
             aria-label={props.mobile ? "Workspace context" : undefined}
           >
-            {props.context}
+            {context}
           </div>
         </>
       ) : null}

@@ -9,7 +9,7 @@
 }
 
 .shell-workspace.left-sidebar-open {
-  grid-template-columns: var(--shell-left-sidebar-width, 200px) minmax(0, 1fr);
+  grid-template-columns: var(--shell-left-sidebar-width, 220px) minmax(0, 1fr);
 }
 
 .shell-workspace.right-panel-open {
@@ -18,7 +18,7 @@
 
 .shell-workspace.left-sidebar-open.right-panel-open {
   grid-template-columns:
-    var(--shell-left-sidebar-width, 200px)
+    var(--shell-left-sidebar-width, 220px)
     minmax(0, 1fr)
     var(--shell-right-panel-width, 360px);
 }
@@ -61,7 +61,7 @@
 }
 
 .shell-left-resize-handle {
-  left: var(--shell-left-sidebar-width, 200px);
+  left: var(--shell-left-sidebar-width, 220px);
   transform: translateX(-50%);
 }
 
@@ -81,10 +81,15 @@
   transition: background 100ms ease;
 }
 
-.shell-resize-handle:hover::after,
-.shell-resize-handle:focus-visible::after,
-.shell-workspace.resizing .shell-resize-handle::after {
+.shell-workspace:not(.resizing) .shell-resize-handle:hover::after,
+.shell-workspace:not(.resizing) .shell-resize-handle:focus-visible::after,
+.shell-workspace.resizing-left .shell-left-resize-handle::after,
+.shell-workspace.resizing-right .shell-right-resize-handle::after {
   background: #4b5563;
+}
+
+.shell-workspace.resizing {
+  user-select: none;
 }
 
 .shell-resize-handle:focus-visible {

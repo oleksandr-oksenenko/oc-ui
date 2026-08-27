@@ -3,7 +3,6 @@ import { Button } from "@opencode-ai/ui/button";
 import { DiffChanges } from "@opencode-ai/ui/diff-changes";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
-import { Select } from "@opencode-ai/ui/select";
 
 import { DiffFile } from "./DiffView/DiffFile.tsx";
 import type { DiffFileData } from "./DiffView/DiffFile.tsx";
@@ -12,6 +11,8 @@ export type DiffViewProps = {
   readonly files: readonly DiffFileData[];
   readonly loading: boolean;
   readonly error?: string;
+  readonly emptyMessage?: string;
+  readonly emptyDescription?: string;
   readonly onRetry?: () => void;
   readonly scope?: string;
   readonly scopeOptions?: readonly { readonly value: string; readonly label: string }[];
@@ -60,22 +61,24 @@ export function DiffView(props: DiffViewProps) {
 
       <Show when={!props.error && !props.loading && props.files.length === 0}>
         <div class="context-state empty-state">
-          <p>No changes in this session</p>
+          <p>{props.emptyMessage ?? "No changes in this session"}</p>
+          <Show when={props.emptyDescription}>{(description) => <span>{description()}</span>}</Show>
         </div>
       </Show>
 
       <Show when={!props.error && props.files.length > 0}>
         <>
           <div class="diff-summary">
-            <Select
+            <select
               class="diff-scope-select"
               aria-label="Diff scope"
-              options={scopeOptions()}
-              current={scopeOptions().find((option) => option.value === scope())}
-              value={(option) => option.value}
-              label={(option) => option.label}
-              onSelect={(option) => option && props.onScopeChange?.(option.value)}
-            />
+              value={scope()}
+              onChange={(event) => props.onScopeChange?.(event.currentTarget.value)}
+            >
+              <For each={scopeOptions()}>
+                {(option) => <option value={option.value}>{option.label}</option>}
+              </For>
+            </select>
             <span class="diff-summary-count">{props.files.length} files</span>
             <div class="diff-summary-changes">
               <span class="sr-only">
