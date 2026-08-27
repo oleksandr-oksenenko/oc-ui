@@ -91,7 +91,7 @@ describe("Composer", () => {
     host.remove();
   });
 
-  it("submits with Ctrl+Enter but keeps ordinary Enter for newlines", () => {
+  it("submits with Enter but keeps Shift+Enter for newlines", () => {
     const host = document.createElement("div");
     const submit = vi.fn<() => void>();
     document.body.append(host);
@@ -111,11 +111,11 @@ describe("Composer", () => {
     const textarea = host.querySelector("textarea");
     if (!textarea) throw new Error("Composer did not render a textarea");
 
-    textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    expect(submit).not.toHaveBeenCalled();
     textarea.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
+      new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }),
     );
+    expect(submit).not.toHaveBeenCalled();
+    textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(submit).toHaveBeenCalledOnce();
     dispose();
     host.remove();

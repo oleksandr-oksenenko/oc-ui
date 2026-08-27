@@ -39,7 +39,7 @@ export function Composer(props: ComposerProps) {
   };
 
   const keyDown = (event: KeyboardEvent) => {
-    if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)) return;
+    if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     submit();
   };
