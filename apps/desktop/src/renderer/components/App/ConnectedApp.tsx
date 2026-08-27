@@ -15,6 +15,7 @@ import {
   SessionSidebar,
   type SessionNode,
 } from "./ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
+import { NewSessionFlow } from "./ConnectedApp/AppShell/Workspace/SessionSidebar/NewSessionFlow.tsx";
 import { Composer } from "./ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
 import { TranscriptView } from "./ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
 import { projectRuntimeSessionNodes } from "./ConnectedApp/runtime-projection.ts";
@@ -40,9 +41,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
     readonly status: "idle" | "loading" | "ready" | "failed";
     readonly error?: string;
   }>({ status: "idle" });
-  const [creating, setCreating] = createSignal(false);
-  const [creatingID, setCreatingID] = createSignal<string>();
-  const [createError, setCreateError] = createSignal<string>();
+  const [newSessionOpen, setNewSessionOpen] = createSignal(false);
   const [submittingID, setSubmittingID] = createSignal<string>();
   const [promptError, setPromptError] = createSignal<string>();
   const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
@@ -85,11 +84,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
   });
 
   const sessionNodes = createMemo<readonly SessionNode[]>(() =>
-    projectRuntimeSessionNodes(
-      sessions(),
-      (sessionID) => runtime.data.session.status(sessionID),
-      creatingID(),
-    ),
+    projectRuntimeSessionNodes(sessions(), (sessionID) => runtime.data.session.status(sessionID)),
   );
 
   const streamConnected = () => runtime.stream.status() === "connected";
@@ -121,28 +116,12 @@ export function ConnectedApp(props: ConnectedAppProps) {
   };
 
   const syncCatalog = async (): Promise<void> => {
-    try {
-      await runtime.sessions.sync();
-      await syncActiveStatuses({
-        api: runtime.api,
-        data: runtime.data,
-        sessionIDs: runtime.sessions.ids(),
-      });
-      if (!alive) return;
-      const current = selectedID();
-      const next =
-        current && runtime.sessions.ids().includes(current) ? current : sessions()[0]?.id;
-      if (next === undefined) {
-        setSelectedID(undefined);
-        setTranscriptState({ status: "idle" });
-      } else if (next !== current) {
-        selectSession(next);
-      } else {
-        void hydrateTranscript(next);
-      }
-    } catch {
-      // The catalog owns its retryable error state.
-    }
+    await runtime.sessions.sync();
+    await syncActiveStatuses({
+      api: runtime.api,
+      data: runtime.data,
+      sessionIDs: runtime.sessions.ids(),
+    });
   };
 
   onMount(() => {
@@ -153,7 +132,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
         if (!alive) return;
         props.onConnected();
         setBootstrapped(true);
-        await syncCatalog();
+        await syncCatalog().catch(() => undefined);
       } catch (cause) {
         if (alive) props.onInitialFailure(cause);
       }
@@ -172,14 +151,19 @@ export function ConnectedApp(props: ConnectedAppProps) {
     if (!reconnectPending || reconnecting) return;
     reconnectPending = false;
     reconnecting = true;
-    const current = selectedID();
-    if (current) setTranscriptState({ sessionID: current, status: "loading" });
+    const previous = selectedID();
+    if (previous) setTranscriptState({ sessionID: previous, status: "loading" });
     void (async () => {
       try {
-        const next = await runtime.hydrateAfterReconnect(current);
+        await runtime.data.location.syncInfo(runtime.defaultLocation);
+        await syncCatalog();
         if (!alive) return;
-        setSelectedID(next);
-        setTranscriptState(next ? { sessionID: next, status: "ready" } : { status: "idle" });
+        const current = selectedID();
+        if (current === undefined) {
+          setTranscriptState({ status: "idle" });
+        } else if (current === previous) {
+          await hydrateTranscript(current);
+        }
       } catch {
         if (!alive) return;
         setTranscriptState({
@@ -217,34 +201,13 @@ export function ConnectedApp(props: ConnectedAppProps) {
     const current = selectedID();
     if (current && runtime.sessions.ids().includes(current)) return;
     const next = sessions()[0]?.id;
-    setSelectedID(next);
-    if (next) void hydrateTranscript(next);
-  });
-
-  const createSession = async (): Promise<void> => {
-    if (!streamConnected() || creating()) return;
-    const previous = selectedID();
-    setCreating(true);
-    setCreateError(undefined);
-    const created = runtime.data.session.create({ location: runtime.defaultLocation });
-    runtime.sessions.admit(created.id);
-    setCreatingID(created.id);
-    setSelectedID(created.id);
-    setTranscriptState({ sessionID: created.id, status: "ready" });
-    try {
-      await created.request;
-    } catch {
-      runtime.sessions.remove(created.id);
-      const fallback =
-        previous && runtime.sessions.ids().includes(previous) ? previous : sessions()[0]?.id;
-      setSelectedID(fallback);
-      setCreateError("The session could not be created. Try again.");
-      if (fallback) void hydrateTranscript(fallback);
-    } finally {
-      setCreating(false);
-      setCreatingID(undefined);
+    if (next === undefined) {
+      setSelectedID(undefined);
+      setTranscriptState({ status: "idle" });
+    } else {
+      selectSession(next);
     }
-  };
+  });
 
   const submitPrompt = async (): Promise<void> => {
     const sessionID = selectedID();
@@ -281,115 +244,125 @@ export function ConnectedApp(props: ConnectedAppProps) {
   };
 
   return (
-    <AppShell
-      titlebar={
-        <Titlebar
-          selectedTitle={selectedSession()?.title}
-          leftSidebarOpen={panels.leftSidebarOpen()}
-          rightPanelOpen={panels.rightPanelOpen()}
-          rightPanelAvailable
-          rightControls={
-            <Show when={!panels.mobile()}>
-              <ContextTabs
+    <>
+      <AppShell
+        titlebar={
+          <Titlebar
+            selectedTitle={selectedSession()?.title}
+            leftSidebarOpen={panels.leftSidebarOpen()}
+            rightPanelOpen={panels.rightPanelOpen()}
+            rightPanelAvailable
+            rightControls={
+              <Show when={!panels.mobile()}>
+                <ContextTabs
+                  activeTab={activeContextTab()}
+                  idBase="connected-workspace-context"
+                  onTabChange={setActiveContextTab}
+                  onClose={() => panels.setRightPanelOpen(false)}
+                />
+              </Show>
+            }
+            mobile={panels.mobile()}
+            onToggleLeftSidebar={panels.toggleLeftSidebar}
+            onToggleRightPanel={panels.toggleRightPanel}
+          />
+        }
+        workspace={
+          <Workspace
+            leftSidebarOpen={panels.leftSidebarOpen()}
+            rightPanelOpen={panels.rightPanelOpen()}
+            mobile={panels.mobile()}
+            sidebar={
+              <SessionSidebar
+                nodes={sessionNodes()}
+                selectedID={selectedID()}
+                expandedIDs={expandedIDs()}
+                loading={runtime.sessions.state() === "loading"}
+                error={runtime.sessions.error()}
+                canCreate={streamConnected() && runtime.sessions.state() === "ready"}
+                autoFocusClose={panels.mobile()}
+                serverName={friendlyServerName(props.server.serverUrl)}
+                serverStatus={streamConnected() ? "connected" : "reconnecting"}
+                onSelect={(sessionID) => {
+                  if (!streamConnected()) return;
+                  selectSession(sessionID);
+                  if (panels.mobile()) panels.setLeftSidebarOpen(false);
+                }}
+                onToggleExpanded={toggleExpanded}
+                onCreate={() => setNewSessionOpen(true)}
+                onRetry={() => void syncCatalog().catch(() => undefined)}
+                onHide={panels.mobile() ? () => panels.setLeftSidebarOpen(false) : undefined}
+                onSelectServer={props.onChangeServer}
+              />
+            }
+            main={
+              <SessionPane
+                selected={selectedSession() !== undefined}
+                title={selectedSession()?.title}
+                noSelection={
+                  <>
+                    <h2>No session selected</h2>
+                    <p>Select a session from the sidebar.</p>
+                  </>
+                }
+                transcript={
+                  <Show when={selectedSession()}>
+                    <TranscriptView
+                      messages={transcript()}
+                      sessionStatus={transcriptStatus()}
+                      loading={transcriptLoading()}
+                      error={transcriptError()}
+                      onRetry={() => {
+                        const id = selectedID();
+                        if (id) void hydrateTranscript(id);
+                      }}
+                    />
+                  </Show>
+                }
+                composer={
+                  <Show when={selectedSession()}>
+                    <Composer
+                      value={drafts.get(selectedID()!)}
+                      disabled={
+                        !streamConnected() ||
+                        transcriptLoading() ||
+                        submittingID() !== undefined ||
+                        running()
+                      }
+                      submitting={submittingID() === selectedID()}
+                      running={running()}
+                      error={promptError()}
+                      onInput={(value) => drafts.set(selectedID()!, value)}
+                      onSubmit={() => void submitPrompt()}
+                    />
+                  </Show>
+                }
+              />
+            }
+            context={
+              <ContextPanel
                 activeTab={activeContextTab()}
-                idBase="connected-workspace-context"
+                showTabs={panels.mobile()}
                 onTabChange={setActiveContextTab}
                 onClose={() => panels.setRightPanelOpen(false)}
               />
-            </Show>
-          }
-          mobile={panels.mobile()}
-          onToggleLeftSidebar={panels.toggleLeftSidebar}
-          onToggleRightPanel={panels.toggleRightPanel}
+            }
+          />
+        }
+      />
+      <Show when={newSessionOpen()}>
+        <NewSessionFlow
+          runtime={runtime}
+          onDismiss={() => setNewSessionOpen(false)}
+          onSessionCreated={(sessionID) => {
+            setSelectedID(sessionID);
+            setTranscriptState({ sessionID, status: "ready" });
+            setNewSessionOpen(false);
+            if (panels.mobile()) panels.setLeftSidebarOpen(false);
+          }}
         />
-      }
-      workspace={
-        <Workspace
-          leftSidebarOpen={panels.leftSidebarOpen()}
-          rightPanelOpen={panels.rightPanelOpen()}
-          mobile={panels.mobile()}
-          sidebar={
-            <SessionSidebar
-              nodes={sessionNodes()}
-              selectedID={selectedID()}
-              expandedIDs={expandedIDs()}
-              loading={runtime.sessions.state() === "loading"}
-              error={createError() ?? runtime.sessions.error()}
-              canCreate={streamConnected() && runtime.sessions.state() === "ready"}
-              creating={creating()}
-              autoFocusClose={panels.mobile()}
-              serverName={friendlyServerName(props.server.serverUrl)}
-              serverStatus={streamConnected() ? "connected" : "reconnecting"}
-              onSelect={(sessionID) => {
-                if (!streamConnected()) return;
-                selectSession(sessionID);
-                if (panels.mobile()) panels.setLeftSidebarOpen(false);
-              }}
-              onToggleExpanded={toggleExpanded}
-              onCreate={() => void createSession()}
-              onRetry={() => {
-                if (createError()) void createSession();
-                else void syncCatalog();
-              }}
-              onHide={panels.mobile() ? () => panels.setLeftSidebarOpen(false) : undefined}
-              onSelectServer={props.onChangeServer}
-            />
-          }
-          main={
-            <SessionPane
-              selected={selectedSession() !== undefined}
-              title={selectedSession()?.title}
-              noSelection={
-                <>
-                  <h2>No session selected</h2>
-                  <p>Select a session from the sidebar.</p>
-                </>
-              }
-              transcript={
-                <Show when={selectedSession()}>
-                  <TranscriptView
-                    messages={transcript()}
-                    sessionStatus={transcriptStatus()}
-                    loading={transcriptLoading()}
-                    error={transcriptError()}
-                    onRetry={() => {
-                      const id = selectedID();
-                      if (id) void hydrateTranscript(id);
-                    }}
-                  />
-                </Show>
-              }
-              composer={
-                <Show when={selectedSession()}>
-                  <Composer
-                    value={drafts.get(selectedID()!)}
-                    disabled={
-                      !streamConnected() ||
-                      transcriptLoading() ||
-                      submittingID() !== undefined ||
-                      running()
-                    }
-                    submitting={submittingID() === selectedID()}
-                    running={running()}
-                    error={promptError()}
-                    onInput={(value) => drafts.set(selectedID()!, value)}
-                    onSubmit={() => void submitPrompt()}
-                  />
-                </Show>
-              }
-            />
-          }
-          context={
-            <ContextPanel
-              activeTab={activeContextTab()}
-              showTabs={panels.mobile()}
-              onTabChange={setActiveContextTab}
-              onClose={() => panels.setRightPanelOpen(false)}
-            />
-          }
-        />
-      }
-    />
+      </Show>
+    </>
   );
 }
 

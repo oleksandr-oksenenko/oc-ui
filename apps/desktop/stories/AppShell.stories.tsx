@@ -44,7 +44,7 @@ const nodes: readonly SessionNode[] = [
       { id: "docs", title: "Release notes", status: "idle" },
     ],
   },
-  { id: "small-fix", title: "Small follow-up fix", status: "creating" },
+  { id: "small-fix", title: "Small follow-up fix", status: "idle" },
 ];
 
 const diffFiles: readonly DiffFileData[] = [
@@ -167,7 +167,6 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                 expandedIDs={expandedIDs()}
                 loading={false}
                 canCreate={true}
-                creating={false}
                 autoFocusClose={panelState.mobile()}
                 serverName="homie.lan:4096"
                 serverStatus="connected"
@@ -309,7 +308,6 @@ export const NarrowRightPanelCollapsed = {
                 expandedIDs={["workspace", "api", "tests"]}
                 loading={false}
                 canCreate={true}
-                creating={false}
                 serverName="Local server"
                 serverStatus="connected"
                 onSelect={() => undefined}

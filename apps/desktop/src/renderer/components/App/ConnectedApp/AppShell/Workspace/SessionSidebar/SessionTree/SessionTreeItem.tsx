@@ -24,16 +24,11 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
     switch (props.node.status) {
       case "running":
         return "Running";
-      case "creating":
-        return "Creating";
       default:
         return "Idle";
     }
   };
-  const showsStatus = () =>
-    props.node.needsInput === true ||
-    props.node.status === "running" ||
-    props.node.status === "creating";
+  const showsStatus = () => props.node.needsInput === true || props.node.status === "running";
 
   return (
     <div class="shell-session-tree-item" style={{ "--session-depth": `${props.depth}` }}>

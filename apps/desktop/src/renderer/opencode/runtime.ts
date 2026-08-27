@@ -5,7 +5,7 @@ import { createEffect, getOwner, onCleanup } from "solid-js";
 import { createOpenCodeEventSource } from "./event-source";
 import type { OpenCodeEventSource } from "./event-source";
 import { mapConnectionFailure } from "./connection";
-import { createSessionCatalog, syncActiveStatuses } from "./session-catalog";
+import { createSessionCatalog } from "./session-catalog";
 import type { SessionCatalog } from "./session-catalog";
 import { syncSessionTranscript } from "./transcript";
 
@@ -30,7 +30,6 @@ export type ConnectedRuntime = {
     sessionID: string,
     options?: { readonly isCurrent?: () => boolean },
   ) => Promise<void>;
-  readonly hydrateAfterReconnect: (selectedSessionID?: string) => Promise<string | undefined>;
 };
 
 type RuntimeFactoryInput = RuntimeConnection & {
@@ -57,7 +56,6 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
   const sessions = createSessionCatalog({
     api: input.api,
     data,
-    defaultLocation: input.defaultLocation,
     events,
   });
 
@@ -100,18 +98,6 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
   const syncTranscript = (sessionID: string, options?: { readonly isCurrent?: () => boolean }) =>
     syncSessionTranscript(data, sessionID, options);
 
-  async function hydrateAfterReconnect(selectedSessionID?: string): Promise<string | undefined> {
-    await data.location.syncInfo(input.defaultLocation);
-    await sessions.sync();
-    await syncActiveStatuses({ api: input.api, data, sessionIDs: sessions.ids() });
-    const next =
-      selectedSessionID && sessions.ids().includes(selectedSessionID)
-        ? selectedSessionID
-        : sessions.ids()[0];
-    if (next) await syncTranscript(next);
-    return next;
-  }
-
   return {
     api: input.api,
     data,
@@ -120,6 +106,5 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
     sessions,
     ready,
     syncTranscript,
-    hydrateAfterReconnect,
   };
 }

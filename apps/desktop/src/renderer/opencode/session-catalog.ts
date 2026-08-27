@@ -1,5 +1,5 @@
 import type { Data } from "@opencode-ai/client/solid";
-import type { LocationRef, OpenCodeClient, SessionInfo } from "@opencode-ai/client";
+import type { OpenCodeClient, SessionInfo } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
 import type { OpenCodeEventSource } from "./event-source";
 
@@ -21,7 +21,6 @@ type CatalogMutation =
 type SessionCatalogInput = {
   readonly api: { readonly session: Pick<OpenCodeClient["session"], "list"> };
   readonly data: { readonly session: Pick<Data["session"], "remember" | "sync"> };
-  readonly defaultLocation: LocationRef;
   readonly events: Pick<OpenCodeEventSource, "on">;
 };
 
@@ -48,7 +47,7 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
 
   input.events.on("session.created", (event) => {
     const { data } = event;
-    if (data.parentID !== undefined || !sameLocation(data.location, input.defaultLocation)) return;
+    if (data.parentID !== undefined) return;
     mutate({ kind: "admit", sessionID: data.sessionID });
     // The event contains only the creation payload. Let createData fetch the
     // complete SessionInfo rather than fabricating an application record.
@@ -72,7 +71,6 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
         let cursor: string | undefined;
         do {
           const page = await input.api.session.list({
-            directory: input.defaultLocation.directory,
             parentID: null,
             order: "desc",
             limit: 100,
@@ -81,7 +79,6 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
           for (const info of page.data) {
             if (
               info.parentID === undefined &&
-              sameLocation(info.location, input.defaultLocation) &&
               !mutations.some(
                 (mutation) => mutation.kind === "remove" && mutation.sessionID === info.id,
               )
@@ -119,13 +116,6 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
     admit: (sessionID) => mutate({ kind: "admit", sessionID }),
     remove: (sessionID) => mutate({ kind: "remove", sessionID }),
   };
-}
-
-function sameLocation(left: LocationRef, right: LocationRef): boolean {
-  return (
-    left.directory === right.directory &&
-    (right.workspaceID === undefined || left.workspaceID === right.workspaceID)
-  );
 }
 
 export async function syncActiveStatuses(input: {

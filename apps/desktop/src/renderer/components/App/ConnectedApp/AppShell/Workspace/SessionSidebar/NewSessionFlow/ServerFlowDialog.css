@@ -1,0 +1,292 @@
+.server-flow-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(760px, calc(100vh - 32px));
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  color: var(--v2-text-text-base);
+  background: var(--v2-background-bg-layer-01);
+  box-shadow: var(--v2-elevation-overlay);
+}
+
+.server-flow-dialog::backdrop {
+  background: var(--v2-overlay-simple-overlay-scrim);
+}
+
+.server-flow-dialog-content {
+  display: flex;
+  flex-direction: column;
+  max-height: min(760px, calc(100vh - 32px));
+}
+
+.server-flow-dialog-add-project {
+  width: min(760px, calc(100vw - 32px));
+  height: min(680px, calc(100vh - 32px));
+}
+
+.server-flow-dialog-add-project .server-flow-dialog-content {
+  height: 100%;
+  max-height: none;
+}
+
+.server-flow-dialog-add-project .server-flow-dialog-body {
+  overflow: hidden;
+}
+
+.server-flow-dialog-add-project .server-directory-browser-shell,
+.server-flow-dialog-add-project .server-directory-browser {
+  flex: 1;
+  min-height: 0;
+}
+
+.server-flow-dialog-add-project .server-directory-state {
+  flex: 1;
+}
+
+.server-flow-dialog-header,
+.server-flow-dialog-footer {
+  display: flex;
+  align-items: flex-start;
+  flex-shrink: 0;
+  padding: 16px;
+}
+
+.server-flow-dialog-header {
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--v2-border-border-base);
+}
+
+.server-flow-dialog-header h2,
+.server-flow-dialog-header p {
+  margin: 0;
+}
+
+.server-flow-dialog-header h2 {
+  font-size: 15px;
+  font-weight: 530;
+  line-height: 20px;
+}
+
+.server-flow-dialog-header p {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--v2-text-text-muted);
+}
+
+.server-flow-dialog-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+}
+
+.server-flow-dialog-footer {
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--v2-border-border-base);
+}
+
+.new-session-project-picker,
+.new-session-location-choice,
+.new-session-worktree-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.new-session-project-picker [data-slot="radio-v2-label"],
+.new-session-location-choice [data-slot="radio-v2-label"] {
+  color: var(--v2-text-text-muted);
+}
+
+.new-session-project-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.new-session-project-heading h3,
+.new-session-project-heading p,
+.new-session-field-error {
+  margin: 0;
+}
+
+.new-session-project-heading h3 {
+  font-size: 13px;
+  font-weight: 530;
+  line-height: 18px;
+}
+
+.new-session-project-heading p {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--v2-text-text-muted);
+}
+
+.new-session-empty-projects {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px dashed var(--v2-border-border-base);
+  border-radius: 6px;
+  color: var(--v2-text-text-muted);
+  font-size: 13px;
+}
+
+.new-session-projects-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--v2-state-border-danger);
+  border-radius: 6px;
+  color: var(--v2-state-fg-danger);
+  background: var(--v2-state-bg-danger);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.new-session-location-summary,
+.new-session-source,
+.new-session-path-preview,
+.new-session-existing-worktree {
+  min-width: 0;
+}
+
+.new-session-location-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: 6px;
+  background: var(--v2-background-bg-base);
+}
+
+.new-session-location-summary div,
+.new-session-source,
+.new-session-path-preview,
+.new-session-existing-worktree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.new-session-location-summary span,
+.new-session-source span,
+.new-session-path-preview span,
+.new-session-existing-worktree span {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--v2-text-text-muted);
+}
+
+.new-session-location-summary strong,
+.new-session-source strong,
+.new-session-source code,
+.new-session-path-preview strong,
+.new-session-existing-worktree code {
+  overflow-wrap: anywhere;
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  font-weight: 440;
+  line-height: 17px;
+  color: var(--v2-text-text-base);
+}
+
+.new-session-guidance,
+.new-session-source,
+.new-session-path-preview {
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--v2-background-bg-base);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--v2-text-text-muted);
+}
+
+.server-flow-operation-error {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--v2-state-border-danger);
+  border-radius: 6px;
+  background: var(--v2-state-bg-danger);
+  color: var(--v2-state-fg-danger);
+}
+
+.server-flow-operation-error > div {
+  min-width: 0;
+}
+
+.server-flow-operation-error strong,
+.server-flow-operation-error p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.server-flow-operation-error p {
+  margin-top: 2px;
+}
+
+.new-session-existing-worktree {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--v2-state-border-danger);
+}
+
+.new-session-field-error {
+  color: var(--v2-state-fg-danger);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.server-flow-mutation-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 72px;
+  font-size: 13px;
+  color: var(--v2-text-text-muted);
+}
+
+@media (max-width: 520px) {
+  .server-flow-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .server-flow-dialog-add-project {
+    height: calc(100vh - 16px);
+  }
+
+  .server-flow-dialog-content {
+    max-height: calc(100vh - 16px);
+  }
+
+  .server-flow-dialog-footer,
+  .new-session-project-heading {
+    flex-wrap: wrap;
+  }
+
+  .server-flow-dialog-footer button,
+  .new-session-project-heading button {
+    flex: 1;
+  }
+}

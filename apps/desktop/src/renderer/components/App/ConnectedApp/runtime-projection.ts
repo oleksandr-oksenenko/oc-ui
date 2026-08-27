@@ -9,16 +9,10 @@ type RuntimeSession = Pick<SessionInfo, "id" | "title">;
 export function projectRuntimeSessionNodes(
   sessions: readonly RuntimeSession[],
   statusForSession: SessionStatusLookup,
-  creatingID?: string,
 ): readonly SessionNode[] {
   return sessions.map((session) => ({
     id: session.id,
     title: session.title?.trim() || "Untitled session",
-    status:
-      creatingID === session.id
-        ? "creating"
-        : statusForSession(session.id) === "running"
-          ? "running"
-          : "idle",
+    status: statusForSession(session.id) === "running" ? "running" : "idle",
   }));
 }

@@ -320,7 +320,6 @@ function WorkspaceShowcaseFixture() {
                 expandedIDs={expandedSessions()}
                 loading={false}
                 canCreate
-                creating={false}
                 autoFocusClose={panelState.mobile()}
                 serverName="Local server"
                 serverStatus="connected"
