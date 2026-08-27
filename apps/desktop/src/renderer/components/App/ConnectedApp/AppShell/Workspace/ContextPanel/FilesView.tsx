@@ -10,6 +10,8 @@ export type FilesViewProps = {
   readonly nodes: readonly FileTreeNode[];
   readonly loading: boolean;
   readonly error?: string;
+  readonly emptyMessage?: string;
+  readonly emptyDescription?: string;
   readonly expandedIDs: readonly string[];
   readonly onToggleExpanded: (id: string) => void;
   readonly onRetry?: () => void;
@@ -47,8 +49,8 @@ export function FilesView(props: FilesViewProps) {
 
       <Show when={!props.error && !props.loading && props.nodes.length === 0}>
         <div class="context-state empty-state">
-          <p>No files to show</p>
-          <span>The selected context has no files.</span>
+          <p>{props.emptyMessage ?? "No files to show"}</p>
+          <span>{props.emptyDescription ?? "The selected context has no files."}</span>
         </div>
       </Show>
 

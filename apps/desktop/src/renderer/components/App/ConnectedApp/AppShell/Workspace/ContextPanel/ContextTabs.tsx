@@ -71,14 +71,12 @@ export function ContextTabs(props: ContextTabsProps) {
       <Show when={props.diffContent !== undefined}>
         <Tabs.Content
           value="diff"
-          forceMount
           class="context-panel-tab-content"
           id={panelId("diff")}
           aria-label={props.showHeader === false && props.idBase === undefined ? "Diff" : undefined}
           aria-labelledby={
             props.showHeader === false && props.idBase === undefined ? undefined : tabId("diff")
           }
-          hidden={props.activeTab !== "diff"}
         >
           {props.diffContent}
         </Tabs.Content>
@@ -86,7 +84,6 @@ export function ContextTabs(props: ContextTabsProps) {
       <Show when={props.filesContent !== undefined}>
         <Tabs.Content
           value="files"
-          forceMount
           class="context-panel-tab-content"
           id={panelId("files")}
           aria-label={
@@ -95,7 +92,6 @@ export function ContextTabs(props: ContextTabsProps) {
           aria-labelledby={
             props.showHeader === false && props.idBase === undefined ? undefined : tabId("files")
           }
-          hidden={props.activeTab !== "files"}
         >
           {props.filesContent}
         </Tabs.Content>

@@ -7,7 +7,6 @@ import "./Titlebar.css";
 
 export type TitlebarProps = {
   readonly selectedTitle?: string;
-  readonly leftControls?: JSX.Element;
   readonly rightControls?: JSX.Element;
   readonly leftSidebarOpen: boolean;
   readonly rightPanelOpen: boolean;
@@ -53,23 +52,19 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
       inert={props.mobile === true && (props.leftSidebarOpen || props.rightPanelOpen)}
     >
       <div class="titlebar-left-region">
-        {props.leftSidebarOpen ? (
-          props.leftControls
-        ) : (
-          <IconButton
-            ref={(element) => {
-              leftToggle = element;
-            }}
-            class="titlebar-icon-button shell-sidebar-toggle-button"
-            type="button"
-            size="normal"
-            variant="ghost-muted"
-            icon={<Icon name="layout-left" />}
-            aria-label="Show sessions"
-            title="Show sessions"
-            onClick={props.onToggleLeftSidebar}
-          />
-        )}
+        <IconButton
+          ref={(element) => {
+            leftToggle = element;
+          }}
+          class="titlebar-icon-button shell-sidebar-toggle-button"
+          type="button"
+          size="normal"
+          variant="ghost-muted"
+          icon={<Icon name="layout-left" />}
+          aria-label={props.leftSidebarOpen ? "Hide sessions" : "Show sessions"}
+          title={props.leftSidebarOpen ? "Hide sessions" : "Show sessions"}
+          onClick={props.onToggleLeftSidebar}
+        />
       </div>
 
       <div class="titlebar-session" aria-live="polite">

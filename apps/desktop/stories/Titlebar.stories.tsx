@@ -6,7 +6,6 @@ import {
   ContextTabs,
   type ContextPanelTab,
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
-import { SessionHeader } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/SessionHeader.tsx";
 
 const meta = {
   title: "Shell/Titlebar",
@@ -24,14 +23,6 @@ function interactiveTitlebar() {
     <div style={{ width: "100%", "min-width": "720px" }}>
       <Titlebar
         selectedTitle="API contract review"
-        leftControls={
-          <SessionHeader
-            canCreate
-            creating={false}
-            onCreate={() => undefined}
-            onHide={() => setLeftSidebarOpen(false)}
-          />
-        }
         rightControls={
           <ContextTabs
             activeTab={activeTab()}
@@ -71,14 +62,6 @@ export const NoSessionSelected = {
     const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("diff");
     return (
       <Titlebar
-        leftControls={
-          <SessionHeader
-            canCreate
-            creating={false}
-            onCreate={() => undefined}
-            onHide={() => undefined}
-          />
-        }
         rightControls={
           <ContextTabs
             activeTab={activeTab()}
@@ -103,14 +86,6 @@ export const MacOSLayout = {
       <div data-platform="macos" style={{ width: "100%", "min-width": "720px" }}>
         <Titlebar
           selectedTitle="Compact Ledger Transcript"
-          leftControls={
-            <SessionHeader
-              canCreate
-              creating={false}
-              onCreate={() => undefined}
-              onHide={() => undefined}
-            />
-          }
           rightControls={
             <ContextTabs
               activeTab={activeTab()}

@@ -5,19 +5,20 @@ import { AppShell } from "./ConnectedApp/AppShell.tsx";
 import { Titlebar } from "./ConnectedApp/AppShell/Titlebar.tsx";
 import { Workspace } from "./ConnectedApp/AppShell/Workspace.tsx";
 import { createShellPanelState } from "./ConnectedApp/AppShell/createShellPanelState.ts";
+import {
+  ContextTabs,
+  type ContextPanelTab,
+} from "./ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
+import { ContextPanel } from "./ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
 import { SessionPane } from "./ConnectedApp/AppShell/Workspace/SessionPane.tsx";
-import { SessionHeader } from "./ConnectedApp/AppShell/Workspace/SessionSidebar/SessionHeader.tsx";
 import {
   SessionSidebar,
   type SessionNode,
 } from "./ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
 import { Composer } from "./ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
 import { TranscriptView } from "./ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
-import {
-  projectRuntimeSessionNodes,
-  projectRuntimeTranscript,
-} from "./ConnectedApp/runtime-projection.ts";
-import { createSessionDraftStore, projectTranscript } from "../../domain/index.ts";
+import { projectRuntimeSessionNodes } from "./ConnectedApp/runtime-projection.ts";
+import { createSessionDraftStore } from "../../domain/index.ts";
 import { syncActiveStatuses, useServerRuntime } from "../../opencode/index.ts";
 import type { VerifiedServer } from "../../opencode/index.ts";
 
@@ -44,7 +45,8 @@ export function ConnectedApp(props: ConnectedAppProps) {
   const [createError, setCreateError] = createSignal<string>();
   const [submittingID, setSubmittingID] = createSignal<string>();
   const [promptError, setPromptError] = createSignal<string>();
-  const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: false });
+  const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
+  const [activeContextTab, setActiveContextTab] = createSignal<ContextPanelTab>("diff");
   const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>([]);
   let alive = true;
   let hydration = 0;
@@ -74,10 +76,12 @@ export function ConnectedApp(props: ConnectedAppProps) {
 
   const transcript = createMemo(() => {
     const id = selectedID();
-    if (id === undefined) return [];
-    return projectRuntimeTranscript(
-      projectTranscript(runtime.data.session.message.list(id), runtime.data.session.status(id)),
-    );
+    return id === undefined ? [] : runtime.data.session.message.list(id);
+  });
+
+  const transcriptStatus = createMemo(() => {
+    const id = selectedID();
+    return id === undefined ? "idle" : runtime.data.session.status(id);
   });
 
   const sessionNodes = createMemo<readonly SessionNode[]>(() =>
@@ -281,17 +285,19 @@ export function ConnectedApp(props: ConnectedAppProps) {
       titlebar={
         <Titlebar
           selectedTitle={selectedSession()?.title}
-          leftControls={
-            <SessionHeader
-              canCreate={streamConnected() && runtime.sessions.state() === "ready"}
-              creating={creating()}
-              onCreate={() => void createSession()}
-              onHide={() => panels.setLeftSidebarOpen(false)}
-            />
-          }
           leftSidebarOpen={panels.leftSidebarOpen()}
           rightPanelOpen={panels.rightPanelOpen()}
-          rightPanelAvailable={false}
+          rightPanelAvailable
+          rightControls={
+            <Show when={!panels.mobile()}>
+              <ContextTabs
+                activeTab={activeContextTab()}
+                idBase="connected-workspace-context"
+                onTabChange={setActiveContextTab}
+                onClose={() => panels.setRightPanelOpen(false)}
+              />
+            </Show>
+          }
           mobile={panels.mobile()}
           onToggleLeftSidebar={panels.toggleLeftSidebar}
           onToggleRightPanel={panels.toggleRightPanel}
@@ -311,7 +317,6 @@ export function ConnectedApp(props: ConnectedAppProps) {
               error={createError() ?? runtime.sessions.error()}
               canCreate={streamConnected() && runtime.sessions.state() === "ready"}
               creating={creating()}
-              showHeader={panels.mobile()}
               autoFocusClose={panels.mobile()}
               serverName={friendlyServerName(props.server.serverUrl)}
               serverStatus={streamConnected() ? "connected" : "reconnecting"}
@@ -326,7 +331,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
                 if (createError()) void createSession();
                 else void syncCatalog();
               }}
-              onHide={() => panels.setLeftSidebarOpen(false)}
+              onHide={panels.mobile() ? () => panels.setLeftSidebarOpen(false) : undefined}
               onSelectServer={props.onChangeServer}
             />
           }
@@ -343,10 +348,10 @@ export function ConnectedApp(props: ConnectedAppProps) {
               transcript={
                 <Show when={selectedSession()}>
                   <TranscriptView
-                    items={transcript()}
+                    messages={transcript()}
+                    sessionStatus={transcriptStatus()}
                     loading={transcriptLoading()}
                     error={transcriptError()}
-                    working={running()}
                     onRetry={() => {
                       const id = selectedID();
                       if (id) void hydrateTranscript(id);
@@ -372,6 +377,14 @@ export function ConnectedApp(props: ConnectedAppProps) {
                   />
                 </Show>
               }
+            />
+          }
+          context={
+            <ContextPanel
+              activeTab={activeContextTab()}
+              showTabs={panels.mobile()}
+              onTabChange={setActiveContextTab}
+              onClose={() => panels.setRightPanelOpen(false)}
             />
           }
         />

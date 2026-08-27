@@ -1,11 +1,9 @@
-import { IconButton } from "@opencode-ai/ui/icon-button";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Loader } from "@opencode-ai/ui/loader";
-import { Textarea } from "@opencode-ai/ui/textarea";
-import { Show, createEffect, on } from "solid-js";
+import { createEffect } from "solid-js";
 
-import { ComposerPicker, type ComposerPickerProps } from "./Composer/ComposerPicker.tsx";
 import "./Composer/Composer.css";
+
+const COMPOSER_MIN_HEIGHT = 40;
+const COMPOSER_MAX_HEIGHT = 168;
 
 export type ComposerProps = {
   readonly value: string;
@@ -16,28 +14,23 @@ export type ComposerProps = {
   readonly error?: string;
   readonly onInput: (value: string) => void;
   readonly onSubmit: () => void;
-  /** Optional provider-neutral model choices. Omit until runtime discovery is available. */
-  readonly model?: ComposerPickerProps;
-  /** Optional provider-neutral reasoning choices. Omit until runtime discovery is available. */
-  readonly reasoning?: ComposerPickerProps;
 };
-
-const MAX_INPUT_HEIGHT = 168;
-const MIN_INPUT_HEIGHT = 40;
 
 export function Composer(props: ComposerProps) {
   let textarea: HTMLTextAreaElement | undefined;
-
-  const resizeInput = () => {
+  const resizeTextarea = () => {
     if (!textarea) return;
-    textarea.style.height = "auto";
-    const contentHeight = Math.max(textarea.scrollHeight, MIN_INPUT_HEIGHT);
-    const height = Math.min(contentHeight, MAX_INPUT_HEIGHT);
+    textarea.style.height = "0px";
+    const scrollHeight = textarea.scrollHeight;
+    const height = Math.max(COMPOSER_MIN_HEIGHT, Math.min(COMPOSER_MAX_HEIGHT, scrollHeight));
     textarea.style.height = `${height}px`;
-    textarea.style.overflowY = contentHeight > MAX_INPUT_HEIGHT ? "auto" : "hidden";
+    textarea.style.overflowY = scrollHeight > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
   };
 
-  createEffect(on(() => props.value, resizeInput));
+  createEffect(() => {
+    void props.value;
+    resizeTextarea();
+  });
 
   const submit = (event?: Event) => {
     event?.preventDefault();
@@ -54,60 +47,53 @@ export function Composer(props: ComposerProps) {
   return (
     <form class="composer-v2" aria-label="Message composer" onSubmit={submit}>
       <div class="composer-v2-editor-row">
-        <Textarea
+        <textarea
+          ref={(element) => {
+            textarea = element;
+          }}
           class="composer-v2-input"
           aria-label="Prompt"
           disabled={false}
           placeholder={props.running ? "Draft your next prompt…" : "Send a message…"}
           rows={1}
           value={props.value}
-          ref={(element) => {
-            textarea = element;
-            resizeInput();
+          onInput={(event) => {
+            props.onInput(event.currentTarget.value);
+            resizeTextarea();
           }}
-          onInput={(event) => props.onInput(event.currentTarget.value)}
           onKeyDown={keyDown}
         />
       </div>
 
       <div class="composer-v2-controls-row">
-        <Show when={props.model || props.reasoning}>
-          <div class="composer-v2-picker-row">
-            <Show when={props.model}>{(model) => <ComposerPicker {...model()} />}</Show>
-            <Show when={props.reasoning}>{(reasoning) => <ComposerPicker {...reasoning()} />}</Show>
-          </div>
-        </Show>
-        <IconButton
+        <div class="composer-v2-picker-row">
+          <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
+            Model unavailable
+          </span>
+          <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
+            Variant unavailable
+          </span>
+        </div>
+        <button
           class="composer-v2-send"
           type="submit"
-          variant="contrast"
-          size="large"
           aria-label="Send"
           title="Send"
           disabled={
             props.disabled || props.submitting || props.running || props.value.trim() === ""
           }
-          icon={
-            <Show
-              when={!props.submitting}
-              fallback={<Loader class="composer-v2-send-icon--loading" aria-hidden="true" />}
-            >
-              <Icon name="arrow-up" aria-hidden="true" />
-            </Show>
-          }
-        />
+        >
+          <span class="composer-v2-send-icon" aria-hidden="true">
+            {props.submitting ? "…" : "↑"}
+          </span>
+        </button>
       </div>
 
-      <Show when={props.error}>
-        {(error) => (
-          <p class="composer-v2-status composer-v2-status--error" role="alert">
-            {error()}
-          </p>
-        )}
-      </Show>
-      <Show when={!props.error && props.running}>
-        <output class="composer-v2-status">Draft saved while this run finishes.</output>
-      </Show>
+      {props.error ? (
+        <p class="composer-v2-status composer-v2-status--error" role="alert">
+          {props.error}
+        </p>
+      ) : null}
     </form>
   );
 }

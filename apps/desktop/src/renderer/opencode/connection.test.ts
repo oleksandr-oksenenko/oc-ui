@@ -54,4 +54,19 @@ describe("OpenCode connection input", () => {
       phase: "health",
     });
   });
+
+  it("maps the beta server's empty 401 response to an authentication error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(null, { status: 401 }))),
+    );
+
+    await expect(
+      verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "wrong" }),
+    ).rejects.toMatchObject({
+      reason: "unauthorized",
+      phase: "health",
+      message: "The server rejected the password.",
+    });
+  });
 });

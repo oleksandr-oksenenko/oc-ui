@@ -38,11 +38,9 @@ export const Idle: Story = {
   },
 };
 
-export const PickerShowcase: Story = {
+export const UnavailablePickers: Story = {
   render: () => {
     const [value, setValue] = createSignal("Explain the latest change");
-    const [model, setModel] = createSignal("balanced");
-    const [reasoning, setReasoning] = createSignal("medium");
     return (
       <div style={frameStyle}>
         <Composer
@@ -50,26 +48,6 @@ export const PickerShowcase: Story = {
           disabled={false}
           submitting={false}
           running={false}
-          model={{
-            label: "Model",
-            value: model(),
-            options: [
-              { value: "fast", label: "Fast" },
-              { value: "balanced", label: "Balanced" },
-              { value: "deep", label: "Deep" },
-            ],
-            onChange: setModel,
-          }}
-          reasoning={{
-            label: "Reasoning",
-            value: reasoning(),
-            options: [
-              { value: "low", label: "Low" },
-              { value: "medium", label: "Medium" },
-              { value: "high", label: "High" },
-            ],
-            onChange: setReasoning,
-          }}
           onInput={setValue}
           onSubmit={() => setValue("")}
         />
@@ -165,7 +143,7 @@ export const EmptyDisabled: Story = {
   ),
 };
 
-export const DisabledPickers: Story = {
+export const UnavailableWhileDisabled: Story = {
   render: () => (
     <div style={frameStyle}>
       <Composer
@@ -173,20 +151,6 @@ export const DisabledPickers: Story = {
         disabled
         submitting={false}
         running={false}
-        model={{
-          label: "Model",
-          value: "balanced",
-          options: [{ value: "balanced", label: "Balanced" }],
-          disabled: true,
-          onChange: () => undefined,
-        }}
-        reasoning={{
-          label: "Reasoning",
-          value: "medium",
-          options: [{ value: "medium", label: "Medium" }],
-          disabled: true,
-          onChange: () => undefined,
-        }}
         onInput={() => undefined}
         onSubmit={() => undefined}
       />

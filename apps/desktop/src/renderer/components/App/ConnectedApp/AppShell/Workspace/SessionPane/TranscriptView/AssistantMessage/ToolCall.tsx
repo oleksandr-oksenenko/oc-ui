@@ -1,52 +1,51 @@
+import type {
+  SessionMessageAssistantTool,
+  SessionMessageToolStateCompleted,
+  SessionMessageToolStateError,
+  SessionMessageToolStateRunning,
+  ToolContent,
+} from "@opencode-ai/client";
 import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
-import { Show, type JSX } from "solid-js";
-import type { ToolCallKind } from "../../transcript-types.ts";
+import { For, Show, type JSX } from "solid-js";
 
 export type ToolCallProps = {
-  readonly name: string;
-  readonly toolKind?: ToolCallKind;
-  readonly target?: string;
-  readonly detail?: string;
-  readonly status: "running" | "done" | "failed";
-  readonly output?: string;
-  readonly defaultExpanded?: boolean;
+  readonly tool: SessionMessageAssistantTool;
 };
 
 export function ToolCall(props: ToolCallProps): JSX.Element {
-  const expandable = () => props.output !== undefined && props.output.length > 0;
+  const details = () => toolDetails(props.tool);
+  const expandable = () => details().length > 0;
+  const status = () => props.tool.state.status;
   const statusLabel = () =>
-    props.status === "done" ? "Done" : props.status === "failed" ? "Failed" : "Running";
+    status() === "completed"
+      ? "Completed"
+      : status() === "error"
+        ? "Error"
+        : status() === "streaming"
+          ? "Streaming"
+          : "Running";
 
   return (
-    <Collapsible
-      class={`transcript-tool-call transcript-tool-${props.status}`}
-      defaultOpen={props.defaultExpanded ?? false}
-    >
+    <Collapsible class={`transcript-tool-call transcript-tool-${status()}`} defaultOpen={false}>
       <Collapsible.Trigger class="transcript-tool-header" disabled={!expandable()}>
-        {renderToolIcon(props.toolKind)}
+        {renderToolIcon(props.tool.name)}
         <span class="transcript-tool-copy">
-          <span class="transcript-tool-name">{props.name}</span>
-          <Show when={props.target}>
-            {(target) => <span class="transcript-tool-target">{target()}</span>}
-          </Show>
-          <Show when={props.detail}>
-            {(detail) => <span class="transcript-tool-detail">{detail()}</span>}
-          </Show>
+          <span class="transcript-tool-name">{props.tool.name}</span>
         </span>
         <span class="transcript-tool-status">
           <Show
-            when={props.status !== "running"}
+            when={status() === "completed" || status() === "error"}
             fallback={
               <Loader class="transcript-tool-loader" width={14} height={14} aria-hidden="true" />
             }
           >
-            {props.status === "done" ? (
-              <Icon name="check" size="small" aria-hidden="true" />
-            ) : (
-              <Icon name="warning" size="small" aria-hidden="true" />
-            )}
+            <Icon
+              name={status() === "completed" ? "check" : "warning"}
+              size="small"
+              aria-hidden="true"
+            />
           </Show>
           <span>{statusLabel()}</span>
         </span>
@@ -56,22 +55,75 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
       </Collapsible.Trigger>
       <Collapsible.Content>
         <Show when={expandable()}>
-          <pre class="transcript-tool-output">{props.output}</pre>
+          <div class="transcript-tool-details">
+            <For each={details()}>{(detail) => detail}</For>
+          </div>
         </Show>
       </Collapsible.Content>
     </Collapsible>
   );
 }
 
-function renderToolIcon(kind: ToolCallKind | undefined): JSX.Element {
-  switch (kind) {
-    case "read":
-      return <Icon name="file-tree" size="small" aria-hidden="true" />;
-    case "search":
-      return <Icon name="magnifying-glass" size="small" aria-hidden="true" />;
-    case "command":
-      return <Icon name="terminal" size="small" aria-hidden="true" />;
-    default:
-      return <Icon name="outline-dots" size="small" aria-hidden="true" />;
+function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
+  switch (tool.state.status) {
+    case "streaming":
+      return [<pre class="transcript-tool-output">{tool.state.input}</pre>];
+    case "running":
+      return [<pre class="transcript-tool-output">{formatObject(tool.state)}</pre>];
+    case "completed":
+      return [
+        <pre class="transcript-tool-output">{formatObject(tool.state)}</pre>,
+        ...tool.state.content.map((content) => renderToolContent(content)),
+      ];
+    case "error":
+      return [
+        <pre class="transcript-tool-output">{formatObject(tool.state)}</pre>,
+        ...(tool.state.content?.map((content) => renderToolContent(content)) ?? []),
+      ];
+    default: {
+      const unreachable: never = tool.state;
+      return [unreachable];
+    }
   }
+}
+
+function renderToolContent(content: ToolContent): JSX.Element {
+  return content.type === "text" ? (
+    <pre class="transcript-tool-output">{content.text}</pre>
+  ) : (
+    <div class="transcript-tool-file">
+      <Icon name="file-tree" size="small" aria-hidden="true" />
+      <span>{content.name ?? content.uri}</span>
+      <span class="transcript-tool-file-mime">{content.mime}</span>
+      <Show when={content.name}>
+        <span class="transcript-tool-file-uri">{content.uri}</span>
+      </Show>
+    </div>
+  );
+}
+
+function formatObject(
+  state:
+    | SessionMessageToolStateRunning
+    | SessionMessageToolStateCompleted
+    | SessionMessageToolStateError,
+): string {
+  if (state.status === "error") {
+    return JSON.stringify({ input: state.input, error: state.error }, null, 2);
+  }
+  return JSON.stringify(state.input, null, 2);
+}
+
+function renderToolIcon(name: string): JSX.Element {
+  const normalized = name.toLowerCase();
+  const icon = normalized.includes("read")
+    ? "file-tree"
+    : normalized.includes("search")
+      ? "magnifying-glass"
+      : normalized.includes("shell") ||
+          normalized.includes("command") ||
+          normalized.includes("bash")
+        ? "terminal"
+        : "outline-dots";
+  return <Icon name={icon} size="small" aria-hidden="true" />;
 }

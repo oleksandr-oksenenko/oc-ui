@@ -1,7 +1,7 @@
 import type { SessionInfo } from "@opencode-ai/client";
 import { describe, expect, it } from "vite-plus/test";
 
-import { projectRuntimeSessionNodes, projectRuntimeTranscript } from "./runtime-projection.ts";
+import { projectRuntimeSessionNodes } from "./runtime-projection.ts";
 
 const session = (id: string, title?: string): SessionInfo =>
   ({
@@ -32,35 +32,5 @@ describe("runtime presentation projection", () => {
     expect(projectRuntimeSessionNodes([session("new")], () => "running", "new")).toEqual([
       { id: "new", title: "Untitled session", status: "creating" },
     ]);
-  });
-
-  it("keeps multiline assistant text in one paragraph payload", () => {
-    const text = "First line\n\nSecond line\n- still plain runtime text";
-
-    expect(
-      projectRuntimeTranscript([
-        { kind: "assistant", id: "assistant-1", textBlocks: [text], state: "complete" },
-      ]),
-    ).toEqual([
-      {
-        kind: "assistant",
-        id: "assistant-1",
-        state: "complete",
-        blocks: [{ kind: "paragraph", content: text }],
-      },
-    ]);
-  });
-
-  it("does not fabricate fixture-only reasoning or tool blocks", () => {
-    const [message] = projectRuntimeTranscript([
-      { kind: "assistant", id: "assistant-1", textBlocks: ["Visible text"], state: "streaming" },
-    ]);
-
-    expect(message).toEqual({
-      kind: "assistant",
-      id: "assistant-1",
-      state: "streaming",
-      blocks: [{ kind: "paragraph", content: "Visible text" }],
-    });
   });
 });

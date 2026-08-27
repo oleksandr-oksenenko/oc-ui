@@ -1,4 +1,4 @@
-import { ScrollView } from "@opencode-ai/ui/scroll-view";
+import { Show } from "solid-js";
 
 import { ContextTabs } from "./ContextPanel/ContextTabs.tsx";
 import type { ContextPanelTab } from "./ContextPanel/ContextTabs.tsx";
@@ -16,31 +16,63 @@ export type ContextPanelProps = {
   readonly showTabs?: boolean;
   readonly tabsIdBase?: string;
   readonly autoFocusClose?: boolean;
-  readonly diff: DiffViewProps;
-  readonly files: FilesViewProps;
+  readonly diff?: DiffViewProps;
+  readonly files?: FilesViewProps;
 };
 
 export function ContextPanel(props: ContextPanelProps) {
+  const diffContent = () => (
+    <div class="context-panel-body">
+      <Show
+        when={props.diff}
+        fallback={
+          <div class="context-state empty-state">
+            <p>Diff unavailable</p>
+            <span>OpenCode diff data is not connected yet.</span>
+          </div>
+        }
+      >
+        {(diff) => <DiffView {...diff()} />}
+      </Show>
+    </div>
+  );
+
+  const filesContent = () => (
+    <div class="context-panel-body">
+      <Show
+        when={props.files}
+        fallback={
+          <div class="context-state empty-state">
+            <p>Files unavailable</p>
+            <span>OpenCode file data is not connected yet.</span>
+          </div>
+        }
+      >
+        {(files) => <FilesView {...files()} />}
+      </Show>
+    </div>
+  );
+
   return (
     <aside class="context-panel" aria-label="Workspace context panel">
-      <ContextTabs
-        activeTab={props.activeTab}
-        autoFocusClose={props.autoFocusClose}
-        diffContent={
-          <ScrollView class="context-panel-body" thumbVisibility="hover">
-            <DiffView {...props.diff} />
-          </ScrollView>
+      <Show
+        when={props.showTabs !== false}
+        fallback={
+          <Show when={props.activeTab === "diff"} fallback={filesContent()}>
+            {diffContent()}
+          </Show>
         }
-        filesContent={
-          <ScrollView class="context-panel-body" thumbVisibility="hover">
-            <FilesView {...props.files} />
-          </ScrollView>
-        }
-        idBase={props.tabsIdBase}
-        onTabChange={props.onTabChange}
-        onClose={props.onClose}
-        showHeader={props.showTabs !== false}
-      />
+      >
+        <ContextTabs
+          activeTab={props.activeTab}
+          autoFocusClose={props.autoFocusClose}
+          diffContent={diffContent()}
+          filesContent={filesContent()}
+          idBase={props.tabsIdBase}
+          onTabChange={props.onTabChange}
+          onClose={props.onClose}
+        />
+      </Show>
     </aside>
   );
 }

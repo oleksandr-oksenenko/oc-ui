@@ -14,7 +14,6 @@ describe("Titlebar", () => {
         <Titlebar
           mobile
           selectedTitle="Responsive session"
-          leftControls={<button type="button">Close sessions</button>}
           leftSidebarOpen={leftSidebarOpen()}
           rightPanelOpen={false}
           rightPanelAvailable={false}
@@ -34,6 +33,38 @@ describe("Titlebar", () => {
     expect(document.activeElement).toBe(
       host.querySelector<HTMLButtonElement>('[aria-label="Show sessions"]'),
     );
+
+    dispose();
+    host.remove();
+  });
+
+  it("keeps the hide sessions control in the titlebar while the sidebar is open", () => {
+    const host = document.createElement("div");
+    const [leftSidebarOpen, setLeftSidebarOpen] = createSignal(true);
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Titlebar
+          selectedTitle="Open session"
+          leftSidebarOpen={leftSidebarOpen()}
+          rightPanelOpen={false}
+          rightPanelAvailable={false}
+          onToggleLeftSidebar={() => setLeftSidebarOpen((open) => !open)}
+          onToggleRightPanel={() => undefined}
+        />
+      ),
+      host,
+    );
+
+    const hide = host.querySelector<HTMLButtonElement>('[aria-label="Hide sessions"]');
+    if (!hide) throw new Error(`Titlebar did not render its hide control: ${host.innerHTML}`);
+    expect(hide.closest(".titlebar-left-region")).not.toBeNull();
+    const icon = hide.innerHTML;
+    hide.click();
+    expect(leftSidebarOpen()).toBe(false);
+    const show = host.querySelector<HTMLButtonElement>('[aria-label="Show sessions"]');
+    expect(show).toBe(hide);
+    expect(show?.innerHTML).toBe(icon);
 
     dispose();
     host.remove();

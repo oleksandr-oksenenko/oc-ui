@@ -16,11 +16,10 @@ import {
   SessionSidebar,
   type SessionNode,
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
-import { SessionHeader } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/SessionHeader.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
-import type { TranscriptMessage } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/transcript-types.ts";
+import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 
 const nodes: readonly SessionNode[] = [
   {
@@ -46,32 +45,6 @@ const nodes: readonly SessionNode[] = [
     ],
   },
   { id: "small-fix", title: "Small follow-up fix", status: "creating" },
-];
-
-const transcript: readonly TranscriptMessage[] = [
-  {
-    kind: "user",
-    id: "user-1",
-    text: "Review the current layout and keep the final UI compact.",
-  },
-  {
-    kind: "assistant",
-    id: "assistant-1",
-    state: "complete",
-    blocks: [
-      {
-        kind: "paragraph",
-        content: "The shell keeps the session, transcript, composer, and context visible together.",
-      },
-      {
-        kind: "tool",
-        name: "layout-check",
-        status: "done",
-        output: "The selected shell composition is ready for visual review.",
-        defaultExpanded: true,
-      },
-    ],
-  },
 ];
 
 const diffFiles: readonly DiffFileData[] = [
@@ -145,8 +118,6 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
     "src/renderer",
   ]);
   const [draft, setDraft] = createSignal("Summarize the current layout changes");
-  const [model, setModel] = createSignal("balanced");
-  const [reasoning, setReasoning] = createSignal("medium");
 
   const toggleExpanded = (id: string) => {
     setExpandedIDs((current) =>
@@ -166,14 +137,6 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
         titlebar={
           <Titlebar
             selectedTitle="Test coverage"
-            leftControls={
-              <SessionHeader
-                canCreate
-                creating={false}
-                onCreate={() => undefined}
-                onHide={() => panelState.setLeftSidebarOpen(false)}
-              />
-            }
             rightControls={
               <Show when={!panelState.mobile()}>
                 <ContextTabs
@@ -205,7 +168,6 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                 loading={false}
                 canCreate={true}
                 creating={false}
-                showHeader={panelState.mobile()}
                 autoFocusClose={panelState.mobile()}
                 serverName="homie.lan:4096"
                 serverStatus="connected"
@@ -215,7 +177,9 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                 onToggleExpanded={toggleExpanded}
                 onCreate={() => undefined}
                 onRetry={() => undefined}
-                onHide={() => panelState.setLeftSidebarOpen(false)}
+                onHide={
+                  panelState.mobile() ? () => panelState.setLeftSidebarOpen(false) : undefined
+                }
                 onSelectServer={() => undefined}
               />
             }
@@ -223,33 +187,15 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
               <SessionPane
                 selected
                 title="Test coverage"
-                transcript={<TranscriptView items={transcript} loading={false} working />}
+                transcript={
+                  <TranscriptView messages={transcript} loading={false} sessionStatus="running" />
+                }
                 composer={
                   <Composer
                     value={draft()}
                     disabled={false}
                     submitting={false}
                     running={false}
-                    model={{
-                      label: "Model",
-                      value: model(),
-                      options: [
-                        { value: "fast", label: "Fast" },
-                        { value: "balanced", label: "Balanced" },
-                        { value: "deep", label: "Deep" },
-                      ],
-                      onChange: setModel,
-                    }}
-                    reasoning={{
-                      label: "Reasoning",
-                      value: reasoning(),
-                      options: [
-                        { value: "low", label: "Low" },
-                        { value: "medium", label: "Medium" },
-                        { value: "high", label: "High" },
-                      ],
-                      onChange: setReasoning,
-                    }}
                     onInput={setDraft}
                     onSubmit={() => setDraft("")}
                   />
@@ -316,7 +262,9 @@ export const MainOnly = {
               <SessionPane
                 selected
                 title="No context panel"
-                transcript={<TranscriptView items={transcript} loading={false} working={false} />}
+                transcript={
+                  <TranscriptView messages={transcript} loading={false} sessionStatus="idle" />
+                }
                 composer={
                   <Composer
                     value="Ask about the selected session"
@@ -343,14 +291,6 @@ export const NarrowRightPanelCollapsed = {
         titlebar={
           <Titlebar
             selectedTitle="Narrow workspace"
-            leftControls={
-              <SessionHeader
-                canCreate
-                creating={false}
-                onCreate={() => undefined}
-                onHide={() => undefined}
-              />
-            }
             leftSidebarOpen={true}
             rightPanelOpen={false}
             rightPanelAvailable={true}
@@ -370,14 +310,12 @@ export const NarrowRightPanelCollapsed = {
                 loading={false}
                 canCreate={true}
                 creating={false}
-                showHeader={false}
                 serverName="Local server"
                 serverStatus="connected"
                 onSelect={() => undefined}
                 onToggleExpanded={() => undefined}
                 onCreate={() => undefined}
                 onRetry={() => undefined}
-                onHide={() => undefined}
                 onSelectServer={() => undefined}
               />
             }
@@ -385,7 +323,9 @@ export const NarrowRightPanelCollapsed = {
               <SessionPane
                 selected
                 title="Narrow workspace"
-                transcript={<TranscriptView items={transcript} loading={false} working={false} />}
+                transcript={
+                  <TranscriptView messages={transcript} loading={false} sessionStatus="idle" />
+                }
                 composer={
                   <Composer
                     value="Keep this narrow layout readable"

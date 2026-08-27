@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { ContextTabs, type ContextPanelTab } from "./ContextTabs.tsx";
 
 describe("ContextTabs", () => {
-  it("uses mounted OpenCode tab panels so inactive content keeps its state", () => {
+  it("mounts only the active OpenCode tab panel", () => {
     const host = document.createElement("div");
     document.body.append(host);
     const onTabChange = vi.fn<(tab: ContextPanelTab) => void>();
@@ -21,10 +21,9 @@ describe("ContextTabs", () => {
     );
 
     const panels = host.querySelectorAll<HTMLElement>('[role="tabpanel"]');
-    expect(panels).toHaveLength(2);
+    expect(panels).toHaveLength(1);
     expect(panels[0]?.hasAttribute("hidden")).toBe(false);
-    expect(panels[1]?.hasAttribute("hidden")).toBe(true);
-    expect(host.textContent).toContain("Files content");
+    expect(host.textContent).not.toContain("Files content");
 
     host.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]?.click();
     expect(onTabChange).toHaveBeenCalledWith("files");

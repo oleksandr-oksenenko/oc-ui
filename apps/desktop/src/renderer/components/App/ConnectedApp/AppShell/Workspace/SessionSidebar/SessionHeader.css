@@ -1,12 +1,16 @@
 .shell-session-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   width: 100%;
   height: 32px;
   min-width: 0;
   gap: 2px;
   padding: 2px 4px;
+}
+
+.shell-session-header.has-close {
+  grid-template-columns: minmax(0, 1fr) 24px;
 }
 
 .shell-create-session[data-component="button-v2"][data-size="small"] {
