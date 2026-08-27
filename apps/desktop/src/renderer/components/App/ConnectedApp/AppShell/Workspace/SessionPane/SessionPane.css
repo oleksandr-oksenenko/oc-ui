@@ -142,9 +142,100 @@
   margin-top: 0;
 }
 
-.transcript-paragraph {
+.transcript-markdown {
   margin: 0 0 5px;
-  white-space: pre-wrap;
+}
+
+.transcript-markdown > :first-child {
+  margin-top: 0;
+}
+
+.transcript-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.transcript-markdown :is(p, ul, ol, blockquote, pre, table) {
+  margin: 0 0 10px;
+}
+
+.transcript-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 16px 0 8px;
+  line-height: 1.25;
+}
+
+.transcript-markdown h1 {
+  font-size: 1.35em;
+}
+
+.transcript-markdown h2 {
+  font-size: 1.2em;
+}
+
+.transcript-markdown :is(h3, h4, h5, h6) {
+  font-size: 1.05em;
+}
+
+.transcript-markdown :is(ul, ol) {
+  padding-left: 22px;
+}
+
+.transcript-markdown li + li {
+  margin-top: 3px;
+}
+
+.transcript-markdown a {
+  color: var(--text-interactive-base, #74a7ff);
+}
+
+.transcript-markdown code {
+  font-family: var(--font-family-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 0.92em;
+}
+
+.transcript-markdown :not(pre) > code {
+  padding: 1px 4px;
+  border: 1px solid var(--border-weaker-base, #2a2a2a);
+  border-radius: 4px;
+  background: var(--surface-raised-base, #0a0a0a);
+}
+
+.transcript-markdown pre {
+  max-width: 100%;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border-weaker-base, #2a2a2a);
+  border-radius: 6px;
+  background: var(--surface-raised-base, #0a0a0a);
+}
+
+.transcript-markdown blockquote {
+  padding-left: 12px;
+  border-left: 2px solid var(--border-interactive-base, #686868);
+  color: var(--text-base, #b5b5b5);
+}
+
+.transcript-markdown hr {
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--border-weaker-base, #2a2a2a);
+}
+
+.transcript-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.transcript-markdown :is(th, td) {
+  padding: 5px 8px;
+  border: 1px solid var(--border-weaker-base, #2a2a2a);
+  text-align: left;
+}
+
+.transcript-markdown img {
+  max-width: 100%;
+  height: auto;
 }
 
 .transcript-message-failure {

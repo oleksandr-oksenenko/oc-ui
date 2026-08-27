@@ -241,4 +241,56 @@ describe("TranscriptView", () => {
     host.remove();
     vi.unstubAllGlobals();
   });
+
+  it("renders model text as sanitized Markdown", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const messages: readonly SessionMessageInfo[] = [
+      {
+        id: "assistant-markdown",
+        time: { ...base, completed: 2 },
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "p", id: "m" },
+        content: [
+          {
+            type: "text",
+            text: [
+              "## Result",
+              "",
+              "This is **important** with `inline code`.",
+              "",
+              "- First",
+              "- Second",
+              "",
+              '<a href="javascript:alert(1)" onclick="alert(1)">Unsafe link</a>',
+              "<script>alert(1)</script>",
+            ].join("\n"),
+          },
+        ],
+      },
+    ];
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(() => <TranscriptView messages={messages} sessionStatus="idle" />, host);
+
+    const markdown = host.querySelector<HTMLElement>(".transcript-markdown");
+    expect(markdown?.querySelector("h2")?.textContent).toBe("Result");
+    expect(markdown?.querySelector("strong")?.textContent).toBe("important");
+    expect(markdown?.querySelector("code")?.textContent).toBe("inline code");
+    expect(markdown?.querySelectorAll("li")).toHaveLength(2);
+    expect(markdown?.querySelector("script")).toBeNull();
+    expect(markdown?.querySelector("a")?.hasAttribute("href")).toBe(false);
+    expect(markdown?.querySelector("a")?.hasAttribute("onclick")).toBe(false);
+
+    dispose();
+    host.remove();
+    vi.unstubAllGlobals();
+  });
 });
