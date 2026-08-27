@@ -17,6 +17,14 @@ const project: Project = {
   sandboxes: [],
 };
 
+const nonGitProject: Project = {
+  id: "docs",
+  canonical: "/srv/projects/docs",
+  name: "docs",
+  time: { created: 1, updated: 1 },
+  sandboxes: [],
+};
+
 function session(id: string, directory: string): SessionInfo {
   return {
     id,
@@ -28,17 +36,31 @@ function session(id: string, directory: string): SessionInfo {
   };
 }
 
-function fileResponse(directory: string): FileListOutput {
+function fileResponse(directory: string, workspaceID?: string): FileListOutput {
+  const location: FileListOutput["location"] = workspaceID
+    ? {
+        directory,
+        workspaceID,
+        project: { id: project.id, directory, canonical: project.canonical },
+      }
+    : {
+        directory,
+        project: { id: project.id, directory, canonical: project.canonical },
+      };
   return {
-    location: {
-      directory,
-      project: { id: project.id, directory, canonical: project.canonical },
-    },
+    location,
     data: [{ path: "worktrees", type: "directory" }],
   };
 }
 
-function fakeRuntime(sessionRequests: readonly Promise<SessionInfo>[]) {
+function fakeRuntime(
+  sessionRequests: readonly Promise<SessionInfo>[],
+  options: {
+    readonly projects?: readonly Project[];
+    readonly acknowledged?: ReadonlyMap<string, SessionInfo>;
+    readonly defaultLocation?: NewSessionFlowRuntime["defaultLocation"];
+  } = {},
+) {
   let createIndex = 0;
   const sessionCreate = vi.fn<NewSessionFlowRuntime["data"]["session"]["create"]>(() => ({
     id: `session-${createIndex + 1}`,
@@ -57,8 +79,11 @@ function fakeRuntime(sessionRequests: readonly Promise<SessionInfo>[]) {
     const directory = input?.location?.directory ?? "/";
     const resolved =
       input?.path === ".." && directory === project.canonical ? "/srv/projects" : directory;
-    return Promise.resolve(fileResponse(resolved));
+    return Promise.resolve(fileResponse(resolved, input?.location?.workspace));
   });
+  const sessionGet = vi.fn<NewSessionFlowRuntime["data"]["session"]["get"]>((sessionID) =>
+    options.acknowledged ? options.acknowledged.get(sessionID) : undefined,
+  );
   const admit = vi.fn<(sessionID: string) => void>();
   const remove = vi.fn<(sessionID: string) => void>();
 
@@ -69,16 +94,17 @@ function fakeRuntime(sessionRequests: readonly Promise<SessionInfo>[]) {
       worktree: { create: worktreeCreate },
     },
     data: {
-      project: { list: () => [project], sync: projectSync },
-      session: { create: sessionCreate },
+      project: { list: () => [...(options.projects ?? [project])], sync: projectSync },
+      session: { create: sessionCreate, get: sessionGet },
     },
-    defaultLocation: { directory: "/srv/projects" },
+    defaultLocation: options.defaultLocation ?? { directory: "/srv/projects" },
     sessions: { admit, remove },
   };
 
   return {
     runtime,
     sessionCreate,
+    sessionGet,
     projectSync,
     projectCurrent,
     worktreeCreate,
@@ -108,6 +134,16 @@ function mount(runtime: NewSessionFlowProps["runtime"]) {
   return { host, onDismiss, onSessionCreated, dispose: () => (dispose(), host.remove()) };
 }
 
+function submit(host: HTMLElement): void {
+  host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+}
+
+function clickButton(host: HTMLElement, text: string): void {
+  [...host.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent?.trim() === text)
+    ?.click();
+}
+
 beforeAll(() => {
   Object.defineProperties(HTMLDialogElement.prototype, {
     showModal: {
@@ -131,7 +167,7 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    submit(mounted.host);
     await flush();
 
     expect(fake.sessionCreate).toHaveBeenCalledWith({
@@ -144,16 +180,63 @@ describe("NewSessionFlow", () => {
     mounted.dispose();
   });
 
+  it("creates a non-Git project session directly without offering a worktree", async () => {
+    const fake = fakeRuntime([Promise.resolve(session("session-1", nonGitProject.canonical))], {
+      projects: [nonGitProject],
+    });
+    const mounted = mount(fake.runtime);
+    await flush();
+
+    expect(mounted.host.textContent).not.toContain("Create a worktree");
+    submit(mounted.host);
+    await flush();
+
+    expect(fake.sessionCreate).toHaveBeenCalledWith({
+      projectID: nonGitProject.id,
+      location: { directory: nonGitProject.canonical },
+    });
+    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
+    mounted.dispose();
+  });
+
+  it("preserves workspace scope when browsing, adding, and using a project", async () => {
+    const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))], {
+      defaultLocation: { directory: "/srv/projects", workspaceID: "workspace-a" },
+    });
+    const mounted = mount(fake.runtime);
+    await flush();
+
+    clickButton(mounted.host, "Add project");
+    await flush();
+
+    expect(fake.fileList).toHaveBeenCalledWith({
+      location: { directory: "/srv/projects", workspace: "workspace-a" },
+      path: ".",
+    });
+    submit(mounted.host);
+    await flush();
+
+    expect(fake.projectCurrent).toHaveBeenCalledWith({
+      location: { directory: "/srv/projects", workspace: "workspace-a" },
+    });
+    submit(mounted.host);
+    await flush();
+
+    expect(fake.sessionCreate).toHaveBeenCalledWith({
+      projectID: project.id,
+      location: { directory: "/srv/projects", workspaceID: "workspace-a" },
+    });
+    mounted.dispose();
+  });
+
   it("registers the directory currently open in the add-project browser", async () => {
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
     const mounted = mount(fake.runtime);
     await flush();
 
-    [...mounted.host.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent?.trim() === "Add project")
-      ?.click();
+    clickButton(mounted.host, "Add project");
     await flush();
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    submit(mounted.host);
     await flush();
 
     expect(fake.projectCurrent).toHaveBeenCalledWith({
@@ -180,9 +263,7 @@ describe("NewSessionFlow", () => {
       });
       await flush();
 
-      [...mounted.host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent?.trim() === "Add project")
-        ?.click();
+      clickButton(mounted.host, "Add project");
       await flush();
 
       expect(fake.fileList).toHaveBeenCalledWith({
@@ -204,7 +285,7 @@ describe("NewSessionFlow", () => {
 
     const radios = mounted.host.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]');
     radios[2]?.click();
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    submit(mounted.host);
     await flush();
 
     const name = mounted.host.querySelector<HTMLInputElement>("input");
@@ -212,7 +293,7 @@ describe("NewSessionFlow", () => {
       name.value = "feature-one";
       name.dispatchEvent(new InputEvent("input", { bubbles: true }));
     }
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    submit(mounted.host);
     await flush();
 
     expect(fake.worktreeCreate).toHaveBeenCalledWith({
@@ -231,13 +312,82 @@ describe("NewSessionFlow", () => {
       expect(mounted.host.textContent).toContain("/srv/worktrees/feature-one");
     });
 
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    submit(mounted.host);
     await flush();
 
     expect(fake.worktreeCreate).toHaveBeenCalledOnce();
     expect(fake.sessionCreate).toHaveBeenCalledTimes(2);
     expect(fake.remove).toHaveBeenCalledWith("session-1");
     expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-2");
+    mounted.dispose();
+  });
+
+  it("preserves worktree inputs and retries worktree creation after failure", async () => {
+    const fake = fakeRuntime([Promise.resolve(session("session-1", "/srv/worktrees/feature-one"))]);
+    fake.worktreeCreate
+      .mockRejectedValueOnce(new Error("worktree failed"))
+      .mockResolvedValueOnce({ directory: "/srv/worktrees/feature-one" });
+    const mounted = mount(fake.runtime);
+    await flush();
+
+    const radios = mounted.host.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]');
+    radios[2]?.click();
+    submit(mounted.host);
+    await flush();
+    const name = mounted.host.querySelector<HTMLInputElement>("input");
+    if (name) {
+      name.value = "feature-one";
+      name.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+
+    submit(mounted.host);
+    await flush();
+
+    expect(mounted.host.textContent).toContain("Worktree creation failed");
+    expect(mounted.host.querySelector<HTMLInputElement>("input")?.value).toBe("feature-one");
+    submit(mounted.host);
+    await flush();
+
+    expect(fake.worktreeCreate).toHaveBeenCalledTimes(2);
+    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
+    mounted.dispose();
+  });
+
+  it("retries a failed direct session without changing the selected project", async () => {
+    const fake = fakeRuntime([
+      Promise.reject(new Error("session failed")),
+      Promise.resolve(session("session-2", project.canonical)),
+    ]);
+    const mounted = mount(fake.runtime);
+    await flush();
+
+    submit(mounted.host);
+    await flush();
+    expect(mounted.host.textContent).toContain("Session creation failed");
+
+    submit(mounted.host);
+    await flush();
+
+    expect(fake.sessionCreate).toHaveBeenCalledTimes(2);
+    expect(fake.remove).toHaveBeenCalledWith("session-1");
+    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-2");
+    mounted.dispose();
+  });
+
+  it("keeps a session acknowledged by the event stream when its request rejects", async () => {
+    const acknowledged = session("session-1", project.canonical);
+    const fake = fakeRuntime([Promise.reject(new Error("response lost"))], {
+      acknowledged: new Map([[acknowledged.id, acknowledged]]),
+    });
+    const mounted = mount(fake.runtime);
+    await flush();
+
+    submit(mounted.host);
+    await flush();
+
+    expect(fake.sessionGet).toHaveBeenCalledWith("session-1");
+    expect(fake.remove).not.toHaveBeenCalled();
+    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
     mounted.dispose();
   });
 });

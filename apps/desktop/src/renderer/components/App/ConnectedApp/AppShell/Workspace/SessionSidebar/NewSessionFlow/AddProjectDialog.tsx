@@ -1,10 +1,10 @@
+import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Show, createEffect, createSignal, on } from "solid-js";
 
 import { ServerDirectoryBrowser } from "../../../../../../../ui/ServerDirectoryBrowser.tsx";
-import type { OpenCodeClient } from "@opencode-ai/client";
 import { createServerFlowDialog } from "./createServerFlowDialog.ts";
 import "./ServerFlowDialog.css";
 
@@ -14,18 +14,19 @@ export type AddProjectDialogError =
 
 export type AddProjectDialogProps = {
   readonly listDirectory: OpenCodeClient["file"]["list"];
-  readonly initialDirectory: string;
+  readonly initialLocation: LocationRef;
   readonly error?: AddProjectDialogError;
   readonly adding?: boolean;
   readonly onDismiss: () => void;
-  readonly onAddProject: (directory: string) => void;
+  readonly onAddProject: (location: LocationRef) => void;
 };
 
 export function AddProjectDialog(props: AddProjectDialogProps) {
   let directoryBrowser: HTMLElement | undefined;
   let operationError: HTMLElement | undefined;
   let submitted = false;
-  const [directory, setDirectory] = createSignal<string>();
+  const [location, setLocation] = createSignal<LocationRef>();
+  const [browserLoading, setBrowserLoading] = createSignal(true);
 
   const busy = () => props.adding === true;
   const { ref: dialogRef, dismiss } = createServerFlowDialog({
@@ -35,8 +36,8 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
 
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
-    const selected = directory();
-    if (busy() || submitted || selected === undefined) return;
+    const selected = location();
+    if (busy() || browserLoading() || submitted || selected === undefined) return;
     submitted = true;
     props.onAddProject(selected);
   };
@@ -96,14 +97,15 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
           <ServerDirectoryBrowser
             listDirectory={props.listDirectory}
             label="Project directory"
-            initialDirectory={props.initialDirectory}
-            disabled={busy()}
+            initialLocation={props.initialLocation}
+            disabled={props.adding === true}
             validationError={props.error?.kind === "validation" ? props.error.message : undefined}
             onBrowserReady={(element) => {
               directoryBrowser = element;
             }}
+            onLoadingChange={setBrowserLoading}
             onDirectoryChange={(next) => {
-              setDirectory(next);
+              setLocation(next);
             }}
           />
 
@@ -142,7 +144,7 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
             type="submit"
             size="large"
             variant={busy() ? "loading" : "contrast"}
-            disabled={busy() || directory() === undefined}
+            disabled={busy() || browserLoading() || location() === undefined}
           >
             <Show when={busy()}>
               <Loader width={16} height={16} />

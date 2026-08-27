@@ -22,6 +22,10 @@ import { projectRuntimeSessionNodes } from "./ConnectedApp/runtime-projection.ts
 import { createSessionDraftStore } from "../../domain/index.ts";
 import { syncActiveStatuses, useServerRuntime } from "../../opencode/index.ts";
 import type { VerifiedServer } from "../../opencode/index.ts";
+import {
+  createReconnectRefreshQueue,
+  retryCatalogAndTranscript,
+} from "./ConnectedApp/sessionRecovery.ts";
 
 export type ConnectedAppProps = {
   readonly server: VerifiedServer;
@@ -139,21 +143,10 @@ export function ConnectedApp(props: ConnectedAppProps) {
     })();
   });
 
-  let reconnectPending = false;
-  let reconnecting = false;
-  createEffect(() => {
-    const status = runtime.stream.status();
-    if (!bootstrapped()) return;
-    if (status !== "connected") {
-      reconnectPending = true;
-      return;
-    }
-    if (!reconnectPending || reconnecting) return;
-    reconnectPending = false;
-    reconnecting = true;
-    const previous = selectedID();
-    if (previous) setTranscriptState({ sessionID: previous, status: "loading" });
-    void (async () => {
+  const reconnectRefresh = createReconnectRefreshQueue(
+    async () => {
+      const previous = selectedID();
+      if (previous) setTranscriptState({ sessionID: previous, status: "loading" });
       try {
         await runtime.data.location.syncInfo(runtime.defaultLocation);
         await syncCatalog();
@@ -171,10 +164,19 @@ export function ConnectedApp(props: ConnectedAppProps) {
           status: "failed",
           error: "The session could not be refreshed after reconnecting.",
         });
-      } finally {
-        reconnecting = false;
       }
-    })();
+    },
+    () => alive && streamConnected(),
+  );
+
+  createEffect(() => {
+    const status = runtime.stream.status();
+    if (!bootstrapped()) return;
+    if (status !== "connected") {
+      reconnectRefresh.markDisconnected();
+      return;
+    }
+    reconnectRefresh.refreshIfPending();
   });
 
   let previousRunning = false;
@@ -243,6 +245,20 @@ export function ConnectedApp(props: ConnectedAppProps) {
     );
   };
 
+  const retryCatalog = async (): Promise<void> => {
+    await retryCatalogAndTranscript(
+      syncCatalog,
+      () => {
+        if (!alive) return undefined;
+        const current = selectedID();
+        return current !== undefined && runtime.sessions.ids().includes(current)
+          ? current
+          : undefined;
+      },
+      hydrateTranscript,
+    );
+  };
+
   return (
     <>
       <AppShell
@@ -290,7 +306,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
                 }}
                 onToggleExpanded={toggleExpanded}
                 onCreate={() => setNewSessionOpen(true)}
-                onRetry={() => void syncCatalog().catch(() => undefined)}
+                onRetry={() => void retryCatalog().catch(() => undefined)}
                 onHide={panels.mobile() ? () => panels.setLeftSidebarOpen(false) : undefined}
                 onSelectServer={props.onChangeServer}
               />

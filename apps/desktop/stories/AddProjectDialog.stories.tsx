@@ -1,4 +1,4 @@
-import type { FileListOutput, OpenCodeClient } from "@opencode-ai/client";
+import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import type { Meta } from "storybook-solidjs-vite";
 
 import {
@@ -53,7 +53,7 @@ export default meta;
 
 function dialog(
   options: {
-    readonly initialDirectory?: string;
+    readonly initialLocation?: LocationRef;
     readonly listDirectory?: OpenCodeClient["file"]["list"];
     readonly error?: AddProjectDialogError;
     readonly adding?: boolean;
@@ -62,7 +62,7 @@ function dialog(
   return (
     <AddProjectDialog
       listDirectory={options.listDirectory ?? listDirectory}
-      initialDirectory={options.initialDirectory ?? "/srv/projects"}
+      initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
       error={options.error}
       adding={options.adding}
       onDismiss={() => undefined}
@@ -76,11 +76,18 @@ export const BrowseServerProjects = {
 };
 
 export const DeepServerDirectory = {
-  render: () => dialog({ initialDirectory: "/mnt/team/experimental/service" }),
+  render: () => dialog({ initialLocation: { directory: "/mnt/team/experimental/service" } }),
 };
 
 export const LoadingDirectory = {
   render: () => dialog({ listDirectory: loadingListDirectory }),
+};
+
+export const DirectoryListingFailure = {
+  render: () =>
+    dialog({
+      listDirectory: () => Promise.reject(new Error("The directory could not be loaded.")),
+    }),
 };
 
 export const ValidationFailure = {

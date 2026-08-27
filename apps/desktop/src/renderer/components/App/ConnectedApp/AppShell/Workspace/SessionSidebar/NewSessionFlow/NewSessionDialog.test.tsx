@@ -1,4 +1,4 @@
-import type { FileListOutput, OpenCodeClient } from "@opencode-ai/client";
+import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
@@ -10,8 +10,8 @@ import {
 } from "./NewSessionDialog.tsx";
 
 const projects = [
-  { id: "oc-ui", name: "oc-ui", directory: "/srv/projects/oc-ui", vcs: "git" },
-  { id: "api", name: "API", directory: "/srv/projects/api", vcs: "git" },
+  { id: "oc-ui", name: "oc-ui", location: { directory: "/srv/projects/oc-ui" }, vcs: "git" },
+  { id: "api", name: "API", location: { directory: "/srv/projects/api" }, vcs: "git" },
 ] as const;
 
 const listDirectory = vi.fn<OpenCodeClient["file"]["list"]>((input) => {
@@ -33,7 +33,7 @@ function callbacks() {
     onProjectChange: vi.fn<(projectID: string) => void>(),
     onModeChange: vi.fn<NewSessionDialogProps["onModeChange"]>(),
     onOpenWorktreeForm: vi.fn<NewSessionDialogProps["onOpenWorktreeForm"]>(),
-    onWorktreeParentChange: vi.fn<(directory: string) => void>(),
+    onWorktreeParentChange: vi.fn<(location: LocationRef) => void>(),
     onWorktreeNameChange: vi.fn<(name: string) => void>(),
     onRetryProjects: vi.fn<() => void>(),
     onUseProject: vi.fn<NewSessionDialogProps["onUseProject"]>(),
@@ -46,6 +46,7 @@ function callbacks() {
 function mount(
   state: () => NewSessionDialogState,
   mutation?: () => NewSessionDialogProps["mutation"],
+  directoryList: OpenCodeClient["file"]["list"] = listDirectory,
 ) {
   const host = document.createElement("div");
   document.body.append(host);
@@ -53,7 +54,7 @@ function mount(
   const dispose = render(
     () => (
       <NewSessionDialog
-        listDirectory={listDirectory}
+        listDirectory={directoryList}
         state={state()}
         mutation={mutation?.()}
         {...actions}
@@ -135,14 +136,103 @@ describe("NewSessionDialog", () => {
     mounted.dispose();
   });
 
-  it("creates a worktree with its project identity and controlled inputs", () => {
+  it("associates project validation with and focuses the project radio group", async () => {
+    const mounted = mount(() => ({
+      view: "select-project",
+      projects,
+      mode: "direct",
+      error: { kind: "validation", field: "project", message: "Choose a project." },
+    }));
+    const projectGroup = mounted.host.querySelector<HTMLElement>('[role="radiogroup"]');
+    expect(projectGroup?.getAttribute("aria-invalid")).toBe("true");
+    expect(projectGroup?.getAttribute("aria-describedby")).toBe("new-session-project-error");
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(document.activeElement?.getAttribute("data-slot")).toBe("radio-v2-item-input");
+    mounted.dispose();
+  });
+
+  it("does not submit a hidden stale project while projects are unavailable", () => {
+    for (const unavailable of [
+      { projectsLoading: true },
+      { projectsError: "Projects could not be loaded from the server." },
+    ]) {
+      const mounted = mount(() => ({
+        view: "select-project",
+        projects,
+        selectedProjectID: "oc-ui",
+        mode: "direct",
+        ...unavailable,
+      }));
+      const submit = mounted.host.querySelector<HTMLButtonElement>('button[type="submit"]');
+      expect(submit?.disabled).toBe(true);
+      mounted.host
+        .querySelector("form")
+        ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+      expect(mounted.actions.onUseProject).not.toHaveBeenCalled();
+      mounted.dispose();
+    }
+  });
+
+  it("creates a worktree with its project identity and controlled inputs", async () => {
     const mounted = mount(() => ({
       view: "worktree",
       project: projects[0],
-      parentDirectory: "/srv/worktrees",
+      parentLocation: { directory: "/srv/worktrees" },
       folderName: "feature-one",
       finalDirectory: "/srv/worktrees/feature-one",
     }));
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    expect(mounted.actions.onCreateWorktree).toHaveBeenCalledOnce();
+    mounted.dispose();
+  });
+
+  it("does not submit an old worktree parent while navigation is loading", async () => {
+    let resolveChild!: (output: FileListOutput) => void;
+    const child = new Promise<FileListOutput>((resolve) => {
+      resolveChild = resolve;
+    });
+    const directoryList: OpenCodeClient["file"]["list"] = (input) => {
+      const base = input?.location?.directory ?? "/";
+      if (input?.path === "feature") return child;
+      return Promise.resolve({
+        location: {
+          directory: "/srv/projects",
+          project: { id: "oc-ui", directory: base, canonical: base },
+        },
+        data: [{ path: "feature", type: "directory" }],
+      });
+    };
+    const mounted = mount(
+      () => ({
+        view: "worktree",
+        project: projects[0],
+        parentLocation: { directory: "/srv/projects" },
+        folderName: "feature-one",
+        finalDirectory: "/srv/projects/feature-one",
+      }),
+      undefined,
+      directoryList,
+    );
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    mounted.host
+      .querySelector<HTMLButtonElement>('[aria-label="Browse directory feature"]')
+      ?.click();
+    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    expect(mounted.actions.onCreateWorktree).not.toHaveBeenCalled();
+
+    resolveChild({
+      location: {
+        directory: "/srv/projects/feature",
+        project: {
+          id: "oc-ui",
+          directory: "/srv/projects/feature",
+          canonical: "/srv/projects/feature",
+        },
+      },
+      data: [],
+    });
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
     mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.actions.onCreateWorktree).toHaveBeenCalledOnce();
     mounted.dispose();
@@ -154,7 +244,7 @@ describe("NewSessionDialog", () => {
       () => ({
         view: "worktree",
         project: projects[0],
-        parentDirectory: "/srv/worktrees",
+        parentLocation: { directory: "/srv/worktrees" },
         folderName: "feature-one",
         finalDirectory: "/srv/worktrees/feature-one",
       }),

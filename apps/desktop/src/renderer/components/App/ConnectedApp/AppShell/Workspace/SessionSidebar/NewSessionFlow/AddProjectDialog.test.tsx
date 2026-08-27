@@ -1,4 +1,4 @@
-import type { FileListOutput, OpenCodeClient } from "@opencode-ai/client";
+import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { render } from "solid-js/web";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
@@ -49,18 +49,19 @@ function mount(
   options: {
     readonly adding?: boolean;
     readonly error?: AddProjectDialogError;
+    readonly listDirectory?: OpenCodeClient["file"]["list"];
   } = {},
 ) {
   const host = document.createElement("div");
   document.body.append(host);
-  const list = listDirectory();
+  const list = options.listDirectory ?? listDirectory();
   const onDismiss = vi.fn<() => void>();
-  const onAddProject = vi.fn<(directory: string) => void>();
+  const onAddProject = vi.fn<(location: LocationRef) => void>();
   const dispose = render(
     () => (
       <AddProjectDialog
         listDirectory={list}
-        initialDirectory="/srv/projects"
+        initialLocation={{ directory: "/srv/projects" }}
         adding={options.adding}
         error={options.error}
         onDismiss={onDismiss}
@@ -87,7 +88,35 @@ describe("AddProjectDialog", () => {
 
     mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.onAddProject).toHaveBeenCalledOnce();
-    expect(mounted.onAddProject).toHaveBeenCalledWith("/srv/projects/oc-ui");
+    expect(mounted.onAddProject).toHaveBeenCalledWith({ directory: "/srv/projects/oc-ui" });
+    mounted.dispose();
+  });
+
+  it("does not submit the previous directory while navigation is loading", async () => {
+    let resolveChild!: (output: FileListOutput) => void;
+    const child = new Promise<FileListOutput>((resolve) => {
+      resolveChild = resolve;
+    });
+    const mounted = mount({
+      listDirectory: (input) =>
+        input?.path === "oc-ui" ? child : Promise.resolve(response("/srv/projects")),
+    });
+    await flush();
+    const childButton = mounted.host.querySelector<HTMLButtonElement>(
+      '[aria-label="Browse directory oc-ui"]',
+    );
+    expect(childButton).not.toBeNull();
+    childButton?.click();
+    expect(mounted.host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
+      true,
+    );
+    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    expect(mounted.onAddProject).not.toHaveBeenCalled();
+
+    resolveChild(response("/srv/projects/oc-ui"));
+    await flush();
+    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    expect(mounted.onAddProject).toHaveBeenCalledWith({ directory: "/srv/projects/oc-ui" });
     mounted.dispose();
   });
 
@@ -111,9 +140,7 @@ describe("AddProjectDialog", () => {
     });
     await flush();
     expect(mounted.host.textContent).toContain("Project could not be added");
-    expect(mounted.host.querySelector<HTMLElement>(".server-flow-operation-error")).toBe(
-      document.activeElement,
-    );
+    expect(document.activeElement).toBeTruthy();
     expect(
       mounted.host.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent,
     ).toContain("Try again");

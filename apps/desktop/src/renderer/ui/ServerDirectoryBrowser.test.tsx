@@ -1,4 +1,4 @@
-import type { FileListOutput, OpenCodeClient } from "@opencode-ai/client";
+import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { render } from "solid-js/web";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -24,10 +24,12 @@ function deferred<T>(): Deferred<T> {
 function response(
   directory: string,
   data: Array<{ readonly path: string; readonly type: "file" | "directory" }>,
+  workspaceID?: string,
 ): FileListOutput {
   return {
     location: {
       directory,
+      workspaceID,
       project: { id: "project", directory, canonical: directory },
     },
     data,
@@ -51,21 +53,25 @@ async function flush(): Promise<void> {
 
 function mount(
   listDirectory: OpenCodeClient["file"]["list"],
-  initialDirectory = "/srv/projects",
-  disabled = false,
-  onDirectoryChange = vi.fn<(directory: string) => void>(),
-  initialPath?: string,
+  options: {
+    readonly initialLocation?: LocationRef;
+    readonly initialPath?: string;
+    readonly disabled?: boolean;
+    readonly validationError?: string;
+  } = {},
 ) {
   const host = document.createElement("div");
   document.body.append(host);
+  const onDirectoryChange = vi.fn<(location: LocationRef) => void>();
   const dispose = render(
     () => (
       <ServerDirectoryBrowser
         listDirectory={listDirectory}
         label="Project directory"
-        initialDirectory={initialDirectory}
-        initialPath={initialPath}
-        disabled={disabled}
+        initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
+        initialPath={options.initialPath}
+        disabled={options.disabled}
+        validationError={options.validationError}
         onDirectoryChange={onDirectoryChange}
       />
     ),
@@ -100,13 +106,55 @@ describe("ServerDirectoryBrowser", () => {
     expect(mounted.host.textContent).toContain("opencode");
     expect(mounted.host.textContent).not.toContain("README.md");
     expect(mounted.onDirectoryChange).toHaveBeenCalledOnce();
-    expect(mounted.onDirectoryChange).toHaveBeenCalledWith("/srv/projects");
+    expect(mounted.onDirectoryChange).toHaveBeenCalledWith({ directory: "/srv/projects" });
+    mounted.dispose();
+  });
+
+  it("preserves the workspace identity while navigating", async () => {
+    const queued = queuedApi();
+    const mounted = mount(queued.list, {
+      initialLocation: { directory: "/srv/projects", workspaceID: "workspace-1" },
+    });
+    await flush();
+    expect(queued.list).toHaveBeenLastCalledWith({
+      location: { directory: "/srv/projects", workspace: "workspace-1" },
+      path: ".",
+    });
+    queued.requests
+      .at(-1)
+      ?.resolve(response("/srv/projects", [{ path: "oc-ui", type: "directory" }], "workspace-2"));
+    await flush();
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith({
+      directory: "/srv/projects",
+      workspaceID: "workspace-2",
+    });
+    mounted.dispose();
+  });
+
+  it("associates directory validation with the browser controls", async () => {
+    const queued = queuedApi();
+    const mounted = mount(queued.list, { validationError: "Choose a valid directory." });
+    await flush();
+    queued.requests[0]?.resolve(response("/srv/projects", []));
+    await flush();
+
+    const browser = mounted.host.querySelector<HTMLElement>(".server-directory-browser");
+    const parent = mounted.host.querySelector<HTMLButtonElement>(
+      '[aria-label="Go to parent directory"]',
+    );
+    const error = mounted.host.querySelector<HTMLElement>(".server-directory-error");
+    expect(browser?.getAttribute("aria-invalid")).toBe("true");
+    expect(browser?.getAttribute("aria-describedby")).toBe(error?.id);
+    expect(parent?.getAttribute("aria-describedby")).toBe(error?.id);
     mounted.dispose();
   });
 
   it("lets the server resolve an initial relative path", async () => {
     const queued = queuedApi();
-    const mounted = mount(queued.list, "/srv/projects/oc-ui", false, undefined, "..");
+    const mounted = mount(queued.list, {
+      initialLocation: { directory: "/srv/projects/oc-ui" },
+      initialPath: "..",
+    });
     await flush();
 
     expect(queued.list).toHaveBeenCalledWith({
@@ -119,7 +167,7 @@ describe("ServerDirectoryBrowser", () => {
     expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(
       "/srv/projects",
     );
-    expect(mounted.onDirectoryChange).toHaveBeenCalledWith("/srv/projects");
+    expect(mounted.onDirectoryChange).toHaveBeenCalledWith({ directory: "/srv/projects" });
     mounted.dispose();
   });
 
@@ -169,8 +217,8 @@ describe("ServerDirectoryBrowser", () => {
     expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(
       "/srv/projects",
     );
-    expect(mounted.onDirectoryChange).toHaveBeenCalledWith("/srv/projects/oc-ui");
-    expect(mounted.onDirectoryChange).toHaveBeenCalledWith("/srv/projects");
+    expect(mounted.onDirectoryChange).toHaveBeenCalledWith({ directory: "/srv/projects/oc-ui" });
+    expect(mounted.onDirectoryChange).toHaveBeenCalledWith({ directory: "/srv/projects" });
     mounted.dispose();
   });
 
@@ -179,13 +227,13 @@ describe("ServerDirectoryBrowser", () => {
     const [initialDirectory, setInitialDirectory] = createSignal("/srv/first");
     const mountedHost = document.createElement("div");
     document.body.append(mountedHost);
-    const onDirectoryChange = vi.fn<(directory: string) => void>();
+    const onDirectoryChange = vi.fn<(location: LocationRef) => void>();
     const dispose = render(
       () => (
         <ServerDirectoryBrowser
           listDirectory={queued.list}
           label="Project directory"
-          initialDirectory={initialDirectory()}
+          initialLocation={{ directory: initialDirectory() }}
           onDirectoryChange={onDirectoryChange}
         />
       ),
@@ -204,7 +252,7 @@ describe("ServerDirectoryBrowser", () => {
       "/srv/second",
     );
     expect(onDirectoryChange).toHaveBeenCalledOnce();
-    expect(onDirectoryChange).toHaveBeenCalledWith("/srv/second");
+    expect(onDirectoryChange).toHaveBeenCalledWith({ directory: "/srv/second" });
     dispose();
     mountedHost.remove();
   });
@@ -227,6 +275,28 @@ describe("ServerDirectoryBrowser", () => {
       "Directory unavailable.",
     );
     expect(mounted.onDirectoryChange).toHaveBeenCalledOnce();
+    mounted.dispose();
+  });
+
+  it("retries a failed listing in place", async () => {
+    const queued = queuedApi();
+    const mounted = mount(queued.list);
+    await flush();
+    queued.requests[0]?.reject(new Error("Directory unavailable."));
+    await flush();
+
+    mounted.host.querySelector<HTMLButtonElement>("button:not([disabled])")?.click();
+    await flush();
+    expect(queued.list).toHaveBeenLastCalledWith({
+      location: { directory: "/srv/projects" },
+      path: ".",
+    });
+    expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(
+      "/srv/projects",
+    );
+    queued.requests[1]?.resolve(response("/srv/projects", []));
+    await flush();
+    expect(mounted.host.textContent).toContain("No child directories.");
     mounted.dispose();
   });
 
@@ -253,7 +323,7 @@ describe("ServerDirectoryBrowser", () => {
 
   it("disables navigation while loading and when disabled", async () => {
     const queued = queuedApi();
-    const mounted = mount(queued.list, "/srv/projects", true);
+    const mounted = mount(queued.list, { disabled: true });
     await flush();
     expect(mounted.host.querySelector('[aria-busy="true"]')).not.toBeNull();
     queued.requests[0]?.resolve(response("/srv/projects", [{ path: "oc-ui", type: "directory" }]));

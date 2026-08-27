@@ -2,7 +2,7 @@ import { Field } from "@opencode-ai/ui/field";
 import { TextInput } from "@opencode-ai/ui/text-input";
 import { Show } from "solid-js";
 
-import type { OpenCodeClient } from "@opencode-ai/client";
+import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
 
 import { ServerDirectoryBrowser } from "../../../../../../../../ui/ServerDirectoryBrowser.tsx";
 import type { NewSessionDialogState } from "../NewSessionDialog.tsx";
@@ -16,8 +16,9 @@ export type WorktreeFormProps = {
   readonly parentValidationError?: string;
   readonly nameValidationError?: string;
   readonly onBrowserReady: (element: HTMLElement) => void;
+  readonly onBrowserLoadingChange: (loading: boolean) => void;
   readonly onNameReady: (element: HTMLInputElement) => void;
-  readonly onParentChange: (directory: string) => void;
+  readonly onParentChange: (location: LocationRef) => void;
   readonly onNameChange: (name: string) => void;
 };
 
@@ -27,16 +28,17 @@ export function WorktreeForm(props: WorktreeFormProps) {
       <div class="new-session-source">
         <span>Project</span>
         <strong>{props.state.project.name}</strong>
-        <code>{props.state.project.directory}</code>
+        <code>{props.state.project.location.directory}</code>
       </div>
       <ServerDirectoryBrowser
         listDirectory={props.listDirectory}
         label="Worktree parent directory"
-        initialDirectory={props.state.project.directory}
+        initialLocation={props.state.project.location}
         initialPath=".."
         disabled={props.disabled}
         validationError={props.parentValidationError}
         onBrowserReady={props.onBrowserReady}
+        onLoadingChange={props.onBrowserLoadingChange}
         onDirectoryChange={props.onParentChange}
       />
       <Field invalid={props.nameValidationError !== undefined}>

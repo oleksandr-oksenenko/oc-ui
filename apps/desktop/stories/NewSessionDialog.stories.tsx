@@ -11,13 +11,29 @@ import {
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/NewSessionFlow/NewSessionDialog.tsx";
 
 const projects = [
-  { id: "oc-ui", name: "oc-ui", directory: "/srv/projects/oc-ui", vcs: "git" },
-  { id: "opencode", name: "OpenCode", directory: "/srv/projects/opencode", vcs: "git" },
+  {
+    id: "oc-ui",
+    name: "oc-ui",
+    location: { directory: "/srv/projects/oc-ui" },
+    vcs: "git",
+  },
+  {
+    id: "opencode",
+    name: "OpenCode",
+    location: { directory: "/srv/projects/opencode" },
+    vcs: "git",
+  },
+  {
+    id: "docs",
+    name: "Documentation",
+    location: { directory: "/srv/projects/docs" },
+  },
 ] as const satisfies readonly NewSessionProject[];
 
 const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
   const base = input?.location?.directory ?? "/";
-  const directory = input?.path === ".." && base === projects[0].directory ? "/srv/projects" : base;
+  const directory =
+    input?.path === ".." && base === projects[0].location.directory ? "/srv/projects" : base;
   return Promise.resolve({
     location: {
       directory,
@@ -79,7 +95,7 @@ function interactiveProjectSelection(initialMode: NewSessionLocationMode = "dire
 const worktreeState = {
   view: "worktree",
   project: projects[0],
-  parentDirectory: "/srv/worktrees",
+  parentLocation: { directory: "/srv/worktrees" },
   folderName: "new-session-location",
   finalDirectory: "/srv/worktrees/new-session-location",
 } as const satisfies NewSessionDialogState;
@@ -90,6 +106,16 @@ export const ChooseProjectAndLocation = {
 
 export const WorktreeSelected = {
   render: () => interactiveProjectSelection("worktree"),
+};
+
+export const NonGitProject = {
+  render: () =>
+    staticDialog({
+      view: "select-project",
+      projects,
+      selectedProjectID: "docs",
+      mode: "direct",
+    }),
 };
 
 export const LoadingProjects = {
@@ -157,7 +183,18 @@ export const SessionCreationFailureAfterWorktree = {
       error: {
         kind: "session",
         message: "The worktree exists, but its session could not be created.",
-        worktreeDirectory: "/srv/worktrees/new-session-location",
+        worktreeLocation: { directory: "/srv/worktrees/new-session-location" },
       },
+    }),
+};
+
+export const DirectSessionCreationFailure = {
+  render: () =>
+    staticDialog({
+      view: "select-project",
+      projects,
+      selectedProjectID: "oc-ui",
+      mode: "direct",
+      error: { kind: "session", message: "The session could not be created. Try again." },
     }),
 };

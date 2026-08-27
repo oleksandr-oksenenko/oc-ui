@@ -26,12 +26,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
 
   return (
     <>
-      <section
-        ref={(element) => props.onReady(element)}
-        class="new-session-project-picker"
-        aria-describedby={props.validationError ? "new-session-project-error" : undefined}
-        tabIndex={props.validationError ? -1 : undefined}
-      >
+      <section ref={(element) => props.onReady(element)} class="new-session-project-picker">
         <div class="new-session-project-heading">
           <div>
             <h3>Project</h3>
@@ -88,6 +83,8 @@ export function ProjectSelection(props: ProjectSelectionProps) {
             label="Select a project"
             value={props.state.selectedProjectID ?? ""}
             disabled={props.disabled}
+            aria-describedby={props.validationError ? "new-session-project-error" : undefined}
+            aria-invalid={props.validationError ? "true" : undefined}
             onChange={props.onProjectChange}
           >
             <For each={props.state.projects}>
@@ -95,7 +92,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
                 <RadioItem
                   value={project.id}
                   label={project.name}
-                  description={project.directory}
+                  description={project.location.directory}
                 />
               )}
             </For>

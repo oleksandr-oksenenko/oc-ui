@@ -13,9 +13,10 @@ form state and the OpenCode mutations. It renders either `NewSessionDialog` or
 `file.list` with the current server directory and a relative path for its initial
 location and every navigation action. Child entries use the server-returned path;
 the `..` entry is also resolved by the server. The browser treats the returned
-`location.directory` as authoritative and reports only successfully resolved
-directories to its caller. It owns loading, listing errors, stale-request
-protection, and the `..` parent entry.
+`LocationRef` as authoritative and reports only successfully resolved locations
+to its caller. It preserves server workspace scope across browsing, project
+lookup, and session creation. It owns loading, listing errors and retry,
+stale-request protection, and the `..` parent entry.
 
 The pinned client does not expose the connected server user's home directory.
 `NewSessionFlow` therefore still derives a conventional home from the server's
@@ -33,7 +34,8 @@ project data, selects the returned project, and returns to the new-session dialo
 
 Adding a project does not ask about worktrees. Add-project errors preserve the
 open folder. While the request is running, the dialog cannot be dismissed or
-submitted again.
+submitted again. While a directory is loading, submission is disabled so the
+previously open folder cannot be selected by mistake.
 
 ## New session
 
@@ -55,16 +57,18 @@ the inputs remain available for retry. If session creation fails after the
 worktree exists, its returned path is retained and retry creates only the session;
 the renderer does not delete the worktree.
 
-Created sessions are admitted to the shared catalog immediately and removed again
-if the create request fails. The sidebar catalog contains every top-level server
-session, independent of directory.
+Created sessions are admitted to the shared catalog immediately. A definite
+create failure removes the optimistic catalog entry. If a server event already
+acknowledged the session before the request failed, that session is kept and
+selected instead of creating a duplicate on retry. The sidebar catalog contains
+every top-level server session, independent of directory.
 
 The created session's `SessionInfo.location` remains the location authority. The
 flow does not create a second mutable session-location model.
 
 ## Storybook coverage
 
-Stories cover server browsing, loading and add-project failures; project loading,
-failure and empty states; direct and worktree choices; the worktree form and path
-preview; both mutation phases; validation; worktree failure; and session failure
-after a worktree exists.
+Stories cover server browsing, loading and listing/add-project failures; project
+loading, failure and empty states; Git and non-Git direct choices; the worktree
+form and path preview; both mutation phases; validation; worktree failure; direct
+session failure; and session failure after a worktree exists.

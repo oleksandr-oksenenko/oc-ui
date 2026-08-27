@@ -1,9 +1,9 @@
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
-import { Show, createEffect, on } from "solid-js";
+import { Show, createEffect, createSignal, on } from "solid-js";
 
-import type { OpenCodeClient } from "@opencode-ai/client";
+import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { createServerFlowDialog } from "./createServerFlowDialog.ts";
 import { ProjectSelection } from "./NewSessionDialog/ProjectSelection.tsx";
 import { WorktreeForm } from "./NewSessionDialog/WorktreeForm.tsx";
@@ -14,7 +14,7 @@ export type NewSessionLocationMode = "direct" | "worktree";
 export type NewSessionProject = {
   readonly id: string;
   readonly name: string;
-  readonly directory: string;
+  readonly location: LocationRef;
   readonly vcs?: "git" | "hg";
 };
 
@@ -28,7 +28,7 @@ export type NewSessionDialogError =
   | {
       readonly kind: "session";
       readonly message: string;
-      readonly worktreeDirectory?: string;
+      readonly worktreeLocation?: LocationRef;
     };
 
 export type NewSessionDialogState =
@@ -45,7 +45,7 @@ export type NewSessionDialogState =
       readonly view: "worktree";
       readonly project: NewSessionProject;
       readonly folderName: string;
-      readonly parentDirectory: string;
+      readonly parentLocation?: LocationRef;
       readonly finalDirectory: string;
       readonly error?: NewSessionDialogError;
     };
@@ -59,7 +59,7 @@ export type NewSessionDialogProps = {
   readonly onProjectChange: (projectID: string) => void;
   readonly onModeChange: (mode: NewSessionLocationMode) => void;
   readonly onOpenWorktreeForm: (projectID: string) => void;
-  readonly onWorktreeParentChange: (directory: string) => void;
+  readonly onWorktreeParentChange: (location: LocationRef) => void;
   readonly onWorktreeNameChange: (name: string) => void;
   readonly onRetryProjects: () => void;
   readonly onUseProject: (projectID: string) => void;
@@ -73,7 +73,16 @@ function operationErrorTitle(error: NewSessionDialogError | undefined) {
 }
 
 function existingWorktree(error: NewSessionDialogError | undefined) {
-  return error?.kind === "session" ? error.worktreeDirectory : undefined;
+  return error?.kind === "session" ? error.worktreeLocation?.directory : undefined;
+}
+
+function projectSelectionUnavailable(state: NewSessionDialogState): boolean {
+  return (
+    state.view === "select-project" &&
+    (state.selectedProjectID === undefined ||
+      state.projectsLoading === true ||
+      state.projectsError !== undefined)
+  );
 }
 
 function dispatchSubmit(props: NewSessionDialogProps, state: NewSessionDialogState): void {
@@ -107,8 +116,15 @@ function focusDialogState(
   },
 ): void {
   if (error?.kind === "validation") {
+    if (error.field === "project") {
+      const radio = elements.projectPicker?.querySelector<HTMLElement>(
+        '[data-slot="radio-v2-item-input"]',
+      );
+      const fallback = elements.projectPicker?.querySelector<HTMLElement>("button:not([disabled])");
+      (radio ?? fallback)?.focus();
+      return;
+    }
     const targets = {
-      project: elements.projectPicker,
       "parent-directory": elements.parentBrowser,
       "folder-name": elements.nameInput,
     };
@@ -123,7 +139,7 @@ function focusDialogState(
     elements.parentBrowser?.focus();
     return;
   }
-  elements.projectPicker?.querySelector<HTMLElement>('[role="radio"]')?.focus();
+  elements.projectPicker?.querySelector<HTMLElement>('[data-slot="radio-v2-item-input"]')?.focus();
 }
 
 export function NewSessionDialog(props: NewSessionDialogProps) {
@@ -132,6 +148,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
   let nameInput: HTMLInputElement | undefined;
   let operationError: HTMLElement | undefined;
   let submitted = false;
+  const [parentBrowserLoading, setParentBrowserLoading] = createSignal(false);
 
   const busy = () => props.mutation !== undefined;
   const { ref: dialogRef, dismiss } = createServerFlowDialog({
@@ -159,7 +176,13 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
 
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
-    if (busy() || submitted) return;
+    if (
+      busy() ||
+      projectSelectionUnavailable(props.state) ||
+      (props.state.view === "worktree" && parentBrowserLoading()) ||
+      submitted
+    )
+      return;
 
     const state = props.state;
     const projectID = state.view === "select-project" ? state.selectedProjectID : state.project.id;
@@ -256,6 +279,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
                 onBrowserReady={(element) => {
                   parentBrowser = element;
                 }}
+                onBrowserLoadingChange={setParentBrowserLoading}
                 onNameReady={(element) => {
                   nameInput = element;
                 }}
@@ -317,7 +341,9 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
             size="large"
             variant={busy() ? "loading" : "contrast"}
             disabled={
-              busy() || (props.state.view === "select-project" && !props.state.selectedProjectID)
+              busy() ||
+              (props.state.view === "worktree" && parentBrowserLoading()) ||
+              projectSelectionUnavailable(props.state)
             }
           >
             <Show when={busy()}>

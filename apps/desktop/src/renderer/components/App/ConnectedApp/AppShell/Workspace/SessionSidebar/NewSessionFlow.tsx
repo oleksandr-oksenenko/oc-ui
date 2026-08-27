@@ -1,4 +1,4 @@
-import type { LocationRef, OpenCodeClient, Project } from "@opencode-ai/client";
+import type { LocationRef, OpenCodeClient, Project, SessionInfo } from "@opencode-ai/client";
 import type { Data } from "@opencode-ai/client/solid";
 import { Show, createMemo, createSignal, onMount } from "solid-js";
 
@@ -26,7 +26,10 @@ export type NewSessionFlowRuntime = {
       readonly list: Data["project"]["list"];
       readonly sync: Data["project"]["sync"];
     };
-    readonly session: { readonly create: Data["session"]["create"] };
+    readonly session: {
+      readonly create: Data["session"]["create"];
+      readonly get: (sessionID: string) => SessionInfo | undefined;
+    };
   };
   readonly defaultLocation: LocationRef;
   readonly sessions: {
@@ -46,7 +49,8 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   const [step, setStep] = createSignal<"select-project" | "worktree">("select-project");
   const [selectedProjectID, setSelectedProjectID] = createSignal<string>();
   const [mode, setMode] = createSignal<NewSessionLocationMode>("direct");
-  const [parentDirectory, setParentDirectory] = createSignal("");
+  const [parentLocation, setParentLocation] = createSignal<LocationRef>();
+  const [selectedLocation, setSelectedLocation] = createSignal<LocationRef>();
   const [folderName, setFolderName] = createSignal("");
   const [projectsLoading, setProjectsLoading] = createSignal(true);
   const [projectsError, setProjectsError] = createSignal<string>();
@@ -56,10 +60,16 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   const [addProjectError, setAddProjectError] = createSignal<AddProjectDialogError>();
 
   const projects = createMemo<readonly NewSessionProject[]>(() =>
-    props.runtime.data.project.list().map(projectOption),
+    props.runtime.data.project
+      .list()
+      .map((project) => projectOption(project, props.runtime.defaultLocation.workspaceID)),
   );
 
-  const selectedProject = () => projects().find((project) => project.id === selectedProjectID());
+  const selectedProject = () => {
+    const project = projects().find((candidate) => candidate.id === selectedProjectID());
+    const location = selectedLocation();
+    return project && location ? { ...project, location } : project;
+  };
 
   const worktreeProject = () => {
     const selected = selectedProject();
@@ -68,8 +78,8 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
 
   const finalDirectory = () =>
     folderName().trim() === ""
-      ? parentDirectory()
-      : worktreePathPreview(parentDirectory(), folderName().trim());
+      ? (parentLocation()?.directory ?? "")
+      : worktreePathPreview(parentLocation()?.directory ?? "", folderName().trim());
 
   const state = createMemo<NewSessionDialogState>(() => {
     const project = worktreeProject();
@@ -77,7 +87,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       return {
         view: "worktree",
         project,
-        parentDirectory: parentDirectory(),
+        parentLocation: parentLocation(),
         folderName: folderName(),
         finalDirectory: finalDirectory(),
         error: error(),
@@ -103,6 +113,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       const selected = selectedProjectID();
       if (!selected || !available.some((project) => project.id === selected)) {
         setSelectedProjectID(available[0]?.id);
+        setSelectedLocation(undefined);
       }
     } catch {
       setProjectsError("Projects could not be loaded from the server.");
@@ -115,6 +126,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
 
   const changeProject = (projectID: string): void => {
     setSelectedProjectID(projectID);
+    setSelectedLocation(undefined);
     if (projects().find((project) => project.id === projectID)?.vcs !== "git") setMode("direct");
     setError(undefined);
   };
@@ -126,7 +138,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       return;
     }
     setSelectedProjectID(projectID);
-    setParentDirectory("");
+    setParentLocation(undefined);
     setFolderName("");
     setError(undefined);
     setStep("worktree");
@@ -134,27 +146,32 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
 
   const createSessionAt = async (
     project: NewSessionProject,
-    directory: string,
-    worktreeDirectory?: string,
+    location: LocationRef,
+    worktreeLocation?: LocationRef,
   ): Promise<void> => {
     setMutation("creating-session");
     setError(undefined);
     const created = props.runtime.data.session.create({
       projectID: project.id,
-      location: { directory },
+      location,
     });
     props.runtime.sessions.admit(created.id);
     try {
       const session = await created.request;
       props.onSessionCreated(session.id);
     } catch {
+      const accepted = props.runtime.data.session.get(created.id);
+      if (accepted?.id === created.id) {
+        props.onSessionCreated(created.id);
+        return;
+      }
       props.runtime.sessions.remove(created.id);
       setError({
         kind: "session",
-        message: worktreeDirectory
+        message: worktreeLocation
           ? "The worktree exists, but its session could not be created."
           : "The session could not be created. Try again.",
-        worktreeDirectory,
+        worktreeLocation,
       });
     } finally {
       setMutation(undefined);
@@ -162,12 +179,15 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   };
 
   const useProject = (projectID: string): void => {
-    const project = projects().find((candidate) => candidate.id === projectID);
+    const project =
+      projectID === selectedProjectID()
+        ? selectedProject()
+        : projects().find((candidate) => candidate.id === projectID);
     if (!project) {
       setError({ kind: "validation", field: "project", message: "Choose a project." });
       return;
     }
-    void createSessionAt(project, project.directory);
+    void createSessionAt(project, project.location);
   };
 
   const createWorktree = async (): Promise<void> => {
@@ -177,7 +197,8 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       setError({ kind: "validation", field: "project", message: "Choose a Git project." });
       return;
     }
-    if (parentDirectory().trim() === "") {
+    const parent = parentLocation();
+    if (!parent || parent.directory.trim() === "") {
       setError({
         kind: "validation",
         field: "parent-directory",
@@ -201,11 +222,12 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       const created = await props.runtime.api.worktree.create({
         projectID: project.id,
         strategy: "git",
-        from: project.directory,
-        directory: parentDirectory(),
+        from: project.location.directory,
+        directory: parent.directory,
         name,
       });
-      await createSessionAt(project, created.directory, created.directory);
+      const worktreeLocation = { ...parent, directory: created.directory };
+      await createSessionAt(project, worktreeLocation, worktreeLocation);
     } catch {
       setError({ kind: "worktree", message: "The worktree could not be created." });
       setMutation(undefined);
@@ -220,18 +242,24 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       return;
     }
     const current = error();
-    if (current?.kind === "session" && current.worktreeDirectory) {
-      void createSessionAt(project, current.worktreeDirectory, current.worktreeDirectory);
+    if (current?.kind === "session" && current.worktreeLocation) {
+      void createSessionAt(project, current.worktreeLocation, current.worktreeLocation);
     }
   };
 
-  const addProject = async (directory: string): Promise<void> => {
+  const addProject = async (location: LocationRef): Promise<void> => {
     setAddingProject(true);
     setAddProjectError(undefined);
     try {
-      const current = await props.runtime.api.project.current({ location: { directory } });
+      const current = await props.runtime.api.project.current({
+        location: {
+          directory: location.directory,
+          workspace: location.workspaceID,
+        },
+      });
       await props.runtime.data.project.sync();
       setSelectedProjectID(current.id);
+      setSelectedLocation(location);
       if (projects().find((project) => project.id === current.id)?.vcs !== "git") setMode("direct");
       setDialog("new-session");
     } catch {
@@ -250,7 +278,10 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       fallback={
         <AddProjectDialog
           listDirectory={props.runtime.api.file.list}
-          initialDirectory={inferServerHomeDirectory(props.runtime.defaultLocation.directory)}
+          initialLocation={{
+            ...props.runtime.defaultLocation,
+            directory: inferServerHomeDirectory(props.runtime.defaultLocation.directory),
+          }}
           adding={addingProject()}
           error={addProjectError()}
           onDismiss={() => setDialog("new-session")}
@@ -271,8 +302,8 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
           setError(undefined);
         }}
         onOpenWorktreeForm={openWorktreeForm}
-        onWorktreeParentChange={(directory) => {
-          setParentDirectory(directory);
+        onWorktreeParentChange={(location) => {
+          setParentLocation(location);
           setError((current) => (current?.kind === "session" ? current : undefined));
         }}
         onWorktreeNameChange={(name) => {
@@ -292,11 +323,13 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   );
 }
 
-function projectOption(project: Project): NewSessionProject {
+function projectOption(project: Project, workspaceID?: string): NewSessionProject {
   return {
     id: project.id,
     name: project.name?.trim() || project.canonical,
-    directory: project.canonical,
+    location: workspaceID
+      ? { directory: project.canonical, workspaceID }
+      : { directory: project.canonical },
     vcs: project.vcs,
   };
 }
