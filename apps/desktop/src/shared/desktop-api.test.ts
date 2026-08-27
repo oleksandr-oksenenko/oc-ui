@@ -1,36 +1,44 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  parseConnectionClearResult,
-  parseConnectionLoadResult,
-  parseConnectionSaveResult,
+  parseLocalOpenCodeConnection,
+  parseTargetLoadResult,
+  parseTargetSaveResult,
+  parseVoidResult,
 } from "./desktop-api.ts";
 
 describe("desktop IPC result parsing", () => {
-  it("accepts valid connection results", () => {
-    expect(parseConnectionLoadResult(undefined)).toBeUndefined();
-    expect(parseConnectionLoadResult({ serverUrl: "https://example.test" })).toEqual({
-      serverUrl: "https://example.test",
-    });
+  it("accepts valid target and sidecar results", () => {
+    expect(parseTargetLoadResult(undefined)).toBeUndefined();
+    expect(parseTargetLoadResult({ kind: "local" })).toEqual({ kind: "local" });
     expect(
-      parseConnectionLoadResult({ serverUrl: "https://example.test", password: "secret" }),
-    ).toEqual({ serverUrl: "https://example.test", password: "secret" });
-    expect(parseConnectionSaveResult({ passwordSaved: true })).toEqual({ passwordSaved: true });
-    expect(parseConnectionClearResult(undefined)).toBeUndefined();
+      parseTargetLoadResult({
+        kind: "remote",
+        serverUrl: "http://example.test",
+        password: "secret",
+      }),
+    ).toEqual({ kind: "remote", serverUrl: "http://example.test", password: "secret" });
+    expect(parseTargetSaveResult({ passwordSaved: true })).toEqual({ passwordSaved: true });
+    expect(
+      parseLocalOpenCodeConnection({
+        serverUrl: "http://127.0.0.1:4096",
+        password: "secret",
+      }),
+    ).toEqual({ serverUrl: "http://127.0.0.1:4096", password: "secret" });
+    expect(parseVoidResult(undefined)).toBeUndefined();
   });
 
-  it("rejects malformed connection results", () => {
-    expect(() => parseConnectionLoadResult({ serverUrl: 1 })).toThrow("Expected string");
-    expect(() =>
-      parseConnectionLoadResult({ serverUrl: "https://example.test", password: 1 }),
-    ).toThrow("Expected string");
-    expect(() =>
-      parseConnectionLoadResult({ serverUrl: "https://example.test", extra: true }),
-    ).toThrow("Expected no excess property");
-    expect(() => parseConnectionSaveResult({ passwordSaved: "yes" })).toThrow("Expected boolean");
-    expect(() => parseConnectionSaveResult({ passwordSaved: true, extra: true })).toThrow(
+  it("rejects malformed target and sidecar results", () => {
+    expect(() => parseTargetLoadResult({ kind: "remote", serverUrl: 1 })).toThrow(
+      "Expected string",
+    );
+    expect(() => parseTargetLoadResult({ kind: "local", extra: true })).toThrow(
       "Expected no excess property",
     );
-    expect(() => parseConnectionClearResult(null)).toThrow("Expected undefined");
+    expect(() => parseTargetSaveResult({ passwordSaved: "yes" })).toThrow("Expected boolean");
+    expect(() => parseLocalOpenCodeConnection({ serverUrl: "http://127.0.0.1:4096" })).toThrow(
+      "Expected string",
+    );
+    expect(() => parseVoidResult(null)).toThrow("Expected undefined");
   });
 });

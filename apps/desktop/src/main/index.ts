@@ -4,11 +4,12 @@ import { join, normalize, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session } from "electron";
-import type { BrowserWindowConstructorOptions } from "electron";
+import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electron";
 import { Effect, ManagedRuntime } from "effect";
 
-import type { SaveConnectionInput } from "../shared/desktop-api.ts";
-import { IPC_CHANNELS, parseSaveConnectionInput } from "../shared/desktop-api.ts";
+import type { SaveTargetInput } from "../shared/desktop-api.ts";
+import { IPC_CHANNELS, parseSaveTargetInput } from "../shared/desktop-api.ts";
+import { createLocalOpenCodeService, type LocalOpenCodeService } from "./local-opencode.ts";
 import type { SettingsService } from "./settings.ts";
 import type { SettingsError } from "./settings.ts";
 import { normalizeServerUrl, settingsLayer, Settings, validatePassword } from "./settings.ts";
@@ -43,8 +44,14 @@ type DesktopRuntime = ManagedRuntime.ManagedRuntime<SettingsService, never>;
 
 let mainWindow: BrowserWindow | undefined;
 let desktopRuntime: DesktopRuntime | undefined;
+let localOpenCode: LocalOpenCodeService | undefined;
 let removeIpcHandlers: (() => void) | undefined;
+let removeLocalOpenCodeUnavailableListener: (() => void) | undefined;
 let rendererProtocolInstalled = false;
+let quitting = false;
+let quitCleanupComplete = false;
+let localOpenCodeWasConnected = false;
+let settingsMutation: Promise<void> = Promise.resolve();
 
 const withSettings = <A>(
   operation: (service: SettingsService) => Effect.Effect<A, SettingsError>,
@@ -61,35 +68,94 @@ const runSettings = <A>(program: Effect.Effect<A, SettingsError, SettingsService
   return desktopRuntime.runPromise(program);
 };
 
+const runLocalOpenCode = <A>(
+  operation: (service: LocalOpenCodeService) => Promise<A>,
+): Promise<A> => {
+  if (quitting || localOpenCode === undefined) {
+    return Promise.reject(new Error("Desktop services are not ready"));
+  }
+  return operation(localOpenCode);
+};
+
+const queueSettingsMutation = <A>(operation: () => Promise<A>): Promise<A> => {
+  const result = settingsMutation.then(operation);
+  settingsMutation = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+};
+
+const assertTrustedIpcSender = (event: IpcMainInvokeEvent): void => {
+  if (quitting) throw new Error("Desktop services are not ready");
+  if (
+    mainWindow === undefined ||
+    mainWindow.isDestroyed() ||
+    event.sender !== mainWindow.webContents ||
+    event.senderFrame !== mainWindow.webContents.mainFrame
+  ) {
+    throw new Error("Untrusted IPC sender");
+  }
+};
+
 const installIpcHandlers = (): void => {
-  ipcMain.handle(IPC_CHANNELS.connectionLoad, (_event, ...args: unknown[]) => {
+  ipcMain.handle(IPC_CHANNELS.targetLoad, (event, ...args: unknown[]) => {
+    assertTrustedIpcSender(event);
     if (args.length !== 0) {
-      return Promise.reject(new TypeError("connection.load does not accept arguments"));
+      return Promise.reject(new TypeError("target.load does not accept arguments"));
     }
-    return runSettings(withSettings((service) => service.load));
+    return settingsMutation.then(() => runSettings(withSettings((service) => service.load)));
   });
 
-  ipcMain.handle(IPC_CHANNELS.connectionSave, (_event, rawInput) => {
-    let input: SaveConnectionInput;
+  ipcMain.handle(IPC_CHANNELS.targetSave, (event, rawInput) => {
+    assertTrustedIpcSender(event);
+    let input: SaveTargetInput;
     try {
-      input = parseSaveConnectionInput(rawInput);
+      input = parseSaveTargetInput(rawInput);
     } catch {
-      return Promise.reject(new TypeError("invalid connection settings"));
+      return Promise.reject(new TypeError("invalid OpenCode target"));
     }
 
-    // Validate at the process boundary before any persistence effect runs.
-    const validated: SaveConnectionInput = {
-      serverUrl: normalizeServerUrl(input.serverUrl),
-      password: validatePassword(input.password),
-    };
-    return runSettings(withSettings((service) => service.save(validated)));
+    const validated: SaveTargetInput =
+      input.kind === "local"
+        ? input
+        : {
+            kind: "remote",
+            serverUrl: normalizeServerUrl(input.serverUrl),
+            password: validatePassword(input.password),
+          };
+    return queueSettingsMutation(() =>
+      runSettings(withSettings((service) => service.save(validated))),
+    );
   });
 
-  ipcMain.handle(IPC_CHANNELS.connectionClear, (_event, ...args: unknown[]) => {
+  ipcMain.handle(IPC_CHANNELS.targetClear, (event, ...args: unknown[]) => {
+    assertTrustedIpcSender(event);
     if (args.length !== 0) {
-      return Promise.reject(new TypeError("connection.clear does not accept arguments"));
+      return Promise.reject(new TypeError("target.clear does not accept arguments"));
     }
-    return runSettings(withSettings((service) => service.clear));
+    return queueSettingsMutation(() => runSettings(withSettings((service) => service.clear)));
+  });
+
+  ipcMain.handle(IPC_CHANNELS.localOpenCodeConnect, (event, ...args: unknown[]) => {
+    assertTrustedIpcSender(event);
+    if (args.length !== 0) {
+      return Promise.reject(new TypeError("localOpenCode.connect does not accept arguments"));
+    }
+    return runLocalOpenCode(async (service) => {
+      const endpoint = await service.connect();
+      localOpenCodeWasConnected = true;
+      return endpoint;
+    });
+  });
+
+  ipcMain.handle(IPC_CHANNELS.localOpenCodeDisconnect, (event, ...args: unknown[]) => {
+    assertTrustedIpcSender(event);
+    if (args.length !== 0) {
+      return Promise.reject(new TypeError("localOpenCode.disconnect does not accept arguments"));
+    }
+    localOpenCodeWasConnected = false;
+    return runLocalOpenCode((service) => service.disconnect());
   });
 
   removeIpcHandlers = () => {
@@ -98,6 +164,12 @@ const installIpcHandlers = (): void => {
     }
     removeIpcHandlers = undefined;
   };
+};
+
+const forwardLocalOpenCodeUnavailable = (): void => {
+  if (!localOpenCodeWasConnected || mainWindow === undefined || mainWindow.isDestroyed()) return;
+  localOpenCodeWasConnected = false;
+  mainWindow.webContents.send(IPC_CHANNELS.localOpenCodeUnavailable);
 };
 
 const isRendererUrl = (value: string, developmentOrigin: string | undefined): boolean => {
@@ -223,6 +295,10 @@ const start = async (): Promise<void> => {
   await app.whenReady();
   configurePermissions();
   desktopRuntime = ManagedRuntime.make(settingsLayer(app.getPath("userData"), safeStorage));
+  localOpenCode = createLocalOpenCodeService({ userDataPath: app.getPath("userData") });
+  removeLocalOpenCodeUnavailableListener = localOpenCode.onUnavailable(
+    forwardLocalOpenCodeUnavailable,
+  );
   installIpcHandlers();
   await createMainWindow();
 
@@ -239,13 +315,30 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
-  removeIpcHandlers?.();
-  const runtime = desktopRuntime;
-  desktopRuntime = undefined;
-  if (runtime !== undefined) {
-    void runtime.dispose();
-  }
+app.on("before-quit", (event) => {
+  if (quitCleanupComplete) return;
+  event.preventDefault();
+  if (quitting) return;
+  quitting = true;
+  const sidecar = localOpenCode;
+  void (async () => {
+    try {
+      await sidecar?.disconnect();
+    } catch {
+      quitting = false;
+      return;
+    }
+    await settingsMutation;
+    removeIpcHandlers?.();
+    removeLocalOpenCodeUnavailableListener?.();
+    removeLocalOpenCodeUnavailableListener = undefined;
+    localOpenCode = undefined;
+    const runtime = desktopRuntime;
+    desktopRuntime = undefined;
+    await runtime?.dispose();
+    quitCleanupComplete = true;
+    app.quit();
+  })();
 });
 
 void start().catch(() => {

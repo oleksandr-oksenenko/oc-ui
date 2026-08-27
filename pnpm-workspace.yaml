@@ -6,6 +6,8 @@ catalogMode: prefer
 
 catalog:
   "@effect/tsgo": 0.38.0
+  "@opencode-ai/cli": 0.0.0-beta-18155
+  "@opencode-ai/client": 0.0.0-beta-18155
   "@opencode-ai/ui": 0.0.0-beta-18155
   "@oxlint/plugins": 1.79.0
   "@solidjs/meta": ^0.29.4

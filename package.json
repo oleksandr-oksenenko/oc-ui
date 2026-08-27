@@ -11,8 +11,8 @@
     "format": "vp fmt",
     "knip": "knip",
     "lint": "vp lint",
-    "opencode:server": "opencode2 serve",
-    "opencode:version": "opencode2 --version",
+    "opencode:server": "pnpm --filter desktop exec opencode2 serve",
+    "opencode:version": "pnpm --filter desktop exec opencode2 --version",
     "prepare": "effect-tsgo patch --no-typescript --oxlint",
     "ready": "pnpm check && vp run desktop#test && vp run desktop#build",
     "storybook": "vp run desktop#storybook",
@@ -22,7 +22,6 @@
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:",
-    "@opencode-ai/cli": "0.0.0-beta-18155",
     "@oxlint/plugins": "catalog:",
     "@types/node": "^26.3.0",
     "@typescript/typescript6": "6.0.2",

@@ -5,7 +5,7 @@
   "workspaces": {
     "apps/desktop": {
       "entry": ["stories/**/*.stories.{ts,tsx}"],
-      "ignoreDependencies": ["jsdom"]
+      "ignoreDependencies": ["@opencode-ai/cli", "jsdom"]
     }
   }
 }

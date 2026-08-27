@@ -22,14 +22,22 @@ assistant response streams into the transcript.
 The slice deliberately supports one exact protocol version:
 `0.0.0-beta-18155`.
 
+The connection is local-first. On startup the desktop app attempts to start a
+managed loopback OpenCode sidecar from the pinned CLI. If that sidecar cannot
+start or fails health/version validation, the user can connect to a remote
+OpenCode server with the same client. The app does not expose a directory
+picker in this slice: both local and remote connections use their server's
+default directory.
+
 ## Agreed product decisions
 
 - Build and run the flow inside Electron from the start.
-- Connect to one existing remote OpenCode server over plain HTTP.
+- Prefer one managed local OpenCode sidecar over loopback, with one existing
+  remote OpenCode server as the fallback connection.
 - Support the Basic authentication used by the standard OpenCode server. The
   username is `opencode`; the user supplies the password.
-- Require OpenCode version `0.0.0-beta-18155` rather than attempting
-  best-effort compatibility with other releases.
+- Require OpenCode CLI, client, UI, and server version `0.0.0-beta-18155`
+  rather than attempting best-effort compatibility with other releases.
 - Use SolidJS for the renderer, `@opencode-ai/client/solid` for OpenCode client
   state, and `@opencode-ai/ui` for optional visual primitives.
 - Use OpenCode's Promise client under its Solid data layer. Keep Effect for the
@@ -46,20 +54,25 @@ The slice deliberately supports one exact protocol version:
   password was securely persisted.
 - Treat message history as authoritative and the global event stream as a
   volatile source of live updates.
+- Own the managed sidecar's process lifecycle: start it only for the local
+  connection, keep it on loopback, avoid logging credentials, and stop it on
+  app shutdown or connection change.
 
 ## User flow
 
 1. Open the Electron app.
-2. Enter an OpenCode server URL and password, or reuse a securely saved
-   connection.
-3. Connect and verify the server health and exact version.
-4. See a flat, recent-first list of sessions.
-5. Select an existing session or create a new one.
-6. Read the selected session's complete transcript.
-7. Enter and send a text prompt.
-8. See the admitted user message and streaming assistant text.
-9. Continue using the selected session after a temporary disconnection and
-   resynchronization without duplicated transcript entries.
+2. The app starts a managed local sidecar and verifies its health and exact
+   version.
+3. If local startup fails, enter an OpenCode server URL and password, or reuse
+   a securely saved remote connection.
+4. Connect and verify the server health and exact version.
+5. See a flat, recent-first list of sessions.
+6. Select an existing session or create a new one.
+7. Read the selected session's complete transcript.
+8. Enter and send a text prompt.
+9. See the admitted user message and streaming assistant text.
+10. Continue using the selected session after a temporary disconnection and
+    resynchronization without duplicated transcript entries.
 
 ## Visible interface
 
@@ -116,6 +129,8 @@ The Electron main process owns:
 
 - The Effect runtime.
 - Window, application, and desktop lifecycle.
+- The managed local OpenCode sidecar: CLI resolution, startup, health/exit
+  monitoring, and shutdown.
 - Context isolation and the narrow preload boundary.
 - Connection-setting and encrypted credential persistence.
 
@@ -127,7 +142,14 @@ The renderer owns:
 - The `createData` Solid store and its API-backed caches.
 - Session loading, selection, and presentation state.
 
-The preload script exposes only connection-setting operations. Electron runs
+The sidecar is a supervised child process, not a second OpenCode
+implementation. The main process resolves the CLI from the desktop package,
+which pins `0.0.0-beta-18155`; it does not depend on a globally installed
+command. A sidecar failure is surfaced as a local connection failure so the
+user can use the remote fallback.
+
+The preload script exposes only target settings and the managed-sidecar
+connect, disconnect, and unavailable-notification operations. Electron runs
 with context isolation enabled and Node integration disabled in the renderer.
 The packaged renderer is served from `oc://renderer`, an origin explicitly
 accepted by the supported OpenCode server. Renderer sandboxing remains enabled.
@@ -190,6 +212,14 @@ authenticated client. It is kept in the client closure only and is not placed
 in Solid application state, rendered into the DOM, or written to logs. This is
 an explicit tradeoff of reusing OpenCode's renderer-side Solid client.
 
+For the managed local sidecar, the server binds to loopback. Its generated
+password is excluded from logs and saved target settings. OpenCode service mode
+necessarily keeps it in the app-private registration file while the child is
+running; that file has owner-only permissions and is removed when the service
+stops. The password is passed transiently to the existing renderer client.
+Replacing the local connection or closing the app stops the child process so a
+stale server and registration file are not left behind.
+
 ### Version boundary
 
 Connection begins with `health.get()`. The connection is accepted only when the
@@ -198,6 +228,12 @@ compatibility error before session state or the event stream is used.
 
 This explicit pin is necessary because the generated client and its event
 schema can change between OpenCode beta releases.
+
+The workspace catalog is the package-installation authority for
+`@opencode-ai/cli`, `@opencode-ai/client`, and `@opencode-ai/ui`. Main and
+renderer share one runtime protocol-version constant. The CLI is a desktop
+runtime dependency so local development and the Electron main process resolve
+the same executable.
 
 ## OpenCode synchronization model
 
@@ -286,8 +322,10 @@ without duplicating message identifiers.
 
 Connection setup obtains the server's default location. New Session calls
 `data.session.create({ location })` without an agent, model, or title. The
-location is the remote server's default context, not the Electron app's local
-working directory.
+location is always owned by the connected server. The pinned local service
+uses the user's home directory; a remote connection uses that server's
+default. The desktop app does not choose or persist a directory, expose a
+directory picker, or send a local directory to a remote server.
 
 The new session is inserted into the picker, selected, and opened with its
 empty transcript.
@@ -305,13 +343,38 @@ empty transcript.
 - Do not support attachments, references, slash commands, skills, shell input,
   or model and agent selection.
 
+## Managed sidecar boundary
+
+The local connection starts the pinned CLI in server mode and routes the
+renderer through the same authenticated HTTP/SSE client used by a remote
+server. Startup waits for health and exact-version validation. Early process
+exit, startup timeout, incompatible version, and app shutdown are connection
+lifecycle events owned by the desktop main process.
+
+The managed command runs OpenCode service mode (`serve --service`) and keeps
+its registration file under the app-private Electron user-data directory. The
+registration's loopback endpoint and Basic-authentication material are passed
+transiently from the main process to the existing renderer client. They are not
+user configuration and are never persisted for a local target.
+
+The managed server is loopback-only. The app does not adopt an unrelated
+process listening on the expected port, expose arbitrary server arguments, or
+offer a directory picker. The pinned local service uses the user's home
+directory; a remote connection uses that server's default. The desktop app
+does not choose or persist a directory.
+
+There is no Electron packager or installer in this repository. The managed
+sidecar is therefore accepted for the installed workspace/development runtime,
+where `apps/desktop` resolves its pinned CLI dependency. This milestone does
+not claim standalone packaged-app behavior, embedded platform assets, signing,
+or updater support. Those require a future packaging design.
+
 ## Explicitly deferred
 
 The first slice does not include:
 
 - Compatibility with OpenCode releases other than `0.0.0-beta-18155`.
 - Multiple saved servers.
-- Starting or managing a local OpenCode server.
 - HTTPS-specific configuration or authentication methods other than Basic.
 - Projects, worktrees, or directory selection.
 - Diff viewing, comments, review flows, or file browsing.
@@ -324,7 +387,7 @@ The first slice does not include:
 - Todos, task progress, token usage, or costs.
 - An embedded terminal.
 - Notifications and other desktop extras.
-- Installers and multi-platform packaging polish.
+- Standalone packaging or installers that embed the managed CLI.
 - A plugin system or UI-variant framework.
 
 Deferred means not required for the first integration slice, not rejected from
@@ -345,4 +408,10 @@ OpenCode `0.0.0-beta-18155` server:
 8. Recover from a forced event-stream disconnection.
 9. Rehydrate without missing or duplicating transcript messages.
 
-No deferred feature is needed to satisfy this boundary.
+For the managed sidecar path, acceptance additionally requires a healthy local
+`0.0.0-beta-18155` server, clean shutdown without a leftover child process,
+clear fallback to a configured remote server when local startup fails, and no
+directory picker. No standalone packaged-app acceptance is claimed while this
+repository has no packager.
+
+No other deferred feature is needed to satisfy this boundary.

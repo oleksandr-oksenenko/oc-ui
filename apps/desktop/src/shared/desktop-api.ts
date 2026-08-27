@@ -1,54 +1,82 @@
 import { Schema } from "effect";
 
-const LoadedConnectionSchema = Schema.Struct({
+export const OPENCODE_VERSION = "0.0.0-beta-18155" as const;
+
+const LocalTargetSchema = Schema.Struct({ kind: Schema.Literal("local") });
+const RemoteTargetSchema = Schema.Struct({
+  kind: Schema.Literal("remote"),
   serverUrl: Schema.String,
   password: Schema.optionalKey(Schema.String),
 });
+const OpenCodeTargetSchema = Schema.Union([LocalTargetSchema, RemoteTargetSchema]);
 
-export type LoadedConnection = typeof LoadedConnectionSchema.Type;
+export type OpenCodeTarget = typeof OpenCodeTargetSchema.Type;
 
-const SaveConnectionInputSchema = Schema.Struct({
+const SaveTargetInputSchema = Schema.Union([
+  LocalTargetSchema,
+  Schema.Struct({
+    kind: Schema.Literal("remote"),
+    serverUrl: Schema.String,
+    password: Schema.String,
+  }),
+]);
+
+export type SaveTargetInput = typeof SaveTargetInputSchema.Type;
+
+const SaveRemoteTargetInputSchema = Schema.Struct({
   serverUrl: Schema.String,
   password: Schema.String,
 });
+type SaveRemoteTargetInput = typeof SaveRemoteTargetInputSchema.Type;
 
-export type SaveConnectionInput = typeof SaveConnectionInputSchema.Type;
+const SaveTargetResultSchema = Schema.Struct({ passwordSaved: Schema.Boolean });
+export type SaveTargetResult = typeof SaveTargetResultSchema.Type;
 
-const SaveConnectionResultSchema = Schema.Struct({
-  passwordSaved: Schema.Boolean,
+const LocalOpenCodeConnectionSchema = Schema.Struct({
+  serverUrl: Schema.String,
+  password: Schema.String,
 });
-
-export type SaveConnectionResult = typeof SaveConnectionResultSchema.Type;
+type LocalOpenCodeConnection = typeof LocalOpenCodeConnectionSchema.Type;
 
 export type DesktopApi = {
-  readonly connection: {
-    readonly load: () => Promise<LoadedConnection | undefined>;
-    readonly save: (input: SaveConnectionInput) => Promise<SaveConnectionResult>;
+  readonly target: {
+    readonly load: () => Promise<OpenCodeTarget | undefined>;
+    readonly saveLocal: () => Promise<void>;
+    readonly saveRemote: (input: SaveRemoteTargetInput) => Promise<SaveTargetResult>;
     readonly clear: () => Promise<void>;
+  };
+  readonly localOpenCode: {
+    readonly connect: () => Promise<LocalOpenCodeConnection>;
+    readonly disconnect: () => Promise<void>;
+    readonly onUnavailable: (listener: () => void) => () => void;
   };
 };
 
 export const IPC_CHANNELS = {
-  connectionLoad: "desktop:connection:load",
-  connectionSave: "desktop:connection:save",
-  connectionClear: "desktop:connection:clear",
+  targetLoad: "desktop:target:load",
+  targetSave: "desktop:target:save",
+  targetClear: "desktop:target:clear",
+  localOpenCodeConnect: "desktop:local-opencode:connect",
+  localOpenCodeDisconnect: "desktop:local-opencode:disconnect",
+  localOpenCodeUnavailable: "desktop:local-opencode:unavailable",
 } as const;
 
 const ipcParseOptions = { onExcessProperty: "error" } as const;
 
-export const parseSaveConnectionInput = Schema.decodeUnknownSync(
-  SaveConnectionInputSchema,
+export const parseSaveTargetInput = Schema.decodeUnknownSync(
+  SaveTargetInputSchema,
   ipcParseOptions,
 );
-export const parseConnectionLoadResult = Schema.decodeUnknownSync(
-  Schema.UndefinedOr(LoadedConnectionSchema),
+export const parseTargetLoadResult = Schema.decodeUnknownSync(
+  Schema.UndefinedOr(OpenCodeTargetSchema),
   ipcParseOptions,
 );
-export const parseConnectionSaveResult = Schema.decodeUnknownSync(
-  SaveConnectionResultSchema,
+export const parseTargetSaveResult = Schema.decodeUnknownSync(
+  SaveTargetResultSchema,
   ipcParseOptions,
 );
-export const parseConnectionClearResult = Schema.decodeUnknownSync(
-  Schema.Undefined,
+export const parseVoidResult = Schema.decodeUnknownSync(Schema.Undefined, ipcParseOptions);
+export const parseLocalOpenCodeConnection = Schema.decodeUnknownSync(
+  LocalOpenCodeConnectionSchema,
   ipcParseOptions,
 );

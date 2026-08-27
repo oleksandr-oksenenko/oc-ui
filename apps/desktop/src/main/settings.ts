@@ -4,11 +4,7 @@ import { dirname, join } from "node:path";
 
 import { Context, Effect, Layer, Schema } from "effect";
 
-import type {
-  LoadedConnection,
-  SaveConnectionInput,
-  SaveConnectionResult,
-} from "../shared/desktop-api.ts";
+import type { OpenCodeTarget, SaveTargetResult } from "../shared/desktop-api.ts";
 
 const SETTINGS_FILE_NAME = "connection-settings.json";
 const MAX_URL_LENGTH = 2_048;
@@ -21,8 +17,8 @@ export interface SecureStorage {
 }
 
 export interface SettingsService {
-  readonly load: Effect.Effect<LoadedConnection | undefined, SettingsError>;
-  readonly save: (input: SaveConnectionInput) => Effect.Effect<SaveConnectionResult, SettingsError>;
+  readonly load: Effect.Effect<OpenCodeTarget | undefined, SettingsError>;
+  readonly save: (target: OpenCodeTarget) => Effect.Effect<SaveTargetResult, SettingsError>;
   readonly clear: Effect.Effect<void, SettingsError>;
 }
 
@@ -32,18 +28,31 @@ export class SettingsError extends Schema.TaggedError<SettingsError>()("Settings
   cause: Schema.Defect(),
 }) {}
 
-const StoredSettingsSchema = Schema.Struct({
+const StoredLocalTargetSchema = Schema.Struct({ kind: Schema.Literal("local") });
+const StoredRemoteTargetSchema = Schema.Struct({
+  kind: Schema.Literal("remote"),
   serverUrl: Schema.String,
   encryptedPassword: Schema.optionalKey(Schema.NonEmptyString),
 });
-type StoredSettings = typeof StoredSettingsSchema.Type;
-const StoredSettingsJsonSchema = Schema.fromJsonString(StoredSettingsSchema);
-const parseStoredSettings = Schema.decodeUnknownSync(StoredSettingsJsonSchema, {
+const LegacyRemoteTargetSchema = Schema.Struct({
+  serverUrl: Schema.String,
+  encryptedPassword: Schema.optionalKey(Schema.NonEmptyString),
+});
+const WritableStoredTargetSchema = Schema.Union([
+  StoredLocalTargetSchema,
+  StoredRemoteTargetSchema,
+]);
+const StoredTargetSchema = Schema.Union([WritableStoredTargetSchema, LegacyRemoteTargetSchema]);
+type WritableStoredTarget = typeof WritableStoredTargetSchema.Type;
+type StoredTarget = typeof StoredTargetSchema.Type;
+const StoredTargetJsonSchema = Schema.fromJsonString(StoredTargetSchema);
+const WritableStoredTargetJsonSchema = Schema.fromJsonString(WritableStoredTargetSchema);
+const parseStoredTarget = Schema.decodeUnknownSync(StoredTargetJsonSchema, {
   onExcessProperty: "error",
 });
-const encodeStoredSettings = Schema.encodeSync(StoredSettingsJsonSchema);
+const encodeStoredTarget = Schema.encodeSync(WritableStoredTargetJsonSchema);
 
-const readSettings = (filePath: string): Effect.Effect<StoredSettings | undefined> =>
+const readSettings = (filePath: string): Effect.Effect<StoredTarget | undefined> =>
   Effect.promise(async () => {
     let contents: string;
     try {
@@ -53,7 +62,7 @@ const readSettings = (filePath: string): Effect.Effect<StoredSettings | undefine
     }
 
     try {
-      return parseStoredSettings(contents);
+      return parseStoredTarget(contents);
     } catch {
       return undefined;
     }
@@ -61,7 +70,7 @@ const readSettings = (filePath: string): Effect.Effect<StoredSettings | undefine
 
 const writeSettings = (
   filePath: string,
-  settings: StoredSettings,
+  target: WritableStoredTarget,
 ): Effect.Effect<void, SettingsError> =>
   Effect.tryPromise({
     try: async () => {
@@ -69,7 +78,7 @@ const writeSettings = (
       await mkdir(directory, { recursive: true });
 
       const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-      const contents = `${encodeStoredSettings(settings)}\n`;
+      const contents = `${encodeStoredTarget(target)}\n`;
 
       try {
         await writeFile(temporaryPath, contents, { encoding: "utf8", mode: 0o600 });
@@ -99,27 +108,34 @@ const makeSettingsService = (
 
   const load = Effect.gen(function* () {
     const stored = yield* readSettings(filePath);
-    if (stored === undefined) {
-      return undefined;
-    }
+    if (stored === undefined) return undefined;
+    if ("kind" in stored && stored.kind === "local") return stored;
 
     const serverUrl = normalizeStoredServerUrl(stored.serverUrl);
-    if (serverUrl === undefined) {
-      return undefined;
-    }
+    if (serverUrl === undefined) return undefined;
 
     const password = decryptStoredPassword(stored, secureStorage);
-    return password === undefined ? { serverUrl } : { serverUrl, password };
+    return password === undefined
+      ? { kind: "remote" as const, serverUrl }
+      : { kind: "remote" as const, serverUrl, password };
   });
 
-  const save = Effect.fn("Settings.save")(function* (input: SaveConnectionInput) {
-    const serverUrl = normalizeServerUrl(input.serverUrl);
-    const password = validatePassword(input.password);
-    const encryptedPassword = encryptPassword(password, secureStorage);
+  const save = Effect.fn("Settings.save")(function* (target: OpenCodeTarget) {
+    if (target.kind === "local") {
+      yield* writeSettings(filePath, target);
+      return { passwordSaved: false };
+    }
+
+    const serverUrl = normalizeServerUrl(target.serverUrl);
+    const password = target.password === undefined ? undefined : validatePassword(target.password);
+    const encryptedPassword =
+      password === undefined ? undefined : encryptPassword(password, secureStorage);
 
     yield* writeSettings(
       filePath,
-      encryptedPassword === undefined ? { serverUrl } : { serverUrl, encryptedPassword },
+      encryptedPassword === undefined
+        ? { kind: "remote", serverUrl }
+        : { kind: "remote", serverUrl, encryptedPassword },
     );
     return { passwordSaved: encryptedPassword !== undefined };
   });
@@ -129,19 +145,13 @@ const makeSettingsService = (
       try {
         await unlink(filePath);
       } catch (cause) {
-        if (!isNodeError(cause) || cause.code !== "ENOENT") {
-          throw cause;
-        }
+        if (!isNodeError(cause) || cause.code !== "ENOENT") throw cause;
       }
     },
     catch: (cause) => new SettingsError({ cause }),
   });
 
-  return {
-    load,
-    save,
-    clear,
-  };
+  return { load, save, clear };
 };
 
 const normalizeStoredServerUrl = (value: string): string | undefined => {
@@ -153,7 +163,7 @@ const normalizeStoredServerUrl = (value: string): string | undefined => {
 };
 
 const decryptStoredPassword = (
-  stored: StoredSettings,
+  stored: { readonly encryptedPassword?: string },
   secureStorage: SecureStorage,
 ): string | undefined => {
   if (stored.encryptedPassword === undefined || !secureStorage.isEncryptionAvailable()) {
@@ -162,9 +172,7 @@ const decryptStoredPassword = (
 
   try {
     const encryptedPassword = Buffer.from(stored.encryptedPassword, "base64");
-    if (encryptedPassword.length === 0) {
-      return undefined;
-    }
+    if (encryptedPassword.length === 0) return undefined;
     const password = secureStorage.decryptString(encryptedPassword);
     return password.length > 0 ? password : undefined;
   } catch {
@@ -174,9 +182,7 @@ const decryptStoredPassword = (
 };
 
 const encryptPassword = (password: string, secureStorage: SecureStorage): string | undefined => {
-  if (!secureStorage.isEncryptionAvailable()) {
-    return undefined;
-  }
+  if (!secureStorage.isEncryptionAvailable()) return undefined;
 
   try {
     const encryptedPassword = secureStorage.encryptString(password).toString("base64");

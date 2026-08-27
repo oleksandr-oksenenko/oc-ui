@@ -84,10 +84,11 @@
 .connection-form-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-height: 32px;
 }
 
 .connection-form-submit {
-  flex: 1;
+  flex: 1 1 140px;
 }

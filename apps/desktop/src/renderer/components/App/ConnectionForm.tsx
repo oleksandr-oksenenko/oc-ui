@@ -14,6 +14,7 @@ export type ConnectionFormProps = {
   readonly onServerUrlInput: (value: string) => void;
   readonly onPasswordInput: (value: string) => void;
   readonly onConnect: () => void;
+  readonly onUseBuiltInServer: () => void;
   readonly onForget: () => void;
 };
 
@@ -105,6 +106,15 @@ export function ConnectionForm(props: ConnectionFormProps) {
               disabled={props.busy}
             >
               {props.busy ? "Connecting" : props.error ? "Retry" : "Connect"}
+            </Button>
+            <Button
+              type="button"
+              size="large"
+              variant="ghost"
+              disabled={props.busy}
+              onClick={props.onUseBuiltInServer}
+            >
+              Use built-in server
             </Button>
             <Show when={props.hasSavedConnection}>
               <Button

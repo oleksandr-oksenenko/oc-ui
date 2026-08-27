@@ -19,6 +19,7 @@ const meta = {
     onServerUrlInput: fn(),
     onPasswordInput: fn(),
     onConnect: fn(),
+    onUseBuiltInServer: fn(),
     onForget: fn(),
   },
 } satisfies Meta<typeof ConnectionForm>;

@@ -2,7 +2,7 @@ import { OpenCode } from "@opencode-ai/client";
 import type { LocationGetOutput, OpenCodeClient } from "@opencode-ai/client";
 import { Predicate } from "effect";
 
-const OPENCODE_VERSION = "0.0.0-beta-18155" as const;
+import { OPENCODE_VERSION } from "../../shared/desktop-api.ts";
 const HEALTH_TIMEOUT_MS = 10_000;
 const BASIC_USERNAME = "opencode";
 

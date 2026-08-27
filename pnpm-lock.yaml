@@ -9,6 +9,12 @@ catalogs:
     '@effect/tsgo':
       specifier: 0.38.0
       version: 0.38.0
+    '@opencode-ai/cli':
+      specifier: 0.0.0-beta-18155
+      version: 0.0.0-beta-18155
+    '@opencode-ai/client':
+      specifier: 0.0.0-beta-18155
+      version: 0.0.0-beta-18155
     '@opencode-ai/ui':
       specifier: 0.0.0-beta-18155
       version: 0.0.0-beta-18155
@@ -65,9 +71,6 @@ importers:
       '@effect/tsgo':
         specifier: 'catalog:'
         version: 0.38.0
-      '@opencode-ai/cli':
-        specifier: 0.0.0-beta-18155
-        version: 0.0.0-beta-18155
       '@oxlint/plugins':
         specifier: 'catalog:'
         version: 1.79.0
@@ -95,8 +98,11 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@opencode-ai/cli':
+        specifier: 'catalog:'
+        version: 0.0.0-beta-18155
       '@opencode-ai/client':
-        specifier: 0.0.0-beta-18155
+        specifier: 'catalog:'
         version: 0.0.0-beta-18155(effect@4.0.0-rc.111)(solid-js@1.9.15)
       '@opencode-ai/ui':
         specifier: 'catalog:'
