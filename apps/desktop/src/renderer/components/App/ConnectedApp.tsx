@@ -5,10 +5,7 @@ import { AppShell } from "./ConnectedApp/AppShell.tsx";
 import { Titlebar } from "./ConnectedApp/AppShell/Titlebar.tsx";
 import { Workspace } from "./ConnectedApp/AppShell/Workspace.tsx";
 import { createShellPanelState } from "./ConnectedApp/AppShell/createShellPanelState.ts";
-import {
-  ContextTabs,
-  type ContextPanelTab,
-} from "./ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
+import { ContextTabs } from "./ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
 import { ContextPanel } from "./ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
 import type { DiffViewProps } from "./ConnectedApp/AppShell/Workspace/ContextPanel/DiffView.tsx";
 import { SessionPane } from "./ConnectedApp/AppShell/Workspace/SessionPane.tsx";
@@ -63,7 +60,6 @@ export function ConnectedApp(props: ConnectedAppProps) {
   const [submittingID, setSubmittingID] = createSignal<string>();
   const [promptError, setPromptError] = createSignal<string>();
   const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
-  const [activeContextTab, setActiveContextTab] = createSignal<ContextPanelTab>("diff");
   const [diffMode, setDiffMode] = createSignal<VcsDiffMode>("working");
   const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>([]);
   let alive = true;
@@ -150,13 +146,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
 
   createEffect(() => {
     const location = selectedLocation();
-    if (
-      !location ||
-      !bootstrapped() ||
-      !streamConnected() ||
-      !panels.rightPanelOpen() ||
-      activeContextTab() !== "diff"
-    ) {
+    if (!location || !bootstrapped() || !streamConnected() || !panels.rightPanelOpen()) {
       return;
     }
 
@@ -433,9 +423,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
             rightControls={
               <Show when={!panels.mobile()}>
                 <ContextTabs
-                  activeTab={activeContextTab()}
                   idBase="connected-workspace-context"
-                  onTabChange={setActiveContextTab}
                   onClose={() => panels.setRightPanelOpen(false)}
                 />
               </Show>
@@ -535,9 +523,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
             }
             context={
               <ContextPanel
-                activeTab={activeContextTab()}
                 showTabs={panels.mobile()}
-                onTabChange={setActiveContextTab}
                 onClose={() => panels.setRightPanelOpen(false)}
                 diff={diff()}
               />
