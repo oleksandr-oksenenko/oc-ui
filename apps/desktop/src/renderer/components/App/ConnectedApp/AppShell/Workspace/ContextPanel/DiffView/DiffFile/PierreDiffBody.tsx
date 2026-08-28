@@ -1,9 +1,10 @@
 import { FileDiff as PierreFileDiff } from "@pierre/diffs";
-import type { FileDiffMetadata } from "@pierre/diffs";
 import { createEffect, onCleanup } from "solid-js";
 
+import type { DiffRenderData } from "../diff-render-data.ts";
+
 type PierreDiffBodyProps = {
-  readonly fileDiff: FileDiffMetadata;
+  readonly diff: DiffRenderData;
   readonly path: string;
 };
 
@@ -12,6 +13,7 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
   const renderer = new PierreFileDiff({
     themeType: "dark",
     diffStyle: "unified",
+    expandUnchanged: false,
     disableFileHeader: true,
     overflow: "scroll",
     unsafeCSS: `
@@ -24,7 +26,12 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
 
   createEffect(() => {
     if (!host) return;
-    renderer.render({ fileDiff: props.fileDiff, containerWrapper: host });
+    const diff = props.diff;
+    renderer.render(
+      diff.kind === "files"
+        ? { oldFile: diff.oldFile, newFile: diff.newFile, containerWrapper: host }
+        : { fileDiff: diff.fileDiff, containerWrapper: host },
+    );
   });
   onCleanup(() => renderer.cleanUp());
 

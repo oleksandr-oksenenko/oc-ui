@@ -112,6 +112,8 @@ export function createVcsDiffStore(input: VcsDiffStoreInput): VcsDiffStore {
         {
           location: requestLocation,
           mode,
+          // An omitted context asks OpenCode for the full-context patch. The
+          // renderer only treats it as complete after validating every hunk.
         },
         { signal: controller.signal },
       )

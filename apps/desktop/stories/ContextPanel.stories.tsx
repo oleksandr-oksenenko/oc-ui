@@ -14,12 +14,27 @@ const diffFiles: readonly DiffFileData[] = [
     patch: `diff --git a/src/renderer/components/Workspace.tsx b/src/renderer/components/Workspace.tsx
 --- a/src/renderer/components/Workspace.tsx
 +++ b/src/renderer/components/Workspace.tsx
-@@ -28,3 +28,4 @@
+@@ -1,17 +1,19 @@
+ import { createMemo } from "solid-js";
+ import { ContextPanel } from "./ContextPanel";
+ type WorkspaceProps = { ready: boolean };
+ export function Workspace(props: WorkspaceProps) {
+   const layout = () => "three-column";
    const columns = createMemo(() => layout());
+   const isReady = () => props.ready;
+   const theme = "dark";
+   const compact = true;
+   const details = "workspace details";
+   const title = "Workspace";
+   const subtitle = "Local project";
+   if (!isReady()) return <p>Loading workspace</p>;
 -  return <main class="workspace">
-+  return <main class="workspace" data-layout={columns()}>
++  const className = "workspace";
++  return <main class={className} data-layout={columns()}>
 +    <ContextPanel {...context} />
+     {props.children}
    </main>;
+ }
 `,
   },
   {

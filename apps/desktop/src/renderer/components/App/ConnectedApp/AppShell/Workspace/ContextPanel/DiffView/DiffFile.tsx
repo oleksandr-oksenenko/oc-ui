@@ -1,10 +1,10 @@
-import { parsePatchFiles, processFile } from "@pierre/diffs";
-import type { FileDiffMetadata } from "@pierre/diffs";
 import { Show, createMemo, createSignal } from "solid-js";
 import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { DiffChanges } from "@opencode-ai/ui/diff-changes";
 
 import { PierreDiffBody } from "./DiffFile/PierreDiffBody.tsx";
+import { prepareDiffRender } from "./diff-render-data.ts";
+export { parseFilePatch } from "./diff-render-data.ts";
 
 export type DiffFileData = {
   readonly path: string;
@@ -21,7 +21,7 @@ type DiffFileProps = {
 
 export function DiffFile(props: DiffFileProps) {
   const [expanded, setExpanded] = createSignal(props.file.defaultExpanded ?? true);
-  const parsed = createMemo(() => parseFilePatch(props.file));
+  const renderData = createMemo(() => prepareDiffRender(props.file));
 
   return (
     <article class="diff-file">
@@ -56,33 +56,13 @@ export function DiffFile(props: DiffFileProps) {
 
         <Collapsible.Content class="diff-file-content">
           <Show
-            when={parsed()}
+            when={renderData()}
             fallback={<p class="diff-file-unavailable">This patch could not be displayed.</p>}
           >
-            {(fileDiff) => <PierreDiffBody fileDiff={fileDiff()} path={props.file.path} />}
+            {(diff) => <PierreDiffBody diff={diff()} path={props.file.path} />}
           </Show>
         </Collapsible.Content>
       </Collapsible>
     </article>
   );
-}
-
-export function parseFilePatch(file: DiffFileData): FileDiffMetadata | undefined {
-  try {
-    const candidates = parsePatchFiles(file.patch, undefined, true).flatMap((patch) => patch.files);
-    const parsed = candidates.find((candidate) => candidate.name === file.path) ?? candidates[0];
-    const fallback =
-      parsed ??
-      processFile(`--- a/${file.path}\n+++ b/${file.path}\n${file.patch}`, {
-        throwOnError: true,
-      });
-    if (!fallback || fallback.hunks.length === 0) return undefined;
-    return {
-      ...fallback,
-      name: file.path,
-      type: file.status === "added" ? "new" : file.status === "deleted" ? "deleted" : "change",
-    };
-  } catch {
-    return undefined;
-  }
 }
