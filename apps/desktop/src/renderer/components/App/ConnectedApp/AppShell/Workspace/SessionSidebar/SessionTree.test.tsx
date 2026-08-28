@@ -46,8 +46,10 @@ describe("SessionTree", () => {
           statusForSession={(sessionID) => (sessionID === "child" ? "running" : "idle")}
           selectedID="child"
           expandedIDs={["root", "child"]}
+          canDelete
           onSelect={onSelect}
           onToggleExpanded={() => undefined}
+          onDelete={() => undefined}
         />
       ),
       host,
@@ -83,8 +85,10 @@ describe("SessionTree", () => {
           depth={0}
           selected
           expanded
+          deleteDisabled={false}
           onSelect={() => undefined}
           onToggleExpanded={onToggleExpanded}
+          onDelete={() => undefined}
         >
           <div>Child</div>
         </SessionTreeItem>
@@ -112,8 +116,10 @@ describe("SessionTree", () => {
           sessions={[session("orphan", "Orphan", "missing")]}
           statusForSession={() => "idle"}
           expandedIDs={[]}
+          canDelete
           onSelect={() => undefined}
           onToggleExpanded={() => undefined}
+          onDelete={() => undefined}
         />
       ),
       host,
@@ -137,8 +143,10 @@ describe("SessionTree", () => {
           ]}
           statusForSession={() => "idle"}
           expandedIDs={["new-root"]}
+          canDelete
           onSelect={() => undefined}
           onToggleExpanded={() => undefined}
+          onDelete={() => undefined}
         />
       ),
       host,
@@ -164,8 +172,10 @@ describe("SessionTree", () => {
           depth={0}
           selected
           expanded={false}
+          deleteDisabled={false}
           onSelect={() => undefined}
           onToggleExpanded={() => undefined}
+          onDelete={() => undefined}
         />
       ),
       host,
@@ -177,6 +187,61 @@ describe("SessionTree", () => {
     expect(host.querySelector(".shell-session-disclosure-slot")).toBeNull();
     expect(host.querySelector(".shell-session-status")?.getAttribute("data-status")).toBe(
       "running",
+    );
+
+    dispose();
+  });
+
+  it("places a delete action at the end of each session row", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const onDelete = vi.fn<(sessionID: string, opener: HTMLButtonElement) => void>();
+    const dispose = render(
+      () => (
+        <SessionTree
+          sessions={[session("one", "One")]}
+          statusForSession={() => "idle"}
+          expandedIDs={[]}
+          canDelete
+          onSelect={() => undefined}
+          onToggleExpanded={() => undefined}
+          onDelete={onDelete}
+        />
+      ),
+      host,
+    );
+
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Delete One"]');
+    expect(button).not.toBeNull();
+    button?.click();
+    expect(onDelete).toHaveBeenCalledWith("one", button);
+
+    dispose();
+    host.remove();
+  });
+
+  it("disables deletion while a session in the subtree is running", () => {
+    const host = document.createElement("div");
+    const dispose = render(
+      () => (
+        <SessionTree
+          sessions={[session("root", "Root"), session("child", "Child", "root")]}
+          statusForSession={(id) => (id === "child" ? "running" : "idle")}
+          expandedIDs={["root"]}
+          canDelete
+          onSelect={() => undefined}
+          onToggleExpanded={() => undefined}
+          onDelete={() => undefined}
+        />
+      ),
+      host,
+    );
+
+    expect(host.querySelector<HTMLButtonElement>('[aria-label="Delete Root"]')?.disabled).toBe(
+      true,
+    );
+    expect(host.querySelector<HTMLButtonElement>('[aria-label="Delete Child"]')?.disabled).toBe(
+      true,
     );
 
     dispose();
@@ -194,10 +259,12 @@ describe("SessionSidebar", () => {
           expandedIDs={[]}
           loading={false}
           canCreate
+          canDelete
           serverName="Local server"
           serverStatus="connected"
           onSelect={() => undefined}
           onToggleExpanded={() => undefined}
+          onDelete={() => undefined}
           onCreate={() => undefined}
           onRetry={() => undefined}
           onSelectServer={() => undefined}

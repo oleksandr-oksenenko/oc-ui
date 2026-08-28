@@ -49,6 +49,7 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
         loading={options.loading ?? false}
         error={options.error}
         canCreate={options.canCreate ?? true}
+        canDelete
         serverName="Local server"
         serverStatus="connected"
         onSelect={setSelectedID}
@@ -57,6 +58,7 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
             current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
           )
         }
+        onDelete={() => undefined}
         onCreate={() => setSelectedID("new-session")}
         onRetry={() => undefined}
         onSelectServer={() => undefined}

@@ -19,12 +19,14 @@ export type SessionSidebarProps = {
   readonly loading: boolean;
   readonly error?: string;
   readonly canCreate: boolean;
+  readonly canDelete: boolean;
   readonly showHeader?: boolean;
   readonly autoFocusClose?: boolean;
   readonly serverName: string;
   readonly serverStatus: SessionSidebarStatus;
   readonly onSelect: (sessionID: string) => void;
   readonly onToggleExpanded: (sessionID: string) => void;
+  readonly onDelete: (sessionID: string, opener: HTMLButtonElement) => void;
   readonly onCreate: () => void;
   readonly onRetry: () => void;
   readonly onHide?: () => void;
@@ -85,8 +87,10 @@ export function SessionSidebar(props: SessionSidebarProps) {
           statusForSession={props.statusForSession}
           selectedID={props.selectedID}
           expandedIDs={props.expandedIDs}
+          canDelete={props.canDelete}
           onSelect={props.onSelect}
           onToggleExpanded={props.onToggleExpanded}
+          onDelete={props.onDelete}
         />
       </Show>
 

@@ -11,8 +11,10 @@ export type SessionTreeProps = {
   readonly statusForSession: (sessionID: string) => DataSessionStatus;
   readonly selectedID?: string;
   readonly expandedIDs: readonly string[];
+  readonly canDelete: boolean;
   readonly onSelect: (sessionID: string) => void;
   readonly onToggleExpanded: (sessionID: string) => void;
+  readonly onDelete: (sessionID: string, opener: HTMLButtonElement) => void;
 };
 
 export function SessionTree(props: SessionTreeProps) {
@@ -35,6 +37,11 @@ export function SessionTree(props: SessionTreeProps) {
     return { roots, children };
   });
 
+  const hasRunningSession = (sessionID: string): boolean => {
+    if (props.statusForSession(sessionID) === "running") return true;
+    return (hierarchy().children.get(sessionID) ?? []).some((child) => hasRunningSession(child.id));
+  };
+
   const renderSessions = (sessions: readonly SessionInfo[], depth: number) => (
     <For each={sessions}>
       {(session) => {
@@ -48,8 +55,17 @@ export function SessionTree(props: SessionTreeProps) {
               depth={depth}
               selected={props.selectedID === session.id}
               expanded={isExpanded(session.id)}
+              deleteDisabled={!props.canDelete || hasRunningSession(session.id)}
+              deleteDisabledReason={
+                !props.canDelete
+                  ? "Reconnect to delete this session"
+                  : hasRunningSession(session.id)
+                    ? "Wait for this session and its child sessions to finish before deleting"
+                    : undefined
+              }
               onSelect={props.onSelect}
               onToggleExpanded={props.onToggleExpanded}
+              onDelete={props.onDelete}
             >
               {children().length > 0 ? (
                 <div class="shell-session-children" style={{ "--session-depth": `${depth + 1}` }}>

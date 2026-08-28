@@ -238,6 +238,7 @@ function WorkspaceShowcaseFixture() {
                 expandedIDs={expandedSessions()}
                 loading={false}
                 canCreate
+                canDelete
                 autoFocusClose={panelState.mobile()}
                 serverName="Local server"
                 serverStatus="connected"
@@ -245,6 +246,7 @@ function WorkspaceShowcaseFixture() {
                   if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
                 }}
                 onToggleExpanded={toggle}
+                onDelete={() => undefined}
                 onCreate={() => undefined}
                 onRetry={() => undefined}
                 onHide={
