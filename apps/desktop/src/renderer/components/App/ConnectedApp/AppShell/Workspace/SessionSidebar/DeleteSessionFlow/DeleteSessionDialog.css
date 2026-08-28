@@ -1,0 +1,45 @@
+.delete-session-dialog [data-slot="dialog-container"] {
+  width: min(calc(100vw - 32px), 440px);
+}
+
+.delete-session-dialog form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+}
+
+.delete-session-dialog-body {
+  gap: 8px;
+  padding: 0 16px 4px;
+  color: var(--v2-text-text-muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.delete-session-dialog-body p {
+  margin: 0;
+}
+
+.delete-session-dialog-body code {
+  color: var(--v2-text-text-base);
+  overflow-wrap: anywhere;
+}
+
+.delete-session-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: 5px;
+  color: var(--v2-text-text-critical, #ef6b73);
+  background: var(--v2-background-bg-critical-weak, rgb(239 107 115 / 10%));
+}
+
+.delete-session-error svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}

@@ -1,5 +1,7 @@
 import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { Button } from "@opencode-ai/ui/button";
+import { Icon } from "@opencode-ai/ui/icon";
+import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Loader } from "@opencode-ai/ui/loader";
 import type { SessionInfo } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
@@ -14,9 +16,12 @@ export type SessionTreeItemProps = {
   readonly depth: number;
   readonly selected: boolean;
   readonly expanded: boolean;
+  readonly deleteDisabled: boolean;
+  readonly deleteDisabledReason?: string;
   readonly children?: JSX.Element;
   readonly onSelect: (sessionID: string) => void;
   readonly onToggleExpanded: (sessionID: string) => void;
+  readonly onDelete: (sessionID: string, opener: HTMLButtonElement) => void;
 };
 
 export function SessionTreeItem(props: SessionTreeItemProps) {
@@ -71,6 +76,17 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               </span>
             ) : null}
           </Button>
+          <IconButton
+            class="shell-session-delete"
+            type="button"
+            size="small"
+            variant="ghost-muted"
+            disabled={props.deleteDisabled}
+            aria-label={`Delete ${title()}`}
+            title={props.deleteDisabledReason ?? `Delete ${title()}`}
+            icon={<Icon name="trash" size="small" aria-hidden="true" />}
+            onClick={(event) => props.onDelete(props.session.id, event.currentTarget)}
+          />
         </div>
         <Collapsible.Content>{props.children}</Collapsible.Content>
       </Collapsible>

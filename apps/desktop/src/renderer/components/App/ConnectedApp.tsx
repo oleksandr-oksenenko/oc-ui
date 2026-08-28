@@ -13,10 +13,15 @@ import { ContextPanel } from "./ConnectedApp/AppShell/Workspace/ContextPanel.tsx
 import type { DiffViewProps } from "./ConnectedApp/AppShell/Workspace/ContextPanel/DiffView.tsx";
 import { SessionPane } from "./ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { SessionSidebar } from "./ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
+import { DeleteSessionFlow } from "./ConnectedApp/AppShell/Workspace/SessionSidebar/DeleteSessionFlow.tsx";
 import { NewSessionFlow } from "./ConnectedApp/AppShell/Workspace/SessionSidebar/NewSessionFlow.tsx";
 import { Composer } from "./ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
 import { TranscriptView } from "./ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
-import { chooseSessionFallback, sessionAncestorIDs } from "./ConnectedApp/session-selection.ts";
+import {
+  chooseSessionFallback,
+  sessionAncestorIDs,
+  sessionSubtreeIDs,
+} from "./ConnectedApp/session-selection.ts";
 import { createSessionDraftStore } from "../../domain/index.ts";
 import { syncActiveStatuses, useServerRuntime } from "../../opencode/index.ts";
 import type { VcsDiffMode, VerifiedServer } from "../../opencode/index.ts";
@@ -45,6 +50,12 @@ export function ConnectedApp(props: ConnectedAppProps) {
     readonly error?: string;
   }>({ status: "idle" });
   const [newSessionOpen, setNewSessionOpen] = createSignal(false);
+  const [deletion, setDeletion] = createSignal<{
+    readonly session: SessionInfo;
+    readonly subtreeIDs: readonly string[];
+    readonly opener: HTMLButtonElement;
+    readonly worktree?: { readonly projectID: string; readonly directory: string };
+  }>();
   const [submittingID, setSubmittingID] = createSignal<string>();
   const [promptError, setPromptError] = createSignal<string>();
   const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
@@ -214,6 +225,28 @@ export function ConnectedApp(props: ConnectedAppProps) {
     newSessionOpener =
       document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
     setNewSessionOpen(true);
+  };
+
+  const openSessionDeletion = (sessionID: string, opener: HTMLButtonElement): void => {
+    if (!streamConnected()) return;
+    const session = sessions().find((candidate) => candidate.id === sessionID);
+    if (session === undefined) return;
+    const subtreeIDs = sessionSubtreeIDs(sessionID, sessions());
+    if (subtreeIDs.some((id) => runtime.data.session.status(id) === "running")) return;
+    const project = runtime.data.project
+      .list()
+      .find((candidate) => candidate.id === session.projectID);
+    const worktreeDirectory = project?.sandboxes.find((directory) =>
+      sameDirectory(directory, session.location.directory),
+    );
+    setDeletion({
+      session,
+      subtreeIDs,
+      opener,
+      worktree: worktreeDirectory
+        ? { projectID: session.projectID, directory: worktreeDirectory }
+        : undefined,
+    });
   };
 
   const selectSession = (sessionID: string): void => {
@@ -412,6 +445,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
                 loading={runtime.sessions.state() === "loading"}
                 error={runtime.sessions.error()}
                 canCreate={streamConnected() && runtime.sessions.state() === "ready"}
+                canDelete={streamConnected() && runtime.sessions.state() === "ready"}
                 autoFocusClose={panels.mobile()}
                 serverName={friendlyServerName(props.server.serverUrl)}
                 serverStatus={streamConnected() ? "connected" : "reconnecting"}
@@ -421,6 +455,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
                   if (panels.mobile()) panels.setLeftSidebarOpen(false);
                 }}
                 onToggleExpanded={toggleExpanded}
+                onDelete={openSessionDeletion}
                 onCreate={openNewSession}
                 onRetry={() => void retryCatalog().catch(() => undefined)}
                 onHide={panels.mobile() ? () => panels.setLeftSidebarOpen(false) : undefined}
@@ -498,6 +533,31 @@ export function ConnectedApp(props: ConnectedAppProps) {
           }}
         />
       </Show>
+      <Show when={deletion()}>
+        {(current) => (
+          <DeleteSessionFlow
+            session={current().session}
+            subtreeIDs={current().subtreeIDs}
+            worktree={current().worktree}
+            removeSession={runtime.api.session.remove}
+            removeWorktree={runtime.api.worktree.remove}
+            statusForSession={(sessionID) => runtime.data.session.status(sessionID)}
+            onDeleted={(sessionIDs) => {
+              for (const sessionID of sessionIDs) {
+                runtime.sessions.remove(sessionID);
+                drafts.clear(sessionID);
+              }
+              const removed = new Set(sessionIDs);
+              setExpandedIDs((currentIDs) => currentIDs.filter((id) => !removed.has(id)));
+            }}
+            onDismiss={() => {
+              const opener = current().opener;
+              setDeletion(undefined);
+              restoreDialogFocusAfterClose(() => opener);
+            }}
+          />
+        )}
+      </Show>
     </>
   );
 }
@@ -514,3 +574,10 @@ function friendlyServerName(serverUrl: string): string {
     return serverUrl;
   }
 }
+
+function sameDirectory(left: string, right: string): boolean {
+  return normalizeDirectory(left) === normalizeDirectory(right);
+}
+
+const normalizeDirectory = (value: string): string =>
+  value.replaceAll("\\", "/").replace(/\/+$/, "");

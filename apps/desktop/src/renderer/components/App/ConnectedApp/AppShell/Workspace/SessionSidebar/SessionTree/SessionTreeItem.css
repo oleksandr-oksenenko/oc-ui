@@ -15,7 +15,7 @@
 
 .shell-session-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 20px;
   align-items: center;
   width: calc(100% - var(--session-depth, 0) * 11px);
   height: 25px;
@@ -28,7 +28,7 @@
 }
 
 .shell-session-row.has-children {
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) 20px;
 }
 
 .shell-session-row:hover {
@@ -145,4 +145,24 @@
 
 .shell-session-status [data-component="loader-v2"] {
   color: inherit;
+}
+
+.shell-session-delete[data-component="icon-button-v2"] {
+  width: 20px;
+  height: 20px;
+  color: #737373;
+}
+
+.shell-session-delete[data-component="icon-button-v2"]:hover:not(:disabled),
+.shell-session-delete[data-component="icon-button-v2"]:focus-visible:not(:disabled) {
+  color: var(--v2-icon-icon-critical, #ef6b73);
+}
+
+.shell-session-delete[data-component="icon-button-v2"]:disabled {
+  opacity: 0.28;
+}
+
+.shell-session-delete svg {
+  width: 12px;
+  height: 12px;
 }

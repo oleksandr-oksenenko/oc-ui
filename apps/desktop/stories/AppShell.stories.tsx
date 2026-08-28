@@ -149,6 +149,7 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                 expandedIDs={expandedIDs()}
                 loading={false}
                 canCreate={true}
+                canDelete
                 autoFocusClose={panelState.mobile()}
                 serverName="homie.lan:4096"
                 serverStatus="connected"
@@ -156,6 +157,7 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                   if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
                 }}
                 onToggleExpanded={toggleExpanded}
+                onDelete={() => undefined}
                 onCreate={() => undefined}
                 onRetry={() => undefined}
                 onHide={
@@ -301,10 +303,12 @@ export const NarrowRightPanelCollapsed = {
                 expandedIDs={["workspace", "api", "tests"]}
                 loading={false}
                 canCreate={true}
+                canDelete
                 serverName="Local server"
                 serverStatus="connected"
                 onSelect={() => undefined}
                 onToggleExpanded={() => undefined}
+                onDelete={() => undefined}
                 onCreate={() => undefined}
                 onRetry={() => undefined}
                 onSelectServer={() => undefined}
