@@ -15,10 +15,10 @@ attributable to that session.
 
 The available comparisons are:
 
-| UI label | Client mode | Meaning |
-| --- | --- | --- |
-| **Working changes** | `working` | Working copy compared with `HEAD`. |
-| **Changes vs `<default>`** | `branch` | Working copy compared with the merge base of the named default branch. This can include committed and uncommitted changes. |
+| UI label                   | Client mode | Meaning                                                                                                                    |
+| -------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Working changes**        | `working`   | Working copy compared with `HEAD`.                                                                                         |
+| **Changes vs `<default>`** | `branch`    | Working copy compared with the merge base of the named default branch. This can include committed and uncommitted changes. |
 
 `Working changes` is the default. The branch comparison is offered only when
 `vcs.get` reports distinct, non-empty current and default branch names.
@@ -32,9 +32,7 @@ api.vcs.diff(
   {
     location: {
       directory: session.location.directory,
-      ...(session.location.workspaceID
-        ? { workspace: session.location.workspaceID }
-        : {}),
+      ...(session.location.workspaceID ? { workspace: session.location.workspaceID } : {}),
     },
     mode: "working" | "branch",
   },
@@ -45,13 +43,13 @@ api.vcs.diff(
 The `workspaceID` to `workspace` rename is required by the pinned generated
 client. The response projects directly:
 
-| `FileDiffInfo` | UI |
-| --- | --- |
-| `file` | `path` |
-| `patch` | `patch` |
-| `additions` | `additions` |
-| `deletions` | `deletions` |
-| `status` | `status` |
+| `FileDiffInfo` | UI          |
+| -------------- | ----------- |
+| `file`         | `path`      |
+| `patch`        | `patch`     |
+| `additions`    | `additions` |
+| `deletions`    | `deletions` |
+| `status`       | `status`    |
 
 The panel does not call `vcs.status`; `vcs.diff` already returns every field
 needed for rendering. Branch metadata uses the existing

@@ -1,6 +1,6 @@
-import { createEffect, onCleanup } from "solid-js";
 import { FileDiff as PierreFileDiff } from "@pierre/diffs";
 import type { FileDiffMetadata } from "@pierre/diffs";
+import { createEffect, onCleanup } from "solid-js";
 
 type PierreDiffBodyProps = {
   readonly fileDiff: FileDiffMetadata;

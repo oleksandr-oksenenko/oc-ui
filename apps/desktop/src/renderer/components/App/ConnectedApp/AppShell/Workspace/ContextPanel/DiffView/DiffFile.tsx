@@ -4,7 +4,7 @@ import { Show, createMemo, createSignal } from "solid-js";
 import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { DiffChanges } from "@opencode-ai/ui/diff-changes";
 
-import { PierreDiffBody } from "./PierreDiffBody.tsx";
+import { PierreDiffBody } from "./DiffFile/PierreDiffBody.tsx";
 
 export type DiffFileData = {
   readonly path: string;
