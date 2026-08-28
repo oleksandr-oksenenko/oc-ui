@@ -1,28 +1,20 @@
-.server-flow-dialog {
+[data-component="dialog-v2"][data-size="large"]
+  > [data-slot="dialog-container"].server-flow-dialog {
   width: min(640px, calc(100vw - 32px));
-  max-width: none;
+  height: auto;
   max-height: min(760px, calc(100vh - 32px));
-  margin: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  color: var(--v2-text-text-base);
-  background: var(--v2-background-bg-layer-01);
-  box-shadow: var(--v2-elevation-overlay);
-}
-
-.server-flow-dialog::backdrop {
-  background: var(--v2-overlay-simple-overlay-scrim);
 }
 
 .server-flow-dialog-content {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-height: 0;
   max-height: min(760px, calc(100vh - 32px));
 }
 
-.server-flow-dialog-add-project {
+[data-component="dialog-v2"][data-size="large"]
+  > [data-slot="dialog-container"].server-flow-dialog-add-project {
   width: min(760px, calc(100vw - 32px));
   height: min(680px, calc(100vh - 32px));
 }
@@ -32,7 +24,13 @@
   max-height: none;
 }
 
-.server-flow-dialog-add-project .server-flow-dialog-body {
+.server-flow-dialog [data-slot="dialog-content"] [data-slot="dialog-body"].server-flow-dialog-body {
+  overflow: auto;
+}
+
+.server-flow-dialog-add-project
+  [data-slot="dialog-content"]
+  [data-slot="dialog-body"].server-flow-dialog-body {
   overflow: hidden;
 }
 
@@ -46,51 +44,16 @@
   flex: 1;
 }
 
-.server-flow-dialog-header,
-.server-flow-dialog-footer {
-  display: flex;
-  align-items: flex-start;
-  flex-shrink: 0;
-  padding: 16px;
-}
-
-.server-flow-dialog-header {
-  justify-content: space-between;
-  gap: 16px;
+.server-flow-dialog [data-slot="dialog-header"] {
   border-bottom: 1px solid var(--v2-border-border-base);
 }
 
-.server-flow-dialog-header h2,
-.server-flow-dialog-header p {
-  margin: 0;
-}
-
-.server-flow-dialog-header h2 {
-  font-size: 15px;
-  font-weight: 530;
-  line-height: 20px;
-}
-
-.server-flow-dialog-header p {
-  margin-top: 4px;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--v2-text-text-muted);
-}
-
 .server-flow-dialog-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
   gap: 16px;
-  min-height: 0;
   padding: 16px;
-  overflow: auto;
 }
 
-.server-flow-dialog-footer {
-  justify-content: flex-end;
-  gap: 8px;
+.server-flow-dialog [data-slot="dialog-footer"] {
   border-top: 1px solid var(--v2-border-border-base);
 }
 
@@ -267,12 +230,14 @@
 }
 
 @media (max-width: 520px) {
-  .server-flow-dialog {
+  [data-component="dialog-v2"][data-size="large"]
+    > [data-slot="dialog-container"].server-flow-dialog {
     width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
   }
 
-  .server-flow-dialog-add-project {
+  [data-component="dialog-v2"][data-size="large"]
+    > [data-slot="dialog-container"].server-flow-dialog-add-project {
     height: calc(100vh - 16px);
   }
 
@@ -280,12 +245,12 @@
     max-height: calc(100vh - 16px);
   }
 
-  .server-flow-dialog-footer,
+  .server-flow-dialog [data-slot="dialog-footer"],
   .new-session-project-heading {
     flex-wrap: wrap;
   }
 
-  .server-flow-dialog-footer button,
+  .server-flow-dialog [data-slot="dialog-footer"] button,
   .new-session-project-heading button {
     flex: 1;
   }

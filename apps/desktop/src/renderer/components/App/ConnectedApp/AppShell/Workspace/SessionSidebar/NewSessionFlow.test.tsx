@@ -1,12 +1,14 @@
 import type { FileListOutput, Project, SessionInfo } from "@opencode-ai/client";
+import { Show, createSignal } from "solid-js";
 import { render } from "solid-js/web";
-import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   NewSessionFlow,
   type NewSessionFlowProps,
   type NewSessionFlowRuntime,
 } from "./NewSessionFlow.tsx";
+import { ServerFlowDialogProvider } from "../../../../../../ui/ServerFlowDialogProvider.tsx";
 
 const project: Project = {
   id: "oc-ui",
@@ -120,18 +122,41 @@ async function flush(): Promise<void> {
   }
 }
 
+async function flushDialogClose(): Promise<void> {
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 200));
+  await flush();
+}
+
 function mount(runtime: NewSessionFlowProps["runtime"]) {
   const host = document.createElement("div");
   document.body.append(host);
   const onDismiss = vi.fn<() => void>();
   const onSessionCreated = vi.fn<(sessionID: string) => void>();
+  const [visible, setVisible] = createSignal(true);
+
   const dispose = render(
     () => (
-      <NewSessionFlow runtime={runtime} onDismiss={onDismiss} onSessionCreated={onSessionCreated} />
+      <ServerFlowDialogProvider>
+        <Show when={visible()}>
+          <NewSessionFlow
+            runtime={runtime}
+            onDismiss={onDismiss}
+            onSessionCreated={onSessionCreated}
+          />
+        </Show>
+      </ServerFlowDialogProvider>
     ),
     host,
   );
-  return { host, onDismiss, onSessionCreated, dispose: () => (dispose(), host.remove()) };
+  return {
+    get root() {
+      return [...document.querySelectorAll<HTMLElement>("[data-dialog-layer]")].at(-1)!;
+    },
+    onDismiss,
+    onSessionCreated,
+    unmountFlow: () => setVisible(false),
+    dispose: () => (dispose(), host.remove()),
+  };
 }
 
 function submit(host: HTMLElement): void {
@@ -144,31 +169,121 @@ function clickButton(host: HTMLElement, text: string): void {
     ?.click();
 }
 
-beforeAll(() => {
-  Object.defineProperties(HTMLDialogElement.prototype, {
-    showModal: {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.setAttribute("open", "");
-      },
-    },
-    close: {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.removeAttribute("open");
-      },
-    },
-  });
-});
-
 describe("NewSessionFlow", () => {
-  it("creates a direct session in the selected project's canonical directory", async () => {
+  it("closes the base dialog with Escape", async () => {
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
     const mounted = mount(fake.runtime);
     await flush();
 
-    submit(mounted.host);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+    expect(mounted.onDismiss).toHaveBeenCalledOnce();
+    mounted.dispose();
+  });
+
+  it("closes the base dialog from its backdrop", async () => {
+    const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
+    const mounted = mount(fake.runtime);
     await flush();
+    const layer = mounted.root.closest<HTMLElement>("[data-dialog-layer]");
+    const overlay = layer?.previousElementSibling;
+
+    overlay?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(mounted.onDismiss).toHaveBeenCalledOnce();
+    mounted.dispose();
+  });
+
+  it("pops Add Project and restores focus to its opener", async () => {
+    const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
+    const mounted = mount(fake.runtime);
+    await flush();
+    expect(mounted.onDismiss).not.toHaveBeenCalled();
+    const opener = [...mounted.root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Add project",
+    );
+    opener?.focus();
+    opener?.click();
+    await flushDialogClose();
+    expect(mounted.root.textContent).toContain("Choose one project directory");
+    mounted.onDismiss.mockClear();
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushDialogClose();
+
+    expect(mounted.root.textContent).toContain("New session");
+    expect(document.activeElement?.textContent?.trim()).toBe("Add project");
+    mounted.dispose();
+  });
+
+  it("removes its base portal when the flow unmounts", async () => {
+    const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
+    const mounted = mount(fake.runtime);
+    await flush();
+    const dialogRoot = mounted.root;
+
+    mounted.unmountFlow();
+    await flushDialogClose();
+
+    expect(dialogRoot.isConnected).toBe(false);
+    expect(mounted.onDismiss).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
+  it("does not mount a base portal after an immediate flow unmount", async () => {
+    const overlaysBefore = document.querySelectorAll('[data-component="dialog-overlay"]').length;
+    const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
+    const mounted = mount(fake.runtime);
+
+    mounted.unmountFlow();
+    await flushDialogClose();
+
+    expect(document.querySelectorAll('[data-component="dialog-overlay"]')).toHaveLength(
+      overlaysBefore,
+    );
+    mounted.dispose();
+  });
+
+  it("removes its Add Project portal when the flow unmounts", async () => {
+    const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
+    const mounted = mount(fake.runtime);
+    await flush();
+    clickButton(mounted.root, "Add project");
+    await flush();
+    const dialogRoot = mounted.root;
+
+    mounted.unmountFlow();
+    await flushDialogClose();
+
+    expect(dialogRoot.isConnected).toBe(false);
+    expect(mounted.onDismiss).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
+  it("does not mount Add Project after an immediate flow unmount", async () => {
+    const overlaysBefore = document.querySelectorAll('[data-component="dialog-overlay"]').length;
+    const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
+    const mounted = mount(fake.runtime);
+    await flush();
+
+    clickButton(mounted.root, "Add project");
+    mounted.unmountFlow();
+    await flushDialogClose();
+
+    expect(document.querySelectorAll('[data-component="dialog-overlay"]')).toHaveLength(
+      overlaysBefore,
+    );
+    mounted.dispose();
+  });
+
+  it("creates a direct session in the selected project's canonical directory", async () => {
+    const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
+    const mounted = mount(fake.runtime);
+    await flush();
+    const dialogRoot = mounted.root;
+
+    submit(dialogRoot);
+    await flushDialogClose();
 
     expect(fake.sessionCreate).toHaveBeenCalledWith({
       projectID: project.id,
@@ -177,6 +292,8 @@ describe("NewSessionFlow", () => {
     expect(fake.admit).toHaveBeenCalledWith("session-1");
     expect(fake.remove).not.toHaveBeenCalled();
     expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
+    expect(mounted.onDismiss).toHaveBeenCalledOnce();
+    expect(dialogRoot.isConnected).toBe(false);
     mounted.dispose();
   });
 
@@ -187,9 +304,9 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    expect(mounted.host.textContent).not.toContain("Create a worktree");
-    submit(mounted.host);
-    await flush();
+    expect(mounted.root.textContent).not.toContain("Create a worktree");
+    submit(mounted.root);
+    await flushDialogClose();
 
     expect(fake.sessionCreate).toHaveBeenCalledWith({
       projectID: nonGitProject.id,
@@ -206,21 +323,21 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    clickButton(mounted.host, "Add project");
-    await flush();
+    clickButton(mounted.root, "Add project");
+    await flushDialogClose();
 
     expect(fake.fileList).toHaveBeenCalledWith({
       location: { directory: "/srv/projects", workspace: "workspace-a" },
       path: ".",
     });
-    submit(mounted.host);
-    await flush();
+    submit(mounted.root);
+    await flushDialogClose();
 
     expect(fake.projectCurrent).toHaveBeenCalledWith({
       location: { directory: "/srv/projects", workspace: "workspace-a" },
     });
-    submit(mounted.host);
-    await flush();
+    submit(mounted.root);
+    await flushDialogClose();
 
     expect(fake.sessionCreate).toHaveBeenCalledWith({
       projectID: project.id,
@@ -234,16 +351,16 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    clickButton(mounted.host, "Add project");
-    await flush();
-    submit(mounted.host);
-    await flush();
+    clickButton(mounted.root, "Add project");
+    await flushDialogClose();
+    submit(mounted.root);
+    await flushDialogClose();
 
     expect(fake.projectCurrent).toHaveBeenCalledWith({
       location: { directory: "/srv/projects" },
     });
     expect(fake.projectSync).toHaveBeenCalledTimes(2);
-    expect(mounted.host.textContent).toContain("New session");
+    expect(mounted.root.textContent).toContain("New session");
     mounted.dispose();
   });
 
@@ -263,7 +380,7 @@ describe("NewSessionFlow", () => {
       });
       await flush();
 
-      clickButton(mounted.host, "Add project");
+      clickButton(mounted.root, "Add project");
       await flush();
 
       expect(fake.fileList).toHaveBeenCalledWith({
@@ -283,17 +400,17 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    const radios = mounted.host.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]');
+    const radios = mounted.root.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]');
     radios[2]?.click();
-    submit(mounted.host);
+    submit(mounted.root);
     await flush();
 
-    const name = mounted.host.querySelector<HTMLInputElement>("input");
+    const name = mounted.root.querySelector<HTMLInputElement>("input");
     if (name) {
       name.value = "feature-one";
       name.dispatchEvent(new InputEvent("input", { bubbles: true }));
     }
-    submit(mounted.host);
+    submit(mounted.root);
     await flush();
 
     expect(fake.worktreeCreate).toHaveBeenCalledWith({
@@ -309,10 +426,10 @@ describe("NewSessionFlow", () => {
     });
     expect(fake.remove).toHaveBeenCalledWith("session-1");
     await vi.waitFor(() => {
-      expect(mounted.host.textContent).toContain("/srv/worktrees/feature-one");
+      expect(mounted.root.textContent).toContain("/srv/worktrees/feature-one");
     });
 
-    submit(mounted.host);
+    submit(mounted.root);
     await flush();
 
     expect(fake.worktreeCreate).toHaveBeenCalledOnce();
@@ -330,22 +447,22 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    const radios = mounted.host.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]');
+    const radios = mounted.root.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]');
     radios[2]?.click();
-    submit(mounted.host);
+    submit(mounted.root);
     await flush();
-    const name = mounted.host.querySelector<HTMLInputElement>("input");
+    const name = mounted.root.querySelector<HTMLInputElement>("input");
     if (name) {
       name.value = "feature-one";
       name.dispatchEvent(new InputEvent("input", { bubbles: true }));
     }
 
-    submit(mounted.host);
+    submit(mounted.root);
     await flush();
 
-    expect(mounted.host.textContent).toContain("Worktree creation failed");
-    expect(mounted.host.querySelector<HTMLInputElement>("input")?.value).toBe("feature-one");
-    submit(mounted.host);
+    expect(mounted.root.textContent).toContain("Worktree creation failed");
+    expect(mounted.root.querySelector<HTMLInputElement>("input")?.value).toBe("feature-one");
+    submit(mounted.root);
     await flush();
 
     expect(fake.worktreeCreate).toHaveBeenCalledTimes(2);
@@ -360,12 +477,13 @@ describe("NewSessionFlow", () => {
     ]);
     const mounted = mount(fake.runtime);
     await flush();
+    const dialogRoot = mounted.root;
 
-    submit(mounted.host);
+    submit(dialogRoot);
     await flush();
-    expect(mounted.host.textContent).toContain("Session creation failed");
+    expect(mounted.root.textContent).toContain("Session creation failed");
 
-    submit(mounted.host);
+    submit(mounted.root);
     await flush();
 
     expect(fake.sessionCreate).toHaveBeenCalledTimes(2);
@@ -381,13 +499,16 @@ describe("NewSessionFlow", () => {
     });
     const mounted = mount(fake.runtime);
     await flush();
+    const dialogRoot = mounted.root;
 
-    submit(mounted.host);
-    await flush();
+    submit(dialogRoot);
+    await flushDialogClose();
 
     expect(fake.sessionGet).toHaveBeenCalledWith("session-1");
     expect(fake.remove).not.toHaveBeenCalled();
     expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
+    expect(mounted.onDismiss).toHaveBeenCalledOnce();
+    expect(dialogRoot.isConnected).toBe(false);
     mounted.dispose();
   });
 });

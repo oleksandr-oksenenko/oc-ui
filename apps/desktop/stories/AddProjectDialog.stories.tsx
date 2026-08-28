@@ -5,6 +5,7 @@ import {
   AddProjectDialog,
   type AddProjectDialogError,
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/NewSessionFlow/AddProjectDialog.tsx";
+import { DialogStory } from "./DialogStory.tsx";
 function response(directory: string, entries: readonly string[]): FileListOutput {
   return {
     location: {
@@ -60,14 +61,18 @@ function dialog(
   } = {},
 ) {
   return (
-    <AddProjectDialog
-      listDirectory={options.listDirectory ?? listDirectory}
-      initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
-      error={options.error}
-      adding={options.adding}
-      onDismiss={() => undefined}
-      onAddProject={() => undefined}
-    />
+    <DialogStory>
+      {(onDismissBlockedChange) => (
+        <AddProjectDialog
+          listDirectory={options.listDirectory ?? listDirectory}
+          initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
+          error={options.error}
+          adding={options.adding}
+          onDismissBlockedChange={onDismissBlockedChange}
+          onAddProject={() => undefined}
+        />
+      )}
+    </DialogStory>
   );
 }
 

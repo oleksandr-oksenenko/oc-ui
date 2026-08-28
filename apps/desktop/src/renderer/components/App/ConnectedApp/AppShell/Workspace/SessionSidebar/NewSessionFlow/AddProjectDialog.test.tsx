@@ -1,8 +1,13 @@
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { render } from "solid-js/web";
-import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { AddProjectDialog, type AddProjectDialogError } from "./AddProjectDialog.tsx";
+import {
+  ServerFlowDialogProvider,
+  useServerFlowDismissBlock,
+} from "../../../../../../../ui/ServerFlowDialogProvider.tsx";
 
 function response(directory: string): FileListOutput {
   return {
@@ -28,23 +33,6 @@ async function flush(): Promise<void> {
   await new Promise<void>((resolve) => queueMicrotask(resolve));
 }
 
-beforeAll(() => {
-  Object.defineProperties(HTMLDialogElement.prototype, {
-    showModal: {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.setAttribute("open", "");
-      },
-    },
-    close: {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.removeAttribute("open");
-      },
-    },
-  });
-});
-
 function mount(
   options: {
     readonly adding?: boolean;
@@ -55,25 +43,45 @@ function mount(
   const host = document.createElement("div");
   document.body.append(host);
   const list = options.listDirectory ?? listDirectory();
-  const onDismiss = vi.fn<() => void>();
+  const onClose = vi.fn<() => void>();
   const onAddProject = vi.fn<(location: LocationRef) => void>();
+  let dialogRoot: HTMLDivElement | undefined;
+
+  function TestDialogHost() {
+    const dialog = useDialog();
+    const setBlocked = useServerFlowDismissBlock();
+    void dialog.show(
+      () => (
+        <div ref={(element) => (dialogRoot = element)}>
+          <AddProjectDialog
+            listDirectory={list}
+            initialLocation={{ directory: "/srv/projects" }}
+            adding={options.adding}
+            error={options.error}
+            onDismissBlockedChange={setBlocked}
+            onAddProject={onAddProject}
+          />
+        </div>
+      ),
+      onClose,
+    );
+    return null;
+  }
+
   const dispose = render(
     () => (
-      <AddProjectDialog
-        listDirectory={list}
-        initialLocation={{ directory: "/srv/projects" }}
-        adding={options.adding}
-        error={options.error}
-        onDismiss={onDismiss}
-        onAddProject={onAddProject}
-      />
+      <ServerFlowDialogProvider>
+        <TestDialogHost />
+      </ServerFlowDialogProvider>
     ),
     host,
   );
   return {
-    host,
+    get root() {
+      return dialogRoot ?? document.body;
+    },
     list,
-    onDismiss,
+    onClose,
     onAddProject,
     dispose: () => (dispose(), host.remove()),
   };
@@ -83,10 +91,10 @@ describe("AddProjectDialog", () => {
   it("submits the directory currently open in the server browser", async () => {
     const mounted = mount();
     await flush();
-    mounted.host.querySelector<HTMLButtonElement>('[aria-label="Browse directory oc-ui"]')?.click();
+    mounted.root.querySelector<HTMLButtonElement>('[aria-label="Browse directory oc-ui"]')?.click();
     await flush();
 
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.onAddProject).toHaveBeenCalledOnce();
     expect(mounted.onAddProject).toHaveBeenCalledWith({ directory: "/srv/projects/oc-ui" });
     mounted.dispose();
@@ -102,20 +110,20 @@ describe("AddProjectDialog", () => {
         input?.path === "oc-ui" ? child : Promise.resolve(response("/srv/projects")),
     });
     await flush();
-    const childButton = mounted.host.querySelector<HTMLButtonElement>(
+    const childButton = mounted.root.querySelector<HTMLButtonElement>(
       '[aria-label="Browse directory oc-ui"]',
     );
     expect(childButton).not.toBeNull();
     childButton?.click();
-    expect(mounted.host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
+    expect(mounted.root.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
       true,
     );
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.onAddProject).not.toHaveBeenCalled();
 
     resolveChild(response("/srv/projects/oc-ui"));
     await flush();
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.onAddProject).toHaveBeenCalledWith({ directory: "/srv/projects/oc-ui" });
     mounted.dispose();
   });
@@ -125,9 +133,9 @@ describe("AddProjectDialog", () => {
       error: { kind: "validation", message: "This directory cannot be added as a project." },
     });
     await flush();
-    const browser = mounted.host.querySelector<HTMLElement>(".server-directory-browser");
-    expect(mounted.host.textContent).toContain("This directory cannot be added as a project.");
-    expect(mounted.host.textContent).toContain("/srv/projects");
+    const browser = mounted.root.querySelector<HTMLElement>(".server-directory-browser");
+    expect(mounted.root.textContent).toContain("This directory cannot be added as a project.");
+    expect(mounted.root.textContent).toContain("/srv/projects");
     expect(browser?.contains(document.activeElement) || document.activeElement === browser).toBe(
       true,
     );
@@ -139,10 +147,10 @@ describe("AddProjectDialog", () => {
       error: { kind: "add-project", message: "The server rejected this project." },
     });
     await flush();
-    expect(mounted.host.textContent).toContain("Project could not be added");
+    expect(mounted.root.textContent).toContain("Project could not be added");
     expect(document.activeElement).toBeTruthy();
     expect(
-      mounted.host.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent,
+      mounted.root.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent,
     ).toContain("Try again");
     mounted.dispose();
   });
@@ -150,16 +158,15 @@ describe("AddProjectDialog", () => {
   it("blocks dismissal and disables controls while adding", async () => {
     const mounted = mount({ adding: true });
     await flush();
-    const dialog = mounted.host.querySelector<HTMLDialogElement>("dialog");
-    dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    expect(mounted.onDismiss).not.toHaveBeenCalled();
-    expect(mounted.host.querySelector('[aria-label="Close add project dialog"]')).toBeNull();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(mounted.onClose).not.toHaveBeenCalled();
+    expect(mounted.root.querySelector('[aria-label="Close add project dialog"]')).toBeNull();
     expect(
-      [...mounted.host.querySelectorAll<HTMLButtonElement>("button")].every(
+      [...mounted.root.querySelectorAll<HTMLButtonElement>("button")].every(
         (button) => button.disabled,
       ),
     ).toBe(true);
-    expect(mounted.host.textContent).toContain("Adding project");
+    expect(mounted.root.textContent).toContain("Adding project");
     mounted.dispose();
   });
 });

@@ -1,13 +1,18 @@
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
-import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   NewSessionDialog,
   type NewSessionDialogProps,
   type NewSessionDialogState,
 } from "./NewSessionDialog.tsx";
+import {
+  ServerFlowDialogProvider,
+  useServerFlowDismissBlock,
+} from "../../../../../../../ui/ServerFlowDialogProvider.tsx";
 
 const projects = [
   { id: "oc-ui", name: "oc-ui", location: { directory: "/srv/projects/oc-ui" }, vcs: "git" },
@@ -28,7 +33,6 @@ const listDirectory = vi.fn<OpenCodeClient["file"]["list"]>((input) => {
 
 function callbacks() {
   return {
-    onDismiss: vi.fn<() => void>(),
     onAddProject: vi.fn<() => void>(),
     onProjectChange: vi.fn<(projectID: string) => void>(),
     onModeChange: vi.fn<NewSessionDialogProps["onModeChange"]>(),
@@ -51,86 +55,106 @@ function mount(
   const host = document.createElement("div");
   document.body.append(host);
   const actions = callbacks();
+  const onClose = vi.fn<() => void>();
+  let dialogRoot: HTMLDivElement | undefined;
+
+  function TestDialogHost() {
+    const dialog = useDialog();
+    const setBlocked = useServerFlowDismissBlock();
+    void dialog.show(
+      () => (
+        <div ref={(element) => (dialogRoot = element)}>
+          <NewSessionDialog
+            listDirectory={directoryList}
+            state={state()}
+            mutation={mutation?.()}
+            onDismissBlockedChange={setBlocked}
+            {...actions}
+          />
+        </div>
+      ),
+      onClose,
+    );
+    return null;
+  }
+
   const dispose = render(
     () => (
-      <NewSessionDialog
-        listDirectory={directoryList}
-        state={state()}
-        mutation={mutation?.()}
-        {...actions}
-      />
+      <ServerFlowDialogProvider>
+        <TestDialogHost />
+      </ServerFlowDialogProvider>
     ),
     host,
   );
-  return { host, actions, dispose: () => (dispose(), host.remove()) };
+  return {
+    get root() {
+      return dialogRoot ?? document.body;
+    },
+    actions,
+    onClose,
+    dispose: () => (dispose(), host.remove()),
+  };
 }
 
-beforeAll(() => {
-  Object.defineProperties(HTMLDialogElement.prototype, {
-    showModal: {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.setAttribute("open", "");
-      },
-    },
-    close: {
-      configurable: true,
-      value(this: HTMLDialogElement) {
-        this.removeAttribute("open");
-      },
-    },
-  });
-});
+async function flushDialogMount(): Promise<void> {
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+}
 
 describe("NewSessionDialog", () => {
-  it("reports project selection and opens the add-project flow", () => {
+  it("reports project selection and opens the add-project flow", async () => {
     const mounted = mount(() => ({
       view: "select-project",
       projects,
       selectedProjectID: "oc-ui",
       mode: "direct",
     }));
+    await flushDialogMount();
 
-    [...mounted.host.querySelectorAll<HTMLButtonElement>("button")]
+    [...mounted.root.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent?.includes("Add project"))
       ?.click();
     expect(mounted.actions.onAddProject).toHaveBeenCalledOnce();
 
-    mounted.host.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]')[1]?.click();
+    mounted.root.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]')[1]?.click();
     expect(mounted.actions.onProjectChange).toHaveBeenCalledWith("api");
     mounted.dispose();
   });
 
-  it("creates a session for the selected project once", () => {
+  it("creates a session for the selected project once", async () => {
     const mounted = mount(() => ({
       view: "select-project",
       projects,
       selectedProjectID: "oc-ui",
       mode: "direct",
     }));
-    const form = mounted.host.querySelector("form");
+    await flushDialogMount();
+    const form = mounted.root.querySelector("form");
     form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.actions.onUseProject).toHaveBeenCalledOnce();
     expect(mounted.actions.onUseProject).toHaveBeenCalledWith("oc-ui");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(mounted.onClose).not.toHaveBeenCalled();
     mounted.dispose();
   });
 
-  it("opens worktree setup for the selected Git project", () => {
+  it("opens worktree setup for the selected Git project", async () => {
     const mounted = mount(() => ({
       view: "select-project",
       projects,
       selectedProjectID: "api",
       mode: "worktree",
     }));
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    await flushDialogMount();
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.actions.onOpenWorktreeForm).toHaveBeenCalledWith("api");
     mounted.dispose();
   });
 
-  it("keeps creation disabled until a project is selected", () => {
+  it("keeps creation disabled until a project is selected", async () => {
     const mounted = mount(() => ({ view: "select-project", projects, mode: "direct" }));
-    expect(mounted.host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
+    await flushDialogMount();
+    expect(mounted.root.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
       true,
     );
     mounted.dispose();
@@ -143,7 +167,8 @@ describe("NewSessionDialog", () => {
       mode: "direct",
       error: { kind: "validation", field: "project", message: "Choose a project." },
     }));
-    const projectGroup = mounted.host.querySelector<HTMLElement>('[role="radiogroup"]');
+    await flushDialogMount();
+    const projectGroup = mounted.root.querySelector<HTMLElement>('[role="radiogroup"]');
     expect(projectGroup?.getAttribute("aria-invalid")).toBe("true");
     expect(projectGroup?.getAttribute("aria-describedby")).toBe("new-session-project-error");
     await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -151,7 +176,7 @@ describe("NewSessionDialog", () => {
     mounted.dispose();
   });
 
-  it("does not submit a hidden stale project while projects are unavailable", () => {
+  it("does not submit a hidden stale project while projects are unavailable", async () => {
     for (const unavailable of [
       { projectsLoading: true },
       { projectsError: "Projects could not be loaded from the server." },
@@ -163,9 +188,10 @@ describe("NewSessionDialog", () => {
         mode: "direct",
         ...unavailable,
       }));
-      const submit = mounted.host.querySelector<HTMLButtonElement>('button[type="submit"]');
+      await flushDialogMount();
+      const submit = mounted.root.querySelector<HTMLButtonElement>('button[type="submit"]');
       expect(submit?.disabled).toBe(true);
-      mounted.host
+      mounted.root
         .querySelector("form")
         ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
       expect(mounted.actions.onUseProject).not.toHaveBeenCalled();
@@ -182,7 +208,7 @@ describe("NewSessionDialog", () => {
       finalDirectory: "/srv/worktrees/feature-one",
     }));
     await new Promise<void>((resolve) => queueMicrotask(resolve));
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.actions.onCreateWorktree).toHaveBeenCalledOnce();
     mounted.dispose();
   });
@@ -215,10 +241,10 @@ describe("NewSessionDialog", () => {
       directoryList,
     );
     await new Promise<void>((resolve) => queueMicrotask(resolve));
-    mounted.host
+    mounted.root
       .querySelector<HTMLButtonElement>('[aria-label="Browse directory feature"]')
       ?.click();
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.actions.onCreateWorktree).not.toHaveBeenCalled();
 
     resolveChild({
@@ -233,12 +259,12 @@ describe("NewSessionDialog", () => {
       data: [],
     });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
-    mounted.host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.actions.onCreateWorktree).toHaveBeenCalledOnce();
     mounted.dispose();
   });
 
-  it("blocks dismissal and controls during both mutation phases", () => {
+  it("blocks dismissal and controls during both mutation phases", async () => {
     const [mutation] = createSignal<NewSessionDialogProps["mutation"]>("creating-session");
     const mounted = mount(
       () => ({
@@ -250,12 +276,16 @@ describe("NewSessionDialog", () => {
       }),
       mutation,
     );
-    const dialog = mounted.host.querySelector<HTMLDialogElement>("dialog");
-    dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    expect(mounted.actions.onDismiss).not.toHaveBeenCalled();
-    expect(mounted.host.querySelector('[aria-label="Close new session dialog"]')).toBeNull();
+    await flushDialogMount();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    const layer = mounted.root.closest<HTMLElement>("[data-dialog-layer]");
+    const overlay = layer?.previousElementSibling;
+    overlay?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    overlay?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(mounted.onClose).not.toHaveBeenCalled();
+    expect(mounted.root.querySelector('[aria-label="Close new session dialog"]')).toBeNull();
     expect(
-      [...mounted.host.querySelectorAll<HTMLInputElement>("input")].every(
+      [...mounted.root.querySelectorAll<HTMLInputElement>("input")].every(
         (input) => input.disabled,
       ),
     ).toBe(true);

@@ -24,6 +24,7 @@ import {
   createReconnectRefreshQueue,
   retryCatalogAndTranscript,
 } from "./ConnectedApp/sessionRecovery.ts";
+import { restoreDialogFocusAfterClose } from "../../ui/restoreDialogFocusAfterClose.ts";
 
 export type ConnectedAppProps = {
   readonly server: VerifiedServer;
@@ -53,6 +54,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
   let alive = true;
   let hydration = 0;
   let selectedAncestorIDs: readonly string[] = [];
+  let newSessionOpener: HTMLElement | undefined;
 
   onCleanup(() => {
     alive = false;
@@ -206,6 +208,12 @@ export function ConnectedApp(props: ConnectedAppProps) {
         error: "This transcript could not be loaded. Check the connection and try again.",
       });
     }
+  };
+
+  const openNewSession = (): void => {
+    newSessionOpener =
+      document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    setNewSessionOpen(true);
   };
 
   const selectSession = (sessionID: string): void => {
@@ -413,7 +421,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
                   if (panels.mobile()) panels.setLeftSidebarOpen(false);
                 }}
                 onToggleExpanded={toggleExpanded}
-                onCreate={() => setNewSessionOpen(true)}
+                onCreate={openNewSession}
                 onRetry={() => void retryCatalog().catch(() => undefined)}
                 onHide={panels.mobile() ? () => panels.setLeftSidebarOpen(false) : undefined}
                 onSelectServer={props.onChangeServer}
@@ -478,11 +486,13 @@ export function ConnectedApp(props: ConnectedAppProps) {
       <Show when={newSessionOpen()}>
         <NewSessionFlow
           runtime={runtime}
-          onDismiss={() => setNewSessionOpen(false)}
+          onDismiss={() => {
+            setNewSessionOpen(false);
+            restoreDialogFocusAfterClose(() => newSessionOpener);
+          }}
           onSessionCreated={(sessionID) => {
             setSelectedID(sessionID);
             setTranscriptState({ sessionID, status: "ready" });
-            setNewSessionOpen(false);
             if (panels.mobile()) panels.setLeftSidebarOpen(false);
           }}
         />
