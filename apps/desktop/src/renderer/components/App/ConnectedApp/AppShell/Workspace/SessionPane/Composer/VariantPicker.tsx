@@ -1,22 +1,20 @@
 import { Select } from "@opencode-ai/ui/select";
 
-export type ComposerPickerOption = {
+export type VariantPickerOption = {
   readonly id: string;
   readonly label: string;
-  readonly group?: string;
 };
 
-type ComposerPickerProps = {
-  readonly label: string;
+type VariantPickerProps = {
   readonly placeholder: string;
   readonly unavailableLabel: string;
-  readonly options: readonly ComposerPickerOption[];
+  readonly options: readonly VariantPickerOption[];
   readonly selectedID?: string;
   readonly disabled: boolean;
   readonly onSelect: (id: string) => void;
 };
 
-export function ComposerPicker(props: ComposerPickerProps) {
+export function VariantPicker(props: VariantPickerProps) {
   const selected = () => props.options.find((option) => option.id === props.selectedID);
 
   return (
@@ -27,13 +25,12 @@ export function ComposerPicker(props: ComposerPickerProps) {
         </span>
       ) : (
         <Select
-          aria-label={props.label}
+          aria-label="Variant"
           class="composer-picker-control"
           options={[...props.options]}
           current={selected()}
           value={(option) => option.id}
           label={(option) => option.label}
-          groupBy={(option) => option.group ?? ""}
           placeholder={props.placeholder}
           disabled={props.disabled}
           onSelect={(option) => {

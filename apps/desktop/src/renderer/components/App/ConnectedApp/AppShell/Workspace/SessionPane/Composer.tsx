@@ -1,8 +1,10 @@
 import { createEffect } from "solid-js";
 
 import "./Composer/Composer.css";
-import { ComposerPicker } from "./Composer/ComposerPicker.tsx";
-import type { ComposerPickerOption } from "./Composer/ComposerPicker.tsx";
+import { ModelPicker } from "./Composer/ModelPicker.tsx";
+import type { ModelPickerOption } from "./Composer/ModelPicker.tsx";
+import { VariantPicker } from "./Composer/VariantPicker.tsx";
+import type { VariantPickerOption } from "./Composer/VariantPicker.tsx";
 
 const COMPOSER_MIN_HEIGHT = 40;
 const COMPOSER_MAX_HEIGHT = 168;
@@ -18,9 +20,9 @@ export type ComposerProps = {
     readonly state: "loading" | "ready" | "failed";
     readonly switching: boolean;
     readonly disabled: boolean;
-    readonly models: readonly ComposerPickerOption[];
+    readonly models: readonly ModelPickerOption[];
     readonly selectedModelID?: string;
-    readonly variants: readonly ComposerPickerOption[];
+    readonly variants: readonly VariantPickerOption[];
     readonly selectedVariantID?: string;
     readonly error?: string;
     readonly onSelectModel: (id: string) => void;
@@ -83,17 +85,13 @@ export function Composer(props: ComposerProps) {
         <div class="composer-v2-picker-row">
           {props.selection.state === "ready" ? (
             <>
-              <ComposerPicker
-                label="Model"
-                placeholder="Model unavailable"
-                unavailableLabel="No models"
+              <ModelPicker
                 options={props.selection.models}
                 selectedID={props.selection.selectedModelID}
                 disabled={props.selection.disabled || props.selection.switching}
                 onSelect={props.selection.onSelectModel}
               />
-              <ComposerPicker
-                label="Variant"
+              <VariantPicker
                 placeholder="Select variant"
                 unavailableLabel={
                   props.selection.selectedModelID === undefined

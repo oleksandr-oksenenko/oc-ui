@@ -65,8 +65,14 @@ describe("Composer", () => {
     host.remove();
   });
 
-  it("renders controlled model and variant choices", () => {
+  it("renders a searchable model picker and a simple variant picker", async () => {
     const host = document.createElement("div");
+    const selectModel = vi.fn<(id: string) => void>();
+    const scrollTo = vi.fn<HTMLElement["scrollTo"]>();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
     document.body.append(host);
     const dispose = render(
       () => (
@@ -80,8 +86,8 @@ describe("Composer", () => {
             switching: false,
             disabled: false,
             models: [
-              { id: "one", label: "Model One" },
-              { id: "two", label: "Model Two" },
+              { id: "one", label: "Model One", group: "provider-a" },
+              { id: "two", label: "Model Two", group: "provider-b" },
             ],
             selectedModelID: "one",
             variants: [
@@ -89,7 +95,7 @@ describe("Composer", () => {
               { id: "deep", label: "deep" },
             ],
             selectedVariantID: "deep",
-            onSelectModel: () => undefined,
+            onSelectModel: selectModel,
             onSelectVariant: () => undefined,
           }}
           onInput={() => undefined}
@@ -99,13 +105,29 @@ describe("Composer", () => {
       host,
     );
 
+    const modelTrigger = host.querySelector<HTMLButtonElement>(".composer-model-trigger");
+    expect(modelTrigger?.textContent).toContain("Model One");
+
     const controls = host.querySelectorAll('[data-component="select-v2"]');
-    expect(controls).toHaveLength(2);
-    expect(controls[0]?.textContent).toContain("Model One");
-    expect(controls[1]?.textContent).toContain("deep");
+    expect(controls).toHaveLength(1);
+    expect(controls[0]?.textContent).toContain("deep");
+
+    modelTrigger?.click();
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    const search = document.body.querySelector<HTMLInputElement>(
+      '.composer-model-popover [data-component="list"] input',
+    );
+    expect(search?.placeholder).toBe("Search models");
+
+    const modelTwo = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('[data-slot="list-item"]'),
+    ].find((item) => item.textContent?.includes("Model Two"));
+    modelTwo?.click();
+    expect(selectModel).toHaveBeenCalledWith("two");
 
     dispose();
     host.remove();
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
   });
 
   it("rejects whitespace and respects application busy state", () => {
