@@ -1,6 +1,8 @@
 import { createEffect } from "solid-js";
 
 import "./Composer/Composer.css";
+import { ComposerPicker } from "./Composer/ComposerPicker.tsx";
+import type { ComposerPickerOption } from "./Composer/ComposerPicker.tsx";
 
 const COMPOSER_MIN_HEIGHT = 40;
 const COMPOSER_MAX_HEIGHT = 168;
@@ -12,6 +14,18 @@ export type ComposerProps = {
   readonly submitting: boolean;
   readonly running: boolean;
   readonly error?: string;
+  readonly selection: {
+    readonly state: "loading" | "ready" | "failed";
+    readonly switching: boolean;
+    readonly disabled: boolean;
+    readonly models: readonly ComposerPickerOption[];
+    readonly selectedModelID?: string;
+    readonly variants: readonly ComposerPickerOption[];
+    readonly selectedVariantID?: string;
+    readonly error?: string;
+    readonly onSelectModel: (id: string) => void;
+    readonly onSelectVariant: (id: string) => void;
+  };
   readonly onInput: (value: string) => void;
   readonly onSubmit: () => void;
 };
@@ -67,12 +81,41 @@ export function Composer(props: ComposerProps) {
 
       <div class="composer-v2-controls-row">
         <div class="composer-v2-picker-row">
-          <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
-            Model unavailable
-          </span>
-          <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
-            Variant unavailable
-          </span>
+          {props.selection.state === "ready" ? (
+            <>
+              <ComposerPicker
+                label="Model"
+                placeholder="Model unavailable"
+                unavailableLabel="No models"
+                options={props.selection.models}
+                selectedID={props.selection.selectedModelID}
+                disabled={props.selection.disabled || props.selection.switching}
+                onSelect={props.selection.onSelectModel}
+              />
+              <ComposerPicker
+                label="Variant"
+                placeholder="Select variant"
+                unavailableLabel={
+                  props.selection.selectedModelID === undefined
+                    ? "Variant unavailable"
+                    : "No variants"
+                }
+                options={props.selection.variants}
+                selectedID={props.selection.selectedVariantID}
+                disabled={props.selection.disabled || props.selection.switching}
+                onSelect={props.selection.onSelectVariant}
+              />
+            </>
+          ) : (
+            <>
+              <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
+                {props.selection.state === "loading" ? "Loading models…" : "Models unavailable"}
+              </span>
+              <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
+                {props.selection.state === "loading" ? "Loading variants…" : "Variants unavailable"}
+              </span>
+            </>
+          )}
         </div>
         <button
           class="composer-v2-send"
@@ -92,6 +135,16 @@ export function Composer(props: ComposerProps) {
       {props.error ? (
         <p class="composer-v2-status composer-v2-status--error" role="alert">
           {props.error}
+        </p>
+      ) : null}
+      {props.selection.switching ? (
+        <p class="composer-v2-status" role="status">
+          Switching selection…
+        </p>
+      ) : null}
+      {props.selection.error ? (
+        <p class="composer-v2-status composer-v2-status--error" role="alert">
+          {props.selection.error}
         </p>
       ) : null}
     </form>

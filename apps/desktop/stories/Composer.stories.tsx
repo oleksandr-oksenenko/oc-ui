@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { createSignal } from "solid-js";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
+import { composerSelection } from "./composer-fixtures.ts";
 
 const meta = {
   title: "Composer/Composer",
@@ -23,6 +24,8 @@ const frameStyle = {
 export const Idle: Story = {
   render: () => {
     const [value, setValue] = createSignal("");
+    const [modelID, setModelID] = createSignal("openai/gpt-5");
+    const [variantID, setVariantID] = createSignal("deep");
     return (
       <div style={frameStyle}>
         <Composer
@@ -30,6 +33,12 @@ export const Idle: Story = {
           disabled={false}
           submitting={false}
           running={false}
+          selection={composerSelection({
+            selectedModelID: modelID(),
+            selectedVariantID: variantID(),
+            onSelectModel: setModelID,
+            onSelectVariant: setVariantID,
+          })}
           onInput={setValue}
           onSubmit={() => setValue("")}
         />
@@ -38,7 +47,7 @@ export const Idle: Story = {
   },
 };
 
-export const UnavailablePickers: Story = {
+export const LoadingPickers: Story = {
   render: () => {
     const [value, setValue] = createSignal("Explain the latest change");
     return (
@@ -48,6 +57,7 @@ export const UnavailablePickers: Story = {
           disabled={false}
           submitting={false}
           running={false}
+          selection={composerSelection({ state: "loading", models: [], variants: [] })}
           onInput={setValue}
           onSubmit={() => setValue("")}
         />
@@ -68,6 +78,7 @@ export const Multiline: Story = {
           disabled={false}
           submitting={false}
           running={false}
+          selection={composerSelection()}
           onInput={setValue}
           onSubmit={() => setValue("")}
         />
@@ -86,6 +97,7 @@ export const RunningDraft: Story = {
           disabled
           submitting={false}
           running
+          selection={composerSelection()}
           onInput={setValue}
           onSubmit={() => undefined}
         />
@@ -102,6 +114,7 @@ export const Submitting: Story = {
         disabled
         submitting
         running={false}
+        selection={composerSelection({ switching: true })}
         onInput={() => undefined}
         onSubmit={() => undefined}
       />
@@ -120,6 +133,7 @@ export const AdmissionError: Story = {
           submitting={false}
           running={false}
           error="The server could not admit this prompt. Try again."
+          selection={composerSelection()}
           onInput={setValue}
           onSubmit={() => undefined}
         />
@@ -136,6 +150,7 @@ export const EmptyDisabled: Story = {
         disabled
         submitting={false}
         running={false}
+        selection={composerSelection()}
         onInput={() => undefined}
         onSubmit={() => undefined}
       />
@@ -151,6 +166,12 @@ export const UnavailableWhileDisabled: Story = {
         disabled
         submitting={false}
         running={false}
+        selection={composerSelection({
+          state: "failed",
+          models: [],
+          variants: [],
+          error: "Models could not be loaded. Check the connection and try again.",
+        })}
         onInput={() => undefined}
         onSubmit={() => undefined}
       />

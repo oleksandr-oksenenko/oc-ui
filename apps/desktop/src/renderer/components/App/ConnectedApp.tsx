@@ -18,7 +18,11 @@ import { Composer } from "./ConnectedApp/AppShell/Workspace/SessionPane/Composer
 import { TranscriptView } from "./ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
 import { chooseSessionFallback, sessionAncestorIDs } from "./ConnectedApp/session-selection.ts";
 import { createSessionDraftStore } from "../../domain/index.ts";
-import { syncActiveStatuses, useServerRuntime } from "../../opencode/index.ts";
+import {
+  createModelSelection,
+  syncActiveStatuses,
+  useServerRuntime,
+} from "../../opencode/index.ts";
 import type { VcsDiffMode, VerifiedServer } from "../../opencode/index.ts";
 import {
   createReconnectRefreshQueue,
@@ -74,6 +78,13 @@ export function ConnectedApp(props: ConnectedAppProps) {
   const selectedSession = createMemo(() => {
     const id = selectedID();
     return id === undefined ? undefined : sessions().find((session) => session.id === id);
+  });
+
+  const modelSelection = createModelSelection({
+    api: runtime.api,
+    data: runtime.data,
+    defaultLocation: runtime.defaultLocation,
+    selectedSession,
   });
 
   const running = createMemo(() => {
@@ -241,7 +252,10 @@ export function ConnectedApp(props: ConnectedAppProps) {
         if (!alive) return;
         props.onConnected();
         setBootstrapped(true);
-        await syncCatalog().catch(() => undefined);
+        await Promise.all([
+          syncCatalog().catch(() => undefined),
+          modelSelection.sync().catch(() => undefined),
+        ]);
       } catch (cause) {
         if (alive) props.onInitialFailure(cause);
       }
@@ -254,7 +268,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
       if (previous) setTranscriptState({ sessionID: previous, status: "loading" });
       try {
         await runtime.data.location.syncInfo(runtime.defaultLocation);
-        await syncCatalog();
+        await Promise.all([syncCatalog(), modelSelection.sync().catch(() => undefined)]);
         if (!alive) return;
         const current = selectedID();
         if (current === undefined) {
@@ -465,6 +479,18 @@ export function ConnectedApp(props: ConnectedAppProps) {
                       submitting={submittingID() === selectedID()}
                       running={running()}
                       error={promptError()}
+                      selection={{
+                        state: modelSelection.state(),
+                        switching: modelSelection.switching(),
+                        disabled: !streamConnected(),
+                        models: modelSelection.models(),
+                        selectedModelID: modelSelection.selectedModelID(),
+                        variants: modelSelection.variants(),
+                        selectedVariantID: modelSelection.selectedVariantID(),
+                        error: modelSelection.error(),
+                        onSelectModel: (id) => void modelSelection.selectModel(id),
+                        onSelectVariant: (id) => void modelSelection.selectVariant(id),
+                      }}
                       onInput={(value) => drafts.set(selectedID()!, value)}
                       onSubmit={() => void submitPrompt()}
                     />

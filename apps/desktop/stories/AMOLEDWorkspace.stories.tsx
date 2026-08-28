@@ -18,6 +18,7 @@ import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/W
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 import { storySession } from "./session-fixtures.ts";
+import { composerSelection } from "./composer-fixtures.ts";
 
 const sessions = [
   storySession("compact-ledger", "Compact Ledger Transcript"),
@@ -270,6 +271,7 @@ function WorkspaceShowcaseFixture() {
                     disabled={false}
                     submitting={false}
                     running={false}
+                    selection={composerSelection()}
                     onInput={setDraft}
                     onSubmit={() => setDraft("")}
                   />

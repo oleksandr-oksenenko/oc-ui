@@ -5,6 +5,7 @@ import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/W
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
+import { composerSelection } from "./composer-fixtures.ts";
 const meta = {
   title: "Session/SessionPane",
   component: SessionPane,
@@ -47,6 +48,7 @@ export const SelectedPlacement: Story = {
             disabled={false}
             submitting={false}
             running={false}
+            selection={composerSelection()}
             onInput={setDraft}
             onSubmit={() => setDraft("")}
           />

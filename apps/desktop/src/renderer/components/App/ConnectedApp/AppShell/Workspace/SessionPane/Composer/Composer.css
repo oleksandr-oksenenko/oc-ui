@@ -147,7 +147,15 @@
   background: transparent;
 }
 
+.composer-picker-control[data-component="select-v2"] [data-slot="select-v2-value"] {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
 .composer-picker-control[data-component="select-v2"] [data-slot="select-v2-value-text"] {
+  display: flex;
+  align-items: center;
   width: max-content;
   height: 100%;
   min-width: 0;
@@ -158,11 +166,15 @@
   color: var(--composer-text);
   background: transparent;
   font: inherit;
-  line-height: 22px;
+  line-height: 1;
   outline: none;
 }
 
 .composer-picker-control[data-component="select-v2"] [data-slot="select-v2-chevron"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   width: 20px;
   height: 20px;
   padding: 3px;
