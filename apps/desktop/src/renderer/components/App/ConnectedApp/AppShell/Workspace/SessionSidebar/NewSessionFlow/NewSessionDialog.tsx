@@ -1,10 +1,17 @@
 import { Button } from "@opencode-ai/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  DialogTitleGroup,
+} from "@opencode-ai/ui/dialog";
+import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Show, createEffect, createSignal, on } from "solid-js";
 
 import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
-import { createServerFlowDialog } from "./createServerFlowDialog.ts";
 import { ProjectSelection } from "./NewSessionDialog/ProjectSelection.tsx";
 import { WorktreeForm } from "./NewSessionDialog/WorktreeForm.tsx";
 import "./ServerFlowDialog.css";
@@ -54,7 +61,7 @@ export type NewSessionDialogProps = {
   readonly listDirectory: OpenCodeClient["file"]["list"];
   readonly state: NewSessionDialogState;
   readonly mutation?: "creating-worktree" | "creating-session";
-  readonly onDismiss: () => void;
+  readonly onDismissBlockedChange?: (blocked: boolean) => void;
   readonly onAddProject: () => void;
   readonly onProjectChange: (projectID: string) => void;
   readonly onModeChange: (mode: NewSessionLocationMode) => void;
@@ -143,18 +150,17 @@ function focusDialogState(
 }
 
 export function NewSessionDialog(props: NewSessionDialogProps) {
+  const dialog = useDialog();
   let projectPicker: HTMLElement | undefined;
   let parentBrowser: HTMLElement | undefined;
   let nameInput: HTMLInputElement | undefined;
   let operationError: HTMLElement | undefined;
-  let submitted = false;
+  let mutationStatus: HTMLOutputElement | undefined;
+  const [submitted, setSubmitted] = createSignal(false);
   const [parentBrowserLoading, setParentBrowserLoading] = createSignal(false);
 
   const busy = () => props.mutation !== undefined;
-  const { ref: dialogRef, dismiss } = createServerFlowDialog({
-    blocked: () => busy() || submitted,
-    onDismiss: props.onDismiss,
-  });
+  const blocked = () => busy() || submitted();
   const currentError = () => props.state.error;
   const worktreeInputsDisabled = () => busy() || existingWorktree(currentError()) !== undefined;
   const validationError = (
@@ -180,31 +186,34 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
       busy() ||
       projectSelectionUnavailable(props.state) ||
       (props.state.view === "worktree" && parentBrowserLoading()) ||
-      submitted
+      submitted()
     )
       return;
 
     const state = props.state;
     const projectID = state.view === "select-project" ? state.selectedProjectID : state.project.id;
     if (!projectID) return;
-    submitted = true;
+    setSubmitted(true);
     dispatchSubmit(props, state);
   };
 
   const goBack = () => {
-    if (!busy() && !submitted) props.onBack();
+    if (!blocked()) props.onBack();
   };
 
   createEffect(() => {
     const view = props.state.view;
     const nextError = currentError();
+    const mutation = props.mutation;
     queueMicrotask(() => {
-      focusDialogState(view, nextError, {
-        projectPicker,
-        parentBrowser,
-        nameInput,
-        operationError,
-      });
+      if (mutation) mutationStatus?.focus();
+      else
+        focusDialogState(view, nextError, {
+          projectPicker,
+          parentBrowser,
+          nameInput,
+          operationError,
+        });
     });
   });
 
@@ -212,50 +221,38 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
     on(
       () => [props.state, props.mutation] as const,
       () => {
-        submitted = false;
+        setSubmitted(false);
       },
       { defer: true },
     ),
   );
 
-  return (
-    <dialog
-      ref={dialogRef}
-      class="server-flow-dialog"
-      aria-labelledby="new-session-dialog-title"
-      aria-describedby="new-session-dialog-description"
-      aria-busy={busy() ? "true" : undefined}
-    >
-      <form class="server-flow-dialog-content" onSubmit={submit}>
-        <header class="server-flow-dialog-header">
-          <div>
-            <h2 id="new-session-dialog-title">
-              {props.state.view === "worktree" ? "Create a worktree" : "New session"}
-            </h2>
-            <p id="new-session-dialog-description">
-              {props.state.view === "worktree"
-                ? "Choose where the server should create the isolated worktree."
-                : "Choose a project and where its session should run."}
-            </p>
-          </div>
-          <Show when={!busy()}>
-            <Button
-              type="button"
-              size="small"
-              variant="ghost-muted"
-              icon="xmark-small"
-              aria-label="Close new session dialog"
-              onClick={dismiss}
-            />
-          </Show>
-        </header>
+  createEffect(() => props.onDismissBlockedChange?.(blocked()));
 
-        <div class="server-flow-dialog-body">
+  return (
+    <Dialog size="large" containerClass="server-flow-dialog">
+      <form
+        class="server-flow-dialog-content"
+        aria-busy={busy() ? "true" : undefined}
+        onSubmit={submit}
+      >
+        <DialogHeader closeLabel="Close new session dialog" hideClose={blocked()}>
+          <DialogTitleGroup
+            title={props.state.view === "worktree" ? "Create a worktree" : "New session"}
+            description={
+              props.state.view === "worktree"
+                ? "Choose where the server should create the isolated worktree."
+                : "Choose a project and where its session should run."
+            }
+          />
+        </DialogHeader>
+
+        <DialogBody class="server-flow-dialog-body">
           <Show when={props.state.view === "select-project" ? props.state : undefined}>
             {(state) => (
               <ProjectSelection
                 state={state()}
-                disabled={busy()}
+                disabled={blocked()}
                 validationError={validationError("project")}
                 onReady={(element) => {
                   projectPicker = element;
@@ -314,19 +311,26 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
           </Show>
 
           <Show when={busy()}>
-            <output class="server-flow-mutation-status" aria-live="polite">
+            <output
+              ref={(element) => {
+                mutationStatus = element;
+              }}
+              class="server-flow-mutation-status"
+              aria-live="polite"
+              tabIndex={-1}
+            >
               <Loader width={18} height={18} />
               <span>{primaryLabel()}</span>
             </output>
           </Show>
-        </div>
+        </DialogBody>
 
-        <footer class="server-flow-dialog-footer">
+        <DialogFooter>
           <Show
-            when={!busy() && props.state.view === "worktree"}
+            when={!blocked() && props.state.view === "worktree"}
             fallback={
-              <Show when={!busy()}>
-                <Button type="button" size="large" variant="ghost" onClick={dismiss}>
+              <Show when={!blocked()}>
+                <Button type="button" size="large" variant="ghost" onClick={() => dialog.close()}>
                   Cancel
                 </Button>
               </Show>
@@ -341,7 +345,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
             size="large"
             variant={busy() ? "loading" : "contrast"}
             disabled={
-              busy() ||
+              blocked() ||
               (props.state.view === "worktree" && parentBrowserLoading()) ||
               projectSelectionUnavailable(props.state)
             }
@@ -351,8 +355,8 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
             </Show>
             {primaryLabel()}
           </Button>
-        </footer>
+        </DialogFooter>
       </form>
-    </dialog>
+    </Dialog>
   );
 }

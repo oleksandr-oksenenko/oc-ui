@@ -4,6 +4,7 @@ import { ConnectionForm } from "./components/App/ConnectionForm.tsx";
 import { ConnectedApp } from "./components/App/ConnectedApp.tsx";
 import { OpenCodeConnectionError, ServerProvider, verifyServer } from "./opencode/index.ts";
 import type { VerifiedServer } from "./opencode/index.ts";
+import { ServerFlowDialogProvider } from "./ui/ServerFlowDialogProvider.tsx";
 
 type ConnectionState =
   | { readonly status: "disconnected" }
@@ -251,7 +252,7 @@ export function App() {
   });
 
   return (
-    <>
+    <ServerFlowDialogProvider>
       <Show when={candidate()} keyed>
         {(server) => (
           <div class="runtime-layer" hidden={connecting()}>
@@ -284,7 +285,7 @@ export function App() {
           onForget={() => void forget()}
         />
       </Show>
-    </>
+    </ServerFlowDialogProvider>
   );
 }
 

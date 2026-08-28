@@ -1,6 +1,7 @@
 import type { LocationRef, OpenCodeClient, Project, SessionInfo } from "@opencode-ai/client";
 import type { Data } from "@opencode-ai/client/solid";
-import { Show, createMemo, createSignal, onMount } from "solid-js";
+import { useDialog } from "@opencode-ai/ui/context/dialog";
+import { createMemo, createSignal, onCleanup, onMount } from "solid-js";
 
 import type { SessionCatalog } from "../../../../../../opencode/session-catalog.ts";
 import {
@@ -14,6 +15,8 @@ import {
   type NewSessionLocationMode,
   type NewSessionProject,
 } from "./NewSessionFlow/NewSessionDialog.tsx";
+import { restoreDialogFocusAfterClose } from "../../../../../../ui/restoreDialogFocusAfterClose.ts";
+import { useServerFlowDismissBlock } from "../../../../../../ui/ServerFlowDialogProvider.tsx";
 
 export type NewSessionFlowRuntime = {
   readonly api: {
@@ -45,7 +48,10 @@ export type NewSessionFlowProps = {
 };
 
 export function NewSessionFlow(props: NewSessionFlowProps) {
-  const [dialog, setDialog] = createSignal<"new-session" | "add-project">("new-session");
+  const dialog = useDialog();
+  const setDismissBlocked = useServerFlowDismissBlock();
+  let activeDialog = dialog.active;
+  let closingFlow = false;
   const [step, setStep] = createSignal<"select-project" | "worktree">("select-project");
   const [selectedProjectID, setSelectedProjectID] = createSignal<string>();
   const [mode, setMode] = createSignal<NewSessionLocationMode>("direct");
@@ -58,6 +64,23 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   const [mutation, setMutation] = createSignal<"creating-worktree" | "creating-session">();
   const [addingProject, setAddingProject] = createSignal(false);
   const [addProjectError, setAddProjectError] = createSignal<AddProjectDialogError>();
+
+  const showOwnedDialog = (
+    element: Parameters<typeof dialog.show>[0],
+    onClose?: Parameters<typeof dialog.show>[1],
+  ): void => {
+    void dialog.show(element, onClose).then(() => {
+      activeDialog = dialog.active;
+      if (closingFlow && dialog.active === activeDialog) dialog.close();
+      return undefined;
+    });
+  };
+
+  onCleanup(() => {
+    closingFlow = true;
+    setDismissBlocked(false);
+    if (dialog.active === activeDialog) dialog.close();
+  });
 
   const projects = createMemo<readonly NewSessionProject[]>(() =>
     props.runtime.data.project
@@ -159,10 +182,12 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
     try {
       const session = await created.request;
       props.onSessionCreated(session.id);
+      dialog.close();
     } catch {
       const accepted = props.runtime.data.session.get(created.id);
       if (accepted?.id === created.id) {
         props.onSessionCreated(created.id);
+        dialog.close();
         return;
       }
       props.runtime.sessions.remove(created.id);
@@ -250,6 +275,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   const addProject = async (location: LocationRef): Promise<void> => {
     setAddingProject(true);
     setAddProjectError(undefined);
+    let added = false;
     try {
       const current = await props.runtime.api.project.current({
         location: {
@@ -261,7 +287,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       setSelectedProjectID(current.id);
       setSelectedLocation(location);
       if (projects().find((project) => project.id === current.id)?.vcs !== "git") setMode("direct");
-      setDialog("new-session");
+      added = true;
     } catch {
       setAddProjectError({
         kind: "add-project",
@@ -270,12 +296,54 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
     } finally {
       setAddingProject(false);
     }
+    if (added && !closingFlow) showNewSessionDialog();
   };
 
-  return (
-    <Show
-      when={dialog() === "new-session"}
-      fallback={
+  const showNewSessionDialog = (): void => {
+    setDismissBlocked(false);
+    showOwnedDialog(
+      () => (
+        <NewSessionDialog
+          listDirectory={props.runtime.api.file.list}
+          state={state()}
+          mutation={mutation()}
+          onDismissBlockedChange={setDismissBlocked}
+          onAddProject={openAddProject}
+          onProjectChange={changeProject}
+          onModeChange={(next) => {
+            if (next === "worktree" && selectedProject()?.vcs !== "git") return;
+            setMode(next);
+            setError(undefined);
+          }}
+          onOpenWorktreeForm={openWorktreeForm}
+          onWorktreeParentChange={(location) => {
+            setParentLocation(location);
+            setError((current) => (current?.kind === "session" ? current : undefined));
+          }}
+          onWorktreeNameChange={(name) => {
+            setFolderName(name);
+            setError(undefined);
+          }}
+          onRetryProjects={() => void syncProjects()}
+          onUseProject={useProject}
+          onCreateWorktree={() => void createWorktree()}
+          onBack={() => {
+            setStep("select-project");
+            setError(undefined);
+          }}
+          onRetry={retry}
+        />
+      ),
+      () => {
+        if (!closingFlow) props.onDismiss();
+      },
+    );
+  };
+
+  const openAddProject = (): void => {
+    setDismissBlocked(false);
+    showOwnedDialog(
+      () => (
         <AddProjectDialog
           listDirectory={props.runtime.api.file.list}
           initialLocation={{
@@ -284,43 +352,29 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
           }}
           adding={addingProject()}
           error={addProjectError()}
-          onDismiss={() => setDialog("new-session")}
+          onDismissBlockedChange={setDismissBlocked}
           onAddProject={(directory) => void addProject(directory)}
         />
-      }
-    >
-      <NewSessionDialog
-        listDirectory={props.runtime.api.file.list}
-        state={state()}
-        mutation={mutation()}
-        onDismiss={props.onDismiss}
-        onAddProject={() => setDialog("add-project")}
-        onProjectChange={changeProject}
-        onModeChange={(next) => {
-          if (next === "worktree" && selectedProject()?.vcs !== "git") return;
-          setMode(next);
-          setError(undefined);
-        }}
-        onOpenWorktreeForm={openWorktreeForm}
-        onWorktreeParentChange={(location) => {
-          setParentLocation(location);
-          setError((current) => (current?.kind === "session" ? current : undefined));
-        }}
-        onWorktreeNameChange={(name) => {
-          setFolderName(name);
-          setError(undefined);
-        }}
-        onRetryProjects={() => void syncProjects()}
-        onUseProject={useProject}
-        onCreateWorktree={() => void createWorktree()}
-        onBack={() => {
-          setStep("select-project");
-          setError(undefined);
-        }}
-        onRetry={retry}
-      />
-    </Show>
-  );
+      ),
+      () => {
+        if (closingFlow) return;
+        setDismissBlocked(false);
+        queueMicrotask(() => {
+          if (closingFlow) return;
+          showNewSessionDialog();
+          restoreDialogFocusAfterClose(() =>
+            [...document.querySelectorAll<HTMLButtonElement>("[data-dialog-layer] button")].find(
+              (button) => button.textContent?.trim() === "Add project",
+            ),
+          );
+        });
+      },
+    );
+  };
+
+  onMount(showNewSessionDialog);
+
+  return null;
 }
 
 function projectOption(project: Project, workspaceID?: string): NewSessionProject {

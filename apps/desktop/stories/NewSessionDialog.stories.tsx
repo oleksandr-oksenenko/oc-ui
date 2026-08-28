@@ -9,6 +9,7 @@ import {
   type NewSessionLocationMode,
   type NewSessionProject,
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/NewSessionFlow/NewSessionDialog.tsx";
+import { DialogStory } from "./DialogStory.tsx";
 
 const projects = [
   {
@@ -48,7 +49,6 @@ const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
 
 const callbacks = {
   listDirectory,
-  onDismiss: () => undefined,
   onAddProject: () => undefined,
   onProjectChange: () => undefined,
   onModeChange: () => undefined,
@@ -71,24 +71,40 @@ const meta = {
 export default meta;
 
 function staticDialog(state: NewSessionDialogState, mutation?: NewSessionDialogProps["mutation"]) {
-  return <NewSessionDialog state={state} mutation={mutation} {...callbacks} />;
+  return (
+    <DialogStory>
+      {(onDismissBlockedChange) => (
+        <NewSessionDialog
+          state={state}
+          mutation={mutation}
+          onDismissBlockedChange={onDismissBlockedChange}
+          {...callbacks}
+        />
+      )}
+    </DialogStory>
+  );
 }
 
 function interactiveProjectSelection(initialMode: NewSessionLocationMode = "direct") {
   const [projectID, setProjectID] = createSignal<string | undefined>(projects[0].id);
   const [mode, setMode] = createSignal<NewSessionLocationMode>(initialMode);
   return (
-    <NewSessionDialog
-      state={{
-        view: "select-project",
-        projects,
-        selectedProjectID: projectID(),
-        mode: mode(),
-      }}
-      {...callbacks}
-      onProjectChange={setProjectID}
-      onModeChange={setMode}
-    />
+    <DialogStory>
+      {(onDismissBlockedChange) => (
+        <NewSessionDialog
+          state={{
+            view: "select-project",
+            projects,
+            selectedProjectID: projectID(),
+            mode: mode(),
+          }}
+          onDismissBlockedChange={onDismissBlockedChange}
+          {...callbacks}
+          onProjectChange={setProjectID}
+          onModeChange={setMode}
+        />
+      )}
+    </DialogStory>
   );
 }
 
