@@ -12,14 +12,11 @@ import {
 import { ContextPanel } from "./ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
 import type { DiffViewProps } from "./ConnectedApp/AppShell/Workspace/ContextPanel/DiffView.tsx";
 import { SessionPane } from "./ConnectedApp/AppShell/Workspace/SessionPane.tsx";
-import {
-  SessionSidebar,
-  type SessionNode,
-} from "./ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
+import { SessionSidebar } from "./ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
 import { NewSessionFlow } from "./ConnectedApp/AppShell/Workspace/SessionSidebar/NewSessionFlow.tsx";
 import { Composer } from "./ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
 import { TranscriptView } from "./ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
-import { projectRuntimeSessionNodes } from "./ConnectedApp/runtime-projection.ts";
+import { chooseSessionFallback, sessionAncestorIDs } from "./ConnectedApp/session-selection.ts";
 import { createSessionDraftStore } from "../../domain/index.ts";
 import { syncActiveStatuses, useServerRuntime } from "../../opencode/index.ts";
 import type { VcsDiffMode, VerifiedServer } from "../../opencode/index.ts";
@@ -55,6 +52,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
   const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>([]);
   let alive = true;
   let hydration = 0;
+  let selectedAncestorIDs: readonly string[] = [];
 
   onCleanup(() => {
     alive = false;
@@ -66,7 +64,9 @@ export function ConnectedApp(props: ConnectedAppProps) {
     return runtime.data.session
       .list()
       .filter((session) => ids.has(session.id))
-      .toSorted((left, right) => right.time.updated - left.time.updated);
+      .toSorted(
+        (left, right) => right.time.updated - left.time.updated || left.id.localeCompare(right.id),
+      );
   });
 
   const selectedSession = createMemo(() => {
@@ -88,10 +88,6 @@ export function ConnectedApp(props: ConnectedAppProps) {
     const id = selectedID();
     return id === undefined ? "idle" : runtime.data.session.status(id);
   });
-
-  const sessionNodes = createMemo<readonly SessionNode[]>(() =>
-    projectRuntimeSessionNodes(sessions(), (sessionID) => runtime.data.session.status(sessionID)),
-  );
 
   const streamConnected = () => runtime.stream.status() === "connected";
 
@@ -214,6 +210,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
 
   const selectSession = (sessionID: string): void => {
     if (selectedID() === sessionID) return;
+    selectedAncestorIDs = sessionAncestorIDs(sessionID, sessions());
     setSelectedID(sessionID);
     setPromptError(undefined);
     void hydrateTranscript(sessionID);
@@ -254,6 +251,9 @@ export function ConnectedApp(props: ConnectedAppProps) {
         const current = selectedID();
         if (current === undefined) {
           setTranscriptState({ status: "idle" });
+        } else if (!runtime.sessions.ids().includes(current)) {
+          // The selection effect will choose and hydrate the nearest surviving ancestor.
+          return;
         } else if (current === previous) {
           await hydrateTranscript(current);
         }
@@ -301,9 +301,16 @@ export function ConnectedApp(props: ConnectedAppProps) {
   createEffect(() => {
     if (runtime.sessions.state() !== "ready") return;
     const current = selectedID();
-    if (current && runtime.sessions.ids().includes(current)) return;
-    const next = sessions()[0]?.id;
+    if (current && runtime.sessions.ids().includes(current)) {
+      const currentSessions = sessions();
+      if (currentSessions.some((session) => session.id === current)) {
+        selectedAncestorIDs = sessionAncestorIDs(current, currentSessions);
+      }
+      return;
+    }
+    const next = chooseSessionFallback(selectedAncestorIDs, sessions());
     if (next === undefined) {
+      selectedAncestorIDs = [];
       setSelectedID(undefined);
       setTranscriptState({ status: "idle" });
     } else {
@@ -390,7 +397,8 @@ export function ConnectedApp(props: ConnectedAppProps) {
             mobile={panels.mobile()}
             sidebar={
               <SessionSidebar
-                nodes={sessionNodes()}
+                sessions={sessions()}
+                statusForSession={(sessionID) => runtime.data.session.status(sessionID)}
                 selectedID={selectedID()}
                 expandedIDs={expandedIDs()}
                 loading={runtime.sessions.state() === "loading"}

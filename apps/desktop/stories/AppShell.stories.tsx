@@ -12,39 +12,20 @@ import {
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
 import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/DiffView/DiffFile.tsx";
 import type { FileTreeNode } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/FilesView/FileTreeItem.tsx";
-import {
-  SessionSidebar,
-  type SessionNode,
-} from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
+import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
+import { storySession } from "./session-fixtures.ts";
 
-const nodes: readonly SessionNode[] = [
-  {
-    id: "workspace",
-    title: "Workspace migration",
-    status: "idle",
-    children: [
-      {
-        id: "api",
-        title: "API contract review",
-        status: "running",
-        children: [
-          {
-            id: "tests",
-            title: "Test coverage",
-            status: "idle",
-            needsInput: true,
-            children: [{ id: "fixtures", title: "Fixtures", status: "idle" }],
-          },
-        ],
-      },
-      { id: "docs", title: "Release notes", status: "idle" },
-    ],
-  },
-  { id: "small-fix", title: "Small follow-up fix", status: "idle" },
+const sessions = [
+  storySession("workspace", "Workspace migration"),
+  storySession("api", "API contract review", "workspace"),
+  storySession("tests", "Test coverage", "api"),
+  storySession("fixtures", "Fixtures", "tests"),
+  storySession("docs", "Release notes", "workspace"),
+  storySession("small-fix", "Small follow-up fix"),
 ];
 
 const diffFiles: readonly DiffFileData[] = [
@@ -162,7 +143,8 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
             rightPanelOpen={panelState.rightPanelOpen()}
             sidebar={
               <SessionSidebar
-                nodes={nodes}
+                sessions={sessions}
+                statusForSession={(id) => (id === "api" ? "running" : "idle")}
                 selectedID="tests"
                 expandedIDs={expandedIDs()}
                 loading={false}
@@ -303,7 +285,8 @@ export const NarrowRightPanelCollapsed = {
             rightPanelOpen={false}
             sidebar={
               <SessionSidebar
-                nodes={nodes}
+                sessions={sessions}
+                statusForSession={(id) => (id === "api" ? "running" : "idle")}
                 selectedID="tests"
                 expandedIDs={["workspace", "api", "tests"]}
                 loading={false}

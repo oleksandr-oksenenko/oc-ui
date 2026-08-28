@@ -1,19 +1,19 @@
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
+import type { SessionInfo } from "@opencode-ai/client";
+import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { Show } from "solid-js";
 
 import { SessionHeader } from "./SessionSidebar/SessionHeader.tsx";
-import type { SessionNode } from "./SessionSidebar/SessionTree.tsx";
 import { SessionTree } from "./SessionSidebar/SessionTree.tsx";
 import "./SessionSidebar.css";
-
-export type { SessionNode } from "./SessionSidebar/SessionTree.tsx";
 
 type SessionSidebarStatus = "connected" | "reconnecting" | "failed";
 
 export type SessionSidebarProps = {
-  readonly nodes: readonly SessionNode[];
+  readonly sessions: readonly SessionInfo[];
+  readonly statusForSession: (sessionID: string) => DataSessionStatus;
   readonly selectedID?: string;
   readonly expandedIDs: readonly string[];
   readonly loading: boolean;
@@ -66,22 +66,23 @@ export function SessionSidebar(props: SessionSidebarProps) {
         )}
       </Show>
 
-      <Show when={props.loading && props.nodes.length === 0 && !props.error}>
+      <Show when={props.loading && props.sessions.length === 0 && !props.error}>
         <output class="shell-sidebar-message shell-sidebar-loading">
           <Loader width={16} height={16} />
           <span>Loading sessions</span>
         </output>
       </Show>
 
-      <Show when={!props.loading && !props.error && props.nodes.length === 0}>
+      <Show when={!props.loading && !props.error && props.sessions.length === 0}>
         <div class="shell-sidebar-message">
           <p>No sessions yet.</p>
         </div>
       </Show>
 
-      <Show when={props.nodes.length > 0 && !props.error}>
+      <Show when={props.sessions.length > 0 && !props.error}>
         <SessionTree
-          nodes={props.nodes}
+          sessions={props.sessions}
+          statusForSession={props.statusForSession}
           selectedID={props.selectedID}
           expandedIDs={props.expandedIDs}
           onSelect={props.onSelect}

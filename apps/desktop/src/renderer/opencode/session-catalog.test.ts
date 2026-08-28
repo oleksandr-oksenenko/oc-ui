@@ -4,7 +4,7 @@ import { createRoot } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createOpenCodeEventSource } from "./event-source.ts";
-import { createSessionCatalog } from "./session-catalog.ts";
+import { createSessionCatalog, syncActiveStatuses } from "./session-catalog.ts";
 
 const location = { directory: "/workspace" } as const;
 
@@ -112,15 +112,156 @@ describe("session catalog reconciliation", () => {
       });
     });
 
-    expect(catalogIds).toEqual(["kept", "other-session", "new", "other"]);
+    expect(catalogIds).toEqual(["kept", "other-session", "child-session", "new", "other", "child"]);
     expect(api.session.list).toHaveBeenCalledWith({
-      parentID: null,
       order: "desc",
       limit: 100,
       cursor: undefined,
     });
-    expect(remember).toHaveBeenCalledTimes(2);
+    expect(remember).toHaveBeenCalledTimes(3);
     expect(sync).toHaveBeenCalledWith("new");
     expect(sync).toHaveBeenCalledWith("other");
+    expect(sync).toHaveBeenCalledWith("child");
+  });
+
+  it("loads every unfiltered page once and de-duplicates overlapping rows", async () => {
+    const remember = vi.fn<Data["session"]["remember"]>();
+    const list = vi
+      .fn<OpenCodeClient["session"]["list"]>()
+      .mockResolvedValueOnce({
+        data: [session("root"), session("child", location, "root")],
+        cursor: { next: "next" },
+      })
+      .mockResolvedValueOnce({
+        data: [session("child", location, "root"), session("grandchild", location, "child")],
+        cursor: {},
+      });
+    const catalog = createSessionCatalog({
+      api: { session: { list } },
+      data: {
+        session: {
+          remember,
+          sync: vi.fn<Data["session"]["sync"]>(() => Promise.resolve()),
+        },
+      },
+      events: createOpenCodeEventSource(),
+    });
+
+    expect(catalog.state()).toBe("loading");
+    await catalog.sync();
+
+    expect(catalog.state()).toBe("ready");
+    expect(catalog.ids()).toEqual(["root", "child", "grandchild"]);
+    expect(list).toHaveBeenNthCalledWith(1, {
+      order: "desc",
+      limit: 100,
+      cursor: undefined,
+    });
+    expect(list).toHaveBeenNthCalledWith(2, {
+      order: "desc",
+      limit: 100,
+      cursor: "next",
+    });
+    expect(remember).toHaveBeenCalledTimes(3);
+  });
+
+  it("admits and removes child sessions from live events after hydration", async () => {
+    const sync = vi.fn<Data["session"]["sync"]>(() => Promise.resolve());
+    const events = createOpenCodeEventSource();
+    const catalog = createSessionCatalog({
+      api: {
+        session: {
+          list: vi.fn<OpenCodeClient["session"]["list"]>().mockResolvedValue({
+            data: [session("root")],
+            cursor: {},
+          }),
+        },
+      },
+      data: {
+        session: {
+          remember: vi.fn<Data["session"]["remember"]>(),
+          sync,
+        },
+      },
+      events,
+    });
+
+    await catalog.sync();
+    events.emit({
+      id: "child-created",
+      created: 2,
+      type: "session.created",
+      durable: { aggregateID: "child", seq: 1, version: 1 },
+      data: {
+        sessionID: "child",
+        projectID: "project",
+        location,
+        parentID: "root",
+        slug: "child",
+        version: "1",
+      },
+    } satisfies OpenCodeEvent);
+
+    expect(catalog.ids()).toEqual(["root", "child"]);
+    expect(sync).toHaveBeenCalledWith("child");
+
+    events.emit({
+      id: "child-deleted",
+      created: 3,
+      type: "session.deleted",
+      durable: { aggregateID: "child", seq: 2, version: 2 },
+      data: { sessionID: "child" },
+    } satisfies OpenCodeEvent);
+
+    expect(catalog.ids()).toEqual(["root"]);
+  });
+
+  it("replaces the catalog with child changes missed while disconnected", async () => {
+    const list = vi
+      .fn<OpenCodeClient["session"]["list"]>()
+      .mockResolvedValueOnce({ data: [session("root")], cursor: {} })
+      .mockResolvedValueOnce({
+        data: [session("root"), session("child", location, "root")],
+        cursor: {},
+      })
+      .mockResolvedValueOnce({ data: [session("root")], cursor: {} });
+    const catalog = createSessionCatalog({
+      api: { session: { list } },
+      data: {
+        session: {
+          remember: vi.fn<Data["session"]["remember"]>(),
+          sync: vi.fn<Data["session"]["sync"]>(() => Promise.resolve()),
+        },
+      },
+      events: createOpenCodeEventSource(),
+    });
+
+    await catalog.sync();
+    expect(catalog.ids()).toEqual(["root"]);
+
+    await catalog.sync();
+    expect(catalog.ids()).toEqual(["root", "child"]);
+
+    await catalog.sync();
+    expect(catalog.ids()).toEqual(["root"]);
+  });
+
+  it("synchronizes status for child sessions as well as roots", async () => {
+    const setStatus = vi.fn<Data["session"]["setStatus"]>();
+    const active = vi.fn<OpenCodeClient["session"]["active"]>().mockResolvedValue({
+      child: { type: "running" },
+    });
+
+    await syncActiveStatuses({
+      api: { session: { active } },
+      data: { session: { setStatus } },
+      sessionIDs: ["root", "child"],
+    });
+
+    expect(setStatus.mock.calls).toEqual([
+      ["root", "idle"],
+      ["child", "idle"],
+      ["child", "running"],
+    ]);
   });
 });

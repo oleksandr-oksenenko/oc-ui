@@ -12,94 +12,41 @@ import {
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
 import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/DiffView/DiffFile.tsx";
 import type { FileTreeNode } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/FilesView/FileTreeItem.tsx";
-import {
-  SessionSidebar,
-  type SessionNode,
-} from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
+import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
+import { storySession } from "./session-fixtures.ts";
 
-const sessions: readonly SessionNode[] = [
-  {
-    id: "compact-ledger",
-    title: "Compact Ledger Transcript",
-    status: "running",
-  },
-  {
-    id: "refactor-utils",
-    title: "Refactor Utils",
-    status: "running",
-    children: [
-      { id: "rename-helpers", title: "Rename Helpers", status: "idle", needsInput: true },
-      { id: "extract-hooks", title: "Extract Hooks", status: "idle", needsInput: true },
-    ],
-  },
-  {
-    id: "investigate-bug",
-    title: "Investigate Bug",
-    status: "idle",
-    needsInput: true,
-    children: [
-      { id: "reproduce-issue", title: "Reproduce Issue", status: "idle" },
-      {
-        id: "trace-root-cause",
-        title: "Trace Root Cause",
-        status: "idle",
-        needsInput: true,
-        children: [
-          { id: "collect-logs", title: "Collect Logs", status: "idle", needsInput: true },
-          { id: "analyze-stack", title: "Analyze Stack", status: "idle", needsInput: true },
-        ],
-      },
-    ],
-  },
-  { id: "config-option", title: "Add Config Option", status: "running", children: [] },
-  {
-    id: "prototype-api",
-    title: "Prototype API",
-    status: "idle",
-    needsInput: true,
-    children: [
-      { id: "design-schema", title: "Design Schema", status: "idle", needsInput: true },
-      {
-        id: "implement-endpoints",
-        title: "Implement Endpoints",
-        status: "idle",
-        needsInput: true,
-        children: [
-          { id: "auth-layer", title: "Auth Layer", status: "running" },
-          { id: "error-handling", title: "Error Handling", status: "idle", needsInput: true },
-        ],
-      },
-    ],
-  },
-  {
-    id: "ui-polish",
-    title: "UI Polish",
-    status: "idle",
-    needsInput: true,
-    children: [
-      { id: "layout-updates", title: "Layout Updates", status: "idle", needsInput: true },
-      { id: "typography", title: "Typography", status: "running" },
-      { id: "spacing-density", title: "Spacing & Density", status: "idle", needsInput: true },
-    ],
-  },
-  { id: "improve-docs", title: "Improve Docs", status: "idle", needsInput: true },
-  {
-    id: "update-tests",
-    title: "Update Tests",
-    status: "running",
-    children: [
-      { id: "unit-tests", title: "Unit Tests", status: "running" },
-      { id: "integration-tests", title: "Integration Tests", status: "idle", needsInput: true },
-    ],
-  },
-  { id: "fix-login", title: "Fix Login Flow", status: "idle", needsInput: true, children: [] },
-  { id: "integrate-stripe", title: "Integrate Stripe", status: "running", children: [] },
-  { id: "optimize-query", title: "Optimize Query", status: "idle", needsInput: true, children: [] },
-  { id: "security-audit", title: "Security Audit", status: "idle", needsInput: true, children: [] },
+const sessions = [
+  storySession("compact-ledger", "Compact Ledger Transcript"),
+  storySession("refactor-utils", "Refactor Utils"),
+  storySession("rename-helpers", "Rename Helpers", "refactor-utils"),
+  storySession("extract-hooks", "Extract Hooks", "refactor-utils"),
+  storySession("investigate-bug", "Investigate Bug"),
+  storySession("reproduce-issue", "Reproduce Issue", "investigate-bug"),
+  storySession("trace-root-cause", "Trace Root Cause", "investigate-bug"),
+  storySession("collect-logs", "Collect Logs", "trace-root-cause"),
+  storySession("analyze-stack", "Analyze Stack", "trace-root-cause"),
+  storySession("config-option", "Add Config Option"),
+  storySession("prototype-api", "Prototype API"),
+  storySession("design-schema", "Design Schema", "prototype-api"),
+  storySession("implement-endpoints", "Implement Endpoints", "prototype-api"),
+  storySession("auth-layer", "Auth Layer", "implement-endpoints"),
+  storySession("error-handling", "Error Handling", "implement-endpoints"),
+  storySession("ui-polish", "UI Polish"),
+  storySession("layout-updates", "Layout Updates", "ui-polish"),
+  storySession("typography", "Typography", "ui-polish"),
+  storySession("spacing-density", "Spacing & Density", "ui-polish"),
+  storySession("improve-docs", "Improve Docs"),
+  storySession("update-tests", "Update Tests"),
+  storySession("unit-tests", "Unit Tests", "update-tests"),
+  storySession("integration-tests", "Integration Tests", "update-tests"),
+  storySession("fix-login", "Fix Login Flow"),
+  storySession("integrate-stripe", "Integrate Stripe"),
+  storySession("optimize-query", "Optimize Query"),
+  storySession("security-audit", "Security Audit"),
 ];
 
 const diff: readonly DiffFileData[] = [
@@ -271,7 +218,21 @@ function WorkspaceShowcaseFixture() {
             rightPanelOpen={panelState.rightPanelOpen()}
             sidebar={
               <SessionSidebar
-                nodes={sessions}
+                sessions={sessions}
+                statusForSession={(id) =>
+                  [
+                    "compact-ledger",
+                    "refactor-utils",
+                    "config-option",
+                    "auth-layer",
+                    "typography",
+                    "update-tests",
+                    "unit-tests",
+                    "integrate-stripe",
+                  ].includes(id)
+                    ? "running"
+                    : "idle"
+                }
                 selectedID="compact-ledger"
                 expandedIDs={expandedSessions()}
                 loading={false}

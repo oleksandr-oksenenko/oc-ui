@@ -39,6 +39,16 @@ describe("syncSessionTranscript", () => {
     expect(fixture.loadMore).toHaveBeenCalledTimes(2);
   });
 
+  it("loads a child session transcript through the same runtime path", async () => {
+    const fixture = makeData(() => false);
+
+    await syncSessionTranscript(fixture.data, "child");
+
+    expect(fixture.syncSession).toHaveBeenCalledWith("child");
+    expect(fixture.syncPending).toHaveBeenCalledWith("child");
+    expect(fixture.syncMessages).toHaveBeenCalledWith("child");
+  });
+
   it("stops requesting older pages after the selection changes", async () => {
     const fixture = makeData(() => true);
 

@@ -24,15 +24,21 @@ describe("session recovery", () => {
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
   });
 
-  it("rehydrates the selected transcript after refreshing the catalog", async () => {
-    const syncCatalog = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  it("rehydrates a selected child transcript after refreshing the catalog", async () => {
+    const order: string[] = [];
+    const syncCatalog = vi.fn<() => Promise<void>>(async () => {
+      order.push("catalog");
+    });
     const hydrateTranscript = vi
       .fn<(sessionID: string) => Promise<void>>()
-      .mockResolvedValue(undefined);
+      .mockImplementation(async (sessionID) => {
+        order.push(`transcript:${sessionID}`);
+      });
 
-    await retryCatalogAndTranscript(syncCatalog, () => "session", hydrateTranscript);
+    await retryCatalogAndTranscript(syncCatalog, () => "child", hydrateTranscript);
 
     expect(syncCatalog).toHaveBeenCalledOnce();
-    expect(hydrateTranscript).toHaveBeenCalledWith("session");
+    expect(hydrateTranscript).toHaveBeenCalledWith("child");
+    expect(order).toEqual(["catalog", "transcript:child"]);
   });
 });

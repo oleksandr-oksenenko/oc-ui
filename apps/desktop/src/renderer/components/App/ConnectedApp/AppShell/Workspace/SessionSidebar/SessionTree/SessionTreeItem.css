@@ -143,10 +143,6 @@
   color: var(--v2-state-fg-warning, #f5b942);
 }
 
-.shell-session-status[data-status="needs-input"] {
-  color: var(--text-interactive-base, #74a7ff);
-}
-
 .shell-session-status [data-component="loader-v2"] {
   color: inherit;
 }

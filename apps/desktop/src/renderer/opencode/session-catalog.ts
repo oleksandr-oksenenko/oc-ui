@@ -47,7 +47,6 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
 
   input.events.on("session.created", (event) => {
     const { data } = event;
-    if (data.parentID !== undefined) return;
     mutate({ kind: "admit", sessionID: data.sessionID });
     // The event contains only the creation payload. Let createData fetch the
     // complete SessionInfo rather than fabricating an application record.
@@ -68,21 +67,22 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
       activeSync = { mutations };
       try {
         const snapshot: SessionInfo[] = [];
+        const snapshotIDs = new Set<string>();
         let cursor: string | undefined;
         do {
           const page = await input.api.session.list({
-            parentID: null,
             order: "desc",
             limit: 100,
             cursor,
           });
           for (const info of page.data) {
             if (
-              info.parentID === undefined &&
+              !snapshotIDs.has(info.id) &&
               !mutations.some(
                 (mutation) => mutation.kind === "remove" && mutation.sessionID === info.id,
               )
             ) {
+              snapshotIDs.add(info.id);
               snapshot.push(info);
               input.data.session.remember(info);
             }
@@ -119,8 +119,8 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
 }
 
 export async function syncActiveStatuses(input: {
-  readonly api: OpenCodeClient;
-  readonly data: Data;
+  readonly api: { readonly session: Pick<OpenCodeClient["session"], "active"> };
+  readonly data: { readonly session: Pick<Data["session"], "setStatus"> };
   readonly sessionIDs: readonly string[];
 }): Promise<void> {
   for (const sessionID of input.sessionIDs) input.data.session.setStatus(sessionID, "idle");

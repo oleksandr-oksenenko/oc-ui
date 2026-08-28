@@ -1,14 +1,16 @@
 import { Collapsible } from "@opencode-ai/ui/collapsible";
-import { Icon } from "@opencode-ai/ui/icon";
 import { Button } from "@opencode-ai/ui/button";
 import { Loader } from "@opencode-ai/ui/loader";
+import type { SessionInfo } from "@opencode-ai/client";
+import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import type { JSX } from "solid-js";
 
-import type { SessionNode } from "../SessionTree.tsx";
 import "./SessionTreeItem.css";
 
 export type SessionTreeItemProps = {
-  readonly node: SessionNode;
+  readonly session: SessionInfo;
+  readonly status: DataSessionStatus;
+  readonly hasChildren: boolean;
   readonly depth: number;
   readonly selected: boolean;
   readonly expanded: boolean;
@@ -18,17 +20,8 @@ export type SessionTreeItemProps = {
 };
 
 export function SessionTreeItem(props: SessionTreeItemProps) {
-  const hasChildren = () => Boolean(props.node.children?.length);
-  const statusLabel = () => {
-    if (props.node.needsInput === true) return "Needs your input";
-    switch (props.node.status) {
-      case "running":
-        return "Running";
-      default:
-        return "Idle";
-    }
-  };
-  const showsStatus = () => props.node.needsInput === true || props.node.status === "running";
+  const title = () => props.session.title?.trim() || "Untitled session";
+  const statusLabel = () => (props.status === "running" ? "Running" : "Idle");
 
   return (
     <div class="shell-session-tree-item" style={{ "--session-depth": `${props.depth}` }}>
@@ -37,21 +30,21 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
         variant="ghost"
         open={props.expanded}
         onOpenChange={(open) => {
-          if (hasChildren() && open !== props.expanded) props.onToggleExpanded(props.node.id);
+          if (props.hasChildren && open !== props.expanded) {
+            props.onToggleExpanded(props.session.id);
+          }
         }}
       >
         <div
           class="shell-session-row"
-          classList={{ selected: props.selected, "has-children": hasChildren() }}
+          classList={{ selected: props.selected, "has-children": props.hasChildren }}
         >
-          {hasChildren() ? (
+          {props.hasChildren ? (
             <span class="shell-session-disclosure-slot">
               <Collapsible.Trigger
                 class="shell-session-disclosure"
                 type="button"
-                aria-label={
-                  props.expanded ? `Collapse ${props.node.title}` : `Expand ${props.node.title}`
-                }
+                aria-label={props.expanded ? `Collapse ${title()}` : `Expand ${title()}`}
               >
                 <Collapsible.Arrow />
               </Collapsible.Trigger>
@@ -63,22 +56,18 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             size="small"
             variant="ghost-muted"
             aria-current={props.selected ? "page" : undefined}
-            aria-label={`${props.node.title}, ${statusLabel()}`}
-            onClick={() => props.onSelect(props.node.id)}
+            aria-label={`${title()}, ${statusLabel()}`}
+            onClick={() => props.onSelect(props.session.id)}
           >
-            <span class="shell-session-title">{props.node.title.trim() || "Untitled session"}</span>
-            {showsStatus() ? (
+            <span class="shell-session-title">{title()}</span>
+            {props.status === "running" ? (
               <span
                 class="shell-session-status"
-                data-status={props.node.needsInput === true ? "needs-input" : props.node.status}
+                data-status={props.status}
                 aria-label={statusLabel()}
                 title={statusLabel()}
               >
-                {props.node.needsInput === true ? (
-                  <Icon name="prompt" size="small" />
-                ) : (
-                  <Loader width={13} height={13} />
-                )}
+                <Loader width={13} height={13} />
               </span>
             ) : null}
           </Button>

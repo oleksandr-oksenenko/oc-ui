@@ -1,40 +1,25 @@
 import { createSignal } from "solid-js";
+import type { SessionInfo } from "@opencode-ai/client";
 import type { Meta } from "storybook-solidjs-vite";
 
 import {
   SessionSidebar,
-  type SessionNode,
   type SessionSidebarProps,
 } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
+import { storySession } from "./session-fixtures.ts";
 
-const flatNodes: readonly SessionNode[] = [
-  { id: "one", title: "Implement session tree", status: "idle" },
-  { id: "two", title: "Review API contract", status: "running" },
-  { id: "three", title: "Waiting for a decision", status: "idle", needsInput: true },
+const flatSessions: readonly SessionInfo[] = [
+  storySession("one", "Implement session tree"),
+  storySession("two", "Review API contract"),
+  storySession("three", "Waiting for a decision"),
 ];
 
-const hierarchyNodes: readonly SessionNode[] = [
-  {
-    id: "level-1",
-    title: "Level one",
-    status: "idle",
-    children: [
-      {
-        id: "level-2",
-        title: "Level two",
-        status: "idle",
-        children: [
-          {
-            id: "level-3",
-            title: "Level three",
-            status: "running",
-            children: [{ id: "level-4", title: "Level four", status: "idle", needsInput: true }],
-          },
-        ],
-      },
-    ],
-  },
-  { id: "sibling", title: "Sibling session", status: "idle" },
+const hierarchySessions: readonly SessionInfo[] = [
+  storySession("level-1", "Level one"),
+  storySession("level-2", "Level two", "level-1"),
+  storySession("level-3", "Level three", "level-2"),
+  storySession("level-4", "Level four", "level-3"),
+  storySession("sibling", "Sibling session"),
 ];
 
 const meta = {
@@ -47,16 +32,18 @@ export default meta;
 type StoryOptions = Partial<Pick<SessionSidebarProps, "loading" | "error" | "canCreate">> & {
   readonly selectedID?: string;
   readonly expandedIDs?: readonly string[];
+  readonly runningIDs?: readonly string[];
 };
 
-function interactiveSidebar(nodes: readonly SessionNode[], options: StoryOptions = {}) {
-  const [selectedID, setSelectedID] = createSignal(options.selectedID ?? nodes[0]?.id);
+function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOptions = {}) {
+  const [selectedID, setSelectedID] = createSignal(options.selectedID ?? sessions[0]?.id);
   const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>(options.expandedIDs ?? []);
 
   return (
     <div style={{ width: "200px", height: "560px", background: "#090909" }}>
       <SessionSidebar
-        nodes={nodes}
+        sessions={sessions}
+        statusForSession={(id) => (options.runningIDs?.includes(id) ? "running" : "idle")}
         selectedID={selectedID()}
         expandedIDs={expandedIDs()}
         loading={options.loading ?? false}
@@ -79,18 +66,19 @@ function interactiveSidebar(nodes: readonly SessionNode[], options: StoryOptions
 }
 
 export const FlatProductionList = {
-  render: () => interactiveSidebar(flatNodes),
+  render: () => interactiveSidebar(flatSessions, { runningIDs: ["two"] }),
 };
 
 export const FourLevelHierarchy = {
-  render: () => interactiveSidebar(hierarchyNodes),
+  render: () => interactiveSidebar(hierarchySessions, { runningIDs: ["level-3"] }),
 };
 
 export const ExpandedDeepHierarchy = {
   render: () =>
-    interactiveSidebar(hierarchyNodes, {
+    interactiveSidebar(hierarchySessions, {
       selectedID: "level-4",
       expandedIDs: ["level-1", "level-2", "level-3"],
+      runningIDs: ["level-3"],
     }),
 };
 
@@ -109,24 +97,8 @@ export const Error = {
 
 export const StatusGlyphs = {
   render: () =>
-    interactiveSidebar([
-      { id: "idle", title: "Idle session", status: "idle" },
-      { id: "running", title: "Running session", status: "running" },
-      { id: "input", title: "Needs input", status: "running", needsInput: true },
-    ]),
-};
-
-export const SelectedNeedsInputPrecedence = {
-  render: () =>
     interactiveSidebar(
-      [
-        {
-          id: "parent",
-          title: "Running parent",
-          status: "running",
-          children: [{ id: "child", title: "Needs input", status: "running", needsInput: true }],
-        },
-      ],
-      { selectedID: "child", expandedIDs: ["parent"] },
+      [storySession("idle", "Idle session"), storySession("running", "Running session")],
+      { runningIDs: ["running"] },
     ),
 };
