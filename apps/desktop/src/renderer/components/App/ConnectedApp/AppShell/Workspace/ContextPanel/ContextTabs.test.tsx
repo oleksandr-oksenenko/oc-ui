@@ -1,32 +1,18 @@
 import { render } from "solid-js/web";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import { ContextTabs, type ContextPanelTab } from "./ContextTabs.tsx";
+import { ContextTabs } from "./ContextTabs.tsx";
 
 describe("ContextTabs", () => {
-  it("mounts only the active OpenCode tab panel", () => {
+  it("mounts the diff panel", () => {
     const host = document.createElement("div");
     document.body.append(host);
-    const onTabChange = vi.fn<(tab: ContextPanelTab) => void>();
-    const dispose = render(
-      () => (
-        <ContextTabs
-          activeTab="diff"
-          diffContent={<div>Diff content</div>}
-          filesContent={<div>Files content</div>}
-          onTabChange={onTabChange}
-        />
-      ),
-      host,
-    );
+    const dispose = render(() => <ContextTabs diffContent={<div>Diff content</div>} />, host);
 
     const panels = host.querySelectorAll<HTMLElement>('[role="tabpanel"]');
     expect(panels).toHaveLength(1);
     expect(panels[0]?.hasAttribute("hidden")).toBe(false);
-    expect(host.textContent).not.toContain("Files content");
-
-    host.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1]?.click();
-    expect(onTabChange).toHaveBeenCalledWith("files");
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(1);
 
     dispose();
     host.remove();
@@ -36,21 +22,13 @@ describe("ContextTabs", () => {
     const host = document.createElement("div");
     document.body.append(host);
     const dispose = render(
-      () => (
-        <ContextTabs
-          activeTab="files"
-          showHeader={false}
-          diffContent={<div>Diff content</div>}
-          filesContent={<div>Files content</div>}
-          onTabChange={() => undefined}
-        />
-      ),
+      () => <ContextTabs showHeader={false} diffContent={<div>Diff content</div>} />,
       host,
     );
 
     expect(host.querySelector('[role="tablist"]')).toBeNull();
     expect(host.querySelector('[role="tabpanel"]:not([hidden])')?.getAttribute("aria-label")).toBe(
-      "Files",
+      "Diff",
     );
 
     dispose();

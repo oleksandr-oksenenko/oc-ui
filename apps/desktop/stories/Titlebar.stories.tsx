@@ -2,10 +2,7 @@ import { createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
 import { Titlebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Titlebar.tsx";
-import {
-  ContextTabs,
-  type ContextPanelTab,
-} from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
+import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
 
 const meta = {
   title: "Shell/Titlebar",
@@ -17,19 +14,12 @@ export default meta;
 function interactiveTitlebar() {
   const [leftSidebarOpen, setLeftSidebarOpen] = createSignal(false);
   const [rightPanelOpen, setRightPanelOpen] = createSignal(false);
-  const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("diff");
 
   return (
     <div style={{ width: "100%", "min-width": "720px" }}>
       <Titlebar
         selectedTitle="API contract review"
-        rightControls={
-          <ContextTabs
-            activeTab={activeTab()}
-            onTabChange={setActiveTab}
-            onClose={() => setRightPanelOpen(false)}
-          />
-        }
+        rightControls={<ContextTabs onClose={() => setRightPanelOpen(false)} />}
         leftSidebarOpen={leftSidebarOpen()}
         rightPanelOpen={rightPanelOpen()}
         rightPanelAvailable={true}
@@ -58,41 +48,25 @@ export const BothPanelsHidden = {
 };
 
 export const NoSessionSelected = {
-  render: () => {
-    const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("diff");
-    return (
-      <Titlebar
-        rightControls={
-          <ContextTabs
-            activeTab={activeTab()}
-            onTabChange={setActiveTab}
-            onClose={() => undefined}
-          />
-        }
-        leftSidebarOpen={true}
-        rightPanelOpen={true}
-        rightPanelAvailable={true}
-        onToggleLeftSidebar={() => undefined}
-        onToggleRightPanel={() => undefined}
-      />
-    );
-  },
+  render: () => (
+    <Titlebar
+      rightControls={<ContextTabs onClose={() => undefined} />}
+      leftSidebarOpen={true}
+      rightPanelOpen={true}
+      rightPanelAvailable={true}
+      onToggleLeftSidebar={() => undefined}
+      onToggleRightPanel={() => undefined}
+    />
+  ),
 };
 
 export const MacOSLayout = {
   render: () => {
-    const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("diff");
     return (
       <div data-platform="macos" style={{ width: "100%", "min-width": "720px" }}>
         <Titlebar
           selectedTitle="Compact Ledger Transcript"
-          rightControls={
-            <ContextTabs
-              activeTab={activeTab()}
-              onTabChange={setActiveTab}
-              onClose={() => undefined}
-            />
-          }
+          rightControls={<ContextTabs onClose={() => undefined} />}
           leftSidebarOpen={true}
           rightPanelOpen={true}
           rightPanelAvailable={true}

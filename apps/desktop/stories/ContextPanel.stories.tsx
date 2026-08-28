@@ -2,10 +2,7 @@ import { createSignal } from "solid-js";
 import type { Decorator, Meta, StoryObj } from "storybook-solidjs-vite";
 
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
-import type { ContextPanelProps } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
-import type { ContextPanelTab } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
 import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/DiffView/DiffFile.tsx";
-import type { FileTreeNode } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/FilesView/FileTreeItem.tsx";
 
 const diffFiles: readonly DiffFileData[] = [
   {
@@ -41,40 +38,6 @@ new file mode 100644
   },
 ];
 
-const fileNodes: readonly FileTreeNode[] = [
-  {
-    id: "src",
-    name: "src",
-    kind: "directory",
-    children: [
-      {
-        id: "src/renderer",
-        name: "renderer",
-        kind: "directory",
-        children: [
-          { id: "src/renderer/App.tsx", name: "App.tsx", kind: "file", status: "modified" },
-          {
-            id: "src/renderer/Workspace.tsx",
-            name: "Workspace.tsx",
-            kind: "file",
-            status: "added",
-          },
-        ],
-      },
-      { id: "src/main.ts", name: "main.ts", kind: "file" },
-    ],
-  },
-  { id: "package.json", name: "package.json", kind: "file", status: "modified" },
-  { id: "README.md", name: "README.md", kind: "file" },
-];
-
-const baseFiles: ContextPanelProps["files"] = {
-  nodes: fileNodes,
-  loading: false,
-  expandedIDs: ["src", "src/renderer"],
-  onToggleExpanded: () => undefined,
-};
-
 const meta = {
   title: "Context/ContextPanel",
   component: ContextPanel,
@@ -93,30 +56,14 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-const noopTabChange = (_tab: ContextPanelTab): void => undefined;
-
 export const Diff: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: { files: diffFiles, loading: false },
-    files: baseFiles,
-  },
-};
-
-export const Files: Story = {
-  args: {
-    activeTab: "files",
-    onTabChange: noopTabChange,
-    diff: { files: diffFiles, loading: false },
-    files: baseFiles,
   },
 };
 
 export const Loading: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: {
       files: [],
       loading: true,
@@ -126,92 +73,51 @@ export const Loading: Story = {
         { value: "branch", label: "Changes vs main" },
       ],
     },
-    files: { ...baseFiles, loading: true, nodes: [] },
   },
 };
 
 export const NoSession: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: {
       files: [],
       loading: false,
       emptyMessage: "Select a session to view changes",
       emptyDescription: "The Diff panel follows the selected session's workspace location.",
     },
-    files: baseFiles,
-  },
-};
-
-export const FilesLoading: Story = {
-  args: {
-    activeTab: "files",
-    onTabChange: noopTabChange,
-    diff: { files: diffFiles, loading: false },
-    files: { ...baseFiles, loading: true, nodes: [] },
   },
 };
 
 export const Empty: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: { files: [], loading: false },
-    files: { ...baseFiles, nodes: [] },
   },
 };
 
 export const Unavailable: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: {
       files: [],
       loading: false,
       emptyMessage: "Diff unavailable",
       emptyDescription: "OpenCode diff data is not connected yet.",
     },
-    files: {
-      ...baseFiles,
-      nodes: [],
-      emptyMessage: "Files unavailable",
-      emptyDescription: "OpenCode file data is not connected yet.",
-    },
-  },
-};
-
-export const FilesEmpty: Story = {
-  args: {
-    activeTab: "files",
-    onTabChange: noopTabChange,
-    diff: { files: diffFiles, loading: false },
-    files: { ...baseFiles, nodes: [] },
   },
 };
 
 export const Error: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: { files: [], loading: false, error: "The working tree could not be read." },
-    files: { ...baseFiles, error: "The file tree could not be read." },
   },
 };
 
 export const Refreshing: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: { files: diffFiles, loading: true, stale: true },
-    files: baseFiles,
   },
 };
 
 export const RefreshError: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: {
       files: diffFiles,
       loading: false,
@@ -219,23 +125,17 @@ export const RefreshError: Story = {
       error: "The latest changes could not be loaded.",
       onRetry: () => undefined,
     },
-    files: baseFiles,
   },
 };
 
 export const CachedStale: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: { files: diffFiles, loading: false, stale: true },
-    files: baseFiles,
   },
 };
 
 export const BranchEmpty: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: {
       files: [],
       loading: false,
@@ -247,27 +147,11 @@ export const BranchEmpty: Story = {
       emptyMessage: "No changes against main",
       emptyDescription: "The working copy matches its merge base with main.",
     },
-    files: baseFiles,
-  },
-};
-
-export const FilesError: Story = {
-  args: {
-    activeTab: "files",
-    onTabChange: noopTabChange,
-    diff: { files: diffFiles, loading: false },
-    files: {
-      ...baseFiles,
-      error: "The file tree could not be read.",
-      onRetry: () => undefined,
-    },
   },
 };
 
 export const DiffEdgeCases: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: {
       files: [
         {
@@ -296,39 +180,17 @@ deleted file mode 100644
       ],
       loading: false,
     },
-    files: baseFiles,
-  },
-};
-
-export const FilesEdgeCases: Story = {
-  args: {
-    activeTab: "files",
-    onTabChange: noopTabChange,
-    diff: { files: diffFiles, loading: false },
-    files: {
-      ...baseFiles,
-      expandedIDs: ["src"],
-      nodes: [
-        { id: "empty", name: "empty-folder", kind: "directory", children: [] },
-        { id: "deleted", name: "removed.ts", kind: "file", status: "deleted" },
-      ],
-    },
   },
 };
 
 export const ComparisonControl: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     diff: { files: diffFiles, loading: false },
-    files: baseFiles,
   },
   render: () => {
     const [comparison, setComparison] = createSignal("working");
     return (
       <ContextPanel
-        activeTab="diff"
-        onTabChange={noopTabChange}
         diff={{
           files: diffFiles,
           loading: false,
@@ -339,7 +201,6 @@ export const ComparisonControl: Story = {
           ],
           onComparisonChange: setComparison,
         }}
-        files={baseFiles}
       />
     );
   },
@@ -347,38 +208,7 @@ export const ComparisonControl: Story = {
 
 export const NoClose: Story = {
   args: {
-    activeTab: "diff",
-    onTabChange: noopTabChange,
     onClose: undefined,
     diff: { files: diffFiles, loading: false },
-    files: baseFiles,
-  },
-};
-
-export const ControlledTabAndExpansion: Story = {
-  args: {
-    activeTab: "files",
-    onTabChange: noopTabChange,
-    diff: { files: diffFiles, loading: false },
-    files: baseFiles,
-  },
-  render: () => {
-    const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("files");
-    const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>(["src"]);
-
-    const toggleExpanded = (id: string): void => {
-      setExpandedIDs((current) =>
-        current.includes(id) ? current.filter((expandedID) => expandedID !== id) : [...current, id],
-      );
-    };
-
-    return (
-      <ContextPanel
-        activeTab={activeTab()}
-        onTabChange={(tab) => setActiveTab(tab)}
-        diff={{ files: diffFiles, loading: false }}
-        files={{ ...baseFiles, expandedIDs: expandedIDs(), onToggleExpanded: toggleExpanded }}
-      />
-    );
   },
 };

@@ -6,12 +6,8 @@ import { createShellPanelState } from "../src/renderer/components/App/ConnectedA
 import { Titlebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Titlebar.tsx";
 import { Workspace } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace.tsx";
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
-import {
-  ContextTabs,
-  type ContextPanelTab,
-} from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
+import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
 import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/DiffView/DiffFile.tsx";
-import type { FileTreeNode } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/FilesView/FileTreeItem.tsx";
 import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
@@ -46,31 +42,6 @@ const diffFiles: readonly DiffFileData[] = [
   },
 ];
 
-const fileNodes: readonly FileTreeNode[] = [
-  {
-    id: "src",
-    name: "src",
-    kind: "directory",
-    children: [
-      {
-        id: "src/renderer",
-        name: "renderer",
-        kind: "directory",
-        children: [
-          { id: "src/renderer/App.tsx", name: "App.tsx", kind: "file", status: "modified" },
-          {
-            id: "src/renderer/Workspace.tsx",
-            name: "Workspace.tsx",
-            kind: "file",
-            status: "added",
-          },
-        ],
-      },
-    ],
-  },
-  { id: "docs", name: "component-inventory.md", kind: "file" },
-];
-
 const meta = {
   title: "Shell/AppShell",
   component: AppShell,
@@ -89,26 +60,15 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
       panelState.setRightPanelOpen(mobileStoryState === "context");
     }
   });
-  const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("diff");
   const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>([
     "workspace",
     "api",
     "tests",
   ]);
-  const [expandedFileIDs, setExpandedFileIDs] = createSignal<readonly string[]>([
-    "src",
-    "src/renderer",
-  ]);
   const [draft, setDraft] = createSignal("Summarize the current layout changes");
 
   const toggleExpanded = (id: string) => {
     setExpandedIDs((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    );
-  };
-
-  const toggleFileExpanded = (id: string) => {
-    setExpandedFileIDs((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
   };
@@ -122,9 +82,7 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
             rightControls={
               <Show when={!panelState.mobile()}>
                 <ContextTabs
-                  activeTab={activeTab()}
                   idBase={contextTabsId}
-                  onTabChange={setActiveTab}
                   onClose={() => panelState.setRightPanelOpen(false)}
                 />
               </Show>
@@ -194,19 +152,11 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
             }
             context={
               <ContextPanel
-                activeTab={activeTab()}
-                onTabChange={setActiveTab}
                 onClose={() => panelState.setRightPanelOpen(false)}
                 showTabs={panelState.mobile()}
                 autoFocusClose={panelState.mobile()}
                 tabsIdBase={contextTabsId}
                 diff={{ files: diffFiles, loading: false }}
-                files={{
-                  nodes: fileNodes,
-                  loading: false,
-                  expandedIDs: expandedFileIDs(),
-                  onToggleExpanded: toggleFileExpanded,
-                }}
               />
             }
           />

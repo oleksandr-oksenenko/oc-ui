@@ -6,12 +6,8 @@ import { createShellPanelState } from "../src/renderer/components/App/ConnectedA
 import { Titlebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Titlebar.tsx";
 import { Workspace } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace.tsx";
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
-import {
-  ContextTabs,
-  type ContextPanelTab,
-} from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
+import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
 import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/DiffView/DiffFile.tsx";
-import type { FileTreeNode } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/FilesView/FileTreeItem.tsx";
 import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
@@ -131,27 +127,6 @@ const diff: readonly DiffFileData[] = [
   },
 ];
 
-const files: readonly FileTreeNode[] = [
-  {
-    id: "src",
-    name: "src",
-    kind: "directory",
-    children: [
-      {
-        id: "renderer",
-        name: "renderer",
-        kind: "directory",
-        children: [
-          { id: "connected", name: "ConnectedApp.tsx", kind: "file", status: "modified" },
-          { id: "styles", name: "styles.css", kind: "file", status: "modified" },
-        ],
-      },
-      { id: "main", name: "main.ts", kind: "file" },
-    ],
-  },
-  { id: "docs", name: "component-inventory.md", kind: "file", status: "added" },
-];
-
 const meta = {
   title: "Showcase/AMOLED Workspace",
   component: AppShell,
@@ -163,7 +138,6 @@ export default meta;
 function WorkspaceShowcaseFixture() {
   const contextTabsId = "showcase-workspace-context";
   const panelState = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
-  const [activeTab, setActiveTab] = createSignal<ContextPanelTab>("diff");
   const [expandedSessions, setExpandedSessions] = createSignal<readonly string[]>([
     "refactor-utils",
     "investigate-bug",
@@ -173,7 +147,6 @@ function WorkspaceShowcaseFixture() {
     "ui-polish",
     "update-tests",
   ]);
-  const [expandedFiles, setExpandedFiles] = createSignal<readonly string[]>(["src", "renderer"]);
   const [draft, setDraft] = createSignal("");
   const [diffComparison, setDiffComparison] = createSignal("working");
 
@@ -182,12 +155,6 @@ function WorkspaceShowcaseFixture() {
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
   };
-  const toggleFile = (id: string) => {
-    setExpandedFiles((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    );
-  };
-
   return (
     <div data-platform="macos" style={{ width: "100vw", height: "100vh" }}>
       <AppShell
@@ -197,9 +164,7 @@ function WorkspaceShowcaseFixture() {
             rightControls={
               <Show when={!panelState.mobile()}>
                 <ContextTabs
-                  activeTab={activeTab()}
                   idBase={contextTabsId}
-                  onTabChange={setActiveTab}
                   onClose={() => panelState.setRightPanelOpen(false)}
                 />
               </Show>
@@ -282,8 +247,6 @@ function WorkspaceShowcaseFixture() {
             }
             context={
               <ContextPanel
-                activeTab={activeTab()}
-                onTabChange={setActiveTab}
                 onClose={() => panelState.setRightPanelOpen(false)}
                 showTabs={panelState.mobile()}
                 autoFocusClose={panelState.mobile()}
@@ -297,12 +260,6 @@ function WorkspaceShowcaseFixture() {
                     { value: "branch", label: "Changes vs main" },
                   ],
                   onComparisonChange: setDiffComparison,
-                }}
-                files={{
-                  nodes: files,
-                  loading: false,
-                  expandedIDs: expandedFiles(),
-                  onToggleExpanded: toggleFile,
                 }}
               />
             }
