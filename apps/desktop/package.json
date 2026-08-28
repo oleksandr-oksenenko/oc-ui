@@ -8,6 +8,7 @@
     "build": "tsc -b && electron-vite build",
     "build-storybook": "storybook build --output-dir storybook-static --disable-telemetry",
     "check": "vp check",
+    "predev": "install-electron --no",
     "dev": "electron-vite dev",
     "preview": "electron-vite preview",
     "storybook": "storybook dev --port 6006 --disable-telemetry",
