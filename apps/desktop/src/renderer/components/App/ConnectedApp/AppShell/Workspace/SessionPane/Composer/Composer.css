@@ -70,14 +70,10 @@
   padding: 0 !important;
   border: 1px solid var(--composer-border);
   border-radius: 5px;
-  color: #ffffff !important;
+  color: #fff !important;
   background: var(--composer-bg) !important;
   background-image: none !important;
   box-shadow: none !important;
-}
-
-.composer-v2-send:hover:not(:disabled) {
-  background: var(--composer-hover) !important;
 }
 
 .composer-v2-send:focus-visible {
@@ -85,15 +81,13 @@
   outline-offset: 1px;
 }
 
-.composer-picker-control[data-component="select-v2"]:focus-within {
-  outline: 1px solid #4a4a50 !important;
-  outline-offset: 0 !important;
-  box-shadow: none !important;
-}
-
 .composer-v2-send:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.composer-v2-send:hover:not(:disabled) {
+  background: var(--composer-hover) !important;
 }
 
 .composer-v2-send-icon {
@@ -153,6 +147,12 @@
   height: 100%;
 }
 
+.composer-picker-control[data-component="select-v2"]:focus-within {
+  outline: 1px solid #4a4a50 !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
+
 .composer-picker-control[data-component="select-v2"] [data-slot="select-v2-value-text"] {
   display: flex;
   align-items: center;
@@ -208,7 +208,7 @@
   color: #fca5a5;
 }
 
-@media (max-width: 620px) {
+@media (width <= 620px) {
   .composer-v2 {
     width: calc(100% - 20px);
   }

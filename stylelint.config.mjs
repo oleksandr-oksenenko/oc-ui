@@ -1,0 +1,7 @@
+export default {
+  extends: ["stylelint-config-standard"],
+  ignoreFiles: ["**/out/**", "**/storybook-static/**"],
+  rules: {
+    "selector-class-pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:--[a-z0-9]+(?:-[a-z0-9]+)*)?$",
+  },
+};

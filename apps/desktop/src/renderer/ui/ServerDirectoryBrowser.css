@@ -17,8 +17,10 @@
 }
 
 .server-directory-entries button {
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+  min-height: 36px;
   justify-content: flex-start;
 }
 
@@ -80,11 +82,6 @@
 
 .server-directory-entries li + li {
   border-top: 1px solid var(--v2-border-border-base);
-}
-
-.server-directory-entries button {
-  width: 100%;
-  min-height: 36px;
 }
 
 .server-directory-entries span {
