@@ -1,7 +1,11 @@
 import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { DesktopApi, OpenCodeTarget } from "../shared/desktop-api.ts";
+import type {
+  DesktopApi,
+  LocalOpenCodeConnectResult,
+  OpenCodeTarget,
+} from "../shared/desktop-api.ts";
 import type { VerifiedServer } from "./opencode/index.ts";
 
 const verifyServer = vi.hoisted(() =>
@@ -48,7 +52,8 @@ const flush = async (): Promise<void> => {
 const makeDesktop = (options: {
   readonly load: () => Promise<OpenCodeTarget | undefined>;
   readonly clear?: () => Promise<void>;
-  readonly connectLocal?: () => Promise<{ serverUrl: string; password: string }>;
+  readonly connectLocal?: () => Promise<LocalOpenCodeConnectResult>;
+  readonly disconnectLocal?: () => Promise<void>;
   readonly onUnavailable?: (listener: () => void) => () => void;
 }): DesktopApi => ({
   target: {
@@ -62,10 +67,10 @@ const makeDesktop = (options: {
   localOpenCode: {
     connect:
       options.connectLocal ??
-      vi.fn<() => Promise<{ serverUrl: string; password: string }>>(() =>
+      vi.fn<() => Promise<LocalOpenCodeConnectResult>>(() =>
         Promise.reject(new Error("not configured")),
       ),
-    disconnect: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+    disconnect: options.disconnectLocal ?? vi.fn<() => Promise<void>>(() => Promise.resolve()),
     onUnavailable: options.onUnavailable ?? (() => () => undefined),
   },
 });
@@ -86,7 +91,7 @@ afterEach(() => {
 describe("App target startup", () => {
   it("does not let a late saved target replace a manual connection", async () => {
     const loaded = deferred<OpenCodeTarget | undefined>();
-    const localConnect = vi.fn<() => Promise<{ serverUrl: string; password: string }>>();
+    const localConnect = vi.fn<() => Promise<LocalOpenCodeConnectResult>>();
     verifyServer.mockImplementation(() => new Promise(() => undefined));
     const desktop = makeDesktop({ load: () => loaded.promise, connectLocal: localConnect });
     const { host, dispose } = mount(desktop);
@@ -166,13 +171,41 @@ describe("App target startup", () => {
   it("keeps a saved local target forgettable when startup fails", async () => {
     const desktop = makeDesktop({
       load: () => Promise.resolve({ kind: "local" }),
-      connectLocal: () => Promise.reject(new Error("failed")),
+      connectLocal: () =>
+        Promise.resolve({
+          status: "failed",
+          message: "The built-in OpenCode server did not start before the startup timeout.",
+        }),
     });
     const { host, dispose } = mount(desktop);
     await flush();
     await flush();
 
     expect(host.textContent).toContain("Forget saved connection");
+    expect(host.textContent).toContain(
+      "The built-in OpenCode server did not start before the startup timeout.",
+    );
+    dispose();
+  });
+
+  it("reports a local startup failure without waiting for cleanup", async () => {
+    const disconnecting = deferred<void>();
+    const desktop = makeDesktop({
+      load: () => Promise.resolve({ kind: "local" }),
+      connectLocal: () =>
+        Promise.resolve({
+          status: "failed",
+          message: "The built-in OpenCode server failed to start.",
+        }),
+      disconnectLocal: () => disconnecting.promise,
+    });
+    const { host, dispose } = mount(desktop);
+    await flush();
+    await flush();
+
+    expect(host.textContent).toContain("The built-in OpenCode server failed to start.");
+    disconnecting.resolve();
+    await flush();
     dispose();
   });
 
@@ -181,7 +214,10 @@ describe("App target startup", () => {
     const desktop = makeDesktop({
       load: () => Promise.resolve(undefined),
       connectLocal: () =>
-        Promise.resolve({ serverUrl: "http://127.0.0.1:4096", password: "local-secret" }),
+        Promise.resolve({
+          status: "connected",
+          connection: { serverUrl: "http://127.0.0.1:4096", password: "local-secret" },
+        }),
       onUnavailable: (listener) => {
         unavailable = listener;
         return () => undefined;

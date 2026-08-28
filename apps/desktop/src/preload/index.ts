@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import {
   IPC_CHANNELS,
-  parseLocalOpenCodeConnection,
+  parseLocalOpenCodeConnectResult,
   parseTargetLoadResult,
   parseTargetSaveResult,
   parseVoidResult,
@@ -25,7 +25,7 @@ const desktopApi: DesktopApi = {
   },
   localOpenCode: {
     connect: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.localOpenCodeConnect).then(parseLocalOpenCodeConnection),
+      ipcRenderer.invoke(IPC_CHANNELS.localOpenCodeConnect).then(parseLocalOpenCodeConnectResult),
     disconnect: () =>
       ipcRenderer.invoke(IPC_CHANNELS.localOpenCodeDisconnect).then(parseVoidResult),
     onUnavailable: (listener) => {

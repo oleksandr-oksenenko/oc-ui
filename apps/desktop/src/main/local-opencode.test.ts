@@ -37,7 +37,7 @@ describe("local OpenCode sidecar", () => {
     expect(connected).toEqual({ serverUrl: endpoint.url, password: endpoint.auth.password });
     expect(ensure).toHaveBeenCalledWith({
       file: "/private/app-data/opencode/service.json",
-      command: ["/private/app-resources/opencode2.exe", "serve", "--service"],
+      command: ["/private/app-resources/opencode2.exe", "serve", "--service", "--port", "0"],
       version: LOCAL_OPENCODE_VERSION,
       env: { XDG_STATE_HOME: "/private/app-data", OPENCODE_CLIENT: "oc-ui" },
     });
@@ -116,7 +116,10 @@ describe("local OpenCode sidecar", () => {
       connectTimeoutMs: 5,
     });
 
-    await expect(service.connect()).rejects.toBeInstanceOf(LocalOpenCodeUnavailableError);
+    await expect(service.connect()).rejects.toMatchObject({
+      reason: "timed-out",
+      message: "The built-in OpenCode server did not start before the startup timeout.",
+    });
     const disconnecting = service.disconnect();
     expect(stop).not.toHaveBeenCalled();
 
@@ -191,7 +194,10 @@ describe("local OpenCode sidecar", () => {
       resolveCliBinary: () => "/private/opencode2.exe",
     });
 
-    await expect(service.connect()).rejects.toBeInstanceOf(LocalOpenCodeUnavailableError);
+    await expect(service.connect()).rejects.toMatchObject({
+      reason: "start-failed",
+      message: "The built-in OpenCode server failed to start.",
+    });
     await expect(service.connect()).rejects.not.toThrow(secret);
 
     const invalidEndpoint = createLocalOpenCodeService({
@@ -207,6 +213,9 @@ describe("local OpenCode sidecar", () => {
       },
       resolveCliBinary: () => "/private/opencode2.exe",
     });
-    await expect(invalidEndpoint.connect()).rejects.not.toThrow(secret);
+    await expect(invalidEndpoint.connect()).rejects.toMatchObject({
+      reason: "invalid-endpoint",
+      message: "The built-in OpenCode server returned invalid connection details.",
+    });
   });
 });

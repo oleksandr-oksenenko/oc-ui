@@ -36,7 +36,12 @@ const LocalOpenCodeConnectionSchema = Schema.Struct({
   serverUrl: Schema.String,
   password: Schema.String,
 });
-type LocalOpenCodeConnection = typeof LocalOpenCodeConnectionSchema.Type;
+
+const LocalOpenCodeConnectResultSchema = Schema.Union([
+  Schema.Struct({ status: Schema.Literal("connected"), connection: LocalOpenCodeConnectionSchema }),
+  Schema.Struct({ status: Schema.Literal("failed"), message: Schema.String }),
+]);
+export type LocalOpenCodeConnectResult = typeof LocalOpenCodeConnectResultSchema.Type;
 
 export type DesktopApi = {
   readonly target: {
@@ -46,7 +51,7 @@ export type DesktopApi = {
     readonly clear: () => Promise<void>;
   };
   readonly localOpenCode: {
-    readonly connect: () => Promise<LocalOpenCodeConnection>;
+    readonly connect: () => Promise<LocalOpenCodeConnectResult>;
     readonly disconnect: () => Promise<void>;
     readonly onUnavailable: (listener: () => void) => () => void;
   };
@@ -76,7 +81,7 @@ export const parseTargetSaveResult = Schema.decodeUnknownSync(
   ipcParseOptions,
 );
 export const parseVoidResult = Schema.decodeUnknownSync(Schema.Undefined, ipcParseOptions);
-export const parseLocalOpenCodeConnection = Schema.decodeUnknownSync(
-  LocalOpenCodeConnectionSchema,
+export const parseLocalOpenCodeConnectResult = Schema.decodeUnknownSync(
+  LocalOpenCodeConnectResultSchema,
   ipcParseOptions,
 );

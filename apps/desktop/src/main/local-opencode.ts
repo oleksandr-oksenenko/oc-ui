@@ -21,6 +21,24 @@ const BASIC_USERNAME = "opencode";
 const LOCAL_CLIENT_NAME = "oc-ui";
 const FAILED_PROBES_BEFORE_UNAVAILABLE = 3;
 
+const LocalOpenCodeFailureReasonSchema = Schema.Union([
+  Schema.Literal("executable-unavailable"),
+  Schema.Literal("invalid-endpoint"),
+  Schema.Literal("start-failed"),
+  Schema.Literal("stop-failed"),
+  Schema.Literal("timed-out"),
+]);
+type LocalOpenCodeFailureReason = typeof LocalOpenCodeFailureReasonSchema.Type;
+
+const localOpenCodeFailureMessages = {
+  "executable-unavailable":
+    "The built-in OpenCode executable is missing or incompatible. Reinstall Ocui and try again.",
+  "invalid-endpoint": "The built-in OpenCode server returned invalid connection details.",
+  "start-failed": "The built-in OpenCode server failed to start.",
+  "stop-failed": "The built-in OpenCode server could not be stopped.",
+  "timed-out": "The built-in OpenCode server did not start before the startup timeout.",
+} satisfies Record<LocalOpenCodeFailureReason, string>;
+
 type ServiceDriver = Pick<typeof OpenCodeService, "ensure" | "stop">;
 type FetchLike = typeof globalThis.fetch;
 
@@ -53,11 +71,15 @@ export type LocalOpenCodeServiceOptions = {
 
 export class LocalOpenCodeUnavailableError extends Schema.TaggedError<LocalOpenCodeUnavailableError>()(
   "LocalOpenCodeUnavailableError",
-  { message: Schema.String },
+  {
+    reason: LocalOpenCodeFailureReasonSchema,
+    message: Schema.String,
+  },
 ) {
-  static make(): LocalOpenCodeUnavailableError {
+  static fromReason(reason: LocalOpenCodeFailureReason): LocalOpenCodeUnavailableError {
     return new LocalOpenCodeUnavailableError({
-      message: "The local OpenCode service is unavailable.",
+      reason,
+      message: localOpenCodeFailureMessages[reason],
     });
   }
 }
@@ -89,7 +111,7 @@ function resolveLocalOpenCodeBinary(): string {
   try {
     packageJsonPath = requireFromMain.resolve(`${CLI_PACKAGE}/package.json`);
   } catch {
-    throw LocalOpenCodeUnavailableError.make();
+    throw LocalOpenCodeUnavailableError.fromReason("executable-unavailable");
   }
 
   try {
@@ -109,7 +131,7 @@ function resolveLocalOpenCodeBinary(): string {
     }
     return binary;
   } catch {
-    throw LocalOpenCodeUnavailableError.make();
+    throw LocalOpenCodeUnavailableError.fromReason("executable-unavailable");
   }
 }
 
@@ -118,7 +140,7 @@ function registrationFile(options: LocalOpenCodeServiceOptions): string {
   if (options.userDataPath !== undefined) {
     return join(options.userDataPath, LOCAL_OPENCODE_SERVICE_FILE);
   }
-  throw LocalOpenCodeUnavailableError.make();
+  throw LocalOpenCodeUnavailableError.fromReason("start-failed");
 }
 
 function serviceStatePath(file: string, options: LocalOpenCodeServiceOptions): string {
@@ -134,15 +156,17 @@ function endpointFromPrivate(input: OpenCodeEndpoint): LocalOpenCodeEndpoint {
   try {
     value = parseServiceEndpoint(input);
   } catch {
-    throw LocalOpenCodeUnavailableError.make();
+    throw LocalOpenCodeUnavailableError.fromReason("invalid-endpoint");
   }
-  if (value.auth.username !== BASIC_USERNAME) throw LocalOpenCodeUnavailableError.make();
+  if (value.auth.username !== BASIC_USERNAME) {
+    throw LocalOpenCodeUnavailableError.fromReason("invalid-endpoint");
+  }
 
   let url: URL;
   try {
     url = new URL(value.url);
   } catch {
-    throw LocalOpenCodeUnavailableError.make();
+    throw LocalOpenCodeUnavailableError.fromReason("invalid-endpoint");
   }
   if (
     url.protocol !== "http:" ||
@@ -154,7 +178,7 @@ function endpointFromPrivate(input: OpenCodeEndpoint): LocalOpenCodeEndpoint {
     url.search !== "" ||
     url.hash !== ""
   ) {
-    throw LocalOpenCodeUnavailableError.make();
+    throw LocalOpenCodeUnavailableError.fromReason("invalid-endpoint");
   }
 
   return {
@@ -257,7 +281,7 @@ export function createLocalOpenCodeService(
         if (!available) {
           failedProbes += 1;
           if (failedProbes >= FAILED_PROBES_BEFORE_UNAVAILABLE) setStatus("unavailable");
-          return;
+          continue;
         }
         failedProbes = 0;
         if (currentStatus === "unavailable") setStatus("connected");
@@ -270,7 +294,7 @@ export function createLocalOpenCodeService(
     const pending = service
       .ensure({
         file,
-        command: [binary, "serve", "--service"],
+        command: [binary, "serve", "--service", "--port", "0"],
         version: LOCAL_OPENCODE_VERSION,
         env: {
           XDG_STATE_HOME: serviceStatePath(file, options),
@@ -290,18 +314,22 @@ export function createLocalOpenCodeService(
     setStatus("connecting");
     try {
       const endpoint = await ensure();
-      if (generation !== lifecycle) throw LocalOpenCodeUnavailableError.make();
+      if (generation !== lifecycle) {
+        throw LocalOpenCodeUnavailableError.fromReason("start-failed");
+      }
       currentEndpoint = endpoint;
       setStatus("connected");
       startMonitoring(endpoint, generation);
       return endpoint;
-    } catch {
+    } catch (cause) {
       if (generation === lifecycle) {
         currentEndpoint = undefined;
         stopMonitoring();
         setStatus("unavailable");
       }
-      throw LocalOpenCodeUnavailableError.make();
+      throw Schema.is(LocalOpenCodeUnavailableError)(cause)
+        ? cause
+        : LocalOpenCodeUnavailableError.fromReason("start-failed");
     }
   };
 
@@ -345,7 +373,7 @@ export function createLocalOpenCodeService(
         await service.stop({ file });
       } catch {
         setStatus("unavailable");
-        throw LocalOpenCodeUnavailableError.make();
+        throw LocalOpenCodeUnavailableError.fromReason("stop-failed");
       }
     }
     setStatus("disconnected");
@@ -376,7 +404,7 @@ async function withTimeout<T>(promise: Promise<T>, milliseconds: number): Promis
   const controller = new AbortController();
   const timeout = Effect.runPromise(
     Effect.sleep(milliseconds).pipe(
-      Effect.andThen(Effect.fail(LocalOpenCodeUnavailableError.make())),
+      Effect.andThen(Effect.fail(LocalOpenCodeUnavailableError.fromReason("timed-out"))),
     ),
     { signal: controller.signal },
   );

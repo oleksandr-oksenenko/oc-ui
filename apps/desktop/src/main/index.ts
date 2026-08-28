@@ -5,11 +5,15 @@ import { pathToFileURL } from "node:url";
 
 import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session } from "electron";
 import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electron";
-import { Effect, ManagedRuntime } from "effect";
+import { Effect, ManagedRuntime, Schema } from "effect";
 
 import type { SaveTargetInput } from "../shared/desktop-api.ts";
 import { IPC_CHANNELS, parseSaveTargetInput } from "../shared/desktop-api.ts";
-import { createLocalOpenCodeService, type LocalOpenCodeService } from "./local-opencode.ts";
+import {
+  createLocalOpenCodeService,
+  LocalOpenCodeUnavailableError,
+  type LocalOpenCodeService,
+} from "./local-opencode.ts";
 import type { SettingsService } from "./settings.ts";
 import type { SettingsError } from "./settings.ts";
 import { normalizeServerUrl, settingsLayer, Settings, validatePassword } from "./settings.ts";
@@ -143,9 +147,16 @@ const installIpcHandlers = (): void => {
       return Promise.reject(new TypeError("localOpenCode.connect does not accept arguments"));
     }
     return runLocalOpenCode(async (service) => {
-      const endpoint = await service.connect();
-      localOpenCodeWasConnected = true;
-      return endpoint;
+      try {
+        const connection = await service.connect();
+        localOpenCodeWasConnected = true;
+        return { status: "connected" as const, connection };
+      } catch (cause) {
+        const error = Schema.is(LocalOpenCodeUnavailableError)(cause)
+          ? cause
+          : LocalOpenCodeUnavailableError.fromReason("start-failed");
+        return { status: "failed" as const, message: error.message };
+      }
     });
   });
 
