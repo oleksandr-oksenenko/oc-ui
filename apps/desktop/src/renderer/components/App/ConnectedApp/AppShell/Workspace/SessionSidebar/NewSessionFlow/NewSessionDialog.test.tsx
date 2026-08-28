@@ -2,7 +2,7 @@ import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/c
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   NewSessionDialog,
@@ -15,9 +15,31 @@ import {
 } from "../../../../../../../ui/ServerFlowDialogProvider.tsx";
 
 const projects = [
-  { id: "oc-ui", name: "oc-ui", location: { directory: "/srv/projects/oc-ui" }, vcs: "git" },
+  {
+    id: "oc-ui",
+    name: "/srv/projects/oc-ui",
+    location: { directory: "/srv/projects/oc-ui" },
+    vcs: "git",
+  },
   { id: "api", name: "API", location: { directory: "/srv/projects/api" }, vcs: "git" },
 ] as const;
+
+const originalElementScrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollTo");
+
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    value: () => undefined,
+  });
+});
+
+afterAll(() => {
+  if (originalElementScrollTo) {
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", originalElementScrollTo);
+    return;
+  }
+  Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+});
 
 const listDirectory = vi.fn<OpenCodeClient["file"]["list"]>((input) => {
   const base = input?.location?.directory ?? "/";
@@ -115,8 +137,81 @@ describe("NewSessionDialog", () => {
       ?.click();
     expect(mounted.actions.onAddProject).toHaveBeenCalledOnce();
 
-    mounted.root.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]')[1]?.click();
+    const trigger = mounted.root.querySelector<HTMLButtonElement>(".new-session-project-trigger");
+    trigger?.click();
+    await flushDialogMount();
+    const picker = document.getElementById(trigger?.getAttribute("aria-controls") ?? "");
+    expect(mounted.root.contains(picker)).toBe(false);
+    const selected = picker?.querySelector('[data-selected="true"] .new-session-project-option');
+    expect(selected?.querySelector("strong")?.textContent).toBe("oc-ui");
+    expect(selected?.querySelector("span")?.textContent).toBe("/srv/projects/oc-ui");
+    [...(picker?.querySelectorAll<HTMLButtonElement>('[data-slot="list-item"]') ?? [])]
+      .find((button) => button.textContent?.includes("API"))
+      ?.click();
     expect(mounted.actions.onProjectChange).toHaveBeenCalledWith("api");
+    mounted.dispose();
+  });
+
+  it("filters projects by name and directory", async () => {
+    const mounted = mount(() => ({
+      view: "select-project",
+      projects,
+      selectedProjectID: "oc-ui",
+      mode: "direct",
+    }));
+    await flushDialogMount();
+
+    const trigger = mounted.root.querySelector<HTMLButtonElement>(".new-session-project-trigger");
+    trigger?.click();
+    await flushDialogMount();
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    const contentID = trigger?.getAttribute("aria-controls") ?? "";
+    await vi.waitFor(() => {
+      expect(
+        document.getElementById(contentID)?.querySelector('[data-component="list"] input'),
+      ).not.toBeNull();
+    });
+    const picker = document.getElementById(contentID);
+    const search = picker?.querySelector<HTMLInputElement>('[data-component="list"] input');
+    expect(search).not.toBeNull();
+    if (search) {
+      search.value = "/srv/projects/api";
+      search.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+    await vi.waitFor(() => {
+      const options = [
+        ...(picker?.querySelectorAll<HTMLButtonElement>('[data-slot="list-item"]') ?? []),
+      ];
+      expect(options).toHaveLength(1);
+      expect(options[0]?.textContent).toContain("API");
+    });
+    mounted.dispose();
+  });
+
+  it("closes the project picker with Escape without dismissing the dialog", async () => {
+    const mounted = mount(() => ({
+      view: "select-project",
+      projects,
+      selectedProjectID: "oc-ui",
+      mode: "direct",
+    }));
+    await flushDialogMount();
+    const trigger = mounted.root.querySelector<HTMLButtonElement>(".new-session-project-trigger");
+
+    trigger?.click();
+    await flushDialogMount();
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    const contentID = trigger?.getAttribute("aria-controls") ?? "";
+    await vi.waitFor(() => expect(document.getElementById(contentID)).not.toBeNull());
+
+    expect(trigger?.matches('[data-server-flow-escape-trigger][aria-expanded="true"]')).toBe(true);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushDialogMount();
+    await vi.waitFor(() => {
+      expect(document.getElementById(contentID)).toBeNull();
+    });
+    expect(mounted.onClose).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(trigger);
     mounted.dispose();
   });
 
@@ -160,7 +255,7 @@ describe("NewSessionDialog", () => {
     mounted.dispose();
   });
 
-  it("associates project validation with and focuses the project radio group", async () => {
+  it("associates project validation with and focuses the project picker", async () => {
     const mounted = mount(() => ({
       view: "select-project",
       projects,
@@ -168,11 +263,11 @@ describe("NewSessionDialog", () => {
       error: { kind: "validation", field: "project", message: "Choose a project." },
     }));
     await flushDialogMount();
-    const projectGroup = mounted.root.querySelector<HTMLElement>('[role="radiogroup"]');
-    expect(projectGroup?.getAttribute("aria-invalid")).toBe("true");
-    expect(projectGroup?.getAttribute("aria-describedby")).toBe("new-session-project-error");
+    const projectTrigger = mounted.root.querySelector<HTMLElement>(".new-session-project-trigger");
+    expect(projectTrigger?.getAttribute("aria-invalid")).toBe("true");
+    expect(projectTrigger?.getAttribute("aria-describedby")).toBe("new-session-project-error");
     await new Promise<void>((resolve) => queueMicrotask(resolve));
-    expect(document.activeElement?.getAttribute("data-slot")).toBe("radio-v2-item-input");
+    expect(document.activeElement).toBe(projectTrigger);
     mounted.dispose();
   });
 

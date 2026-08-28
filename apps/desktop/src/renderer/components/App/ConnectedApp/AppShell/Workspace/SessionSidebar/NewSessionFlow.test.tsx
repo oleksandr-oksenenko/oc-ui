@@ -400,8 +400,7 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    const radios = mounted.root.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]');
-    radios[2]?.click();
+    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
     submit(mounted.root);
     await flush();
 
@@ -447,8 +446,7 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    const radios = mounted.root.querySelectorAll<HTMLElement>('[data-slot="radio-v2-item-input"]');
-    radios[2]?.click();
+    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
     submit(mounted.root);
     await flush();
     const name = mounted.root.querySelector<HTMLInputElement>("input");

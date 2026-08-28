@@ -16,6 +16,7 @@
     "test": "vp test run --passWithNoTests"
   },
   "dependencies": {
+    "@kobalte/core": "catalog:",
     "@opencode-ai/cli": "catalog:",
     "@opencode-ai/client": "catalog:",
     "@opencode-ai/ui": "catalog:",

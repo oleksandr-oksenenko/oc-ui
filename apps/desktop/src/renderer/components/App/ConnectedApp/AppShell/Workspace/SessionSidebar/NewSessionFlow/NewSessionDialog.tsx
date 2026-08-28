@@ -124,11 +124,11 @@ function focusDialogState(
 ): void {
   if (error?.kind === "validation") {
     if (error.field === "project") {
-      const radio = elements.projectPicker?.querySelector<HTMLElement>(
-        '[data-slot="radio-v2-item-input"]',
+      const trigger = elements.projectPicker?.querySelector<HTMLElement>(
+        ".new-session-project-trigger",
       );
       const fallback = elements.projectPicker?.querySelector<HTMLElement>("button:not([disabled])");
-      (radio ?? fallback)?.focus();
+      (trigger ?? fallback)?.focus();
       return;
     }
     const targets = {
@@ -146,7 +146,7 @@ function focusDialogState(
     elements.parentBrowser?.focus();
     return;
   }
-  elements.projectPicker?.querySelector<HTMLElement>('[data-slot="radio-v2-item-input"]')?.focus();
+  elements.projectPicker?.querySelector<HTMLElement>(".new-session-project-trigger")?.focus();
 }
 
 export function NewSessionDialog(props: NewSessionDialogProps) {

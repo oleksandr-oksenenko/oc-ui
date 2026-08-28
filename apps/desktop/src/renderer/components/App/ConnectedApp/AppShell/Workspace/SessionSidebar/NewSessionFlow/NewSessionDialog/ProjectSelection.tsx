@@ -1,12 +1,25 @@
+import { Popover as Kobalte } from "@kobalte/core/popover";
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
+import { List } from "@opencode-ai/ui/list";
 import { Loader } from "@opencode-ai/ui/loader";
 import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
-import { For, Show } from "solid-js";
+import { Show, createEffect, createMemo, createSignal, createUniqueId } from "solid-js";
 
 import type { NewSessionDialogState, NewSessionLocationMode } from "../NewSessionDialog.tsx";
 
 type ProjectSelectionState = Extract<NewSessionDialogState, { view: "select-project" }>;
+type ProjectOption = {
+  readonly project: ProjectSelectionState["projects"][number];
+  readonly name: string;
+  readonly search: string;
+};
+
+function projectDisplayName(project: ProjectOption["project"]): string {
+  if (project.name !== project.location.directory) return project.name;
+  const normalized = project.location.directory.replace(/[\\/]+$/, "");
+  return normalized.split(/[\\/]/).at(-1) || project.name;
+}
 
 export type ProjectSelectionProps = {
   readonly state: ProjectSelectionState;
@@ -20,9 +33,37 @@ export type ProjectSelectionProps = {
 };
 
 export function ProjectSelection(props: ProjectSelectionProps) {
-  const selectedProject = () =>
-    props.state.projects.find((project) => project.id === props.state.selectedProjectID);
+  const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
+  const [pickerOpen, setPickerOpen] = createSignal(false);
+  const pickerContentID = `new-session-project-${createUniqueId()}`;
+  const projectOptions = createMemo<ProjectOption[]>(() =>
+    props.state.projects.map((project) => {
+      const name = projectDisplayName(project);
+      return {
+        project,
+        name,
+        search: `${name}\n${project.name}\n${project.location.directory}`,
+      };
+    }),
+  );
+  const selectedOption = () =>
+    projectOptions().find(({ project }) => project.id === props.state.selectedProjectID);
+  const selectedProject = () => selectedOption()?.project;
   const ready = () => !props.state.projectsLoading && !props.state.projectsError;
+
+  const closePicker = (restoreFocus = false) => {
+    setPickerOpen(false);
+    if (restoreFocus) queueMicrotask(() => trigger()?.focus());
+  };
+  const selectProject = (option: ProjectOption | undefined) => {
+    if (!option) return;
+    props.onProjectChange(option.project.id);
+    closePicker();
+  };
+
+  createEffect(() => {
+    if (props.disabled) closePicker();
+  });
 
   return (
     <>
@@ -79,24 +120,74 @@ export function ProjectSelection(props: ProjectSelectionProps) {
             </Show>
           }
         >
-          <RadioGroup
-            label="Select a project"
-            value={props.state.selectedProjectID ?? ""}
-            disabled={props.disabled}
-            aria-describedby={props.validationError ? "new-session-project-error" : undefined}
-            aria-invalid={props.validationError ? "true" : undefined}
-            onChange={props.onProjectChange}
+          <Kobalte
+            open={pickerOpen()}
+            onOpenChange={(open) => setPickerOpen(open)}
+            placement="bottom-start"
+            gutter={4}
+            sameWidth
+            fitViewport
+            modal
+            forceMount
           >
-            <For each={props.state.projects}>
-              {(project) => (
-                <RadioItem
-                  value={project.id}
-                  label={project.name}
-                  description={project.location.directory}
-                />
-              )}
-            </For>
-          </RadioGroup>
+            <Kobalte.Trigger
+              ref={setTrigger}
+              as="button"
+              type="button"
+              role="combobox"
+              class="new-session-project-trigger"
+              disabled={props.disabled}
+              aria-label="Select a project"
+              aria-haspopup="dialog"
+              aria-expanded={pickerOpen()}
+              aria-controls={pickerOpen() ? pickerContentID : undefined}
+              aria-describedby={props.validationError ? "new-session-project-error" : undefined}
+              aria-invalid={props.validationError ? "true" : undefined}
+              data-server-flow-escape-trigger
+            >
+              <span class="new-session-project-trigger-value">
+                <strong>{selectedOption()?.name ?? "Select a project"}</strong>
+                <Show when={selectedProject()?.location.directory}>
+                  {(directory) => <span>{directory()}</span>}
+                </Show>
+              </span>
+              <Icon name="chevron-down" size="small" />
+            </Kobalte.Trigger>
+
+            <Kobalte.Portal>
+              <Show when={pickerOpen()}>
+                <Kobalte.Content
+                  id={pickerContentID}
+                  class="new-session-project-popover"
+                  onEscapeKeyDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closePicker(true);
+                  }}
+                  onPointerDownOutside={() => closePicker()}
+                >
+                  <Kobalte.Title class="sr-only">Select a project</Kobalte.Title>
+                  <List
+                    class="new-session-project-list"
+                    search={{ placeholder: "Search projects", autofocus: true }}
+                    emptyMessage="No matching projects."
+                    items={projectOptions()}
+                    key={(option) => option.project.id}
+                    current={selectedOption()}
+                    filterKeys={["search"]}
+                    onSelect={selectProject}
+                  >
+                    {({ project, name }) => (
+                      <span class="new-session-project-option">
+                        <strong>{name}</strong>
+                        <span>{project.location.directory}</span>
+                      </span>
+                    )}
+                  </List>
+                </Kobalte.Content>
+              </Show>
+            </Kobalte.Portal>
+          </Kobalte>
         </Show>
 
         <Show when={props.validationError}>

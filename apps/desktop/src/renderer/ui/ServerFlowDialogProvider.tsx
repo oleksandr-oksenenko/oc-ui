@@ -15,12 +15,32 @@ function stopDismissal(event: Event): void {
   event.stopImmediatePropagation();
 }
 
+function closeEscapeLayer(event: KeyboardEvent): boolean {
+  const trigger = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      'button[data-server-flow-escape-trigger][aria-expanded="true"][aria-controls]',
+    ),
+  ]
+    .filter((candidate) => {
+      const contentID = candidate.getAttribute("aria-controls");
+      return contentID !== null && document.getElementById(contentID) !== null;
+    })
+    .at(-1);
+  if (!trigger) return false;
+  stopDismissal(event);
+  trigger.click();
+  trigger.focus();
+  return true;
+}
+
 /** Adds the server-flow dismissal rule around OpenCode's dialog provider. */
 export function ServerFlowDialogProvider(props: ParentProps) {
   const [blocked, setBlocked] = createSignal(false);
 
   const keyDown = (event: KeyboardEvent): void => {
-    if (event.key === "Escape" && blocked()) stopDismissal(event);
+    if (event.key !== "Escape") return;
+    if (closeEscapeLayer(event)) return;
+    if (blocked()) stopDismissal(event);
   };
   const backdrop = (event: Event): void => {
     if (!blocked()) return;
