@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  parseLocalOpenCodeConnection,
+  parseLocalOpenCodeConnectResult,
   parseTargetLoadResult,
   parseTargetSaveResult,
   parseVoidResult,
@@ -20,11 +20,17 @@ describe("desktop IPC result parsing", () => {
     ).toEqual({ kind: "remote", serverUrl: "http://example.test", password: "secret" });
     expect(parseTargetSaveResult({ passwordSaved: true })).toEqual({ passwordSaved: true });
     expect(
-      parseLocalOpenCodeConnection({
-        serverUrl: "http://127.0.0.1:4096",
-        password: "secret",
+      parseLocalOpenCodeConnectResult({
+        status: "connected",
+        connection: { serverUrl: "http://127.0.0.1:4096", password: "secret" },
       }),
-    ).toEqual({ serverUrl: "http://127.0.0.1:4096", password: "secret" });
+    ).toEqual({
+      status: "connected",
+      connection: { serverUrl: "http://127.0.0.1:4096", password: "secret" },
+    });
+    expect(
+      parseLocalOpenCodeConnectResult({ status: "failed", message: "Server failed to start." }),
+    ).toEqual({ status: "failed", message: "Server failed to start." });
     expect(parseVoidResult(undefined)).toBeUndefined();
   });
 
@@ -36,9 +42,12 @@ describe("desktop IPC result parsing", () => {
       "Expected no excess property",
     );
     expect(() => parseTargetSaveResult({ passwordSaved: "yes" })).toThrow("Expected boolean");
-    expect(() => parseLocalOpenCodeConnection({ serverUrl: "http://127.0.0.1:4096" })).toThrow(
-      "Expected string",
-    );
+    expect(() =>
+      parseLocalOpenCodeConnectResult({
+        status: "connected",
+        connection: { serverUrl: "http://127.0.0.1:4096" },
+      }),
+    ).toThrow('Missing key\n  at ["connection"]["password"]');
     expect(() => parseVoidResult(null)).toThrow("Expected undefined");
   });
 });

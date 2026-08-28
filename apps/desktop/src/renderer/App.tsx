@@ -76,15 +76,25 @@ export function App() {
     try {
       const local = await desktop.localOpenCode.connect();
       if (currentAttempt !== attempt) return;
+      if (local.status === "failed") {
+        setConnection({ status: "failed", message: local.message });
+        try {
+          await disconnectLocal();
+        } catch {
+          if (currentAttempt !== attempt) return;
+          setConnection({ status: "failed", message: localCleanupMessage() });
+        }
+        return;
+      }
       const verified = await verifyServer({
-        serverUrl: local.serverUrl,
-        password: local.password,
+        serverUrl: local.connection.serverUrl,
+        password: local.connection.password,
       });
       if (currentAttempt !== attempt) return;
       setServerUrl(verified.serverUrl);
       // This password belongs only to the running local process. It is never
       // passed to target.saveLocal or target.saveRemote.
-      pendingPassword = local.password;
+      pendingPassword = local.connection.password;
       setCandidate(verified);
     } catch (cause) {
       if (currentAttempt !== attempt) return;
