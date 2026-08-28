@@ -5,9 +5,9 @@ import { createSignal, onCleanup } from "solid-js";
 import type { OpenCodeEventSource } from "./event-source";
 
 export type VcsDiffMode = "working" | "branch";
-export type VcsDiffStatus = "idle" | "loading" | "ready" | "failed";
+type VcsDiffStatus = "idle" | "loading" | "ready" | "failed";
 
-export type VcsDiffSnapshot = {
+type VcsDiffSnapshot = {
   readonly files: readonly FileDiffInfo[];
   readonly status: VcsDiffStatus;
   readonly stale: boolean;
