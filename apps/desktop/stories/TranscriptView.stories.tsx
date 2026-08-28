@@ -183,6 +183,7 @@ const richItems: readonly SessionMessageInfo[] = [
 const meta = {
   title: "Transcript/TranscriptView",
   component: TranscriptView,
+  args: { sessionID: "transcript-story" },
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof TranscriptView>;
 export default meta;

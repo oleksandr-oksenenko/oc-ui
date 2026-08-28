@@ -1,8 +1,9 @@
 import type { LocationRef, SessionMessageInfo } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { Button } from "@opencode-ai/ui/button";
+import { createAutoScroll } from "@opencode-ai/ui/hooks";
 import { Loader } from "@opencode-ai/ui/loader";
-import { Show, type JSX } from "solid-js";
+import { createEffect, Show, type JSX } from "solid-js";
 
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
 import { CompactionMessage } from "./TranscriptView/CompactionMessage.tsx";
@@ -15,6 +16,7 @@ import { UserMessage } from "./TranscriptView/UserMessage.tsx";
 import "./SessionPane.css";
 
 export type TranscriptViewProps = {
+  readonly sessionID: string;
   readonly messages: readonly SessionMessageInfo[];
   readonly sessionStatus: DataSessionStatus;
   readonly loading?: boolean;
@@ -25,10 +27,27 @@ export type TranscriptViewProps = {
 };
 
 export function TranscriptView(props: TranscriptViewProps): JSX.Element {
+  let openedSessionID: string | undefined;
   const working = () => props.sessionStatus === "running";
+  const autoScrollActive = () => props.loading === true || working();
+  const { contentRef, handleScroll, resume, scrollRef } = createAutoScroll({
+    working: autoScrollActive,
+  });
+
+  createEffect(() => {
+    const sessionID = props.sessionID;
+    if (props.loading === true || openedSessionID === sessionID) return;
+    openedSessionID = sessionID;
+    resume();
+  });
 
   return (
-    <div class="transcript-view" aria-busy={props.loading === true}>
+    <div
+      ref={scrollRef}
+      class="transcript-view"
+      aria-busy={props.loading === true}
+      onScroll={handleScroll}
+    >
       <Show when={props.loading === true && props.messages.length === 0}>
         <output class="transcript-state" aria-live="polite">
           <Loader class="transcript-state-loader" width={18} height={18} aria-hidden="true" />
@@ -56,7 +75,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
       </Show>
 
       <Show when={props.messages.length > 0 || working()}>
-        <div class="transcript-document">
+        <div ref={contentRef} class="transcript-document">
           {props.messages.map((message) => renderMessage(message, props.sessionStatus))}
 
           <Show when={working()}>

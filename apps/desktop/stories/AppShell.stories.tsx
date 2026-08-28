@@ -169,7 +169,12 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                 selected
                 title="Test coverage"
                 transcript={
-                  <TranscriptView messages={transcript} loading={false} sessionStatus="running" />
+                  <TranscriptView
+                    sessionID="integrated"
+                    messages={transcript}
+                    loading={false}
+                    sessionStatus="running"
+                  />
                 }
                 composer={
                   <Composer
@@ -244,7 +249,12 @@ export const MainOnly = {
                 selected
                 title="No context panel"
                 transcript={
-                  <TranscriptView messages={transcript} loading={false} sessionStatus="idle" />
+                  <TranscriptView
+                    sessionID="main-only"
+                    messages={transcript}
+                    loading={false}
+                    sessionStatus="idle"
+                  />
                 }
                 composer={
                   <Composer
@@ -305,7 +315,12 @@ export const NarrowRightPanelCollapsed = {
                 selected
                 title="Narrow workspace"
                 transcript={
-                  <TranscriptView messages={transcript} loading={false} sessionStatus="idle" />
+                  <TranscriptView
+                    sessionID="narrow"
+                    messages={transcript}
+                    loading={false}
+                    sessionStatus="idle"
+                  />
                 }
                 composer={
                   <Composer

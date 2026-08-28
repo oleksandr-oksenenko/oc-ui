@@ -440,6 +440,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
                 transcript={
                   <Show when={selectedSession()}>
                     <TranscriptView
+                      sessionID={selectedID()!}
                       messages={transcript()}
                       sessionStatus={transcriptStatus()}
                       loading={transcriptLoading()}

@@ -33,7 +33,14 @@ export const SelectedPlacement: Story = {
       <SessionPane
         selected
         title="AMOLED polish"
-        transcript={<TranscriptView messages={transcript} sessionStatus="idle" loading={false} />}
+        transcript={
+          <TranscriptView
+            sessionID="selected-placement"
+            messages={transcript}
+            sessionStatus="idle"
+            loading={false}
+          />
+        }
         composer={
           <Composer
             value={draft()}

@@ -1,4 +1,5 @@
 import type { SessionMessageAssistantTool, SessionMessageInfo } from "@opencode-ai/client";
+import { batch, createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -105,7 +106,10 @@ describe("TranscriptView", () => {
     ];
     const host = document.createElement("div");
     document.body.append(host);
-    const dispose = render(() => <TranscriptView messages={messages} sessionStatus="idle" />, host);
+    const dispose = render(
+      () => <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />,
+      host,
+    );
 
     expect(host.textContent).toContain("notes.txt");
     expect(host.textContent).toContain("reviewer");
@@ -213,7 +217,7 @@ describe("TranscriptView", () => {
     const host = document.createElement("div");
     document.body.append(host);
     const dispose = render(
-      () => <TranscriptView messages={messages} sessionStatus="running" />,
+      () => <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />,
       host,
     );
     expect(
@@ -288,7 +292,10 @@ describe("TranscriptView", () => {
     ];
     const host = document.createElement("div");
     document.body.append(host);
-    const dispose = render(() => <TranscriptView messages={messages} sessionStatus="idle" />, host);
+    const dispose = render(
+      () => <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />,
+      host,
+    );
 
     const markdown = host.querySelector<HTMLElement>(".transcript-markdown");
     expect(markdown?.querySelector("h2")?.textContent).toBe("Result");
@@ -302,5 +309,72 @@ describe("TranscriptView", () => {
     dispose();
     host.remove();
     vi.unstubAllGlobals();
+  });
+
+  it("scrolls to the bottom the first time a delayed transcript opens", async () => {
+    vi.useFakeTimers();
+    let notifyResize: (() => void) | undefined;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        private target: Element | undefined;
+
+        constructor(callback: ResizeObserverCallback) {
+          notifyResize = () => {
+            if (this.target === undefined) throw new Error("No resize target was observed");
+            const entry: ResizeObserverEntry = {
+              target: this.target,
+              contentRect: new DOMRectReadOnly(0, 0, 0, 480),
+              borderBoxSize: [],
+              contentBoxSize: [],
+              devicePixelContentBoxSize: [],
+            };
+            callback([entry], this);
+          };
+        }
+        observe(target: Element) {
+          this.target = target;
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const [loading, setLoading] = createSignal(true);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>([]);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <TranscriptView
+          sessionID="first"
+          messages={messages()}
+          sessionStatus="idle"
+          loading={loading()}
+        />
+      ),
+      host,
+    );
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    let scrollHeight = 0;
+    Object.defineProperty(transcript, "scrollHeight", {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+
+    transcript.scrollTop = 10;
+    vi.advanceTimersByTime(301);
+    batch(() => {
+      setMessages([{ id: "message", time: base, type: "user", text: "Prompt" }]);
+      setLoading(false);
+    });
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    scrollHeight = 480;
+    notifyResize?.();
+    expect(transcript.scrollTop).toBe(480);
+
+    dispose();
+    host.remove();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 });

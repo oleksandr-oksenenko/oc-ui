@@ -258,6 +258,7 @@ function WorkspaceShowcaseFixture() {
                 title="Compact Ledger Transcript"
                 transcript={
                   <TranscriptView
+                    sessionID="amoled-workspace"
                     messages={transcript}
                     sessionStatus="running"
                     workingLabel="Generating visual regression report…"
