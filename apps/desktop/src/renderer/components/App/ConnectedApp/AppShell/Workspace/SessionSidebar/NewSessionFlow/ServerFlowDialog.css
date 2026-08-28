@@ -229,7 +229,7 @@
   color: var(--v2-text-text-muted);
 }
 
-@media (max-width: 520px) {
+@media (width <= 520px) {
   [data-component="dialog-v2"][data-size="large"]
     > [data-slot="dialog-container"].server-flow-dialog {
     width: calc(100vw - 16px);
@@ -250,8 +250,8 @@
     flex-wrap: wrap;
   }
 
-  .server-flow-dialog [data-slot="dialog-footer"] button,
-  .new-session-project-heading button {
+  .new-session-project-heading button,
+  .server-flow-dialog [data-slot="dialog-footer"] button {
     flex: 1;
   }
 }

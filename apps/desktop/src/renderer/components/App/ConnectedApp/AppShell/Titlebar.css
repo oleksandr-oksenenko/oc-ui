@@ -39,19 +39,16 @@
 .titlebar-icon-button {
   display: inline-flex;
   align-items: center;
-  border: 0;
-  color: #a3a3a3;
-  background: transparent;
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.titlebar-icon-button {
   justify-content: center;
   width: 24px;
   height: 24px;
   padding: 0;
+  border: 0;
   border-radius: 4px;
+  color: #a3a3a3;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
 }
 
 .titlebar-icon-button:hover {
@@ -76,18 +73,15 @@
 }
 
 .titlebar-session-title {
+  display: block;
   max-width: 100%;
   overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.titlebar-session-title {
-  display: block;
   color: #d4d4d4;
   font-size: 12px;
   font-weight: 550;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .titlebar-actions {
@@ -123,12 +117,10 @@
   padding-right: 4px;
 }
 
-@media (max-width: 719px) {
+@media (width <= 719px) {
   .shell-titlebar,
   .shell-titlebar.left-sidebar-open,
-  .shell-titlebar.right-panel-open,
-  [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open),
-  [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open).right-panel-open {
+  [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open) {
     grid-template-columns: 32px minmax(0, 1fr) 32px;
   }
 
@@ -144,14 +136,14 @@
     grid-template-columns: 0 0 minmax(0, 1fr);
   }
 
-  [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open) .titlebar-left-region {
-    justify-content: flex-start;
-    padding-right: 0;
-  }
-
   .shell-titlebar.left-sidebar-open .titlebar-left-region,
   .shell-titlebar.right-panel-open .titlebar-right-region {
     padding: 0;
+  }
+
+  [data-platform="macos"] .shell-titlebar:not(.left-sidebar-open) .titlebar-left-region {
+    justify-content: flex-start;
+    padding-right: 0;
   }
 }
 

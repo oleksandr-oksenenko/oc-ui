@@ -23,6 +23,8 @@ catalog:
   oxlint-tsgolint: 7.0.2001
   solid-js: ^1.9.15
   storybook: 10.5.10
+  stylelint: ^17.14.1
+  stylelint-config-standard: ^40.0.0
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
   vite-plugin-solid: 2.11.14
   vite-plus: 0.3.0

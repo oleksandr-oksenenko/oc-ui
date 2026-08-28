@@ -63,13 +63,13 @@
   outline: none;
 }
 
-.shell-session-row.selected .shell-session-main {
-  color: #f5f5f5;
-}
-
 .shell-session-main:focus-visible {
   outline: 2px solid #74a7ff;
   outline-offset: -2px;
+}
+
+.shell-session-row.selected .shell-session-main {
+  color: #f5f5f5;
 }
 
 .shell-session-disclosure-slot,
