@@ -1,4 +1,4 @@
-import type { ComposerProps } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
+import type { ComposerProps } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 
 export function composerSelection(
   overrides: Partial<ComposerProps["selection"]> = {},

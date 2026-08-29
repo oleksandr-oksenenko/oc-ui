@@ -3,7 +3,7 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Tabs } from "@opencode-ai/ui/tabs";
 
-import "../../SidebarToggleButton.css";
+import "../../../../../ui/SidebarToggleButton.css";
 import "./ContextTabs.css";
 
 export type ContextTabsProps = {

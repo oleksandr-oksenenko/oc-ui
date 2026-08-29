@@ -7,7 +7,7 @@ import { AddProjectDialog, type AddProjectDialogError } from "./AddProjectDialog
 import {
   ServerFlowDialogProvider,
   useServerFlowDismissBlock,
-} from "../../../../../../../ui/ServerFlowDialogProvider.tsx";
+} from "../../../../../../ui/ServerFlowDialogProvider.tsx";
 
 function response(directory: string): FileListOutput {
   return {

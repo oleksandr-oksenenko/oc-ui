@@ -8,7 +8,7 @@ import {
   type NewSessionDialogState,
   type NewSessionLocationMode,
   type NewSessionProject,
-} from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/NewSessionFlow/NewSessionDialog.tsx";
+} from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/NewSessionFlow/NewSessionDialog.tsx";
 import { DialogStory } from "./DialogStory.tsx";
 
 const projects = [

@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import type { Decorator, Meta, StoryObj } from "storybook-solidjs-vite";
 
-import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
-import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/DiffView/DiffFile.tsx";
+import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
+import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
 
 const diffFiles: readonly DiffFileData[] = [
   {
@@ -170,14 +170,14 @@ export const DiffEdgeCases: Story = {
     diff: {
       files: [
         {
-          path: "src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/very-long-file-name.tsx",
+          path: "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/very-long-file-name.tsx",
           additions: 0,
           deletions: 2,
           status: "deleted",
           defaultExpanded: false,
-          patch: `diff --git a/src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/very-long-file-name.tsx b/src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/very-long-file-name.tsx
+          patch: `diff --git a/src/renderer/components/App/ConnectedApp/Changes/ContextPanel/very-long-file-name.tsx b/src/renderer/components/App/ConnectedApp/Changes/ContextPanel/very-long-file-name.tsx
 deleted file mode 100644
---- a/src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/very-long-file-name.tsx
+--- a/src/renderer/components/App/ConnectedApp/Changes/ContextPanel/very-long-file-name.tsx
 +++ /dev/null
 @@ -40,2 +0,0 @@
 -  const obsolete = true;

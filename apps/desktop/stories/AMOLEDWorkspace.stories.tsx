@@ -1,17 +1,17 @@
 import { Show, createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
-import { AppShell } from "../src/renderer/components/App/ConnectedApp/AppShell.tsx";
-import { createShellPanelState } from "../src/renderer/components/App/ConnectedApp/AppShell/createShellPanelState.ts";
-import { Titlebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Titlebar.tsx";
-import { Workspace } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace.tsx";
-import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel.tsx";
-import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
-import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/DiffView/DiffFile.tsx";
-import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
-import { SessionPane } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane.tsx";
-import { Composer } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/Composer.tsx";
-import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionPane/TranscriptView.tsx";
+import { AppShell } from "../src/renderer/components/App/ConnectedApp/Shell/AppShell.tsx";
+import { createShellPanelState } from "../src/renderer/components/App/ConnectedApp/Shell/createShellPanelState.ts";
+import { Titlebar } from "../src/renderer/components/App/ConnectedApp/Shell/Titlebar.tsx";
+import { Workspace } from "../src/renderer/components/App/ConnectedApp/Shell/Workspace.tsx";
+import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
+import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/ContextTabs.tsx";
+import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
+import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
+import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
+import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
+import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 import { storySession } from "./session-fixtures.ts";
 import { composerSelection } from "./composer-fixtures.ts";

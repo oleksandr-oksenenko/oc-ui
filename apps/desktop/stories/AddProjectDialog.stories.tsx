@@ -4,7 +4,7 @@ import type { Meta } from "storybook-solidjs-vite";
 import {
   AddProjectDialog,
   type AddProjectDialogError,
-} from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/NewSessionFlow/AddProjectDialog.tsx";
+} from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/NewSessionFlow/AddProjectDialog.tsx";
 import { DialogStory } from "./DialogStory.tsx";
 function response(directory: string, entries: readonly string[]): FileListOutput {
   return {

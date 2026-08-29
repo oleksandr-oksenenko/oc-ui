@@ -8,7 +8,7 @@ import {
   type NewSessionFlowProps,
   type NewSessionFlowRuntime,
 } from "./NewSessionFlow.tsx";
-import { ServerFlowDialogProvider } from "../../../../../../ui/ServerFlowDialogProvider.tsx";
+import { ServerFlowDialogProvider } from "../../../../../ui/ServerFlowDialogProvider.tsx";
 
 const project: Project = {
   id: "oc-ui",
@@ -55,15 +55,26 @@ function fileResponse(directory: string, workspaceID?: string): FileListOutput {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function fakeRuntime(
   sessionRequests: readonly Promise<SessionInfo>[],
   options: {
     readonly projects?: readonly Project[];
     readonly acknowledged?: ReadonlyMap<string, SessionInfo>;
+    readonly syncAcknowledgement?: SessionInfo;
+    readonly syncGate?: Promise<void>;
     readonly defaultLocation?: NewSessionFlowRuntime["defaultLocation"];
   } = {},
 ) {
   let createIndex = 0;
+  const acknowledged = new Map(options.acknowledged);
   const sessionCreate = vi.fn<NewSessionFlowRuntime["data"]["session"]["create"]>(() => ({
     id: `session-${createIndex + 1}`,
     request: sessionRequests[createIndex++]!,
@@ -83,8 +94,14 @@ function fakeRuntime(
       input?.path === ".." && directory === project.canonical ? "/srv/projects" : directory;
     return Promise.resolve(fileResponse(resolved, input?.location?.workspace));
   });
+  const sessionSync = vi.fn<NewSessionFlowRuntime["data"]["session"]["sync"]>(async (sessionID) => {
+    await options.syncGate;
+    if (options.syncAcknowledgement?.id === sessionID) {
+      acknowledged.set(sessionID, options.syncAcknowledgement);
+    }
+  });
   const sessionGet = vi.fn<NewSessionFlowRuntime["data"]["session"]["get"]>((sessionID) =>
-    options.acknowledged ? options.acknowledged.get(sessionID) : undefined,
+    acknowledged.get(sessionID),
   );
   const admit = vi.fn<(sessionID: string) => void>();
   const remove = vi.fn<(sessionID: string) => void>();
@@ -97,7 +114,7 @@ function fakeRuntime(
     },
     data: {
       project: { list: () => [...(options.projects ?? [project])], sync: projectSync },
-      session: { create: sessionCreate, get: sessionGet },
+      session: { create: sessionCreate, sync: sessionSync, get: sessionGet },
     },
     defaultLocation: options.defaultLocation ?? { directory: "/srv/projects" },
     sessions: { admit, remove },
@@ -106,6 +123,7 @@ function fakeRuntime(
   return {
     runtime,
     sessionCreate,
+    sessionSync,
     sessionGet,
     projectSync,
     projectCurrent,
@@ -316,6 +334,23 @@ describe("NewSessionFlow", () => {
     mounted.dispose();
   });
 
+  it("ignores a pending session creation after the flow unmounts", async () => {
+    const pendingSession = deferred<SessionInfo>();
+    const fake = fakeRuntime([pendingSession.promise]);
+    const mounted = mount(fake.runtime);
+    await flush();
+
+    submit(mounted.root);
+    await flush();
+    mounted.unmountFlow();
+    pendingSession.resolve(session("session-1", project.canonical));
+    await flushDialogClose();
+
+    expect(mounted.onSessionCreated).not.toHaveBeenCalled();
+    expect(mounted.onDismiss).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
   it("preserves workspace scope when browsing, adding, and using a project", async () => {
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))], {
       defaultLocation: { directory: "/srv/projects", workspaceID: "workspace-a" },
@@ -507,6 +542,35 @@ describe("NewSessionFlow", () => {
     expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
     expect(mounted.onDismiss).toHaveBeenCalledOnce();
     expect(dialogRoot.isConnected).toBe(false);
+    mounted.dispose();
+  });
+
+  it("reconciles session creation after a request rejection while hydration is pending", async () => {
+    const acknowledged = session("session-1", project.canonical);
+    let resolveSync!: () => void;
+    const syncGate = new Promise<void>((resolve) => {
+      resolveSync = resolve;
+    });
+    const fake = fakeRuntime([Promise.reject(new Error("response lost"))], {
+      syncAcknowledgement: acknowledged,
+      syncGate,
+    });
+    const mounted = mount(fake.runtime);
+    await flush();
+
+    submit(mounted.root);
+    await flush();
+
+    expect(fake.sessionSync).toHaveBeenCalledWith("session-1");
+    expect(fake.sessionGet).not.toHaveBeenCalled();
+    expect(fake.remove).not.toHaveBeenCalled();
+
+    resolveSync();
+    await flushDialogClose();
+
+    expect(fake.sessionGet).toHaveBeenCalledWith("session-1");
+    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
+    expect(mounted.onDismiss).toHaveBeenCalledOnce();
     mounted.dispose();
   });
 });

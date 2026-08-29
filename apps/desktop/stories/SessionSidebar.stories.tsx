@@ -5,7 +5,7 @@ import type { Meta } from "storybook-solidjs-vite";
 import {
   SessionSidebar,
   type SessionSidebarProps,
-} from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar.tsx";
+} from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
 import { storySession } from "./session-fixtures.ts";
 
 const flatSessions: readonly SessionInfo[] = [

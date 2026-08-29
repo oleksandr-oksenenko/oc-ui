@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
-import { Titlebar } from "../src/renderer/components/App/ConnectedApp/AppShell/Titlebar.tsx";
-import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/ContextPanel/ContextTabs.tsx";
+import { Titlebar } from "../src/renderer/components/App/ConnectedApp/Shell/Titlebar.tsx";
+import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/ContextTabs.tsx";
 
 const meta = {
   title: "Shell/Titlebar",

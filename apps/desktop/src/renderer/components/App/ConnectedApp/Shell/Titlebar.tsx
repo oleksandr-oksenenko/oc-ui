@@ -2,7 +2,7 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { createEffect, type JSX } from "solid-js";
 
-import "./SidebarToggleButton.css";
+import "../../../../ui/SidebarToggleButton.css";
 import "./Titlebar.css";
 
 export type TitlebarProps = {

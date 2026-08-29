@@ -12,7 +12,7 @@ import {
 import {
   ServerFlowDialogProvider,
   useServerFlowDismissBlock,
-} from "../../../../../../../ui/ServerFlowDialogProvider.tsx";
+} from "../../../../../../ui/ServerFlowDialogProvider.tsx";
 
 const projects = [
   {

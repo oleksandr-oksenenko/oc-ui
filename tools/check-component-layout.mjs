@@ -8,6 +8,8 @@ import ts from "@typescript/typescript6";
 const root = process.cwd();
 const rendererRoot = path.join(root, "apps/desktop/src/renderer");
 const componentsRoot = path.join(rendererRoot, "components");
+const connectedAppFile = path.join(componentsRoot, "App", "ConnectedApp.tsx");
+const connectedAppRoot = path.join(componentsRoot, "App", "ConnectedApp");
 
 const isStoryFile = (filePath) =>
   /(?:^|[\\/])(?:story|stories)(?:[\\/]|$)/.test(filePath) ||
@@ -148,6 +150,70 @@ const resolveImport = (specifier, containingFile) => {
   return resolved ? path.normalize(resolved) : undefined;
 };
 
+const connectedAppFeature = (filePath) => {
+  const relative = path.relative(connectedAppRoot, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+  const parts = relative.split(path.sep);
+  return parts.length > 1 ? parts[0] : undefined;
+};
+
+const isConnectedAppEntry = (filePath) => {
+  const feature = connectedAppFeature(filePath);
+  return (
+    feature !== undefined &&
+    path.dirname(filePath) === path.join(connectedAppRoot, feature) &&
+    path.basename(filePath).endsWith("Region.tsx")
+  );
+};
+
+const childComponentRoot = (filePath) =>
+  filePath === appFile
+    ? path.join(componentsRoot, "App") + path.sep
+    : path.join(path.dirname(filePath), path.basename(filePath, ".tsx")) + path.sep;
+
+const componentImportViolation = (importer, imported) => {
+  const importerFeature = connectedAppFeature(importer);
+  const importedFeature = connectedAppFeature(imported);
+
+  if (importer === connectedAppFile) {
+    return importedFeature && isConnectedAppEntry(imported)
+      ? undefined
+      : `connected app must compose a feature entry, not ${path.relative(root, imported)}`;
+  }
+
+  if (importerFeature) {
+    if (importedFeature !== importerFeature) {
+      return `feature ${importerFeature} cannot import runtime component ${path.relative(
+        root,
+        imported,
+      )} from ${importedFeature ? `feature ${importedFeature}` : "outside its feature"}`;
+    }
+    if (isConnectedAppEntry(importer) || imported.startsWith(childComponentRoot(importer))) {
+      return undefined;
+    }
+    return `child component ${path.relative(root, imported)} must live below ${path.relative(
+      root,
+      childComponentRoot(importer).slice(0, -1),
+    )}`;
+  }
+
+  if (importedFeature) {
+    return isConnectedAppEntry(imported)
+      ? undefined
+      : `component outside ConnectedApp cannot import internal feature component ${path.relative(
+          root,
+          imported,
+        )}`;
+  }
+
+  return imported.startsWith(childComponentRoot(importer))
+    ? undefined
+    : `child component ${path.relative(root, imported)} must live below ${path.relative(
+        root,
+        childComponentRoot(importer).slice(0, -1),
+      )}`;
+};
+
 for (const filePath of storyFiles) {
   addDiagnostic(filePath, "story files are not allowed under renderer/components");
 }
@@ -179,7 +245,11 @@ for (const filePath of componentFiles) {
     );
   }
 
-  if (filePath !== appFile) {
+  if (path.dirname(filePath) === connectedAppRoot) {
+    addDiagnostic(filePath, "connected app components must live in a feature directory");
+  }
+
+  if (filePath !== appFile && connectedAppFeature(filePath) === undefined) {
     const directory = path.dirname(filePath);
     const expectedParent =
       directory === path.join(componentsRoot, "App")
@@ -194,11 +264,6 @@ for (const filePath of componentFiles) {
   }
 
   if (!filePath.startsWith(`${componentsRoot}${path.sep}`) && filePath !== appFile) continue;
-  const parentName = path.basename(filePath, ".tsx");
-  const childRoot =
-    filePath === appFile
-      ? path.join(componentsRoot, "App") + path.sep
-      : path.join(path.dirname(filePath), parentName) + path.sep;
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
       continue;
@@ -215,15 +280,9 @@ for (const filePath of componentFiles) {
     const importedFile = resolveImport(specifier, filePath);
     if (!importedFile || !isProductionComponent(importedFile) || !importedFile.endsWith(".tsx"))
       continue;
-    if (!importedFile.startsWith(childRoot)) {
-      addDiagnostic(
-        filePath,
-        `child component ${path.relative(root, importedFile)} must live below ${path.relative(
-          root,
-          childRoot.slice(0, -1),
-        )}`,
-      );
-    }
+
+    const violation = componentImportViolation(filePath, importedFile);
+    if (violation) addDiagnostic(filePath, violation);
   }
 }
 

@@ -3,7 +3,7 @@ import { createSignal, Show } from "solid-js";
 import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ServerFlowDialogProvider } from "../../../../../../ui/ServerFlowDialogProvider.tsx";
+import { ServerFlowDialogProvider } from "../../../../../ui/ServerFlowDialogProvider.tsx";
 import { DeleteSessionFlow } from "./DeleteSessionFlow.tsx";
 
 const session: SessionInfo = {

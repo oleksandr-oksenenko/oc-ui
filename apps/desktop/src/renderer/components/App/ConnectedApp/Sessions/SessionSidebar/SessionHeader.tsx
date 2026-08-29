@@ -3,7 +3,7 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Show } from "solid-js";
 
-import "../../SidebarToggleButton.css";
+import "../../../../../ui/SidebarToggleButton.css";
 import "./SessionHeader.css";
 
 export type SessionHeaderProps = {

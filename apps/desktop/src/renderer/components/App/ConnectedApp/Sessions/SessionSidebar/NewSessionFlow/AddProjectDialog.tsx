@@ -12,7 +12,7 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Show, createEffect, createSignal, on } from "solid-js";
 
-import { ServerDirectoryBrowser } from "../../../../../../../ui/ServerDirectoryBrowser.tsx";
+import { ServerDirectoryBrowser } from "../../../../../../ui/ServerDirectoryBrowser.tsx";
 import "./ServerFlowDialog.css";
 
 export type AddProjectDialogError =

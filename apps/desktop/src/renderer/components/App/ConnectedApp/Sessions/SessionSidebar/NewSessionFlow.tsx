@@ -3,7 +3,7 @@ import type { Data } from "@opencode-ai/client/solid";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { createMemo, createSignal, onCleanup, onMount } from "solid-js";
 
-import type { SessionCatalog } from "../../../../../../opencode/session-catalog.ts";
+import type { SessionCatalog } from "../../../../../opencode/session-catalog.ts";
 import {
   AddProjectDialog,
   type AddProjectDialogError,
@@ -15,8 +15,8 @@ import {
   type NewSessionLocationMode,
   type NewSessionProject,
 } from "./NewSessionFlow/NewSessionDialog.tsx";
-import { restoreDialogFocusAfterClose } from "../../../../../../ui/restoreDialogFocusAfterClose.ts";
-import { useServerFlowDismissBlock } from "../../../../../../ui/ServerFlowDialogProvider.tsx";
+import { restoreDialogFocusAfterClose } from "../../../../../ui/restoreDialogFocusAfterClose.ts";
+import { useServerFlowDismissBlock } from "../../../../../ui/ServerFlowDialogProvider.tsx";
 
 export type NewSessionFlowRuntime = {
   readonly api: {
@@ -31,6 +31,7 @@ export type NewSessionFlowRuntime = {
     };
     readonly session: {
       readonly create: Data["session"]["create"];
+      readonly sync: Data["session"]["sync"];
       readonly get: (sessionID: string) => SessionInfo | undefined;
     };
   };
@@ -181,16 +182,23 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
     props.runtime.sessions.admit(created.id);
     try {
       const session = await created.request;
+      if (closingFlow) return;
       props.onSessionCreated(session.id);
-      dialog.close();
+      if (dialog.active === activeDialog) dialog.close();
     } catch {
+      // A session.created event can arrive before its SessionInfo hydration
+      // finishes. Wait for that authoritative refresh before rolling back the
+      // optimistic catalog admission.
+      await props.runtime.data.session.sync(created.id).catch(() => undefined);
       const accepted = props.runtime.data.session.get(created.id);
       if (accepted?.id === created.id) {
+        if (closingFlow) return;
         props.onSessionCreated(created.id);
-        dialog.close();
+        if (dialog.active === activeDialog) dialog.close();
         return;
       }
       props.runtime.sessions.remove(created.id);
+      if (closingFlow) return;
       setError({
         kind: "session",
         message: worktreeLocation

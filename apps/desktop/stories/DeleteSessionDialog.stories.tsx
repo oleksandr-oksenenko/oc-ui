@@ -1,6 +1,6 @@
 import type { Meta } from "storybook-solidjs-vite";
 
-import { DeleteSessionDialog } from "../src/renderer/components/App/ConnectedApp/AppShell/Workspace/SessionSidebar/DeleteSessionFlow/DeleteSessionDialog.tsx";
+import { DeleteSessionDialog } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/DeleteSessionFlow/DeleteSessionDialog.tsx";
 import { DialogStory } from "./DialogStory.tsx";
 
 const meta = {

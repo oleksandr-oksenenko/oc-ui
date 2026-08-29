@@ -1,6 +1,6 @@
 import type { JSX } from "solid-js";
 
-import "./AppShell/AppShell.css";
+import "./AppShell.css";
 
 export type AppShellProps = {
   readonly titlebar: JSX.Element;

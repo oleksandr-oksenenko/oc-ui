@@ -4,7 +4,7 @@ import { Show } from "solid-js";
 
 import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
 
-import { ServerDirectoryBrowser } from "../../../../../../../../ui/ServerDirectoryBrowser.tsx";
+import { ServerDirectoryBrowser } from "../../../../../../../ui/ServerDirectoryBrowser.tsx";
 import type { NewSessionDialogState } from "../NewSessionDialog.tsx";
 
 type WorktreeState = Extract<NewSessionDialogState, { view: "worktree" }>;

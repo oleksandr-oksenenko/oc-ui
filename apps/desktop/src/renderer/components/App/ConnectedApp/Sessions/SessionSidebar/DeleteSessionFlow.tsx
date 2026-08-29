@@ -3,7 +3,7 @@ import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 
-import { useServerFlowDismissBlock } from "../../../../../../ui/ServerFlowDialogProvider.tsx";
+import { useServerFlowDismissBlock } from "../../../../../ui/ServerFlowDialogProvider.tsx";
 import { DeleteSessionDialog } from "./DeleteSessionFlow/DeleteSessionDialog.tsx";
 
 export type DeleteSessionFlowProps = {
