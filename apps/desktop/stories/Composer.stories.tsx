@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { createSignal } from "solid-js";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
-import { composerSelection } from "./composer-fixtures.ts";
+import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
 
 const meta = {
   title: "Composer/Composer",
@@ -26,6 +26,7 @@ export const Idle: Story = {
     const [value, setValue] = createSignal("");
     const [modelID, setModelID] = createSignal("openai/gpt-5");
     const [variantID, setVariantID] = createSignal("deep");
+    const [agentID, setAgentID] = createSignal("build");
     return (
       <div style={frameStyle}>
         <Composer
@@ -33,11 +34,15 @@ export const Idle: Story = {
           disabled={false}
           submitting={false}
           running={false}
-          selection={composerSelection({
+          modelSelection={composerModelSelection({
             selectedModelID: modelID(),
             selectedVariantID: variantID(),
             onSelectModel: setModelID,
             onSelectVariant: setVariantID,
+          })}
+          agentSelection={composerAgentSelection({
+            selectedAgentID: agentID(),
+            onSelectAgent: setAgentID,
           })}
           onInput={setValue}
           onSubmit={() => setValue("")}
@@ -57,13 +62,65 @@ export const LoadingPickers: Story = {
           disabled={false}
           submitting={false}
           running={false}
-          selection={composerSelection({ state: "loading", models: [], variants: [] })}
+          modelSelection={composerModelSelection({ state: "loading", models: [], variants: [] })}
+          agentSelection={composerAgentSelection({ state: "loading", agents: [] })}
           onInput={setValue}
           onSubmit={() => setValue("")}
         />
       </div>
     );
   },
+};
+
+export const DefaultAgent: Story = {
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value=""
+        disabled={false}
+        submitting={false}
+        running={false}
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection({ selectedAgentID: undefined })}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
+};
+
+export const EmptyAgents: Story = {
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value=""
+        disabled={false}
+        submitting={false}
+        running={false}
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection({ agents: [], selectedAgentID: undefined })}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
+};
+
+export const MissingAgent: Story = {
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value=""
+        disabled={false}
+        submitting={false}
+        running={false}
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection({ selectedAgentID: "missing" })}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
 };
 
 export const Multiline: Story = {
@@ -78,7 +135,8 @@ export const Multiline: Story = {
           disabled={false}
           submitting={false}
           running={false}
-          selection={composerSelection()}
+          modelSelection={composerModelSelection()}
+          agentSelection={composerAgentSelection()}
           onInput={setValue}
           onSubmit={() => setValue("")}
         />
@@ -97,7 +155,8 @@ export const RunningDraft: Story = {
           disabled
           submitting={false}
           running
-          selection={composerSelection()}
+          modelSelection={composerModelSelection()}
+          agentSelection={composerAgentSelection()}
           onInput={setValue}
           onSubmit={() => undefined}
         />
@@ -114,7 +173,8 @@ export const Submitting: Story = {
         disabled
         submitting
         running={false}
-        selection={composerSelection({ switching: true })}
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection({ switching: true })}
         onInput={() => undefined}
         onSubmit={() => undefined}
       />
@@ -133,7 +193,8 @@ export const AdmissionError: Story = {
           submitting={false}
           running={false}
           error="The server could not admit this prompt. Try again."
-          selection={composerSelection()}
+          modelSelection={composerModelSelection()}
+          agentSelection={composerAgentSelection()}
           onInput={setValue}
           onSubmit={() => undefined}
         />
@@ -150,7 +211,8 @@ export const EmptyDisabled: Story = {
         disabled
         submitting={false}
         running={false}
-        selection={composerSelection()}
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
         onInput={() => undefined}
         onSubmit={() => undefined}
       />
@@ -166,11 +228,16 @@ export const UnavailableWhileDisabled: Story = {
         disabled
         submitting={false}
         running={false}
-        selection={composerSelection({
+        modelSelection={composerModelSelection({
           state: "failed",
           models: [],
           variants: [],
           error: "Models could not be loaded. Check the connection and try again.",
+        })}
+        agentSelection={composerAgentSelection({
+          state: "failed",
+          agents: [],
+          error: "Agents could not be loaded. Check the connection and try again.",
         })}
         onInput={() => undefined}
         onSubmit={() => undefined}

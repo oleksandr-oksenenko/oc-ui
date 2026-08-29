@@ -2,6 +2,7 @@ import type { JSX } from "solid-js";
 import { Show } from "solid-js";
 
 import type { ModelSelection } from "../../../../opencode/model-selection.ts";
+import type { SessionAgentSelectionController } from "./createSessionAgentSelection.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
 import { Composer } from "./SessionPane/Composer.tsx";
 import { SessionPane } from "./SessionPane.tsx";
@@ -12,6 +13,7 @@ export type ConversationRegionProps = {
   readonly workspace: SessionWorkspace;
   readonly composer: SessionComposerController;
   readonly modelSelection: ModelSelection;
+  readonly agentSelection: SessionAgentSelectionController;
   readonly connected: () => boolean;
 };
 
@@ -49,7 +51,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
             submitting={props.composer.submitting()}
             running={props.workspace.running()}
             error={props.composer.error()}
-            selection={{
+            modelSelection={{
               state: props.modelSelection.state(),
               switching: props.modelSelection.switching(),
               disabled: !props.connected(),
@@ -60,6 +62,15 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               error: props.modelSelection.error(),
               onSelectModel: (id) => void props.modelSelection.selectModel(id),
               onSelectVariant: (id) => void props.modelSelection.selectVariant(id),
+            }}
+            agentSelection={{
+              state: props.agentSelection.state(),
+              switching: props.agentSelection.switching(),
+              disabled: !props.connected(),
+              agents: props.agentSelection.agents(),
+              selectedAgentID: props.agentSelection.selectedAgentID(),
+              error: props.agentSelection.error(),
+              onSelectAgent: (id) => void props.agentSelection.selectAgent(id),
             }}
             onInput={props.composer.input}
             onSubmit={() => void props.composer.submit()}

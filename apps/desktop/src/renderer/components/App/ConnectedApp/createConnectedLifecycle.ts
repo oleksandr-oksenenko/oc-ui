@@ -26,7 +26,7 @@ export type ConnectedLifecycleOptions = {
   readonly markBootstrapped: () => void;
   readonly connected: Accessor<boolean>;
   readonly sessions: ConnectedLifecycleSessions;
-  readonly syncModels: () => Promise<void>;
+  readonly syncSelections: () => Promise<void>;
   readonly onConnected: () => void;
   readonly onInitialFailure: (cause: unknown) => void;
 };
@@ -50,7 +50,7 @@ export function createConnectedLifecycle(options: ConnectedLifecycleOptions): vo
         options.markBootstrapped();
         initialFeatureSync = Promise.all([
           options.sessions.syncCatalog().catch(() => undefined),
-          options.syncModels().catch(() => undefined),
+          options.syncSelections().catch(() => undefined),
         ]).then(() => undefined);
         await initialFeatureSync;
       } catch (cause) {
@@ -69,7 +69,7 @@ export function createConnectedLifecycle(options: ConnectedLifecycleOptions): vo
         if (!alive || !options.connected()) return;
         await Promise.all([
           options.sessions.refreshAfterReconnect(),
-          options.syncModels().catch(() => undefined),
+          options.syncSelections().catch(() => undefined),
         ]);
       } catch {
         if (alive) options.sessions.failRecovery();

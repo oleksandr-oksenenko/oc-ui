@@ -24,12 +24,14 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
     const [running, setRunning] = createSignal(false);
     const [transcriptLoading, setTranscriptLoading] = createSignal(false);
     const [connected, setConnected] = createSignal(true);
+    const [selectionSwitching, setSelectionSwitching] = createSignal(false);
     const composer = createSessionComposer({
       runtime: { data: { session: { prompt } } },
       selectedID,
       running,
       transcriptLoading,
       connected,
+      selectionSwitching,
     });
     return {
       dispose,
@@ -38,6 +40,7 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
       setRunning,
       setTranscriptLoading,
       setConnected,
+      setSelectionSwitching,
       prompt,
     };
   });
@@ -126,6 +129,23 @@ describe("createSessionComposer", () => {
     root.setTranscriptLoading(false);
     root.setSelectedID("other");
     expect(root.composer.error()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("disables and guards submission while agent or model selection switches", async () => {
+    const prompt = vi.fn<Prompt>((input) => Promise.resolve(promptResult(input)));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.composer.input("message");
+    root.setSelectionSwitching(true);
+
+    expect(root.composer.disabled()).toBe(true);
+    await root.composer.submit();
+    expect(prompt).not.toHaveBeenCalled();
+
+    root.setSelectionSwitching(false);
+    await root.composer.submit();
+    expect(prompt).toHaveBeenCalledWith({ sessionID: "session", text: "message" });
     root.dispose();
   });
 });

@@ -1,6 +1,8 @@
 import { createEffect } from "solid-js";
 
 import "./Composer/Composer.css";
+import { AgentPicker } from "./Composer/AgentPicker.tsx";
+import type { AgentPickerOption } from "./Composer/AgentPicker.tsx";
 import { ModelPicker } from "./Composer/ModelPicker.tsx";
 import type { ModelPickerOption } from "./Composer/ModelPicker.tsx";
 import { VariantPicker } from "./Composer/VariantPicker.tsx";
@@ -16,7 +18,7 @@ export type ComposerProps = {
   readonly submitting: boolean;
   readonly running: boolean;
   readonly error?: string;
-  readonly selection: {
+  readonly modelSelection: {
     readonly state: "loading" | "ready" | "failed";
     readonly switching: boolean;
     readonly disabled: boolean;
@@ -28,9 +30,125 @@ export type ComposerProps = {
     readonly onSelectModel: (id: string) => void;
     readonly onSelectVariant: (id: string) => void;
   };
+  readonly agentSelection: {
+    readonly state: "loading" | "ready" | "failed";
+    readonly switching: boolean;
+    readonly disabled: boolean;
+    readonly agents: readonly AgentPickerOption[];
+    readonly selectedAgentID?: string;
+    readonly error?: string;
+    readonly onSelectAgent: (id: string) => void;
+  };
   readonly onInput: (value: string) => void;
   readonly onSubmit: () => void;
 };
+
+function selectionControls(
+  props: Pick<ComposerProps, "agentSelection" | "modelSelection" | "submitting">,
+) {
+  return (
+    <div class="composer-v2-picker-row">
+      {props.agentSelection.state === "ready" ? (
+        <AgentPicker
+          placeholder="Default agent"
+          unavailableLabel={
+            props.agentSelection.selectedAgentID === undefined ? "No agents" : "Agent unavailable"
+          }
+          options={props.agentSelection.agents}
+          selectedID={props.agentSelection.selectedAgentID}
+          disabled={
+            props.agentSelection.disabled ||
+            props.agentSelection.switching ||
+            props.modelSelection.switching ||
+            props.submitting
+          }
+          onSelect={props.agentSelection.onSelectAgent}
+        />
+      ) : (
+        <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
+          {props.agentSelection.state === "loading" ? "Loading agents…" : "Agents unavailable"}
+        </span>
+      )}
+      {props.modelSelection.state === "ready" ? (
+        <>
+          <ModelPicker
+            options={props.modelSelection.models}
+            selectedID={props.modelSelection.selectedModelID}
+            disabled={
+              props.modelSelection.disabled ||
+              props.agentSelection.switching ||
+              props.modelSelection.switching ||
+              props.submitting
+            }
+            onSelect={props.modelSelection.onSelectModel}
+          />
+          <VariantPicker
+            placeholder="Select variant"
+            unavailableLabel={
+              props.modelSelection.selectedModelID === undefined
+                ? "Variant unavailable"
+                : "No variants"
+            }
+            options={props.modelSelection.variants}
+            selectedID={props.modelSelection.selectedVariantID}
+            disabled={
+              props.modelSelection.disabled ||
+              props.agentSelection.switching ||
+              props.modelSelection.switching ||
+              props.submitting
+            }
+            onSelect={props.modelSelection.onSelectVariant}
+          />
+        </>
+      ) : (
+        <>
+          <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
+            {props.modelSelection.state === "loading" ? "Loading models…" : "Models unavailable"}
+          </span>
+          <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
+            {props.modelSelection.state === "loading"
+              ? "Loading variants…"
+              : "Variants unavailable"}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function selectionStatus(
+  props: Pick<ComposerProps, "agentSelection" | "error" | "modelSelection">,
+) {
+  return (
+    <>
+      {props.error ? (
+        <p class="composer-v2-status composer-v2-status--error" role="alert">
+          {props.error}
+        </p>
+      ) : null}
+      {props.agentSelection.switching ? (
+        <p class="composer-v2-status" role="status">
+          Switching agent…
+        </p>
+      ) : null}
+      {props.modelSelection.switching ? (
+        <p class="composer-v2-status" role="status">
+          Switching selection…
+        </p>
+      ) : null}
+      {props.modelSelection.error ? (
+        <p class="composer-v2-status composer-v2-status--error" role="alert">
+          {props.modelSelection.error}
+        </p>
+      ) : null}
+      {props.agentSelection.error ? (
+        <p class="composer-v2-status composer-v2-status--error" role="alert">
+          {props.agentSelection.error}
+        </p>
+      ) : null}
+    </>
+  );
+}
 
 export function Composer(props: ComposerProps) {
   let textarea: HTMLTextAreaElement | undefined;
@@ -50,7 +168,15 @@ export function Composer(props: ComposerProps) {
 
   const submit = (event?: Event) => {
     event?.preventDefault();
-    if (props.disabled || props.submitting || props.running || props.value.trim() === "") return;
+    if (
+      props.disabled ||
+      props.submitting ||
+      props.running ||
+      props.modelSelection.switching ||
+      props.agentSelection.switching ||
+      props.value.trim() === ""
+    )
+      return;
     props.onSubmit();
   };
 
@@ -82,46 +208,19 @@ export function Composer(props: ComposerProps) {
       </div>
 
       <div class="composer-v2-controls-row">
-        <div class="composer-v2-picker-row">
-          {props.selection.state === "ready" ? (
-            <>
-              <ModelPicker
-                options={props.selection.models}
-                selectedID={props.selection.selectedModelID}
-                disabled={props.selection.disabled || props.selection.switching}
-                onSelect={props.selection.onSelectModel}
-              />
-              <VariantPicker
-                placeholder="Select variant"
-                unavailableLabel={
-                  props.selection.selectedModelID === undefined
-                    ? "Variant unavailable"
-                    : "No variants"
-                }
-                options={props.selection.variants}
-                selectedID={props.selection.selectedVariantID}
-                disabled={props.selection.disabled || props.selection.switching}
-                onSelect={props.selection.onSelectVariant}
-              />
-            </>
-          ) : (
-            <>
-              <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
-                {props.selection.state === "loading" ? "Loading models…" : "Models unavailable"}
-              </span>
-              <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
-                {props.selection.state === "loading" ? "Loading variants…" : "Variants unavailable"}
-              </span>
-            </>
-          )}
-        </div>
+        {selectionControls(props)}
         <button
           class="composer-v2-send"
           type="submit"
           aria-label="Send"
           title="Send"
           disabled={
-            props.disabled || props.submitting || props.running || props.value.trim() === ""
+            props.disabled ||
+            props.submitting ||
+            props.running ||
+            props.modelSelection.switching ||
+            props.agentSelection.switching ||
+            props.value.trim() === ""
           }
         >
           <span class="composer-v2-send-icon" aria-hidden="true">
@@ -130,21 +229,7 @@ export function Composer(props: ComposerProps) {
         </button>
       </div>
 
-      {props.error ? (
-        <p class="composer-v2-status composer-v2-status--error" role="alert">
-          {props.error}
-        </p>
-      ) : null}
-      {props.selection.switching ? (
-        <p class="composer-v2-status" role="status">
-          Switching selection…
-        </p>
-      ) : null}
-      {props.selection.error ? (
-        <p class="composer-v2-status composer-v2-status--error" role="alert">
-          {props.selection.error}
-        </p>
-      ) : null}
+      {selectionStatus(props)}
     </form>
   );
 }

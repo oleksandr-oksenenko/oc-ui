@@ -42,7 +42,7 @@ function setup(ready: Promise<void>) {
       },
     },
   };
-  const syncModels = vi.fn<() => Promise<void>>(async () => {
+  const syncSelections = vi.fn<() => Promise<void>>(async () => {
     calls.push("models");
   });
   const onConnected = vi.fn<() => void>(() => {
@@ -59,7 +59,7 @@ function setup(ready: Promise<void>) {
     sessions,
     runtime,
     setStatus,
-    syncModels,
+    syncSelections,
     onConnected,
     onInitialFailure,
   };

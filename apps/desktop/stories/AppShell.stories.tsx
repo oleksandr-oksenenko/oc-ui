@@ -14,7 +14,7 @@ import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversati
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 import { storySession } from "./session-fixtures.ts";
-import { composerSelection } from "./composer-fixtures.ts";
+import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
 
 const sessions = [
   storySession("workspace", "Workspace migration"),
@@ -144,7 +144,8 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                     disabled={false}
                     submitting={false}
                     running={false}
-                    selection={composerSelection()}
+                    modelSelection={composerModelSelection()}
+                    agentSelection={composerAgentSelection()}
                     onInput={setDraft}
                     onSubmit={() => setDraft("")}
                   />
@@ -217,7 +218,8 @@ export const MainOnly = {
                     disabled={false}
                     submitting={false}
                     running={false}
-                    selection={composerSelection()}
+                    modelSelection={composerModelSelection()}
+                    agentSelection={composerAgentSelection()}
                     onInput={() => undefined}
                     onSubmit={() => undefined}
                   />
@@ -287,7 +289,8 @@ export const NarrowRightPanelCollapsed = {
                     disabled={false}
                     submitting={false}
                     running={false}
-                    selection={composerSelection()}
+                    modelSelection={composerModelSelection()}
+                    agentSelection={composerAgentSelection()}
                     onInput={() => undefined}
                     onSubmit={() => undefined}
                   />

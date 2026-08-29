@@ -9,6 +9,7 @@ import { ChangesRegion } from "./ConnectedApp/Changes/ChangesRegion.tsx";
 import { ChangesTitlebarRegion } from "./ConnectedApp/Changes/ChangesTitlebarRegion.tsx";
 import { createWorkspaceChanges } from "./ConnectedApp/Changes/createWorkspaceChanges.ts";
 import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegion.tsx";
+import { createSessionAgentSelection } from "./ConnectedApp/Conversation/createSessionAgentSelection.ts";
 import { createSessionComposer } from "./ConnectedApp/Conversation/createSessionComposer.ts";
 import { SessionFlowsRegion } from "./ConnectedApp/Sessions/SessionFlowsRegion.tsx";
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
@@ -43,13 +44,23 @@ export function ConnectedApp(props: ConnectedAppProps) {
     defaultLocation: runtime.defaultLocation,
     selectedSession: sessions.selectedSession,
   });
+  const agentSelection = createSessionAgentSelection({
+    api: runtime.api,
+    data: runtime.data,
+    selectedSession: sessions.selectedSession,
+    connected,
+  });
   createConnectedLifecycle({
     runtime,
     bootstrapped,
     markBootstrapped: () => setBootstrapped(true),
     connected,
     sessions,
-    syncModels: () => modelSelection.sync(),
+    syncSelections: () =>
+      Promise.all([
+        modelSelection.sync().catch(() => undefined),
+        agentSelection.sync().catch(() => undefined),
+      ]).then(() => undefined),
     onConnected: props.onConnected,
     onInitialFailure: props.onInitialFailure,
   });
@@ -60,6 +71,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
     running: sessions.running,
     transcriptLoading: sessions.transcriptLoading,
     connected,
+    selectionSwitching: () => modelSelection.switching() || agentSelection.switching(),
   });
   const flows = createSessionFlows({
     runtime,
@@ -104,6 +116,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
             workspace={sessions}
             composer={composer}
             modelSelection={modelSelection}
+            agentSelection={agentSelection}
             connected={connected}
           />
         }

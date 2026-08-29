@@ -14,6 +14,7 @@ type SessionComposerOptions = {
   readonly running: Accessor<boolean>;
   readonly transcriptLoading: Accessor<boolean>;
   readonly connected: Accessor<boolean>;
+  readonly selectionSwitching: Accessor<boolean>;
 };
 
 export type SessionComposerController = {
@@ -47,7 +48,8 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       !options.connected() ||
       options.transcriptLoading() ||
       submittingID() !== undefined ||
-      options.running(),
+      options.running() ||
+      options.selectionSwitching(),
   );
 
   const submitting = createMemo(() => {
@@ -66,7 +68,8 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       sessionID === undefined ||
       submittingID() !== undefined ||
       options.running() ||
-      !options.connected()
+      !options.connected() ||
+      options.selectionSwitching()
     ) {
       return;
     }

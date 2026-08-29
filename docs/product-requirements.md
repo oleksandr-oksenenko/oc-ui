@@ -321,11 +321,12 @@ without duplicating message identifiers.
 ### New Session
 
 Connection setup obtains the server's default location. New Session calls
-`data.session.create({ location })` without an agent, model, or title. The
-location is always owned by the connected server. The pinned local service
-uses the user's home directory; a remote connection uses that server's
-default. The desktop app does not choose or persist a directory, expose a
-directory picker, or send a local directory to a remote server.
+`data.session.create({ location })` without an agent, model, or title; the
+connected server owns those defaults. The location is always owned by the
+connected server. The pinned local service uses the user's home directory; a
+remote connection uses that server's default. The desktop app does not choose
+or persist a directory, expose a directory picker, or send a local directory
+to a remote server.
 
 The new session is inserted into the picker, selected, and opened with its
 empty transcript.
@@ -340,8 +341,16 @@ empty transcript.
 - Keep drafts in memory per session.
 - Allow editing while the selected session is running but disable submission.
 - Submit from the button or with Ctrl+Enter/Cmd+Enter; Enter inserts a newline.
+- Support the server-backed model and variant for the selected session and
+  location.
+- Show primary agents and all selectable agents for the selected session and
+  location; exclude hidden and subagent-only agents.
+- If `SessionInfo.agent` is absent, display `Default agent` to represent the
+  server-owned default; do not infer a specific agent from list order.
+- Use the session switch APIs for selection without local persistence, and
+  block submission while a switch is settling.
 - Do not support attachments, references, slash commands, skills, shell input,
-  or model and agent selection.
+  or other composer extensions.
 
 ## Managed sidecar boundary
 

@@ -5,7 +5,7 @@ import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversati
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
-import { composerSelection } from "./composer-fixtures.ts";
+import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
 const meta = {
   title: "Session/SessionPane",
   component: SessionPane,
@@ -48,7 +48,8 @@ export const SelectedPlacement: Story = {
             disabled={false}
             submitting={false}
             running={false}
-            selection={composerSelection()}
+            modelSelection={composerModelSelection()}
+            agentSelection={composerAgentSelection()}
             onInput={setDraft}
             onSubmit={() => setDraft("")}
           />
