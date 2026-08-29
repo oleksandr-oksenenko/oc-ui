@@ -12,6 +12,7 @@ import "./SessionTreeItem.css";
 export type SessionTreeItemProps = {
   readonly session: SessionInfo;
   readonly status: DataSessionStatus;
+  readonly requiresInput?: boolean;
   readonly hasChildren: boolean;
   readonly depth: number;
   readonly selected: boolean;
@@ -26,7 +27,8 @@ export type SessionTreeItemProps = {
 
 export function SessionTreeItem(props: SessionTreeItemProps) {
   const title = () => props.session.title?.trim() || "Untitled session";
-  const statusLabel = () => (props.status === "running" ? "Running" : "Idle");
+  const statusLabel = () =>
+    props.status === "running" ? "Running" : props.requiresInput ? "Requires input" : "Idle";
 
   return (
     <div class="shell-session-tree-item" style={{ "--session-depth": `${props.depth}` }}>
@@ -44,8 +46,8 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
           class="shell-session-row"
           classList={{ selected: props.selected, "has-children": props.hasChildren }}
         >
-          {props.hasChildren ? (
-            <span class="shell-session-disclosure-slot">
+          <span class="shell-session-disclosure-slot">
+            {props.hasChildren ? (
               <Collapsible.Trigger
                 class="shell-session-disclosure"
                 type="button"
@@ -53,8 +55,8 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               >
                 <Collapsible.Arrow />
               </Collapsible.Trigger>
-            </span>
-          ) : null}
+            ) : null}
+          </span>
           <Button
             class="shell-session-main"
             type="button"
@@ -65,6 +67,8 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             onClick={() => props.onSelect(props.session.id)}
           >
             <span class="shell-session-title">{title()}</span>
+          </Button>
+          <span class="shell-session-row-end">
             {props.status === "running" ? (
               <span
                 class="shell-session-status"
@@ -74,19 +78,28 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               >
                 <Loader width={13} height={13} />
               </span>
+            ) : props.requiresInput ? (
+              <span
+                class="shell-session-status"
+                data-status="requires-input"
+                aria-label={statusLabel()}
+                title={statusLabel()}
+              >
+                <span class="shell-session-input-required" aria-hidden="true" />
+              </span>
             ) : null}
-          </Button>
-          <IconButton
-            class="shell-session-delete"
-            type="button"
-            size="small"
-            variant="ghost-muted"
-            disabled={props.deleteDisabled}
-            aria-label={`Delete ${title()}`}
-            title={props.deleteDisabledReason ?? `Delete ${title()}`}
-            icon={<Icon name="trash" size="small" aria-hidden="true" />}
-            onClick={(event) => props.onDelete(props.session.id, event.currentTarget)}
-          />
+            <IconButton
+              class="shell-session-delete"
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              disabled={props.deleteDisabled}
+              aria-label={`Delete ${title()}`}
+              title={props.deleteDisabledReason ?? `Delete ${title()}`}
+              icon={<Icon name="trash" size="small" aria-hidden="true" />}
+              onClick={(event) => props.onDelete(props.session.id, event.currentTarget)}
+            />
+          </span>
         </div>
         <Collapsible.Content>{props.children}</Collapsible.Content>
       </Collapsible>

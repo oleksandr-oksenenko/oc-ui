@@ -17,7 +17,10 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 const session = (id: string, title: string, parentID?: string, updated = 1): SessionInfo => ({
   id,
@@ -29,6 +32,31 @@ const session = (id: string, title: string, parentID?: string, updated = 1): Ses
   time: { created: 1, updated },
   location: { directory: "/project" },
 });
+
+const sidebarProps = (overrides: Partial<Parameters<typeof SessionSidebar>[0]> = {}) => ({
+  sessions: [],
+  statusForSession: () => "idle" as const,
+  expandedIDs: [],
+  loading: false,
+  canCreate: true,
+  canDelete: true,
+  serverName: "Local server",
+  serverStatus: "connected" as const,
+  onSelect: () => undefined,
+  onToggleExpanded: () => undefined,
+  onDelete: () => undefined,
+  onCreate: () => undefined,
+  onRetry: () => undefined,
+  onSelectServer: () => undefined,
+  ...overrides,
+});
+
+const inputEvent = (input: HTMLInputElement, value: string) => {
+  input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
+const fixedNow = 1788004800000;
 
 describe("SessionTree", () => {
   it("renders recursive children and selects them through the same callback", async () => {
@@ -161,7 +189,75 @@ describe("SessionTree", () => {
     dispose();
   });
 
-  it("keeps flat titles full-width and shows runtime status", () => {
+  it("groups roots into Today, This week, and Earlier using updated timestamps", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(fixedNow);
+    const now = fixedNow;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <SessionSidebar
+          {...sidebarProps({
+            sessions: [
+              session("today", "Today session", undefined, now - 60 * 60 * 1000),
+              session("week", "This week session", undefined, now - 3 * 24 * 60 * 60 * 1000),
+              session("earlier", "Earlier session", undefined, now - 14 * 24 * 60 * 60 * 1000),
+            ],
+          })}
+        />
+      ),
+      host,
+    );
+
+    expect([...host.querySelectorAll("section h2")].map((heading) => heading.textContent)).toEqual([
+      "Today",
+      "This week",
+      "Earlier",
+    ]);
+
+    dispose();
+    host.remove();
+  });
+
+  it("keeps a recently updated descendant with its old root in Today", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(fixedNow);
+    const now = fixedNow;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <SessionSidebar
+          {...sidebarProps({
+            sessions: [
+              session("old-root", "Old root", undefined, now - 14 * 24 * 60 * 60 * 1000),
+              session("recent-child", "Recent child", "old-root", now - 60 * 60 * 1000),
+              session("old-other", "Old other", undefined, now - 14 * 24 * 60 * 60 * 1000),
+            ],
+            expandedIDs: ["old-root"],
+          })}
+        />
+      ),
+      host,
+    );
+
+    const today = [...host.querySelectorAll("section")].find(
+      (section) => section.querySelector("h2")?.textContent === "Today",
+    );
+    const earlier = [...host.querySelectorAll("section")].find(
+      (section) => section.querySelector("h2")?.textContent === "Earlier",
+    );
+    expect(today?.textContent).toContain("Old root");
+    expect(today?.textContent).toContain("Recent child");
+    expect(earlier?.textContent).toContain("Old other");
+    expect(earlier?.textContent).not.toContain("Old root");
+
+    dispose();
+    host.remove();
+  });
+
+  it("reserves the disclosure gutter for leaf titles and shows runtime status", () => {
     const host = document.createElement("div");
     const dispose = render(
       () => (
@@ -184,9 +280,48 @@ describe("SessionTree", () => {
     const row = host.querySelector(".shell-session-row");
     expect(row?.classList.contains("selected")).toBe(true);
     expect(row?.classList.contains("has-children")).toBe(false);
-    expect(host.querySelector(".shell-session-disclosure-slot")).toBeNull();
+    expect(host.querySelector(".shell-session-disclosure-slot")).not.toBeNull();
+    expect(host.querySelector(".shell-session-disclosure")).toBeNull();
     expect(host.querySelector(".shell-session-status")?.getAttribute("data-status")).toBe(
       "running",
+    );
+    expect(host.querySelector(".shell-session-status")?.parentElement?.className).toBe(
+      "shell-session-row-end",
+    );
+    expect(host.querySelector('[aria-label="Delete Running"]')?.parentElement?.className).toBe(
+      "shell-session-row-end",
+    );
+
+    dispose();
+  });
+
+  it("places the future requires-input dot in the shared row-end slot", () => {
+    const host = document.createElement("div");
+    const dispose = render(
+      () => (
+        <SessionTreeItem
+          session={session("input", "Needs input")}
+          status="idle"
+          requiresInput
+          hasChildren={false}
+          depth={0}
+          selected={false}
+          expanded={false}
+          deleteDisabled={false}
+          onSelect={() => undefined}
+          onToggleExpanded={() => undefined}
+          onDelete={() => undefined}
+        />
+      ),
+      host,
+    );
+
+    const status = host.querySelector('[data-status="requires-input"]');
+    expect(status?.getAttribute("aria-label")).toBe("Requires input");
+    expect(status?.querySelector(".shell-session-input-required")).not.toBeNull();
+    expect(status?.parentElement?.className).toBe("shell-session-row-end");
+    expect(host.querySelector('[aria-label="Delete Needs input"]')?.parentElement).toBe(
+      status?.parentElement,
     );
 
     dispose();
@@ -213,6 +348,8 @@ describe("SessionTree", () => {
 
     const button = host.querySelector<HTMLButtonElement>('[aria-label="Delete One"]');
     expect(button).not.toBeNull();
+    expect(button?.hidden).toBe(false);
+    expect(button?.parentElement?.lastElementChild).toBe(button);
     button?.click();
     expect(onDelete).toHaveBeenCalledWith("one", button);
 
@@ -249,6 +386,97 @@ describe("SessionTree", () => {
 });
 
 describe("SessionSidebar", () => {
+  it("renders the filter and keeps matching ancestors while pruning unrelated branches", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <SessionSidebar
+          {...sidebarProps({
+            sessions: [
+              session("matching-root", "Project work"),
+              session("matching-parent", "Architecture notes", "matching-root"),
+              session("matching-child", "Deep MATCH result", "matching-parent"),
+              session("unrelated-root", "Personal notes"),
+              session("unrelated-child", "Unrelated child", "unrelated-root"),
+            ],
+            expandedIDs: [],
+          })}
+        />
+      ),
+      host,
+    );
+
+    const filter = host.querySelector<HTMLInputElement>('[aria-label="Filter sessions"]');
+    expect(filter).not.toBeNull();
+    expect(filter?.placeholder).toBe("Filter sessions");
+    inputEvent(filter!, "match");
+
+    expect(host.querySelector('[aria-label="Project work, Idle"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Architecture notes, Idle"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Deep MATCH result, Idle"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Personal notes, Idle"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Unrelated child, Idle"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Collapse Project work"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Collapse Architecture notes"]')).not.toBeNull();
+
+    dispose();
+    host.remove();
+  });
+
+  it("clearing the filter restores controlled expansion and reports no matches distinctly", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <SessionSidebar
+          {...sidebarProps({
+            sessions: [session("root", "Root"), session("child", "Matching child", "root")],
+            expandedIDs: [],
+          })}
+        />
+      ),
+      host,
+    );
+    const filter = host.querySelector<HTMLInputElement>('[aria-label="Filter sessions"]');
+    expect(filter).not.toBeNull();
+
+    inputEvent(filter!, "does-not-exist");
+    expect(host.textContent).toContain("No sessions match");
+    expect(host.textContent).not.toContain("No sessions yet.");
+
+    inputEvent(filter!, "matching");
+    expect(host.querySelector('[aria-label="Matching child, Idle"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Collapse Root"]')).not.toBeNull();
+
+    inputEvent(filter!, "");
+    expect(host.querySelector('[aria-label="Expand Root"]')).not.toBeNull();
+
+    dispose();
+    host.remove();
+  });
+
+  it("does not expose a requires-input state", () => {
+    const host = document.createElement("div");
+    const dispose = render(
+      () => (
+        <SessionSidebar
+          {...sidebarProps({
+            sessions: [session("idle", "Idle"), session("running", "Running")],
+            statusForSession: (id) => (id === "running" ? "running" : "idle"),
+          })}
+        />
+      ),
+      host,
+    );
+
+    expect(host.textContent).not.toContain("Requires input");
+    expect(host.querySelector('[aria-label="Running, Running"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Idle, Idle"]')).not.toBeNull();
+
+    dispose();
+  });
+
   it("places the create action at the top of the session list", () => {
     const host = document.createElement("div");
     const dispose = render(

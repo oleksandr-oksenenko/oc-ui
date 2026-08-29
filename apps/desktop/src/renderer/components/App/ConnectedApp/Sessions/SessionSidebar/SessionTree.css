@@ -1,24 +1,41 @@
 .shell-session-tree {
-  grid-row: 2;
+  grid-row: 3;
   min-height: 0;
   overflow: hidden;
 }
 
 .shell-session-tree-content {
   min-height: 100%;
-  padding: 1px 4px 8px;
+  padding: 0 9px 18px;
+}
+
+.shell-session-group + .shell-session-group {
+  margin-top: 12px;
+}
+
+.shell-session-group h2 {
+  margin: 0;
+  padding: 8px 7px 7px;
+  color: var(--v2-text-text-faint, #666);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
+.shell-session-group-tree {
+  min-width: 0;
 }
 
 .shell-session-children {
-  position: relative;
+  min-width: 0;
+  margin-left: 8px;
 }
 
-.shell-session-children::before {
-  position: absolute;
-  top: 0;
-  bottom: 12px;
-  left: calc(var(--session-depth, 1) * 11px - 6px);
-  width: 1px;
-  background: #2a2a2a;
-  content: "";
+.shell-session-no-match {
+  margin: 12px 8px;
+  color: var(--v2-text-text-faint, #747474);
+  font-size: 11px;
+  line-height: 1.5;
 }

@@ -1,4 +1,3 @@
-import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Show } from "solid-js";
@@ -16,19 +15,18 @@ export type SessionHeaderProps = {
 export function SessionHeader(props: SessionHeaderProps) {
   return (
     <div class="shell-session-header" classList={{ "has-close": props.onHide !== undefined }}>
-      <Button
+      <h1>Sessions</h1>
+      <IconButton
         class="shell-create-session"
         type="button"
-        size="small"
+        size="large"
         variant="ghost-muted"
         aria-label="Create session"
         title="Create session"
         disabled={!props.canCreate}
+        icon={<Icon name="plus" aria-hidden="true" />}
         onClick={props.onCreate}
-      >
-        <Icon name="plus" />
-        <span>New Session</span>
-      </Button>
+      />
       <Show when={props.onHide}>
         {(onHide) => (
           <IconButton

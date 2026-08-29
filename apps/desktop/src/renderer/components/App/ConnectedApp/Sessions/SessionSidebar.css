@@ -1,11 +1,12 @@
 .shell-session-sidebar {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  color: #e5e5e5;
+  color: var(--v2-text-text-base, #d4d4d4);
+  background: #0b0b0b;
 }
 
 .shell-sidebar-action,
@@ -32,7 +33,7 @@
 }
 
 .shell-sidebar-message {
-  grid-row: 2;
+  grid-row: 3;
   display: grid;
   justify-items: start;
   gap: 8px;
@@ -47,6 +48,21 @@
   align-items: center;
 }
 
+.shell-sidebar-filter {
+  width: 100%;
+  padding: 0 14px 12px;
+}
+
+.shell-session-filter[data-component="text-input-v2"] {
+  width: 100%;
+  border-color: #2a2a2a;
+  background: #111;
+}
+
+.shell-session-filter [data-slot="text-input-v2-input"] {
+  font-size: 13px;
+}
+
 .shell-sidebar-action[data-component="button-v2"][data-size="small"] {
   padding: 3px 6px;
   border-radius: 4px;
@@ -54,22 +70,23 @@
 }
 
 .shell-sidebar-footer {
-  grid-row: 3;
+  grid-row: 4;
   min-width: 0;
-  padding: 2px 4px 4px;
+  padding: 6px 9px 8px;
+  border-top: 1px solid #1c1c1c;
 }
 
 .shell-server-selector[data-component="button-v2"][data-size="small"] {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) 13px;
+  grid-template-columns: 14px minmax(0, 1fr) 14px;
   align-items: center;
   justify-content: initial;
   width: 100%;
-  height: 26px;
-  gap: 6px;
-  padding: 0 4px;
+  height: 32px;
+  gap: 7px;
+  padding: 0 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   text-align: left;
 }

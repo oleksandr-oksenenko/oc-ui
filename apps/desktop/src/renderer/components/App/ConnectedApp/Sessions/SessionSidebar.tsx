@@ -1,9 +1,10 @@
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
+import { TextInput } from "@opencode-ai/ui/text-input";
 import type { SessionInfo } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
-import { Show } from "solid-js";
+import { Show, createSignal } from "solid-js";
 
 import { SessionHeader } from "./SessionSidebar/SessionHeader.tsx";
 import { SessionTree } from "./SessionSidebar/SessionTree.tsx";
@@ -40,6 +41,8 @@ const statusLabel = {
 } satisfies Record<SessionSidebarStatus, string>;
 
 export function SessionSidebar(props: SessionSidebarProps) {
+  const [filter, setFilter] = createSignal("");
+
   return (
     <aside class="shell-session-sidebar" aria-label="Sessions">
       <Show when={props.showHeader !== false}>
@@ -50,6 +53,20 @@ export function SessionSidebar(props: SessionSidebarProps) {
           onHide={props.onHide}
         />
       </Show>
+
+      <div class="shell-sidebar-filter">
+        <TextInput
+          class="shell-session-filter"
+          appearance="large"
+          value={filter()}
+          placeholder="Filter sessions"
+          aria-label="Filter sessions"
+          leadingIcon={<Icon name="magnifying-glass" size="small" aria-hidden="true" />}
+          showClearButton={filter().length > 0}
+          onInput={(event) => setFilter(event.currentTarget.value)}
+          onClearClick={() => setFilter("")}
+        />
+      </div>
 
       <Show when={props.error}>
         {(error) => (
@@ -88,6 +105,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
           selectedID={props.selectedID}
           expandedIDs={props.expandedIDs}
           canDelete={props.canDelete}
+          query={filter()}
           onSelect={props.onSelect}
           onToggleExpanded={props.onToggleExpanded}
           onDelete={props.onDelete}
