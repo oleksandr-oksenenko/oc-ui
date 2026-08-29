@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   parseLocalOpenCodeConnectResult,
+  parseSaveTargetInput,
   parseTargetLoadResult,
   parseTargetSaveResult,
   parseVoidResult,
@@ -32,6 +33,10 @@ describe("desktop IPC result parsing", () => {
       parseLocalOpenCodeConnectResult({ status: "failed", message: "Server failed to start." }),
     ).toEqual({ status: "failed", message: "Server failed to start." });
     expect(parseVoidResult(undefined)).toBeUndefined();
+    expect(parseSaveTargetInput({ kind: "remote", serverUrl: "http://example.test" })).toEqual({
+      kind: "remote",
+      serverUrl: "http://example.test",
+    });
   });
 
   it("rejects malformed target and sidecar results", () => {

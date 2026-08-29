@@ -17,7 +17,7 @@ const SaveTargetInputSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("remote"),
     serverUrl: Schema.String,
-    password: Schema.String,
+    password: Schema.optionalKey(Schema.String),
   }),
 ]);
 
@@ -25,7 +25,7 @@ export type SaveTargetInput = typeof SaveTargetInputSchema.Type;
 
 const SaveRemoteTargetInputSchema = Schema.Struct({
   serverUrl: Schema.String,
-  password: Schema.String,
+  password: Schema.optionalKey(Schema.String),
 });
 type SaveRemoteTargetInput = typeof SaveRemoteTargetInputSchema.Type;
 

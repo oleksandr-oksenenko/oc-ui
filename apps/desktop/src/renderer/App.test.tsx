@@ -6,10 +6,10 @@ import type {
   LocalOpenCodeConnectResult,
   OpenCodeTarget,
 } from "../shared/desktop-api.ts";
-import type { VerifiedServer } from "./opencode/index.ts";
-
 const verifyServer = vi.hoisted(() =>
-  vi.fn<(input: { serverUrl: string; password: string }) => Promise<VerifiedServer>>(),
+  vi.fn<
+    (input: { serverUrl: string; password: string }) => Promise<{ readonly serverUrl: string }>
+  >(),
 );
 
 vi.mock("./opencode/index.ts", () => ({
@@ -19,7 +19,19 @@ vi.mock("./opencode/index.ts", () => ({
 }));
 
 vi.mock("./components/App/ConnectedApp.tsx", () => ({
-  ConnectedApp: () => null,
+  ConnectedApp: (props: {
+    readonly onConnected: () => void;
+    readonly onChangeServer: () => void;
+  }) => (
+    <>
+      <button type="button" data-testid="connected" onClick={props.onConnected}>
+        Connected
+      </button>
+      <button type="button" data-testid="change-server" onClick={props.onChangeServer}>
+        Change server
+      </button>
+    </>
+  ),
 }));
 
 import { App } from "./App.tsx";
@@ -89,6 +101,93 @@ afterEach(() => {
 });
 
 describe("App target startup", () => {
+  it("waits for a first-run choice instead of starting the built-in server", async () => {
+    const localConnect = vi.fn<() => Promise<LocalOpenCodeConnectResult>>();
+    const desktop = makeDesktop({
+      load: () => Promise.resolve(undefined),
+      connectLocal: localConnect,
+    });
+    const { host, dispose } = mount(desktop);
+    await flush();
+
+    expect(localConnect).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Start built-in server");
+    expect(host.textContent).not.toContain("Saved choice");
+    dispose();
+  });
+
+  it("auto-connects an explicitly saved local choice and saves it after startup", async () => {
+    const desktop = makeDesktop({
+      load: () => Promise.resolve({ kind: "local" }),
+      connectLocal: () =>
+        Promise.resolve({
+          status: "connected",
+          connection: { serverUrl: "http://127.0.0.1:4096", password: "local-secret" },
+        }),
+    });
+    verifyServer.mockResolvedValue({
+      serverUrl: "http://127.0.0.1:4096",
+    });
+    const { host, dispose } = mount(desktop);
+    await flush();
+    await flush();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="connected"]')?.click();
+    await flush();
+    expect(desktop.target.saveLocal).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it("saves a passwordless remote endpoint without inventing a credential", async () => {
+    const desktop = makeDesktop({
+      load: () => Promise.resolve({ kind: "remote", serverUrl: "http://remote.test:4096" }),
+    });
+    verifyServer.mockResolvedValue({
+      serverUrl: "http://remote.test:4096",
+    });
+    const { host, dispose } = mount(desktop);
+    await flush();
+
+    expect(verifyServer).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLInputElement>('input[autocomplete="url"]')?.value).toBe(
+      "http://remote.test:4096",
+    );
+    host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    await flush();
+    host.querySelector<HTMLButtonElement>('[data-testid="connected"]')?.click();
+    await flush();
+
+    expect(desktop.target.saveRemote).toHaveBeenCalledWith({
+      serverUrl: "http://remote.test:4096",
+    });
+    dispose();
+  });
+
+  it("keeps the saved remote endpoint visible when changing servers", async () => {
+    const desktop = makeDesktop({
+      load: () =>
+        Promise.resolve({
+          kind: "remote",
+          serverUrl: "http://remote.test:4096",
+          password: "saved-secret",
+        }),
+    });
+    verifyServer.mockResolvedValue({
+      serverUrl: "http://remote.test:4096",
+    });
+    const { host, dispose } = mount(desktop);
+    await flush();
+    await flush();
+
+    host.querySelector<HTMLButtonElement>('[data-testid="change-server"]')?.click();
+    await flush();
+    expect(host.textContent).toContain("Saved choice");
+    expect(host.querySelector<HTMLInputElement>('input[autocomplete="url"]')?.value).toBe(
+      "http://remote.test:4096",
+    );
+    dispose();
+  });
+
   it("does not let a late saved target replace a manual connection", async () => {
     const loaded = deferred<OpenCodeTarget | undefined>();
     const localConnect = vi.fn<() => Promise<LocalOpenCodeConnectResult>>();
@@ -96,9 +195,9 @@ describe("App target startup", () => {
     const desktop = makeDesktop({ load: () => loaded.promise, connectLocal: localConnect });
     const { host, dispose } = mount(desktop);
 
-    const inputs = host.querySelectorAll("input");
-    const urlInput = inputs.item(0);
-    const passwordInput = inputs.item(1);
+    host.querySelector<HTMLInputElement>('input[type="radio"][value="remote"]')?.click();
+    const urlInput = host.querySelector<HTMLInputElement>('input[autocomplete="url"]')!;
+    const passwordInput = host.querySelector<HTMLInputElement>('input[type="password"]')!;
     urlInput.value = "http://remote.test:4096";
     urlInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
     passwordInput.value = "remote-secret";
@@ -160,7 +259,7 @@ describe("App target startup", () => {
     await flush();
 
     const forget = [...host.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Forget saved connection",
+      (button) => button.textContent?.trim() === "Forget saved choice",
     );
     forget?.click();
     await flush();
@@ -181,7 +280,7 @@ describe("App target startup", () => {
     await flush();
     await flush();
 
-    expect(host.textContent).toContain("Forget saved connection");
+    expect(host.textContent).toContain("Forget saved choice");
     expect(host.textContent).toContain(
       "The built-in OpenCode server did not start before the startup timeout.",
     );
@@ -212,7 +311,7 @@ describe("App target startup", () => {
   it("stops the owned sidecar when it becomes unavailable", async () => {
     let unavailable: (() => void) | undefined;
     const desktop = makeDesktop({
-      load: () => Promise.resolve(undefined),
+      load: () => Promise.resolve({ kind: "local" }),
       connectLocal: () =>
         Promise.resolve({
           status: "connected",

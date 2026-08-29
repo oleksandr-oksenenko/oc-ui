@@ -1,5 +1,6 @@
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
 
+import type { OpenCodeTarget } from "../shared/desktop-api.ts";
 import { ConnectionForm } from "./components/App/ConnectionForm.tsx";
 import { ConnectedApp } from "./components/App/ConnectedApp.tsx";
 import { OpenCodeConnectionError, ServerProvider, verifyServer } from "./opencode/index.ts";
@@ -13,13 +14,18 @@ type ConnectionState =
   | { readonly status: "failed"; readonly message: string };
 
 type ConnectionOwner = "none" | "local" | "remote";
+type ConnectionMode = Exclude<ConnectionOwner, "none">;
+type SavedTarget =
+  | { readonly kind: "local" }
+  | { readonly kind: "remote"; readonly serverUrl: string };
 
 /** Owns saved-target setup and the connected/disconnected boundary. */
 export function App() {
   const desktop = window.desktop;
   const [serverUrl, setServerUrl] = createSignal("");
   const [password, setPassword] = createSignal("");
-  const [saved, setSaved] = createSignal(false);
+  const [mode, setMode] = createSignal<ConnectionMode>("local");
+  const [savedTarget, setSavedTarget] = createSignal<SavedTarget>();
   const [owner, setOwner] = createSignal<ConnectionOwner>("none");
   const [candidate, setCandidate] = createSignal<VerifiedServer>();
   const [connection, setConnection] = createSignal<ConnectionState>({ status: "disconnected" });
@@ -55,6 +61,7 @@ export function App() {
       if (currentAttempt !== attempt) return;
     }
     setOwner("remote");
+    setMode("remote");
     setConnection({ status: "connecting" });
     try {
       const verified = await verifyServer(input);
@@ -72,6 +79,7 @@ export function App() {
   const connectLocal = async (): Promise<void> => {
     const currentAttempt = ++attempt;
     setOwner("local");
+    setMode("local");
     setCandidate(undefined);
     setConnection({ status: "connecting" });
     try {
@@ -120,18 +128,32 @@ export function App() {
 
     if (connectionOwner === "local") {
       // Local authentication is process-scoped and intentionally ephemeral.
+      const saveAttempt = attempt;
       void desktop.target
         .saveLocal()
-        .then(() => setSaved(true))
-        .catch(() => setSaved(false));
+        .then(() => {
+          if (saveAttempt === attempt) setSavedTarget({ kind: "local" });
+          return undefined;
+        })
+        .catch(() => undefined);
       return;
     }
 
     if (connectionOwner !== "remote") return;
+    const saveAttempt = attempt;
+    const remoteTarget =
+      passwordToSave.length === 0
+        ? { serverUrl: server.serverUrl }
+        : { serverUrl: server.serverUrl, password: passwordToSave };
     void desktop.target
-      .saveRemote({ serverUrl: server.serverUrl, password: passwordToSave })
-      .then(() => setSaved(true))
-      .catch(() => setSaved(false));
+      .saveRemote(remoteTarget)
+      .then(() => {
+        if (saveAttempt === attempt) {
+          setSavedTarget({ kind: "remote", serverUrl: server.serverUrl });
+        }
+        return undefined;
+      })
+      .catch(() => undefined);
   };
 
   const initialStreamFailed = (server: VerifiedServer, cause: unknown): void => {
@@ -160,12 +182,20 @@ export function App() {
 
   const changeServer = async (): Promise<void> => {
     const currentAttempt = ++attempt;
+    const previousOwner = owner();
     pendingPassword = "";
     setCandidate(undefined);
-    setServerUrl("");
     setPassword("");
     savedRemotePassword = "";
-    if (owner() === "local") {
+    if (previousOwner === "remote") {
+      setMode("remote");
+    } else if (previousOwner === "local") {
+      setMode("local");
+      setServerUrl("");
+    } else {
+      restoreSavedTarget(savedTarget(), setMode, setServerUrl);
+    }
+    if (previousOwner === "local") {
       setConnection({ status: "connecting" });
       try {
         await disconnectLocal();
@@ -203,7 +233,8 @@ export function App() {
       });
       return;
     }
-    setSaved(false);
+    setSavedTarget(undefined);
+    setMode("local");
     setServerUrl("");
     setPassword("");
     setConnection({ status: "disconnected" });
@@ -240,13 +271,15 @@ export function App() {
       try {
         const loaded = await desktop.target.load();
         if (loadAttempt !== attempt) return;
-        if (loaded === undefined || loaded.kind === "local") {
-          if (loaded?.kind === "local") setSaved(true);
+        if (loaded === undefined) return;
+
+        setSavedTarget(publicSavedTarget(loaded));
+        setMode(loaded.kind);
+        if (loaded.kind === "local") {
           await connectLocal();
           return;
         }
 
-        setSaved(true);
         setServerUrl(loaded.serverUrl);
         if (loaded.password === undefined) return;
         savedRemotePassword = loaded.password;
@@ -282,9 +315,18 @@ export function App() {
         <ConnectionForm
           serverUrl={serverUrl()}
           password={password()}
+          mode={mode()}
           busy={connecting()}
           error={connectionError()}
-          hasSavedConnection={saved()}
+          savedTarget={savedTarget()}
+          onModeChange={(nextMode) => {
+            setMode(nextMode);
+            setConnection({ status: "disconnected" });
+            if (nextMode === "remote" && serverUrl().length === 0) {
+              const saved = savedTarget();
+              if (saved?.kind === "remote") setServerUrl(saved.serverUrl);
+            }
+          }}
           onServerUrlInput={(value) => {
             savedRemotePassword = "";
             setServerUrl(value);
@@ -297,6 +339,24 @@ export function App() {
       </Show>
     </ServerFlowDialogProvider>
   );
+}
+
+function publicSavedTarget(target: OpenCodeTarget): SavedTarget {
+  return target.kind === "local" ? target : { kind: "remote", serverUrl: target.serverUrl };
+}
+
+function restoreSavedTarget(
+  saved: SavedTarget | undefined,
+  setMode: (mode: ConnectionMode) => void,
+  setServerUrl: (serverUrl: string) => void,
+): void {
+  if (saved?.kind === "remote") {
+    setMode("remote");
+    setServerUrl(saved.serverUrl);
+    return;
+  }
+  setMode("local");
+  setServerUrl("");
 }
 
 function connectionMessage(cause: unknown): string {

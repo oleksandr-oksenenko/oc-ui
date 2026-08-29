@@ -123,11 +123,13 @@ const installIpcHandlers = (): void => {
     const validated: SaveTargetInput =
       input.kind === "local"
         ? input
-        : {
-            kind: "remote",
-            serverUrl: normalizeServerUrl(input.serverUrl),
-            password: validatePassword(input.password),
-          };
+        : input.password === undefined
+          ? { kind: "remote", serverUrl: normalizeServerUrl(input.serverUrl) }
+          : {
+              kind: "remote",
+              serverUrl: normalizeServerUrl(input.serverUrl),
+              password: validatePassword(input.password),
+            };
     return queueSettingsMutation(() =>
       runSettings(withSettings((service) => service.save(validated))),
     );

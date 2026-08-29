@@ -11,11 +11,13 @@ const meta = {
     layout: "fullscreen",
   },
   args: {
+    mode: "local",
     serverUrl: "",
     password: "",
     busy: false,
     error: undefined,
-    hasSavedConnection: false,
+    savedTarget: undefined,
+    onModeChange: fn(),
     onServerUrlInput: fn(),
     onPasswordInput: fn(),
     onConnect: fn(),
@@ -31,22 +33,27 @@ export const Blank: Story = {};
 
 export const Connecting: Story = {
   args: {
-    serverUrl: "http://127.0.0.1:4096",
-    password: "server-password",
     busy: true,
   },
 };
 
-export const SavedUrl: Story = {
+export const SavedBuiltIn: Story = {
   args: {
+    savedTarget: { kind: "local" },
+  },
+};
+
+export const SavedRemote: Story = {
+  args: {
+    mode: "remote",
     serverUrl: "http://homie:4096",
-    password: "saved-password",
-    hasSavedConnection: true,
+    savedTarget: { kind: "remote", serverUrl: "http://homie:4096" },
   },
 };
 
 export const NonLoopbackHttpWarning: Story = {
   args: {
+    mode: "remote",
     serverUrl: "http://homie.lan:4096",
     password: "",
   },
@@ -54,6 +61,7 @@ export const NonLoopbackHttpWarning: Story = {
 
 export const Unauthorized: Story = {
   args: {
+    mode: "remote",
     serverUrl: "http://127.0.0.1:4096",
     password: "wrong-password",
     error: "The server rejected the password.",
@@ -62,6 +70,7 @@ export const Unauthorized: Story = {
 
 export const Unreachable: Story = {
   args: {
+    mode: "remote",
     serverUrl: "http://homie:4096",
     password: "server-password",
     error: "The server could not be reached.",
@@ -70,6 +79,7 @@ export const Unreachable: Story = {
 
 export const IncompatibleVersion: Story = {
   args: {
+    mode: "remote",
     serverUrl: "http://homie:4096",
     password: "server-password",
     error: "This app and server use different OpenCode versions.",

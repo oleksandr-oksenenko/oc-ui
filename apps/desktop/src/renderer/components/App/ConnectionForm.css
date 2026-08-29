@@ -11,8 +11,8 @@
 
 .connection-form-column {
   display: grid;
-  gap: 12px;
-  width: min(360px, calc(100vw - 48px));
+  gap: 16px;
+  width: min(420px, calc(100vw - 48px));
 }
 
 .connection-form-heading {
@@ -42,6 +42,59 @@
   line-height: 1.45;
 }
 
+.connection-form-saved {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--v2-border-border-base, #292929);
+  border-radius: 6px;
+  background: var(--v2-background-bg-subtle, #111);
+  font-size: 12px;
+}
+
+.connection-form-saved span {
+  flex: none;
+  color: var(--v2-text-text-muted, #a3a3a3);
+}
+
+.connection-form-saved strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--v2-text-text-base, #f5f5f5);
+  font-weight: 540;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-form-mode [data-slot="radio-v2-items"] {
+  gap: 8px;
+}
+
+.connection-form-mode [data-slot="radio-v2-item"] {
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--v2-border-border-base, #292929);
+  border-radius: 6px;
+  background: transparent;
+}
+
+.connection-form-mode [data-slot="radio-v2-item"]:hover {
+  border-color: var(--v2-border-border-strong, #454545);
+  background: var(--v2-background-bg-subtle, #111);
+}
+
+.connection-form-mode [data-slot="radio-v2-item"][data-checked] {
+  border-color: var(--v2-border-border-strong, #525252);
+  background: var(--v2-background-bg-subtle, #111);
+}
+
+.connection-form-mode [data-slot="radio-v2-item-description"] {
+  line-height: 1.35;
+}
+
 .connection-form-fields {
   display: grid;
   gap: 12px;
@@ -67,18 +120,26 @@
 
 .connection-form-warning,
 .connection-form-error {
-  margin-top: 6px;
   font-size: 12px;
   line-height: 1.45;
   user-select: text;
 }
 
 .connection-form-warning {
+  margin-top: 6px;
   color: var(--v2-state-fg-warning, #f5b546);
 }
 
 .connection-form-error {
   color: var(--v2-state-fg-danger, #f26d78);
+}
+
+.connection-form-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--v2-text-text-muted, #a3a3a3);
+  font-size: 12px;
 }
 
 .connection-form-actions {
@@ -90,5 +151,5 @@
 }
 
 .connection-form-submit {
-  flex: 1 1 140px;
+  flex: 1 1 200px;
 }
