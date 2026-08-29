@@ -16,6 +16,8 @@ type SessionDeletion = {
 
 type SessionFocusResolver = () => HTMLElement | undefined;
 
+export type SessionDeletionStatus = "ready" | "running" | "removed";
+
 export type SessionFlowsRuntime = {
   readonly data: {
     readonly session: {
@@ -36,6 +38,7 @@ export type SessionFlows = {
   readonly expandedIDs: Accessor<readonly string[]>;
   readonly newSessionOpen: Accessor<boolean>;
   readonly deletion: Accessor<SessionDeletion | undefined>;
+  readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
   readonly openNewSession: () => void;
   readonly dismissNewSession: () => void;
   readonly openSessionDeletion: (
@@ -73,33 +76,51 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
     restoreDialogFocusAfterClose(() => newSessionOpener);
   };
 
+  const inspectDeletion = (
+    sessionID: string,
+  ):
+    | { readonly status: "removed" | "running" }
+    | {
+        readonly status: "ready";
+        readonly session: SessionInfo;
+        readonly subtreeIDs: readonly string[];
+      } => {
+    const sessions = input.workspace.sessions();
+    const session = sessions.find((candidate) => candidate.id === sessionID);
+    if (session === undefined) return { status: "removed" };
+    const subtreeIDs = sessionSubtreeIDs(sessionID, sessions);
+    if (
+      subtreeIDs.some((candidateID) => input.runtime.data.session.status(candidateID) === "running")
+    ) {
+      return { status: "running" };
+    }
+    return { status: "ready", session, subtreeIDs };
+  };
+
+  const deletionStatusForSession = (sessionID: string): SessionDeletionStatus =>
+    inspectDeletion(sessionID).status;
+
   const openSessionDeletion = (
     sessionID: string,
     opener: HTMLButtonElement,
     focusFallback?: SessionFocusResolver,
   ): void => {
     if (!input.connected()) return;
-    const session = input.workspace.sessions().find((candidate) => candidate.id === sessionID);
-    if (session === undefined) return;
-    const subtreeIDs = sessionSubtreeIDs(sessionID, input.workspace.sessions());
-    if (
-      subtreeIDs.some((candidateID) => input.runtime.data.session.status(candidateID) === "running")
-    ) {
-      return;
-    }
+    const target = inspectDeletion(sessionID);
+    if (target.status !== "ready") return;
     const project = input.runtime.data.project
       .list()
-      .find((candidate) => candidate.id === session.projectID);
+      .find((candidate) => candidate.id === target.session.projectID);
     const worktreeDirectory = project?.sandboxes.find((directory) =>
-      sameDirectory(directory, session.location.directory),
+      sameDirectory(directory, target.session.location.directory),
     );
     setDeletion({
-      session,
-      subtreeIDs,
+      session: target.session,
+      subtreeIDs: target.subtreeIDs,
       opener,
       focusFallback,
       worktree: worktreeDirectory
-        ? { projectID: session.projectID, directory: worktreeDirectory }
+        ? { projectID: target.session.projectID, directory: worktreeDirectory }
         : undefined,
     });
   };
@@ -133,6 +154,7 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
     expandedIDs,
     newSessionOpen,
     deletion,
+    deletionStatusForSession,
     openNewSession,
     dismissNewSession,
     openSessionDeletion,

@@ -38,7 +38,7 @@ describe("DeleteSessionFlow", () => {
               subtreeIDs={["root"]}
               removeSession={removeSession}
               removeWorktree={removeWorktree}
-              statusForSession={() => "idle"}
+              deletionStatusForSession={() => "ready"}
               onDeleted={() => undefined}
               onDismiss={() => setOpen(false)}
             />
@@ -80,7 +80,7 @@ describe("DeleteSessionFlow", () => {
             worktree={{ projectID: "project", directory: "/worktrees/experiment" }}
             removeSession={removeSession}
             removeWorktree={removeWorktree}
-            statusForSession={() => "idle"}
+            deletionStatusForSession={() => "ready"}
             onDeleted={onDeleted}
             onDismiss={() => undefined}
           />
@@ -134,7 +134,7 @@ describe("DeleteSessionFlow", () => {
             subtreeIDs={["root", "child"]}
             removeSession={removeSession}
             removeWorktree={removeWorktree}
-            statusForSession={(id) => (id === "child" ? "running" : "idle")}
+            deletionStatusForSession={() => "running"}
             onDeleted={() => undefined}
             onDismiss={() => undefined}
           />
@@ -164,6 +164,54 @@ describe("DeleteSessionFlow", () => {
     dispose();
   });
 
+  it("finishes worktree cleanup when the session was removed externally", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const removeSession = vi.fn<OpenCodeClient["session"]["remove"]>().mockResolvedValue(undefined);
+    const removeWorktree = vi
+      .fn<OpenCodeClient["worktree"]["remove"]>()
+      .mockResolvedValue(undefined);
+    const onDeleted = vi.fn<(sessionIDs: readonly string[]) => void>();
+    const dispose = render(
+      () => (
+        <ServerFlowDialogProvider>
+          <DeleteSessionFlow
+            session={session}
+            subtreeIDs={["root", "child"]}
+            worktree={{ projectID: "project", directory: "/worktrees/experiment" }}
+            removeSession={removeSession}
+            removeWorktree={removeWorktree}
+            deletionStatusForSession={() => "removed"}
+            onDeleted={onDeleted}
+            onDismiss={() => undefined}
+          />
+        </ServerFlowDialogProvider>
+      ),
+      host,
+    );
+
+    const button = await vi.waitFor(() => {
+      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+        (item) => item.textContent?.trim() === "Delete session",
+      );
+      if (candidate === undefined) throw new Error("Delete session button was not rendered");
+      return candidate;
+    });
+    button.click();
+
+    await vi.waitFor(() => {
+      expect(removeWorktree).toHaveBeenCalledWith({
+        projectID: "project",
+        directory: "/worktrees/experiment",
+        force: true,
+      });
+      expect(onDeleted).toHaveBeenCalledWith(["root", "child"]);
+    });
+    expect(removeSession).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
   it("retries only worktree cleanup after session deletion succeeds", async () => {
     const host = document.createElement("div");
     document.body.append(host);
@@ -172,6 +220,10 @@ describe("DeleteSessionFlow", () => {
       .fn<OpenCodeClient["worktree"]["remove"]>()
       .mockRejectedValueOnce(new Error("busy"))
       .mockResolvedValue(undefined);
+    const deletionStatusForSession = vi
+      .fn<(sessionID: string) => "ready" | "running" | "removed">()
+      .mockReturnValueOnce("ready")
+      .mockReturnValue("removed");
     const onDeleted = vi.fn<(sessionIDs: readonly string[]) => void>();
     const dispose = render(
       () => (
@@ -182,7 +234,7 @@ describe("DeleteSessionFlow", () => {
             worktree={{ projectID: "project", directory: "/worktrees/experiment" }}
             removeSession={removeSession}
             removeWorktree={removeWorktree}
-            statusForSession={() => "idle"}
+            deletionStatusForSession={deletionStatusForSession}
             onDeleted={onDeleted}
             onDismiss={() => undefined}
           />
@@ -215,6 +267,7 @@ describe("DeleteSessionFlow", () => {
     await vi.waitFor(() => {
       expect(removeSession).toHaveBeenCalledTimes(1);
       expect(removeWorktree).toHaveBeenCalledTimes(2);
+      expect(deletionStatusForSession).toHaveBeenCalledTimes(1);
       expect(onDeleted).toHaveBeenCalledWith(["root"]);
     });
 
@@ -246,7 +299,7 @@ describe("DeleteSessionFlow", () => {
             subtreeIDs={["root"]}
             removeSession={removeSession}
             removeWorktree={removeWorktree}
-            statusForSession={() => "idle"}
+            deletionStatusForSession={() => "ready"}
             onDeleted={() => undefined}
             onDismiss={onDismiss}
           />

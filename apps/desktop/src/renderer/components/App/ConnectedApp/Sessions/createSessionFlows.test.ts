@@ -88,9 +88,12 @@ describe("createSessionFlows", () => {
     const opener = document.createElement("button");
     document.body.append(opener);
 
+    expect(flows.deletionStatusForSession("root")).toBe("running");
     flows.openSessionDeletion("root", opener);
     expect(flows.deletion()).toBeUndefined();
     fixture.status.set("child", "idle");
+    expect(flows.deletionStatusForSession("root")).toBe("ready");
+    expect(flows.deletionStatusForSession("missing")).toBe("removed");
     flows.openSessionDeletion("root", opener);
     expect(flows.deletion()?.worktree).toEqual({
       projectID: "project",

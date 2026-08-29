@@ -29,6 +29,7 @@ export function SessionsRegion(props: SessionsRegionProps) {
       error={props.runtime.sessions.error()}
       canCreate={connected() && props.runtime.sessions.state() === "ready"}
       canDelete={connected() && props.runtime.sessions.state() === "ready"}
+      deletionStatusForSession={props.flows.deletionStatusForSession}
       autoFocusClose={props.mobile}
       serverName={friendlyServerName(props.serverUrl)}
       serverStatus={connected() ? "connected" : "reconnecting"}

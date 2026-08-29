@@ -6,6 +6,7 @@ import {
   SessionSidebar,
   type SessionSidebarProps,
 } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
+import { sessionSubtreeIDs } from "../src/renderer/components/App/ConnectedApp/Sessions/session-selection.ts";
 import { storySession } from "./session-fixtures.ts";
 
 const storyNow = Date.UTC(2026, 7, 29, 12, 0, 0);
@@ -58,6 +59,7 @@ type StoryOptions = Partial<
   readonly selectedID?: string;
   readonly expandedIDs?: readonly string[];
   readonly runningIDs?: readonly string[];
+  readonly requiresInputIDs?: readonly string[];
   readonly serverStatus?: SessionSidebarProps["serverStatus"];
   readonly height?: string;
   readonly width?: string;
@@ -118,6 +120,14 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
         error={options.error}
         canCreate={options.canCreate ?? true}
         canDelete={options.canDelete ?? true}
+        deletionStatusForSession={(id) =>
+          sessionSubtreeIDs(id, visibleSessions()).every(
+            (sessionID) => !options.runningIDs?.includes(sessionID),
+          )
+            ? "ready"
+            : "running"
+        }
+        requiresInputForSession={(id) => options.requiresInputIDs?.includes(id) ?? false}
         showHeader={options.showHeader}
         serverName="Local server"
         serverStatus={serverStatus()}
@@ -215,7 +225,8 @@ export const StatusGlyphs = {
       [
         updated(storySession("idle", "Idle session"), storyNow - day),
         updated(storySession("running", "Running session"), storyNow - 60 * 60 * 1000),
+        updated(storySession("input", "Requires input"), storyNow - 2 * 60 * 60 * 1000),
       ],
-      { runningIDs: ["running"] },
+      { runningIDs: ["running"], requiresInputIDs: ["input"] },
     ),
 };

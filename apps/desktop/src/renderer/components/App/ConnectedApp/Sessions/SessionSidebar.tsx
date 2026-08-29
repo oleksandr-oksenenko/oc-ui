@@ -8,6 +8,7 @@ import { Show, createSignal } from "solid-js";
 
 import { SessionHeader } from "./SessionSidebar/SessionHeader.tsx";
 import { SessionTree } from "./SessionSidebar/SessionTree.tsx";
+import type { SessionDeletionStatus } from "./createSessionFlows.ts";
 import "./SessionSidebar.css";
 
 type SessionSidebarStatus = "connected" | "reconnecting" | "failed";
@@ -21,6 +22,8 @@ export type SessionSidebarProps = {
   readonly error?: string;
   readonly canCreate: boolean;
   readonly canDelete: boolean;
+  readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
+  readonly requiresInputForSession?: (sessionID: string) => boolean;
   readonly showHeader?: boolean;
   readonly autoFocusClose?: boolean;
   readonly serverName: string;
@@ -105,6 +108,8 @@ export function SessionSidebar(props: SessionSidebarProps) {
           selectedID={props.selectedID}
           expandedIDs={props.expandedIDs}
           canDelete={props.canDelete}
+          deletionStatusForSession={props.deletionStatusForSession}
+          requiresInputForSession={props.requiresInputForSession}
           query={filter()}
           onSelect={props.onSelect}
           onToggleExpanded={props.onToggleExpanded}

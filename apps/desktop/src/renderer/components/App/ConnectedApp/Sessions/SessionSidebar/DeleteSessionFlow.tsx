@@ -1,9 +1,9 @@
 import type { OpenCodeClient, SessionInfo } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 
 import { useServerFlowDismissBlock } from "../../../../../ui/ServerFlowDialogProvider.tsx";
+import type { SessionDeletionStatus } from "../createSessionFlows.ts";
 import { DeleteSessionDialog } from "./DeleteSessionFlow/DeleteSessionDialog.tsx";
 
 export type DeleteSessionFlowProps = {
@@ -12,7 +12,7 @@ export type DeleteSessionFlowProps = {
   readonly worktree?: { readonly projectID: string; readonly directory: string };
   readonly removeSession: OpenCodeClient["session"]["remove"];
   readonly removeWorktree: OpenCodeClient["worktree"]["remove"];
-  readonly statusForSession: (sessionID: string) => DataSessionStatus;
+  readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
   readonly onDeleted: (sessionIDs: readonly string[]) => void;
   readonly onDismiss: () => void;
 };
@@ -30,9 +30,13 @@ export function DeleteSessionFlow(props: DeleteSessionFlowProps) {
 
   const deleteSession = async (): Promise<void> => {
     if (deleting()) return;
-    if (props.subtreeIDs.some((sessionID) => props.statusForSession(sessionID) === "running")) {
-      setError("Wait for this session and its child sessions to finish before deleting.");
-      return;
+    if (!sessionRemoved()) {
+      const status = props.deletionStatusForSession(props.session.id);
+      if (status === "running") {
+        setError("Wait for this session and its child sessions to finish before deleting.");
+        return;
+      }
+      if (status === "removed") setSessionRemoved(true);
     }
 
     setDeleting(true);

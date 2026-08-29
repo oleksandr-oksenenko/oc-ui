@@ -204,6 +204,7 @@ function WorkspaceShowcaseFixture() {
                 loading={false}
                 canCreate
                 canDelete
+                deletionStatusForSession={() => "ready"}
                 autoFocusClose={panelState.mobile()}
                 serverName="Local server"
                 serverStatus="connected"

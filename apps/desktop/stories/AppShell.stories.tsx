@@ -109,6 +109,7 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                 loading={false}
                 canCreate={true}
                 canDelete
+                deletionStatusForSession={() => "ready"}
                 autoFocusClose={panelState.mobile()}
                 serverName="homie.lan:4096"
                 serverStatus="connected"
@@ -257,6 +258,7 @@ export const NarrowRightPanelCollapsed = {
                 loading={false}
                 canCreate={true}
                 canDelete
+                deletionStatusForSession={() => "ready"}
                 serverName="Local server"
                 serverStatus="connected"
                 onSelect={() => undefined}

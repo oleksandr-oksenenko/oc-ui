@@ -40,6 +40,7 @@ const sidebarProps = (overrides: Partial<Parameters<typeof SessionSidebar>[0]> =
   loading: false,
   canCreate: true,
   canDelete: true,
+  deletionStatusForSession: () => "ready" as const,
   serverName: "Local server",
   serverStatus: "connected" as const,
   onSelect: () => undefined,
@@ -75,6 +76,7 @@ describe("SessionTree", () => {
           selectedID="child"
           expandedIDs={["root", "child"]}
           canDelete
+          deletionStatusForSession={() => "ready"}
           onSelect={onSelect}
           onToggleExpanded={() => undefined}
           onDelete={() => undefined}
@@ -145,6 +147,7 @@ describe("SessionTree", () => {
           statusForSession={() => "idle"}
           expandedIDs={[]}
           canDelete
+          deletionStatusForSession={() => "ready"}
           onSelect={() => undefined}
           onToggleExpanded={() => undefined}
           onDelete={() => undefined}
@@ -172,6 +175,7 @@ describe("SessionTree", () => {
           statusForSession={() => "idle"}
           expandedIDs={["new-root"]}
           canDelete
+          deletionStatusForSession={() => "ready"}
           onSelect={() => undefined}
           onToggleExpanded={() => undefined}
           onDelete={() => undefined}
@@ -338,6 +342,7 @@ describe("SessionTree", () => {
           statusForSession={() => "idle"}
           expandedIDs={[]}
           canDelete
+          deletionStatusForSession={() => "ready"}
           onSelect={() => undefined}
           onToggleExpanded={() => undefined}
           onDelete={onDelete}
@@ -357,7 +362,7 @@ describe("SessionTree", () => {
     host.remove();
   });
 
-  it("disables deletion while a session in the subtree is running", () => {
+  it("uses deletion eligibility supplied by the Sessions domain", () => {
     const host = document.createElement("div");
     const dispose = render(
       () => (
@@ -366,6 +371,7 @@ describe("SessionTree", () => {
           statusForSession={(id) => (id === "child" ? "running" : "idle")}
           expandedIDs={["root"]}
           canDelete
+          deletionStatusForSession={() => "running"}
           onSelect={() => undefined}
           onToggleExpanded={() => undefined}
           onDelete={() => undefined}
@@ -477,6 +483,26 @@ describe("SessionSidebar", () => {
     dispose();
   });
 
+  it("renders requires-input state only when the view contract supplies it", () => {
+    const host = document.createElement("div");
+    const dispose = render(
+      () => (
+        <SessionSidebar
+          {...sidebarProps({
+            sessions: [session("input", "Needs input")],
+            requiresInputForSession: (id) => id === "input",
+          })}
+        />
+      ),
+      host,
+    );
+
+    expect(host.querySelector('[data-status="requires-input"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Needs input, Requires input"]')).not.toBeNull();
+
+    dispose();
+  });
+
   it("places the create action at the top of the session list", () => {
     const host = document.createElement("div");
     const dispose = render(
@@ -488,6 +514,7 @@ describe("SessionSidebar", () => {
           loading={false}
           canCreate
           canDelete
+          deletionStatusForSession={() => "ready"}
           serverName="Local server"
           serverStatus="connected"
           onSelect={() => undefined}
