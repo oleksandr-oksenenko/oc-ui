@@ -11,10 +11,12 @@ import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/C
 import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
+import { QuestionForm } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/QuestionForm.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 import { storySession } from "./session-fixtures.ts";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
+import { workspaceQuestionForm } from "./question-form-fixtures.ts";
 
 const sessions = [
   storySession("compact-ledger", "Compact Ledger Transcript"),
@@ -187,7 +189,6 @@ function WorkspaceShowcaseFixture() {
                 sessions={sessions}
                 statusForSession={(id) =>
                   [
-                    "compact-ledger",
                     "refactor-utils",
                     "config-option",
                     "auth-layer",
@@ -229,8 +230,19 @@ function WorkspaceShowcaseFixture() {
                   <TranscriptView
                     sessionID="amoled-workspace"
                     messages={transcript}
-                    sessionStatus="running"
-                    workingLabel="Generating visual regression report…"
+                    sessionStatus="idle"
+                    pendingInteraction={
+                      <article
+                        class="transcript-message transcript-assistant-message transcript-pending-interaction"
+                        data-message-id="workspace-question-form"
+                      >
+                        <QuestionForm
+                          form={workspaceQuestionForm}
+                          onSubmit={() => undefined}
+                          onCancel={() => undefined}
+                        />
+                      </article>
+                    }
                   />
                 }
                 composer={

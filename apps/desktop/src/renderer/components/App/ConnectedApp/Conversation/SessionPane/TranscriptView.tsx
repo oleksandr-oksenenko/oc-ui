@@ -24,6 +24,7 @@ export type TranscriptViewProps = {
   readonly workingLabel?: string;
   readonly onRetry?: () => void;
   readonly emptyMessage?: string;
+  readonly pendingInteraction?: JSX.Element;
 };
 
 export function TranscriptView(props: TranscriptViewProps): JSX.Element {
@@ -67,16 +68,23 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
       </Show>
 
       <Show
-        when={props.loading !== true && props.error === undefined && props.messages.length === 0}
+        when={
+          props.loading !== true &&
+          props.error === undefined &&
+          props.messages.length === 0 &&
+          props.pendingInteraction === undefined
+        }
       >
         <div class="transcript-state transcript-empty-state">
           <p>{props.emptyMessage ?? "Start this session with a prompt"}</p>
         </div>
       </Show>
 
-      <Show when={props.messages.length > 0 || working()}>
+      <Show when={props.messages.length > 0 || working() || props.pendingInteraction !== undefined}>
         <div ref={contentRef} class="transcript-document">
           {props.messages.map((message) => renderMessage(message, props.sessionStatus))}
+
+          {props.pendingInteraction}
 
           <Show when={working()}>
             <output class="transcript-working" aria-live="polite">

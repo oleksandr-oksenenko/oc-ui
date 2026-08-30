@@ -131,6 +131,11 @@
   color: var(--text-strong, #f5f5f5);
 }
 
+.transcript-pending-interaction {
+  display: flex;
+  justify-content: center;
+}
+
 .transcript-assistant-document {
   width: 100%;
   font-size: 14px;
