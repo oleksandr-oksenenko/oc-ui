@@ -2,7 +2,6 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Show } from "solid-js";
 
-import "../../../../../ui/SidebarToggleButton.css";
 import "./SessionHeader.css";
 
 export type SessionHeaderProps = {
@@ -19,8 +18,8 @@ export function SessionHeader(props: SessionHeaderProps) {
       <IconButton
         class="shell-create-session"
         type="button"
-        size="large"
-        variant="ghost-muted"
+        size="normal"
+        variant="contrast"
         aria-label="Create session"
         title="Create session"
         disabled={!props.canCreate}
@@ -30,9 +29,8 @@ export function SessionHeader(props: SessionHeaderProps) {
       <Show when={props.onHide}>
         {(onHide) => (
           <IconButton
-            class="shell-sidebar-toggle-button"
             type="button"
-            size="small"
+            size="normal"
             variant="ghost-muted"
             icon={<Icon name="layout-left-partial" />}
             aria-label="Hide sessions"

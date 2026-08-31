@@ -12,8 +12,9 @@ const malformedFile = {
 };
 
 describe("DiffView", () => {
-  it("keeps the controlled comparison available while loading", () => {
+  it("keeps the controlled comparison available while loading", async () => {
     const host = document.createElement("div");
+    document.body.append(host);
     const onComparisonChange = vi.fn<(value: string) => void>();
     const dispose = render(
       () => (
@@ -31,13 +32,20 @@ describe("DiffView", () => {
       host,
     );
 
-    const select = host.querySelector<HTMLSelectElement>('[aria-label="Diff comparison"]');
+    const select = host.querySelector<HTMLElement>('[data-component="select-v2"]');
     expect(select).not.toBeNull();
-    select!.value = "branch";
-    select!.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(select?.textContent).toContain("Working changes");
+    select?.focus();
+    select?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    const branch = [
+      ...document.body.querySelectorAll<HTMLElement>('[data-component="menu-v2-item"]'),
+    ].find((option) => option.textContent?.includes("Changes vs main"));
+    branch?.click();
     expect(onComparisonChange).toHaveBeenCalledWith("branch");
     expect(host.textContent).toContain("Loading diff");
     dispose();
+    host.remove();
   });
 
   it("uses workspace-state wording for an empty comparison", () => {

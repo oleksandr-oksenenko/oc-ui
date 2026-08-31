@@ -1,8 +1,9 @@
-import { For, Show } from "solid-js";
 import { Button } from "@opencode-ai/ui/button";
 import { DiffChanges } from "@opencode-ai/ui/diff-changes";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
+import { Select } from "@opencode-ai/ui/select";
+import { createMemo, For, Show } from "solid-js";
 
 import { DiffFile } from "./DiffView/DiffFile.tsx";
 import type { DiffFileData } from "./DiffView/DiffFile.tsx";
@@ -25,27 +26,31 @@ const defaultComparisonOptions = [{ value: "working", label: "Working changes" }
 export function DiffView(props: DiffViewProps) {
   const additions = () => props.files.reduce((total, file) => total + file.additions, 0);
   const deletions = () => props.files.reduce((total, file) => total + file.deletions, 0);
-  const comparisonOptions = (): { readonly value: string; readonly label: string }[] =>
+  const comparisonOptions = createMemo<{ readonly value: string; readonly label: string }[]>(() =>
     props.comparisonOptions && props.comparisonOptions.length > 0
       ? props.comparisonOptions.map((option) => option)
-      : [...defaultComparisonOptions];
+      : [...defaultComparisonOptions],
+  );
   const comparison = () => props.comparison ?? comparisonOptions()[0]?.value ?? "working";
+  const selectedComparison = () =>
+    comparisonOptions().find((option) => option.value === comparison()) ?? comparisonOptions()[0];
 
   return (
     <section class="context-view diff-view" aria-label="Diff">
       <Show when={props.files.length > 0 || comparisonOptions().length > 1}>
         <div class="diff-summary">
           <Show when={comparisonOptions().length > 1}>
-            <select
+            <Select
               class="diff-comparison-select"
               aria-label="Diff comparison"
-              value={comparison()}
-              onChange={(event) => props.onComparisonChange?.(event.currentTarget.value)}
-            >
-              <For each={comparisonOptions()}>
-                {(option) => <option value={option.value}>{option.label}</option>}
-              </For>
-            </select>
+              options={comparisonOptions()}
+              current={selectedComparison()}
+              value={(option) => option.value}
+              label={(option) => option.label}
+              onSelect={(option) => {
+                if (option) props.onComparisonChange?.(option.value);
+              }}
+            />
           </Show>
           <Show when={props.files.length > 0}>
             <span class="diff-summary-count">
@@ -73,8 +78,7 @@ export function DiffView(props: DiffViewProps) {
             <p>{error()}</p>
             <Show when={props.onRetry}>
               <Button
-                class="context-retry"
-                size="small"
+                size="normal"
                 variant="outline"
                 type="button"
                 onClick={() => props.onRetry?.()}
@@ -114,8 +118,7 @@ export function DiffView(props: DiffViewProps) {
                 <span>{error()}</span>
                 <Show when={props.onRetry}>
                   <Button
-                    class="context-retry"
-                    size="small"
+                    size="normal"
                     variant="outline"
                     type="button"
                     onClick={() => props.onRetry?.()}

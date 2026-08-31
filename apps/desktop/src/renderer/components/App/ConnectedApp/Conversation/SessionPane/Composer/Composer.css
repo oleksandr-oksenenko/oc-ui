@@ -1,11 +1,11 @@
 .composer-v2,
 .composer-model-popover {
-  --composer-bg: #0a0a0a;
-  --composer-hover: #101010;
-  --composer-surface: #0a0a0a;
-  --composer-border: #29292f;
-  --composer-text: #f4f4f5;
-  --composer-muted: #96969f;
+  --composer-bg: var(--oc-surface-raised);
+  --composer-hover: var(--oc-surface-control);
+  --composer-surface: var(--oc-surface-raised);
+  --composer-border: var(--oc-border-strong);
+  --composer-text: var(--oc-text-contrast);
+  --composer-muted: var(--oc-text-muted);
 }
 
 .composer-v2 {
@@ -18,7 +18,7 @@
   margin: 0 auto 16px;
   padding: 3px 6px;
   border: 1px solid var(--composer-border);
-  border-radius: 6px;
+  border-radius: var(--oc-radius);
   color: var(--composer-text);
   background: var(--composer-bg);
 }
@@ -37,7 +37,7 @@
   max-height: 168px;
   padding: 10px 2px;
   border: 0;
-  border-radius: 4px !important;
+  border-radius: var(--oc-radius) !important;
   resize: none;
   overflow-y: hidden;
   color: var(--composer-text);
@@ -45,8 +45,8 @@
   background: transparent !important;
   box-shadow: none !important;
   font-family: inherit;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
 }
 
 .composer-v2-input:focus {
@@ -55,7 +55,12 @@
 }
 
 .composer-v2:focus-within {
-  border-color: #3d3d43;
+  border-color: var(--oc-focus-ring);
+}
+
+.composer-v2:has(.composer-v2-input:focus-visible) {
+  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
+  outline-offset: 1px;
 }
 
 .composer-v2-input::placeholder {
@@ -67,20 +72,20 @@
   align-items: center;
   justify-content: center;
   margin-left: auto;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
   padding: 0 !important;
   border: 1px solid var(--composer-border);
-  border-radius: 5px;
-  color: #fff !important;
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-contrast) !important;
   background: var(--composer-bg) !important;
   background-image: none !important;
   box-shadow: none !important;
 }
 
 .composer-v2-action:focus-visible {
-  outline: 1px solid #4a4a50;
+  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
   outline-offset: 1px;
 }
 
@@ -94,8 +99,9 @@
 }
 
 .composer-v2-action-icon {
-  font-size: 20px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .composer-v2-action [data-slot="icon-svg"] {
@@ -125,7 +131,7 @@
   gap: 5px;
   min-width: 0;
   color: var(--composer-muted);
-  font-size: 11px;
+  font-size: var(--oc-type-caption-size);
   line-height: 20px;
 }
 
@@ -144,7 +150,7 @@
   padding: 0 2px 0 7px;
   gap: 2px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--oc-radius);
   color: var(--composer-text);
   background: transparent;
   font: inherit;
@@ -165,8 +171,8 @@
 }
 
 .composer-model-trigger:focus-visible {
-  outline: 1px solid #4a4a50;
-  outline-offset: 0;
+  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
+  outline-offset: 1px;
 }
 
 .composer-model-trigger:disabled {
@@ -182,10 +188,10 @@
   width: min(288px, calc(100vw - 24px));
   max-width: none;
   border: 1px solid var(--composer-border);
-  border-radius: 6px;
+  border-radius: var(--oc-radius);
   color: var(--composer-text);
   background: var(--composer-bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  box-shadow: var(--oc-shadow-popover);
 }
 
 .composer-model-popover [data-slot="popover-body"] {
@@ -210,13 +216,13 @@
   padding: 0 7px;
   gap: 6px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--oc-radius);
   color: var(--composer-muted);
   background: var(--composer-hover);
 }
 
 .composer-model-list [data-slot="list-search"]:focus-within {
-  border-color: #3d3d43;
+  border-color: var(--oc-border-strong);
 }
 
 .composer-model-list [data-slot="list-search-container"] {
@@ -237,9 +243,9 @@
   padding: 0;
   color: var(--composer-text);
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16px;
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
+  line-height: var(--oc-type-metadata-line-height);
 }
 
 .composer-model-list
@@ -269,7 +275,7 @@
   color: var(--composer-muted);
   background: var(--composer-bg);
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--oc-type-caption-size);
   font-weight: 500;
   line-height: 24px;
 }
@@ -283,13 +289,13 @@
   min-height: 26px;
   padding: 0 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--oc-radius);
   color: var(--composer-text);
   background: transparent;
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16px;
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
+  line-height: var(--oc-type-metadata-line-height);
 }
 
 .composer-model-list [data-slot="list-items"] [data-slot="list-item"][data-active="true"] {
@@ -317,8 +323,8 @@
 .composer-model-list [data-slot="list-empty-state"] [data-slot="list-message"] {
   color: var(--composer-muted);
   font-family: inherit;
-  font-size: 12px;
-  line-height: 16px;
+  font-size: var(--oc-type-metadata-size);
+  line-height: var(--oc-type-metadata-line-height);
 }
 
 .composer-model-option {
@@ -340,7 +346,7 @@
   padding: 0;
   gap: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--oc-radius);
   background: transparent;
 }
 
@@ -351,9 +357,8 @@
 }
 
 .composer-picker-control[data-component="select-v2"]:focus-within {
-  outline: 1px solid #4a4a50 !important;
-  outline-offset: 0 !important;
-  box-shadow: none !important;
+  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
+  outline-offset: 1px;
 }
 
 .composer-picker-control[data-component="select-v2"] [data-slot="select-v2-value-text"] {
@@ -403,12 +408,12 @@
 .composer-v2-status {
   margin: 0;
   color: var(--composer-muted);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
 }
 
 .composer-v2-status--error {
-  color: #fca5a5;
+  color: var(--oc-status-danger);
 }
 
 @media (width <= 620px) {

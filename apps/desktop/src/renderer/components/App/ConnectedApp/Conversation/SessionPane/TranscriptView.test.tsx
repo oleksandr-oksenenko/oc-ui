@@ -192,7 +192,24 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("Agent switched");
     expect(host.textContent).toContain("Model switched");
     expect(host.textContent).toContain("Location switched");
-    expect(host.textContent).toContain("Compaction completed");
+    expect(host.textContent).toContain("Compaction");
+    expect(
+      host.querySelector(".transcript-shell-exited .transcript-context-status")?.textContent,
+    ).toBe("Completed");
+    expect(
+      host
+        .querySelector(".transcript-shell-exited .transcript-context-status")
+        ?.getAttribute("data-status"),
+    ).toBe("success");
+    expect(
+      host.querySelector(".transcript-compaction-completed .transcript-context-status")
+        ?.textContent,
+    ).toBe("Completed");
+    expect(
+      host
+        .querySelector(".transcript-compaction-completed .transcript-context-status")
+        ?.getAttribute("data-status"),
+    ).toBe("success");
     expect(host.textContent).toContain("System context");
     expect(host.textContent).toContain("Context");
     expect(host.textContent).not.toContain("secret");

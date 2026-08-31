@@ -5,14 +5,14 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  color: var(--v2-text-text-base, #d4d4d4);
-  background: #0b0b0b;
+  color: var(--v2-text-text-base);
+  background: var(--oc-surface-raised);
 }
 
 .shell-sidebar-action,
 .shell-server-selector {
   border: 0;
-  color: #a3a3a3;
+  color: var(--oc-text-muted);
   background: transparent;
   box-shadow: none;
   cursor: pointer;
@@ -20,15 +20,15 @@
 
 .shell-sidebar-action:hover,
 .shell-server-selector:hover {
-  color: #f5f5f5;
-  background: #1c1c1c;
+  color: var(--oc-text-contrast);
+  background: var(--oc-surface-hover);
 }
 
 .shell-sidebar-action:focus-visible,
 .shell-server-selector:focus-visible {
-  color: #f5f5f5;
-  background: #1c1c1c;
-  outline: 2px solid #74a7ff;
+  color: var(--oc-text-contrast);
+  background: var(--oc-surface-hover);
+  outline: 2px solid var(--oc-focus-ring);
   outline-offset: -2px;
 }
 
@@ -38,14 +38,31 @@
   justify-items: start;
   gap: 8px;
   padding: 12px 14px;
-  color: #737373;
-  font-size: 11px;
-  line-height: 1.45;
+  color: var(--oc-text-faint);
+  font-size: var(--oc-type-status-size);
+  line-height: var(--oc-type-status-line-height);
 }
 
 .shell-sidebar-loading {
   grid-template-columns: auto 1fr;
   align-items: center;
+}
+
+.shell-sidebar-status-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.shell-sidebar-status-row svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+}
+
+.shell-sidebar-error-row {
+  color: var(--oc-status-danger);
 }
 
 .shell-sidebar-filter {
@@ -55,25 +72,15 @@
 
 .shell-session-filter[data-component="text-input-v2"] {
   width: 100%;
-  border-color: #2a2a2a;
-  background: #111;
-}
-
-.shell-session-filter [data-slot="text-input-v2-input"] {
-  font-size: 13px;
-}
-
-.shell-sidebar-action[data-component="button-v2"][data-size="small"] {
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 11px;
+  border-color: var(--oc-border-strong);
+  background: var(--oc-surface-control);
 }
 
 .shell-sidebar-footer {
   grid-row: 4;
   min-width: 0;
   padding: 6px 9px 8px;
-  border-top: 1px solid #1c1c1c;
+  border-top: 1px solid var(--oc-border-muted);
 }
 
 .shell-server-selector[data-component="button-v2"][data-size="small"] {
@@ -85,9 +92,9 @@
   height: 32px;
   gap: 7px;
   padding: 0 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 400;
+  border-radius: var(--oc-radius);
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
   text-align: left;
 }
 
@@ -96,23 +103,23 @@
   width: 14px;
   height: 14px;
   place-items: center;
-  color: #86efac;
+  color: var(--oc-status-success);
 }
 
 .shell-server-status-dot {
   display: block;
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--oc-radius-full);
   background: currentcolor;
 }
 
 .shell-server-status.reconnecting {
-  color: #fcd34d;
+  color: var(--oc-status-warning);
 }
 
 .shell-server-status.failed {
-  color: #737373;
+  color: var(--oc-status-danger);
 }
 
 .shell-server-name {
@@ -129,7 +136,7 @@
 .shell-server-chevron {
   width: 13px;
   height: 13px;
-  color: #737373;
+  color: var(--oc-text-faint);
 }
 
 .shell-server-status svg {

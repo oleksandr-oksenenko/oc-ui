@@ -80,7 +80,7 @@ describe("Composer", () => {
 
     const sendButton = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
     expect(sendButton?.disabled).toBe(true);
-    expect(sendButton?.textContent).toBe("…");
+    expect(sendButton?.querySelector('[data-component="loader-v2"]')).not.toBeNull();
     sendButton?.click();
     expect(submit).not.toHaveBeenCalled();
     dispose();
@@ -423,6 +423,40 @@ describe("Composer", () => {
     expect(button.disabled).toBe(true);
     button.click();
     expect(submit).toHaveBeenCalledOnce();
+    dispose();
+    host.remove();
+  });
+
+  it("keeps native submit behavior while switching its pinned artwork", () => {
+    const host = document.createElement("div");
+    const [action, setAction] = createSignal<ComposerProps["action"]>("send");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Composer
+          value="send this"
+          disabled={false}
+          action={action()}
+          modelSelection={unavailableSelection}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={() => undefined}
+        />
+      ),
+      host,
+    );
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    if (!button) throw new Error("Composer did not render its send button");
+
+    expect(button.type).toBe("submit");
+    expect(button.querySelector('[data-slot="icon-svg"]')).not.toBeNull();
+    expect(button.querySelector('[data-component="loader-v2"]')).toBeNull();
+
+    setAction("sending");
+    expect(button.disabled).toBe(true);
+    expect(button.querySelector('[data-slot="icon-svg"]')).toBeNull();
+    expect(button.querySelector('[data-component="loader-v2"]')).not.toBeNull();
+
     dispose();
     host.remove();
   });

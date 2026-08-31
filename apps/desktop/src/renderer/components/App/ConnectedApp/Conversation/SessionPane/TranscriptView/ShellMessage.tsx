@@ -1,6 +1,7 @@
 import type { SessionMessageShell } from "@opencode-ai/client";
 import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { Icon } from "@opencode-ai/ui/icon";
+import { Loader } from "@opencode-ai/ui/loader";
 import { Show, type JSX } from "solid-js";
 
 export function ShellMessage(props: { readonly message: SessionMessageShell }): JSX.Element {
@@ -15,7 +16,21 @@ export function ShellMessage(props: { readonly message: SessionMessageShell }): 
       <Collapsible.Trigger class="transcript-context-trigger" disabled={!hasDetails}>
         <Icon name="terminal" size="small" aria-hidden="true" />
         <span class="transcript-context-label">{props.message.command}</span>
-        <span class="transcript-context-detail">{shellStatus(props.message)}</span>
+        <span class="transcript-context-status" data-status={shellSemanticStatus(props.message)}>
+          <Show
+            when={props.message.status === "running"}
+            fallback={
+              <Icon
+                name={shellSemanticStatus(props.message) === "success" ? "check" : "warning"}
+                size="small"
+                aria-hidden="true"
+              />
+            }
+          >
+            <Loader width={14} height={14} aria-hidden="true" />
+          </Show>
+          <span>{shellStatus(props.message)}</span>
+        </span>
         <Show when={hasDetails}>
           <Collapsible.Arrow />
         </Show>
@@ -42,7 +57,7 @@ function shellStatus(message: SessionMessageShell): string {
     case "running":
       return "Running";
     case "exited":
-      return "Exited";
+      return message.exit === 0 ? "Completed" : `Exited ${String(message.exit ?? "")}`.trim();
     case "timeout":
       return "Timed out";
     case "killed":
@@ -52,4 +67,12 @@ function shellStatus(message: SessionMessageShell): string {
       return unreachable;
     }
   }
+}
+
+function shellSemanticStatus(message: SessionMessageShell): "running" | "success" | "error" {
+  return message.status === "running"
+    ? "running"
+    : message.status === "exited" && message.exit === 0
+      ? "success"
+      : "error";
 }

@@ -1,0 +1,72 @@
+/*
+ * The pinned OpenCode UI package hardcodes the ordinary control radius in
+ * these public roots and slots. Keep this narrow override at the app edge so
+ * upstream styles remain untouched while visible controls follow our single
+ * product radius.
+ */
+:root [data-component="button-v2"],
+:root [data-component="icon-button-v2"],
+:root [data-component="text-input-v2"],
+:root [data-component="select-v2"],
+:root [data-component="menu-v2-content"][data-slot="select-v2-content"],
+:root [data-component="dialog-v2"] [data-slot="dialog-container"] {
+  border-radius: var(--oc-radius);
+}
+
+/* Contrast actions use a solid, accessible selection color. The upstream
+ * highlight washes its top edge below readable text contrast in this theme. */
+:root [data-component="button-v2"][data-variant="contrast"],
+:root [data-component="icon-button-v2"][data-variant="contrast"] {
+  background-color: var(--oc-selection);
+  background-image: none;
+  box-shadow: 0 0 0 1px var(--oc-selection-hover) inset;
+}
+
+:root [data-component="button-v2"][data-variant="contrast"]:hover:not(:disabled),
+:root [data-component="icon-button-v2"][data-variant="contrast"]:hover:not(:disabled) {
+  background-color: var(--oc-selection-hover);
+  background-image: none;
+}
+
+:root [data-component="button-v2"][data-variant="contrast"]:active:not(:disabled),
+:root [data-component="icon-button-v2"][data-variant="contrast"]:active:not(:disabled) {
+  background-color: var(--oc-selection-pressed);
+  background-image: none;
+}
+
+/* Disabled navigation remains legible without looking selectable. Keep the
+ * native disabled behavior and make its pointer affordance explicit. */
+:root [data-slot="tabs-trigger"]:disabled {
+  color: var(--oc-text-faint);
+  cursor: not-allowed;
+}
+
+:root [data-component="text-input-v2"] [data-slot="text-input-v2-icon-button"],
+:root [data-component="select-v2"] [data-slot="select-v2-chevron"],
+:root [data-component="dialog-v2"] [data-slot="dialog-close-button"] {
+  border-radius: var(--oc-radius);
+}
+
+/* The compact tab treatment is a rectangle with the same product radius,
+ * despite the upstream variable's historical "pill" name. */
+:root [data-component="tabs"] {
+  --tabs-compact-pill-radius: var(--oc-radius);
+}
+
+/* Radio controls and indicators are real circles, so they retain the full
+ * radius token. Disabled descendants keep the not-allowed affordance while
+ * remaining in the pointer event path for accessible labels. */
+:root [data-slot="radio-v2-item"] [data-slot="radio-v2-item-control"],
+:root [data-slot="radio-v2-item"] [data-slot="radio-v2-item-indicator"] {
+  border-radius: var(--oc-radius-full);
+}
+
+:root [data-slot="radio-v2-item"]:where([data-disabled]),
+:root [data-slot="radio-v2-item"]:where([data-disabled]) [data-slot="radio-v2-item-control-stack"],
+:root [data-slot="radio-v2-item"]:where([data-disabled]) [data-slot="radio-v2-item-control"],
+:root [data-slot="radio-v2-item"]:where([data-disabled]) [data-slot="radio-v2-item-text"],
+:root [data-slot="radio-v2-item"]:where([data-disabled]) [data-slot="radio-v2-item-label"],
+:root [data-slot="radio-v2-item"]:where([data-disabled]) [data-slot="radio-v2-item-label-text"],
+:root [data-slot="radio-v2-item"]:where([data-disabled]) [data-slot="radio-v2-item-description"] {
+  cursor: not-allowed;
+}

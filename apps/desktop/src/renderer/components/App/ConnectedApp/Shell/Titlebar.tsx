@@ -2,7 +2,6 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { createEffect, type JSX } from "solid-js";
 
-import "../../../../ui/SidebarToggleButton.css";
 import "./Titlebar.css";
 
 export type TitlebarProps = {
@@ -56,7 +55,7 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
           ref={(element) => {
             leftToggle = element;
           }}
-          class="titlebar-icon-button shell-sidebar-toggle-button"
+          class="titlebar-icon-button"
           type="button"
           size="normal"
           variant="ghost-muted"
@@ -83,7 +82,7 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
                 ref={(element) => {
                   rightToggle = element;
                 }}
-                class="titlebar-icon-button shell-sidebar-toggle-button"
+                class="titlebar-icon-button"
                 type="button"
                 size="normal"
                 variant="ghost-muted"

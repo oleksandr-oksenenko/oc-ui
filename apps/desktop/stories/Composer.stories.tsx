@@ -235,3 +235,76 @@ export const UnavailableWhileDisabled: Story = {
     </div>
   ),
 };
+
+export const PromptFocused: Story = {
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value="A focused prompt exposes the canonical composer focus treatment."
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
+  play: ({ canvasElement }) => {
+    canvasElement.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')?.focus();
+  },
+};
+
+export const SwitchingSelection: Story = {
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value="The draft remains visible while the model selection changes."
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection({ switching: true })}
+        agentSelection={composerAgentSelection()}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
+};
+
+const narrowViewport = {
+  options: {
+    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
+  },
+};
+
+export const NarrowLongSelections: Story = {
+  parameters: { viewport: narrowViewport },
+  globals: { viewport: { value: "mobile390", isRotated: false } },
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value="Review the complete remote workspace context and preserve the server-provided path."
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection({
+          models: [
+            {
+              id: "openai/long-model",
+              label: "OpenAI reasoning model with an intentionally long display name",
+              group: "OpenAI hosted models",
+            },
+          ],
+          selectedModelID: "openai/long-model",
+          variants: [{ id: "maximum-reasoning", label: "maximum reasoning with extended context" }],
+          selectedVariantID: "maximum-reasoning",
+        })}
+        agentSelection={composerAgentSelection({
+          agents: [{ id: "review-long", label: "Independent implementation reviewer" }],
+          selectedAgentID: "review-long",
+        })}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
+};

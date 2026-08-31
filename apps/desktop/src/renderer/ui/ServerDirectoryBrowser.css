@@ -7,8 +7,8 @@
 
 .server-directory-error {
   margin: 0;
-  font-size: 12px;
-  line-height: 16px;
+  font-size: var(--oc-type-status-size);
+  line-height: var(--oc-type-status-line-height);
 }
 
 .server-directory-error,
@@ -28,10 +28,10 @@
   display: flex;
   flex-direction: column;
   min-height: 152px;
-  border: 1px solid var(--v2-border-border-base);
-  border-radius: 6px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
   overflow: hidden;
-  background: var(--v2-background-bg-base);
+  background: var(--oc-surface-canvas);
 }
 
 .server-directory-browser-header {
@@ -40,16 +40,16 @@
   min-height: 36px;
   gap: 8px;
   padding: 4px 8px 4px 12px;
-  border-bottom: 1px solid var(--v2-border-border-base);
+  border-bottom: 1px solid var(--oc-border-base);
 }
 
 .server-directory-browser-path {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
+  font-family: var(--oc-font-mono);
+  font-size: var(--oc-type-metadata-size);
+  line-height: var(--oc-type-metadata-line-height);
   color: var(--v2-text-text-muted);
 }
 
@@ -61,27 +61,31 @@
   margin: 0;
   padding: 4px;
   overflow-y: auto;
-  scrollbar-color: var(--v2-border-border-base) transparent;
-  scrollbar-width: thin;
+  scrollbar-color: var(--oc-scrollbar-thumb) var(--oc-scrollbar-track);
+  scrollbar-width: var(--oc-scrollbar-width);
   list-style: none;
 }
 
 .server-directory-entries::-webkit-scrollbar {
-  width: 10px;
+  width: var(--oc-scrollbar-size);
 }
 
 .server-directory-entries::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--oc-scrollbar-track);
 }
 
 .server-directory-entries::-webkit-scrollbar-thumb {
-  border: 2px solid var(--v2-background-bg-base);
-  border-radius: 999px;
-  background: var(--v2-border-border-base);
+  border: 2px solid var(--oc-surface-canvas);
+  border-radius: var(--oc-radius-full);
+  background: var(--oc-scrollbar-thumb);
+}
+
+.server-directory-entries::-webkit-scrollbar-thumb:hover {
+  background: var(--oc-scrollbar-thumb-hover);
 }
 
 .server-directory-entries li + li {
-  border-top: 1px solid var(--v2-border-border-base);
+  border-top: 1px solid var(--oc-border-base);
 }
 
 .server-directory-entries span {
@@ -114,7 +118,7 @@
   margin: 0;
   padding: 16px;
   text-align: center;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
   color: var(--v2-text-text-muted);
 }
