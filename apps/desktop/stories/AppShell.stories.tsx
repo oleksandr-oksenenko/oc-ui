@@ -142,12 +142,12 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
                   <Composer
                     value={draft()}
                     disabled={false}
-                    submitting={false}
-                    running={false}
+                    action="running"
                     modelSelection={composerModelSelection()}
                     agentSelection={composerAgentSelection()}
                     onInput={setDraft}
                     onSubmit={() => setDraft("")}
+                    onStop={() => undefined}
                   />
                 }
               />
@@ -216,8 +216,7 @@ export const MainOnly = {
                   <Composer
                     value="Ask about the selected session"
                     disabled={false}
-                    submitting={false}
-                    running={false}
+                    action="send"
                     modelSelection={composerModelSelection()}
                     agentSelection={composerAgentSelection()}
                     onInput={() => undefined}
@@ -287,8 +286,7 @@ export const NarrowRightPanelCollapsed = {
                   <Composer
                     value="Keep this narrow layout readable"
                     disabled={false}
-                    submitting={false}
-                    running={false}
+                    action="send"
                     modelSelection={composerModelSelection()}
                     agentSelection={composerAgentSelection()}
                     onInput={() => undefined}

@@ -62,7 +62,7 @@
   color: var(--composer-muted);
 }
 
-.composer-v2-send {
+.composer-v2-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -79,23 +79,28 @@
   box-shadow: none !important;
 }
 
-.composer-v2-send:focus-visible {
+.composer-v2-action:focus-visible {
   outline: 1px solid #4a4a50;
   outline-offset: 1px;
 }
 
-.composer-v2-send:disabled {
+.composer-v2-action:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
-.composer-v2-send:hover:not(:disabled) {
+.composer-v2-action:hover:not(:disabled) {
   background: var(--composer-hover) !important;
 }
 
-.composer-v2-send-icon {
+.composer-v2-action-icon {
   font-size: 20px;
   line-height: 1;
+}
+
+.composer-v2-action [data-slot="icon-svg"] {
+  width: 16px;
+  height: 16px;
 }
 
 .composer-v2-picker-row {

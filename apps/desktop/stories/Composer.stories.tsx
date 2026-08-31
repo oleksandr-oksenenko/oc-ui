@@ -32,8 +32,7 @@ export const Idle: Story = {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={composerModelSelection({
             selectedModelID: modelID(),
             selectedVariantID: variantID(),
@@ -60,8 +59,7 @@ export const LoadingPickers: Story = {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={composerModelSelection({ state: "loading", models: [], variants: [] })}
           agentSelection={composerAgentSelection({ state: "loading", agents: [] })}
           onInput={setValue}
@@ -78,8 +76,7 @@ export const DefaultAgent: Story = {
       <Composer
         value=""
         disabled={false}
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection({ selectedAgentID: undefined })}
         onInput={() => undefined}
@@ -95,8 +92,7 @@ export const EmptyAgents: Story = {
       <Composer
         value=""
         disabled={false}
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection({ agents: [], selectedAgentID: undefined })}
         onInput={() => undefined}
@@ -112,8 +108,7 @@ export const MissingAgent: Story = {
       <Composer
         value=""
         disabled={false}
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection({ selectedAgentID: "missing" })}
         onInput={() => undefined}
@@ -133,8 +128,7 @@ export const Multiline: Story = {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={composerModelSelection()}
           agentSelection={composerAgentSelection()}
           onInput={setValue}
@@ -152,13 +146,13 @@ export const RunningDraft: Story = {
       <div style={frameStyle}>
         <Composer
           value={value()}
-          disabled
-          submitting={false}
-          running
+          disabled={false}
+          action="running"
           modelSelection={composerModelSelection()}
           agentSelection={composerAgentSelection()}
           onInput={setValue}
           onSubmit={() => undefined}
+          onStop={() => undefined}
         />
       </div>
     );
@@ -171,8 +165,7 @@ export const Submitting: Story = {
       <Composer
         value="Send this prompt"
         disabled
-        submitting
-        running={false}
+        action="sending"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection({ switching: true })}
         onInput={() => undefined}
@@ -190,8 +183,7 @@ export const AdmissionError: Story = {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           error="The server could not admit this prompt. Try again."
           modelSelection={composerModelSelection()}
           agentSelection={composerAgentSelection()}
@@ -209,8 +201,7 @@ export const EmptyDisabled: Story = {
       <Composer
         value=""
         disabled
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection()}
         onInput={() => undefined}
@@ -226,8 +217,7 @@ export const UnavailableWhileDisabled: Story = {
       <Composer
         value="Unavailable while reconnecting"
         disabled
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection({
           state: "failed",
           models: [],

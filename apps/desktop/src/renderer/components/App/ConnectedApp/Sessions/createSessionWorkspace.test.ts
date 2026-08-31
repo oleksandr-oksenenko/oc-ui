@@ -28,6 +28,9 @@ function setup(initial: readonly SessionInfo[]) {
     api: {
       session: {
         active: vi.fn<SessionWorkspaceRuntime["api"]["session"]["active"]>(async () => ({})),
+        interrupt: vi.fn<SessionWorkspaceRuntime["api"]["session"]["interrupt"]>(async () => ({
+          interrupted: true,
+        })),
       },
     },
     data: {
@@ -47,10 +50,70 @@ function setup(initial: readonly SessionInfo[]) {
     syncTranscript: vi.fn<SessionWorkspaceRuntime["syncTranscript"]>(async () => undefined),
   };
 
-  return { runtime, setIDs, setCatalogState, connected, setConnected, bootstrapped };
+  return {
+    runtime,
+    setIDs,
+    setCatalogState,
+    connected,
+    setConnected,
+    bootstrapped,
+    setStatus: (id: string, status: "idle" | "running") => statuses.set(id, status),
+  };
 }
 
 describe("createSessionWorkspace", () => {
+  it("interrupts the selected running session and serializes repeated stops", async () => {
+    const fixture = setup([session("one", 1)]);
+    let resolveInterrupt!: () => void;
+    vi.mocked(fixture.runtime.api.session.interrupt).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveInterrupt = () => resolve({ interrupted: true });
+        }),
+    );
+    let workspace!: ReturnType<typeof createSessionWorkspace>;
+    let dispose!: () => void;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      workspace = createSessionWorkspace({
+        runtime: fixture.runtime,
+        connected: fixture.connected,
+        bootstrapped: fixture.bootstrapped,
+      });
+    });
+    fixture.setStatus("one", "running");
+
+    const firstStop = workspace.stop();
+    await workspace.stop();
+
+    expect(fixture.runtime.api.session.interrupt).toHaveBeenCalledOnce();
+    expect(fixture.runtime.api.session.interrupt).toHaveBeenCalledWith({ sessionID: "one" });
+    resolveInterrupt();
+    await firstStop;
+    dispose();
+  });
+
+  it("reports an interrupt failure for the selected session", async () => {
+    const fixture = setup([session("one", 1)]);
+    vi.mocked(fixture.runtime.api.session.interrupt).mockRejectedValue(new Error("offline"));
+    let workspace!: ReturnType<typeof createSessionWorkspace>;
+    let dispose!: () => void;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      workspace = createSessionWorkspace({
+        runtime: fixture.runtime,
+        connected: fixture.connected,
+        bootstrapped: fixture.bootstrapped,
+      });
+    });
+    fixture.setStatus("one", "running");
+
+    await workspace.stop();
+
+    expect(workspace.stopError()).toBe("The session could not be stopped. Try again.");
+    dispose();
+  });
+
   it("sorts catalog-admitted sessions by update time and id", () => {
     const fixture = setup([session("z", 1), session("b", 4), session("a", 4)]);
     let workspace!: ReturnType<typeof createSessionWorkspace>;

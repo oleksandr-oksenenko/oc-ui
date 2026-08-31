@@ -46,8 +46,7 @@ export const SelectedPlacement: Story = {
           <Composer
             value={draft()}
             disabled={false}
-            submitting={false}
-            running={false}
+            action="send"
             modelSelection={composerModelSelection()}
             agentSelection={composerAgentSelection()}
             onInput={setDraft}

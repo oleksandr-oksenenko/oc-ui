@@ -237,12 +237,12 @@ function WorkspaceShowcaseFixture() {
                   <Composer
                     value={draft()}
                     disabled={false}
-                    submitting={false}
-                    running={false}
+                    action="running"
                     modelSelection={composerModelSelection()}
                     agentSelection={composerAgentSelection()}
                     onInput={setDraft}
                     onSubmit={() => setDraft("")}
+                    onStop={() => undefined}
                   />
                 }
               />

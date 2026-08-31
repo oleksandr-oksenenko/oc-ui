@@ -18,6 +18,9 @@ export type ConversationRegionProps = {
 };
 
 export function ConversationRegion(props: ConversationRegionProps): JSX.Element {
+  const composerAction = () =>
+    props.workspace.running() ? "running" : props.composer.submitting() ? "sending" : "send";
+
   return (
     <SessionPane
       selected={props.workspace.selectedSession() !== undefined}
@@ -47,10 +50,11 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
         <Show when={props.workspace.selectedSession()}>
           <Composer
             value={props.composer.value()}
-            disabled={props.composer.disabled()}
-            submitting={props.composer.submitting()}
-            running={props.workspace.running()}
-            error={props.composer.error()}
+            action={composerAction()}
+            disabled={
+              composerAction() === "running" ? !props.connected() : props.composer.disabled()
+            }
+            error={props.workspace.stopError() ?? props.composer.error()}
             modelSelection={{
               state: props.modelSelection.state(),
               switching: props.modelSelection.switching(),
@@ -74,6 +78,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
             }}
             onInput={props.composer.input}
             onSubmit={() => void props.composer.submit()}
+            onStop={() => void props.workspace.stop()}
           />
         </Show>
       }
