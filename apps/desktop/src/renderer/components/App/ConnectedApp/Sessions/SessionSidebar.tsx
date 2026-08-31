@@ -74,12 +74,15 @@ export function SessionSidebar(props: SessionSidebarProps) {
       <Show when={props.error}>
         {(error) => (
           <div class="shell-sidebar-message" role="alert">
-            <p>{error()}</p>
+            <div class="shell-sidebar-status-row shell-sidebar-error-row">
+              <Icon name="warning" size="small" aria-hidden="true" />
+              <p>{error()}</p>
+            </div>
             <Button
               class="shell-sidebar-action"
               type="button"
-              size="small"
-              variant="ghost-muted"
+              size="normal"
+              variant="outline"
               onClick={props.onRetry}
             >
               Retry
@@ -89,7 +92,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
       </Show>
 
       <Show when={props.loading && props.sessions.length === 0 && !props.error}>
-        <output class="shell-sidebar-message shell-sidebar-loading">
+        <output class="shell-sidebar-message shell-sidebar-loading" aria-live="polite">
           <Loader width={16} height={16} />
           <span>Loading sessions</span>
         </output>
@@ -134,9 +137,14 @@ export function SessionSidebar(props: SessionSidebarProps) {
             {props.serverStatus === "connected" ? (
               <span class="shell-server-status-dot" aria-hidden="true" />
             ) : props.serverStatus === "reconnecting" ? (
-              <Loader class="shell-server-status-spinner" width={14} height={14} />
+              <Loader
+                class="shell-server-status-spinner"
+                width={14}
+                height={14}
+                aria-hidden="true"
+              />
             ) : (
-              <Icon name="warning" />
+              <Icon name="warning" aria-hidden="true" />
             )}
           </span>
           <span class="shell-server-name">{props.serverName}</span>

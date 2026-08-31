@@ -151,8 +151,8 @@ export function ConnectionForm(props: ConnectionFormProps) {
             <Button
               class="connection-form-submit"
               type={props.mode === "remote" ? "submit" : "button"}
-              size="large"
-              variant={props.busy ? "loading" : "contrast"}
+              size="normal"
+              variant={props.busy ? "loading" : props.error ? "outline" : "contrast"}
               disabled={props.busy}
               onClick={props.mode === "local" ? props.onUseBuiltInServer : undefined}
             >
@@ -169,8 +169,8 @@ export function ConnectionForm(props: ConnectionFormProps) {
             <Show when={props.savedTarget}>
               <Button
                 type="button"
-                size="large"
-                variant="ghost"
+                size="normal"
+                variant="outline"
                 disabled={props.busy}
                 onClick={props.onForget}
               >

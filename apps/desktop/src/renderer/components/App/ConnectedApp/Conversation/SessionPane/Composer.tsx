@@ -1,3 +1,5 @@
+import { Icon } from "@opencode-ai/ui/icon";
+import { Loader } from "@opencode-ai/ui/loader";
 import { createEffect } from "solid-js";
 
 import "./Composer/Composer.css";
@@ -224,7 +226,7 @@ export function Composer(props: ComposerProps) {
           }
         >
           <span class="composer-v2-send-icon" aria-hidden="true">
-            {props.submitting ? "…" : "↑"}
+            {props.submitting ? <Loader width={16} height={16} /> : <Icon name="arrow-up" />}
           </span>
         </button>
       </div>

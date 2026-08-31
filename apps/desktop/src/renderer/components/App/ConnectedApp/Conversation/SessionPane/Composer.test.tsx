@@ -394,6 +394,41 @@ describe("Composer", () => {
     host.remove();
   });
 
+  it("keeps native submit behavior while switching its pinned artwork", () => {
+    const host = document.createElement("div");
+    const [submitting, setSubmitting] = createSignal(false);
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Composer
+          value="send this"
+          disabled={false}
+          submitting={submitting()}
+          running={false}
+          modelSelection={unavailableSelection}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={() => undefined}
+        />
+      ),
+      host,
+    );
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    if (!button) throw new Error("Composer did not render its send button");
+
+    expect(button.type).toBe("submit");
+    expect(button.querySelector('[data-slot="icon-svg"]')).not.toBeNull();
+    expect(button.querySelector('[data-component="loader-v2"]')).toBeNull();
+
+    setSubmitting(true);
+    expect(button.disabled).toBe(true);
+    expect(button.querySelector('[data-slot="icon-svg"]')).toBeNull();
+    expect(button.querySelector('[data-component="loader-v2"]')).not.toBeNull();
+
+    dispose();
+    host.remove();
+  });
+
   it("submits with Enter but keeps Shift+Enter for newlines", () => {
     const host = document.createElement("div");
     const submit = vi.fn<() => void>();

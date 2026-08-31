@@ -3,7 +3,6 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Tabs } from "@opencode-ai/ui/tabs";
 
-import "../../../../../ui/SidebarToggleButton.css";
 import "./ContextTabs.css";
 
 export type ContextTabsProps = {
@@ -35,9 +34,9 @@ export function ContextTabs(props: ContextTabsProps) {
             </Tabs.Trigger>
           </Tabs.List>
           <IconButton
-            class="context-panel-close shell-sidebar-toggle-button"
+            class="context-panel-close"
             size="normal"
-            variant="ghost"
+            variant="ghost-muted"
             icon={<Icon name="layout-right-partial" size="small" aria-hidden="true" />}
             aria-label="Hide context panel"
             title="Hide context panel"

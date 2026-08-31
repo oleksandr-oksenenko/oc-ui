@@ -75,8 +75,8 @@ export function DeleteSessionDialog(props: DeleteSessionDialogProps) {
           <Show when={!props.deleting}>
             <Button
               type="button"
-              size="large"
-              variant="ghost"
+              size="normal"
+              variant="outline"
               autofocus
               onClick={() => dialog.close()}
             >
@@ -85,7 +85,7 @@ export function DeleteSessionDialog(props: DeleteSessionDialogProps) {
           </Show>
           <Button
             type="submit"
-            size="large"
+            size="normal"
             variant={props.deleting ? "loading" : "danger"}
             disabled={props.deleting}
           >

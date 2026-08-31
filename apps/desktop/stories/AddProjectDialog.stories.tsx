@@ -112,3 +112,31 @@ export const AddProjectFailure = {
 export const AddingProject = {
   render: () => dialog({ adding: true }),
 };
+
+const narrowViewport = {
+  options: {
+    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
+  },
+};
+
+export const NarrowDirectoryBrowser = {
+  parameters: { viewport: narrowViewport },
+  globals: { viewport: { value: "mobile390", isRotated: false } },
+  render: () =>
+    dialog({
+      initialLocation: {
+        directory: "/mnt/team/experimental/services/renderer-infrastructure",
+      },
+    }),
+};
+
+export const FocusedOperationError = {
+  render: () =>
+    dialog({
+      error: {
+        kind: "add-project",
+        message:
+          "The server could not add the selected project directory. Check access and try again.",
+      },
+    }),
+};

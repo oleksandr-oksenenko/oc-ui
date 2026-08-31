@@ -17,24 +17,14 @@
 .shell-session-header h1 {
   min-width: 0;
   margin: 0;
-  color: var(--v2-text-text-contrast, #e7e7e7);
-  font-size: 18px;
+  color: var(--v2-text-text-contrast);
+  font-size: var(--oc-type-heading-size);
   font-weight: 560;
   letter-spacing: -0.01em;
 }
 
-.shell-create-session[data-component="icon-button-v2"] {
+.shell-create-session {
   flex: none;
-  color: var(--v2-icon-icon-muted, #a3a3a3);
-}
-
-.shell-create-session[data-component="icon-button-v2"]:disabled {
-  color: var(--v2-text-text-faint, #525252);
-}
-
-.shell-create-session[data-component="icon-button-v2"]:hover:not(:disabled),
-.shell-create-session[data-component="icon-button-v2"]:focus-visible:not(:disabled) {
-  color: var(--v2-text-text-contrast, #f5f5f5);
 }
 
 @media (width <= 420px) {

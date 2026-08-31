@@ -5,8 +5,8 @@
   height: 32px;
   min-height: 32px;
   overflow: hidden;
-  border-bottom: 1px solid #22242a;
-  background: #080808;
+  border-bottom: 1px solid var(--oc-border-base);
+  background: var(--oc-surface-raised);
 }
 
 .context-tabs > :is([data-slot="tabs-list"], [data-slot="tabs-v2-list"]) {
@@ -29,10 +29,10 @@
   display: block;
   height: 100%;
   border: 0;
-  color: #777b85;
+  color: var(--oc-text-muted);
   background: transparent;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--oc-type-tab-size);
+  font-weight: var(--oc-type-tab-weight);
   letter-spacing: normal;
 }
 
@@ -62,26 +62,32 @@
   height: 24px;
 }
 
+[data-component="icon-button-v2"].context-panel-close:is(:focus-visible, [data-state="focus"]):not(
+    :disabled
+  ) {
+  outline-offset: -2px;
+}
+
 .context-tab:hover {
-  color: #c4c7ce;
+  color: var(--oc-text-base);
 }
 
 .context-tab-trigger:focus-visible {
-  color: #c4c7ce;
-  outline: 2px solid #74a7ff;
+  color: var(--oc-text-base);
+  outline: 2px solid var(--oc-focus-ring);
   outline-offset: -2px;
 }
 
 .context-tab:has([data-selected]) {
-  color: #f0f1f3;
+  color: var(--oc-text-contrast);
 }
 
 .context-tab:has([data-selected])::after {
   position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 1px;
-  background: #9aa7ff;
+  right: 2px;
+  bottom: 0;
+  left: 2px;
+  height: 3px;
+  background: var(--oc-focus-ring);
   content: "";
 }

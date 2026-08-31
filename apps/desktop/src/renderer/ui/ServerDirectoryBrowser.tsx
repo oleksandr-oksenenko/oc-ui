@@ -141,7 +141,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
               {listingError()}
               <Button
                 type="button"
-                size="small"
+                size="normal"
                 variant="outline"
                 disabled={navigationDisabled()}
                 onClick={() => void loadDirectory(retryInput.location, retryInput.path)}

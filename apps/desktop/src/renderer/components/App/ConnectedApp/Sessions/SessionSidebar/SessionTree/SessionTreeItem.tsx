@@ -44,7 +44,11 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
       >
         <div
           class="shell-session-row"
-          classList={{ selected: props.selected, "has-children": props.hasChildren }}
+          classList={{
+            selected: props.selected,
+            "has-children": props.hasChildren,
+            "has-status": props.status === "running" || props.requiresInput === true,
+          }}
         >
           <span class="shell-session-disclosure-slot">
             {props.hasChildren ? (
@@ -76,7 +80,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
                 aria-label={statusLabel()}
                 title={statusLabel()}
               >
-                <Loader width={13} height={13} />
+                <Loader width={14} height={14} aria-hidden="true" />
               </span>
             ) : props.requiresInput ? (
               <span

@@ -2,6 +2,7 @@ import type { LocationRef, SessionMessageInfo } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { Button } from "@opencode-ai/ui/button";
 import { createAutoScroll } from "@opencode-ai/ui/hooks";
+import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { createEffect, Show, type JSX } from "solid-js";
 
@@ -57,9 +58,10 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
       <Show when={props.error !== undefined}>
         <div class="transcript-state transcript-error-state" role="alert">
+          <Icon class="transcript-state-icon" name="warning" aria-hidden="true" />
           <p>{props.error}</p>
           <Show when={props.onRetry !== undefined}>
-            <Button type="button" size="small" variant="outline" onClick={() => props.onRetry?.()}>
+            <Button type="button" size="normal" variant="outline" onClick={() => props.onRetry?.()}>
               Retry
             </Button>
           </Show>
@@ -80,7 +82,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
           <Show when={working()}>
             <output class="transcript-working" aria-live="polite">
-              <Loader class="transcript-working-loader" aria-hidden="true" />
+              <Loader class="transcript-working-loader" width={14} height={14} aria-hidden="true" />
               <span>{props.workingLabel ?? "Working"}</span>
             </output>
           </Show>

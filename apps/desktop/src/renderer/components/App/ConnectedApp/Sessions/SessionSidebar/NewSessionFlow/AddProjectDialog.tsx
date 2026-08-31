@@ -139,14 +139,16 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
 
         <DialogFooter>
           <Show when={!blocked()}>
-            <Button type="button" size="large" variant="ghost" onClick={() => dialog.close()}>
+            <Button type="button" size="normal" variant="outline" onClick={() => dialog.close()}>
               Cancel
             </Button>
           </Show>
           <Button
             type="submit"
-            size="large"
-            variant={busy() ? "loading" : "contrast"}
+            size="normal"
+            variant={
+              busy() ? "loading" : props.error?.kind === "add-project" ? "outline" : "contrast"
+            }
             disabled={blocked() || browserLoading() || location() === undefined}
           >
             <Show when={busy()}>
