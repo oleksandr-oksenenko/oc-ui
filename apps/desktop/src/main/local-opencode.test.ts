@@ -5,6 +5,7 @@ import {
   createLocalOpenCodeService,
   LocalOpenCodeUnavailableError,
   LOCAL_OPENCODE_VERSION,
+  packagedOpenCodeBinaryPath,
 } from "./local-opencode.ts";
 
 const endpoint = {
@@ -20,7 +21,7 @@ afterEach(() => {
 });
 
 describe("local OpenCode sidecar", () => {
-  it("starts the pinned packaged binary with app-private registration state", async () => {
+  it("starts an explicitly selected packaged binary with app-private registration state", async () => {
     const ensure = vi.fn<(_options?: EnsureOptions) => Promise<typeof endpoint>>(() =>
       Promise.resolve(endpoint),
     );
@@ -28,7 +29,7 @@ describe("local OpenCode sidecar", () => {
     const service = createLocalOpenCodeService({
       userDataPath: "/private/app-data",
       service: { ensure, stop },
-      resolveCliBinary: () => "/private/app-resources/opencode2.exe",
+      binaryPath: packagedOpenCodeBinaryPath("/private/app-resources"),
       fetch: vi.fn<() => Promise<Response>>(() => Promise.resolve(healthy())),
     });
 
@@ -37,7 +38,7 @@ describe("local OpenCode sidecar", () => {
     expect(connected).toEqual({ serverUrl: endpoint.url, password: endpoint.auth.password });
     expect(ensure).toHaveBeenCalledWith({
       file: "/private/app-data/opencode/service.json",
-      command: ["/private/app-resources/opencode2.exe", "serve", "--service", "--port", "0"],
+      command: ["/private/app-resources/opencode/opencode2", "serve", "--service", "--port", "0"],
       version: LOCAL_OPENCODE_VERSION,
       env: { XDG_STATE_HOME: "/private/app-data", OPENCODE_CLIENT: "oc-ui" },
     });

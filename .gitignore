@@ -5,6 +5,7 @@ node_modules/
 dist/
 dist-ssr/
 out/
+apps/desktop/.packaging/
 storybook-static/
 *.tsbuildinfo
 

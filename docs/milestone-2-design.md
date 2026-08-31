@@ -111,11 +111,13 @@ environment values into target settings.
 
 ## Packaging boundary and acceptance
 
-This repository has no Electron packager or installer. The milestone therefore
-accepts the managed sidecar in the installed workspace/development runtime,
-where the desktop package and its platform-specific optional CLI dependency
-are available. It does not claim that a standalone packaged app embeds the
-CLI, includes every platform asset, or supports signing and updates.
+The repository now has a local macOS ARM64 electron-builder target. It embeds
+the exact pinned CLI outside ASAR at
+`Contents/Resources/opencode/opencode2`, resolves that executable from
+`process.resourcesPath`, and produces an unpacked `.app` plus a DMG. Local
+builds use ad-hoc signing by default and accept an Apple Development identity
+through `CSC_NAME`. Notarization, publishing, other platforms, and updates are
+not part of this milestone.
 
 Acceptance requires:
 
@@ -130,5 +132,7 @@ Acceptance requires:
 - no directory picker or arbitrary server configuration UI appears; and
 - package-local CLI resolution works without a globally installed command.
 
-Standalone packaged-app acceptance begins only after a packager, asset layout,
-signing policy, and platform-specific child-process tests are added.
+Packaged-app acceptance additionally requires the ARM64 CLI to execute from the
+signed app resources, the renderer to load from the packaged `oc://renderer`
+origin, the DMG to pass integrity checks, and app quit not to strand a
+windowless process when sidecar cleanup fails.
