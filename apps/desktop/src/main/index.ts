@@ -19,6 +19,7 @@ import type { SettingsService } from "./settings.ts";
 import type { SettingsError } from "./settings.ts";
 import { normalizeServerUrl, settingsLayer, Settings, validatePassword } from "./settings.ts";
 import { disconnectSidecarForQuit } from "./shutdown.ts";
+import { resolveSessionDataPath, resolveUserDataPath } from "./user-data-path.ts";
 
 const RENDERER_SCHEME = "oc";
 const RENDERER_HOST = "renderer";
@@ -27,8 +28,8 @@ const APP_NAME = "Ocui";
 // Raw development launches otherwise inherit Electron's shared profile. Give
 // this app the same isolated identity and Chromium state it will have packaged.
 app.setName(APP_NAME);
-const appUserData = join(app.getPath("appData"), APP_NAME);
-const appSessionData = join(appUserData, "Session Data");
+const appUserData = resolveUserDataPath(join(app.getPath("appData"), APP_NAME), process.argv);
+const appSessionData = resolveSessionDataPath(appUserData);
 mkdirSync(appSessionData, { recursive: true });
 app.setPath("userData", appUserData);
 app.setPath("sessionData", appSessionData);

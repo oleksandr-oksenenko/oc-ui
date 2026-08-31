@@ -157,6 +157,15 @@ export default defineConfig({
         rules: effectNodeBoundaryRules,
       },
       {
+        files: ["apps/desktop/wdio.conf.ts", "apps/desktop/test/e2e/**/*.{ts,mjs}"],
+        rules: {
+          ...effectPromiseBoundaryRules,
+          ...effectNodeBoundaryRules,
+          "effecttsgo/global-console": "off",
+          "effecttsgo/global-date": "off",
+        },
+      },
+      {
         files: ["tools/**/*.mjs"],
         rules: {
           "effecttsgo/global-console": "off",

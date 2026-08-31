@@ -5,8 +5,12 @@
   "ignoreDependencies": ["oxlint", "oxlint-tsgolint"],
   "workspaces": {
     "apps/desktop": {
-      "entry": ["stories/**/*.stories.{ts,tsx}", "electron-builder.config.mjs"],
-      "ignoreDependencies": ["@opencode-ai/cli", "jsdom"]
+      "entry": [
+        "stories/**/*.stories.{ts,tsx}",
+        "test/e2e/**/*.e2e.ts",
+        "electron-builder.config.mjs"
+      ],
+      "ignoreDependencies": ["@opencode-ai/cli", "@wdio/local-runner", "jsdom"]
     }
   }
 }
