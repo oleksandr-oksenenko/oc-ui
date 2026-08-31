@@ -1,10 +1,11 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignore": ["tools/oxlint/anti-slop/**"],
+  "ignoreBinaries": ["lipo"],
   "ignoreDependencies": ["oxlint", "oxlint-tsgolint"],
   "workspaces": {
     "apps/desktop": {
-      "entry": ["stories/**/*.stories.{ts,tsx}"],
+      "entry": ["stories/**/*.stories.{ts,tsx}", "electron-builder.config.mjs"],
       "ignoreDependencies": ["@opencode-ai/cli", "jsdom"]
     }
   }

@@ -42,6 +42,7 @@ peerDependencyRules:
 allowBuilds:
   "@opencode-ai/cli": true
   electron: true
+  electron-winstaller: false
   esbuild: true
   msgpackr-extract: false
 
