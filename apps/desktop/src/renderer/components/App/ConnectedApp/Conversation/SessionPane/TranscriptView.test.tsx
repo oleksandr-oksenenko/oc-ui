@@ -37,6 +37,77 @@ const assistant = (
 });
 
 describe("TranscriptView", () => {
+  it("renders a pending interaction after transcript messages", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const messages: readonly SessionMessageInfo[] = [
+      {
+        id: "user",
+        time: base,
+        type: "user",
+        text: "Prompt",
+      },
+    ];
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <TranscriptView
+          sessionID="session"
+          messages={messages}
+          sessionStatus="idle"
+          pendingInteraction={<form data-testid="pending-interaction">Choose a workspace</form>}
+        />
+      ),
+      host,
+    );
+
+    const documentChildren = [...host.querySelectorAll<HTMLElement>(".transcript-document > *")];
+    expect(documentChildren.at(-1)?.dataset.testid).toBe("pending-interaction");
+    expect(documentChildren.at(-1)?.textContent).toBe("Choose a workspace");
+
+    dispose();
+    host.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders a pending interaction instead of the empty transcript state", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <TranscriptView
+          sessionID="session"
+          messages={[]}
+          sessionStatus="idle"
+          pendingInteraction={<form>Choose a workspace</form>}
+        />
+      ),
+      host,
+    );
+
+    expect(host.querySelector(".transcript-empty-state")).toBeNull();
+    expect(host.querySelector("form")?.textContent).toBe("Choose a workspace");
+
+    dispose();
+    host.remove();
+    vi.unstubAllGlobals();
+  });
+
   it("renders every SDK message variant and preserves assistant source order", () => {
     vi.stubGlobal(
       "ResizeObserver",
