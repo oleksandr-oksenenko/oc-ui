@@ -90,9 +90,7 @@ function fakeRuntime(
   );
   const fileList = vi.fn<NewSessionFlowRuntime["api"]["file"]["list"]>((input) => {
     const directory = input?.location?.directory ?? "/";
-    const resolved =
-      input?.path === ".." && directory === project.canonical ? "/srv/projects" : directory;
-    return Promise.resolve(fileResponse(resolved, input?.location?.workspace));
+    return Promise.resolve(fileResponse(directory, input?.location?.workspace));
   });
   const sessionSync = vi.fn<NewSessionFlowRuntime["data"]["session"]["sync"]>(async (sessionID) => {
     await options.syncGate;
@@ -381,33 +379,34 @@ describe("NewSessionFlow", () => {
     mounted.dispose();
   });
 
-  it("registers the directory currently open in the add-project browser", async () => {
+  it("uses the directory currently open in the add-project browser", async () => {
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
     const mounted = mount(fake.runtime);
     await flush();
 
     clickButton(mounted.root, "Add project");
     await flushDialogClose();
+    clickButton(mounted.root, "worktrees");
+    await flush();
     submit(mounted.root);
     await flushDialogClose();
 
     expect(fake.projectCurrent).toHaveBeenCalledWith({
-      location: { directory: "/srv/projects" },
+      location: { directory: "/srv/projects/worktrees" },
     });
     expect(fake.projectSync).toHaveBeenCalledTimes(2);
-    expect(mounted.root.textContent).toContain("New session");
+    submit(mounted.root);
+    await flushDialogClose();
+    expect(fake.sessionCreate).toHaveBeenCalledWith({
+      projectID: project.id,
+      location: { directory: "/srv/projects/worktrees" },
+    });
     mounted.dispose();
   });
 
-  it.each([
-    ["/Users/alex/code/oc-ui", "/Users/alex"],
-    ["/home/alex/code/oc-ui", "/home/alex"],
-    ["/var/home/alex/code/oc-ui", "/var/home/alex"],
-    ["C:\\Users\\alex\\code\\oc-ui", "C:\\Users\\alex"],
-    ["/srv/projects/oc-ui", "/srv/projects/oc-ui"],
-  ])(
-    "opens the add-project browser at the server home inferred from %s",
-    async (location, home) => {
+  it.each(["/Users/alex/code/oc-ui", "C:\\Users\\alex\\code\\oc-ui", "\\\\server\\share\\oc-ui"])(
+    "opens the add-project browser at the exact server default %s",
+    async (location) => {
       const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
       const mounted = mount({
         ...fake.runtime,
@@ -419,7 +418,7 @@ describe("NewSessionFlow", () => {
       await flush();
 
       expect(fake.fileList).toHaveBeenCalledWith({
-        location: { directory: home },
+        location: { directory: location },
         path: ".",
       });
       mounted.dispose();

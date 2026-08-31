@@ -25,6 +25,7 @@ const frameStyle = {
 };
 const idleOnSubmit = fn<() => void>();
 const idleOnSelectModel = fn<(id: string) => void>();
+const runningOnStop = fn<() => void>();
 
 export const Idle: Story = {
   render: () => {
@@ -37,8 +38,7 @@ export const Idle: Story = {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={composerModelSelection({
             selectedModelID: modelID(),
             selectedVariantID: variantID(),
@@ -117,8 +117,7 @@ export const LoadingPickers: Story = {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={composerModelSelection({ state: "loading", models: [], variants: [] })}
           agentSelection={composerAgentSelection({ state: "loading", agents: [] })}
           onInput={setValue}
@@ -135,8 +134,7 @@ export const DefaultAgent: Story = {
       <Composer
         value=""
         disabled={false}
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection({ selectedAgentID: undefined })}
         onInput={() => undefined}
@@ -152,8 +150,7 @@ export const EmptyAgents: Story = {
       <Composer
         value=""
         disabled={false}
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection({ agents: [], selectedAgentID: undefined })}
         onInput={() => undefined}
@@ -169,8 +166,7 @@ export const MissingAgent: Story = {
       <Composer
         value=""
         disabled={false}
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection({ selectedAgentID: "missing" })}
         onInput={() => undefined}
@@ -190,8 +186,7 @@ export const Multiline: Story = {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={composerModelSelection()}
           agentSelection={composerAgentSelection()}
           onInput={setValue}
@@ -209,21 +204,22 @@ export const RunningDraft: Story = {
       <div style={frameStyle}>
         <Composer
           value={value()}
-          disabled
-          submitting={false}
-          running
-          modelSelection={composerModelSelection({ disabled: true })}
-          agentSelection={composerAgentSelection({ disabled: true })}
+          disabled={false}
+          action="running"
+          modelSelection={composerModelSelection()}
+          agentSelection={composerAgentSelection()}
           onInput={setValue}
           onSubmit={() => undefined}
+          onStop={runningOnStop}
         />
       </div>
     );
   },
   play: async ({ canvasElement, step }) => {
+    runningOnStop.mockClear();
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    const send = canvas.getByRole("button", { name: "Send" });
+    const stop = canvas.getByRole("button", { name: "Stop" });
     const pickers = canvasElement.querySelectorAll<HTMLElement>('[data-component="select-v2"]');
     const model = canvas.getByRole("button", { name: "Model: GPT-5" });
 
@@ -236,13 +232,15 @@ export const RunningDraft: Story = {
       );
     });
 
-    await step("Disable submission and selection controls during the run", async () => {
-      await expect(send).toBeDisabled();
-      await expect(model).toBeDisabled();
+    await step("Keep live-run controls available", async () => {
+      await expect(stop).toBeEnabled();
+      await expect(model).toBeEnabled();
       await expect(pickers).toHaveLength(2);
       for (const picker of pickers) {
-        await expect(picker).toHaveAttribute("data-disabled");
+        await expect(picker).not.toHaveAttribute("data-disabled");
       }
+      await userEvent.click(stop);
+      await expect(runningOnStop).toHaveBeenCalledOnce();
     });
   },
 };
@@ -253,8 +251,7 @@ export const Submitting: Story = {
       <Composer
         value="Send this prompt"
         disabled
-        submitting
-        running={false}
+        action="sending"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection({ switching: true })}
         onInput={() => undefined}
@@ -272,8 +269,7 @@ export const AdmissionError: Story = {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           error="The server could not admit this prompt. Try again."
           modelSelection={composerModelSelection()}
           agentSelection={composerAgentSelection()}
@@ -310,8 +306,7 @@ export const EmptyDisabled: Story = {
       <Composer
         value=""
         disabled
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection()}
         onInput={() => undefined}
@@ -327,8 +322,7 @@ export const UnavailableWhileDisabled: Story = {
       <Composer
         value="Unavailable while reconnecting"
         disabled
-        submitting={false}
-        running={false}
+        action="send"
         modelSelection={composerModelSelection({
           state: "failed",
           models: [],
@@ -339,6 +333,79 @@ export const UnavailableWhileDisabled: Story = {
           state: "failed",
           agents: [],
           error: "Agents could not be loaded. Check the connection and try again.",
+        })}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
+};
+
+export const PromptFocused: Story = {
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value="A focused prompt exposes the canonical composer focus treatment."
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
+  play: ({ canvasElement }) => {
+    canvasElement.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')?.focus();
+  },
+};
+
+export const SwitchingSelection: Story = {
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value="The draft remains visible while the model selection changes."
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection({ switching: true })}
+        agentSelection={composerAgentSelection()}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    </div>
+  ),
+};
+
+const narrowViewport = {
+  options: {
+    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
+  },
+};
+
+export const NarrowLongSelections: Story = {
+  parameters: { viewport: narrowViewport },
+  globals: { viewport: { value: "mobile390", isRotated: false } },
+  render: () => (
+    <div style={frameStyle}>
+      <Composer
+        value="Review the complete remote workspace context and preserve the server-provided path."
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection({
+          models: [
+            {
+              id: "openai/long-model",
+              label: "OpenAI reasoning model with an intentionally long display name",
+              group: "OpenAI hosted models",
+            },
+          ],
+          selectedModelID: "openai/long-model",
+          variants: [{ id: "maximum-reasoning", label: "maximum reasoning with extended context" }],
+          selectedVariantID: "maximum-reasoning",
+        })}
+        agentSelection={composerAgentSelection({
+          agents: [{ id: "review-long", label: "Independent implementation reviewer" }],
+          selectedAgentID: "review-long",
         })}
         onInput={() => undefined}
         onSubmit={() => undefined}

@@ -1,7 +1,6 @@
 import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 
-import "../../../../ui/SidebarToggleButton.css";
 import "./ContextPanel/ContextTabs.css";
 
 export type ChangesTitlebarRegionProps = {
@@ -13,7 +12,7 @@ export function ChangesTitlebarRegion(props: ChangesTitlebarRegionProps) {
     <div class="context-tabs">
       <span class="context-tab-label">Diff</span>
       <IconButton
-        class="context-panel-close shell-sidebar-toggle-button"
+        class="context-panel-close"
         size="normal"
         variant="ghost"
         icon={<Icon name="layout-right-partial" size="small" aria-hidden="true" />}

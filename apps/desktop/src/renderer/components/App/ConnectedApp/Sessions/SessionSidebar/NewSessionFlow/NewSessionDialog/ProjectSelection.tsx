@@ -75,7 +75,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
           </div>
           <Button
             type="button"
-            size="small"
+            size="normal"
             variant="outline"
             disabled={props.disabled}
             onClick={props.onAddProject}
@@ -98,7 +98,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
               <span>{message()}</span>
               <Button
                 type="button"
-                size="small"
+                size="normal"
                 variant="outline"
                 disabled={props.disabled}
                 onClick={props.onRetryProjects}

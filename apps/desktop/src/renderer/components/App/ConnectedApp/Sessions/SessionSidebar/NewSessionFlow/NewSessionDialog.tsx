@@ -180,6 +180,14 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
     return "Create session";
   };
 
+  const primaryVariant = () => {
+    if (busy()) return "loading" as const;
+    if (currentError()?.kind === "worktree" || currentError()?.kind === "session") {
+      return "outline" as const;
+    }
+    return "contrast" as const;
+  };
+
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
     if (
@@ -330,20 +338,25 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
             when={!blocked() && props.state.view === "worktree"}
             fallback={
               <Show when={!blocked()}>
-                <Button type="button" size="large" variant="ghost" onClick={() => dialog.close()}>
+                <Button
+                  type="button"
+                  size="normal"
+                  variant="outline"
+                  onClick={() => dialog.close()}
+                >
                   Cancel
                 </Button>
               </Show>
             }
           >
-            <Button type="button" size="large" variant="ghost" onClick={goBack}>
+            <Button type="button" size="normal" variant="outline" onClick={goBack}>
               Back
             </Button>
           </Show>
           <Button
             type="submit"
-            size="large"
-            variant={busy() ? "loading" : "contrast"}
+            size="normal"
+            variant={primaryVariant()}
             disabled={
               blocked() ||
               (props.state.view === "worktree" && parentBrowserLoading()) ||

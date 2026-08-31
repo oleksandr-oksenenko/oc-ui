@@ -42,21 +42,8 @@ function response(
   };
 }
 
-const destinations = new Map<string, string>([
-  ["/srv|projects", "/srv/projects"],
-  ["/srv/projects|..", "/srv"],
-  ["/srv/projects|oc-ui", "/srv/projects/oc-ui"],
-  ["/srv/projects|opencode", "/srv/projects/opencode"],
-  ["/srv/projects|api", "/srv/projects/api"],
-  ["/srv/projects/oc-ui|..", "/srv/projects"],
-  ["/srv/projects/opencode|..", "/srv/projects"],
-  ["/srv/projects/api|..", "/srv/projects"],
-]);
-
 const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
-  const base = input?.location?.directory ?? "/";
-  const target = input?.path ?? ".";
-  const directory = destinations.get(`${base}|${target}`) ?? base;
+  const directory = input?.location?.directory ?? "/";
   const entries =
     directory === "/srv/projects"
       ? ["oc-ui", "opencode", "api"]
@@ -117,7 +104,9 @@ export const BrowseServerProjects: Story = {
         {dialog({
           initialLocation: { directory: "/srv/projects", workspaceID: "workspace-1" },
           listDirectory: (input) => {
-            if (input?.path === "oc-ui") return childNavigation.promise;
+            if (input?.location?.directory === "/srv/projects/oc-ui") {
+              return childNavigation.promise;
+            }
             return listDirectory(input);
           },
           onAddProject: browseOnAddProject,
@@ -209,4 +198,32 @@ export const AddProjectFailure = {
 
 export const AddingProject = {
   render: () => dialog({ adding: true }),
+};
+
+const narrowViewport = {
+  options: {
+    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
+  },
+};
+
+export const NarrowDirectoryBrowser = {
+  parameters: { viewport: narrowViewport },
+  globals: { viewport: { value: "mobile390", isRotated: false } },
+  render: () =>
+    dialog({
+      initialLocation: {
+        directory: "/mnt/team/experimental/services/renderer-infrastructure",
+      },
+    }),
+};
+
+export const FocusedOperationError = {
+  render: () =>
+    dialog({
+      error: {
+        kind: "add-project",
+        message:
+          "The server could not add the selected project directory. Check access and try again.",
+      },
+    }),
 };

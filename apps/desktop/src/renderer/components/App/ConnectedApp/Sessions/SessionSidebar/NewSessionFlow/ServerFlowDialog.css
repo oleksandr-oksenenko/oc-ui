@@ -45,7 +45,7 @@
 }
 
 .server-flow-dialog [data-slot="dialog-header"] {
-  border-bottom: 1px solid var(--v2-border-border-base);
+  border-bottom: 1px solid var(--oc-border-base);
 }
 
 .server-flow-dialog-body {
@@ -54,7 +54,7 @@
 }
 
 .server-flow-dialog [data-slot="dialog-footer"] {
-  border-top: 1px solid var(--v2-border-border-base);
+  border-top: 1px solid var(--oc-border-base);
 }
 
 .new-session-project-picker,
@@ -84,15 +84,15 @@
 }
 
 .new-session-project-heading h3 {
-  font-size: 13px;
+  font-size: var(--oc-type-body-size);
   font-weight: 530;
-  line-height: 18px;
+  line-height: var(--oc-type-body-line-height);
 }
 
 .new-session-project-heading p {
   margin-top: 2px;
-  font-size: 12px;
-  line-height: 16px;
+  font-size: var(--oc-type-metadata-size);
+  line-height: var(--oc-type-metadata-line-height);
   color: var(--v2-text-text-muted);
 }
 
@@ -104,9 +104,9 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--v2-border-border-base);
-  border-radius: 6px;
-  background: var(--v2-background-bg-base);
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-canvas);
   color: var(--v2-text-text-base);
   text-align: left;
 }
@@ -138,9 +138,9 @@
 .new-session-project-trigger-value strong,
 .new-session-project-option strong {
   overflow: hidden;
-  font-size: 13px;
+  font-size: var(--oc-type-body-size);
   font-weight: 530;
-  line-height: 18px;
+  line-height: var(--oc-type-body-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -149,8 +149,8 @@
 .new-session-project-option span {
   overflow: hidden;
   color: var(--v2-text-text-muted);
-  font-family: var(--font-family-mono);
-  font-size: 11px;
+  font-family: var(--oc-font-mono);
+  font-size: var(--oc-type-caption-size);
   line-height: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -161,10 +161,10 @@
   width: var(--kb-popper-anchor-width);
   max-width: calc(100vw - 32px);
   padding: 4px;
-  border: 1px solid var(--v2-border-border-strong);
-  border-radius: 6px;
-  background: var(--v2-background-bg-layer-02);
-  box-shadow: var(--v2-elevation-floating);
+  border: 1px solid var(--oc-border-strong);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-control);
+  box-shadow: var(--oc-shadow-floating);
 }
 
 .new-session-project-list {
@@ -188,8 +188,8 @@
   [data-slot="list-search"]
   [data-component="input"]
   [data-slot="input-input"] {
-  font-size: 12px;
-  line-height: 16px;
+  font-size: var(--oc-type-metadata-size);
+  line-height: var(--oc-type-metadata-line-height);
 }
 
 .new-session-project-list [data-slot="list-scroll"] {
@@ -205,7 +205,7 @@
   box-sizing: border-box;
   min-height: 40px;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--oc-radius);
   text-align: left;
 }
 
@@ -221,10 +221,10 @@
   gap: 8px;
   min-height: 96px;
   padding: 16px;
-  border: 1px dashed var(--v2-border-border-base);
-  border-radius: 6px;
+  border: 1px dashed var(--oc-border-base);
+  border-radius: var(--oc-radius);
   color: var(--v2-text-text-muted);
-  font-size: 13px;
+  font-size: var(--oc-type-body-size);
 }
 
 .new-session-projects-error {
@@ -233,12 +233,12 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  border: 1px solid var(--v2-state-border-danger);
-  border-radius: 6px;
+  border: 1px solid var(--oc-status-danger-border);
+  border-radius: var(--oc-radius);
   color: var(--v2-state-fg-danger);
   background: var(--v2-state-bg-danger);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
 }
 
 .new-session-location-summary,
@@ -253,9 +253,9 @@
   align-items: flex-start;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--v2-border-border-base);
-  border-radius: 6px;
-  background: var(--v2-background-bg-base);
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-canvas);
 }
 
 .new-session-location-summary div,
@@ -271,7 +271,7 @@
 .new-session-source span,
 .new-session-path-preview span,
 .new-session-existing-worktree span {
-  font-size: 11px;
+  font-size: var(--oc-type-caption-size);
   line-height: 14px;
   color: var(--v2-text-text-muted);
 }
@@ -282,8 +282,8 @@
 .new-session-path-preview strong,
 .new-session-existing-worktree code {
   overflow-wrap: anywhere;
-  font-family: var(--font-family-mono);
-  font-size: 12px;
+  font-family: var(--oc-font-mono);
+  font-size: var(--oc-type-code-size);
   font-weight: 440;
   line-height: 17px;
   color: var(--v2-text-text-base);
@@ -293,21 +293,27 @@
 .new-session-source,
 .new-session-path-preview {
   padding: 12px;
-  border-radius: 6px;
-  background: var(--v2-background-bg-base);
-  font-size: 13px;
-  line-height: 18px;
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-canvas);
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
   color: var(--v2-text-text-muted);
 }
 
 .server-flow-operation-error {
   display: flex;
+  align-items: flex-start;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--v2-state-border-danger);
-  border-radius: 6px;
-  background: var(--v2-state-bg-danger);
-  color: var(--v2-state-fg-danger);
+  border: 1px solid var(--oc-status-danger-border);
+  border-radius: var(--oc-radius);
+  background: var(--oc-status-danger-surface);
+  color: var(--oc-status-danger);
+}
+
+.server-flow-operation-error > [data-slot="icon-svg"] {
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .server-flow-operation-error > div {
@@ -317,8 +323,8 @@
 .server-flow-operation-error strong,
 .server-flow-operation-error p {
   margin: 0;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
 }
 
 .server-flow-operation-error p {
@@ -328,17 +334,17 @@
 .new-session-existing-worktree {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--v2-state-border-danger);
+  border-top: 1px solid var(--oc-status-danger-border);
 }
 
 .server-flow-operation-error .new-session-existing-worktree span {
-  color: #9a9a9a;
+  color: var(--oc-status-danger-muted);
 }
 
 .new-session-field-error {
   color: var(--v2-state-fg-danger);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: var(--oc-type-status-size);
+  line-height: var(--oc-type-status-line-height);
 }
 
 .server-flow-mutation-status {
@@ -347,7 +353,7 @@
   justify-content: center;
   gap: 8px;
   min-height: 72px;
-  font-size: 13px;
+  font-size: var(--oc-type-body-size);
   color: var(--v2-text-text-muted);
 }
 
@@ -374,6 +380,10 @@
 
   .new-session-project-heading button,
   .server-flow-dialog [data-slot="dialog-footer"] button {
-    flex: 1;
+    flex: 1 1 160px;
+    height: auto;
+    min-height: 28px;
+    padding-block: 5px;
+    white-space: normal;
   }
 }

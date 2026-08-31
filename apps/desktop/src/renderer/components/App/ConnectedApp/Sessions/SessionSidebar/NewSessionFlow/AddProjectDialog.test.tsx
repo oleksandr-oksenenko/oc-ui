@@ -21,9 +21,7 @@ function response(directory: string): FileListOutput {
 
 function listDirectory(): OpenCodeClient["file"]["list"] {
   return vi.fn<OpenCodeClient["file"]["list"]>((input) => {
-    const base = input?.location?.directory ?? "/";
-    const directory =
-      input?.path === "oc-ui" && base === "/srv/projects" ? "/srv/projects/oc-ui" : base;
+    const directory = input?.location?.directory ?? "/";
     return Promise.resolve(response(directory));
   });
 }
@@ -107,7 +105,9 @@ describe("AddProjectDialog", () => {
     });
     const mounted = mount({
       listDirectory: (input) =>
-        input?.path === "oc-ui" ? child : Promise.resolve(response("/srv/projects")),
+        input?.location?.directory === "/srv/projects/oc-ui"
+          ? child
+          : Promise.resolve(response("/srv/projects")),
     });
     await flush();
     const childButton = mounted.root.querySelector<HTMLButtonElement>(

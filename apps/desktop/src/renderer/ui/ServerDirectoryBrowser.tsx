@@ -5,22 +5,17 @@ import { Loader } from "@opencode-ai/ui/loader";
 import { For, Show, createEffect, createMemo, createSignal, createUniqueId } from "solid-js";
 
 import "./ServerDirectoryBrowser.css";
+import { serverPathChild, serverPathParent } from "./serverPath.ts";
 
 export type ServerDirectoryBrowserProps = {
   readonly listDirectory: OpenCodeClient["file"]["list"];
   readonly label: string;
   readonly initialLocation: LocationRef;
-  readonly initialPath?: string;
   readonly disabled?: boolean;
   readonly validationError?: string;
   readonly onBrowserReady?: (element: HTMLElement) => void;
   readonly onLoadingChange?: (loading: boolean) => void;
   readonly onDirectoryChange: (location: LocationRef) => void;
-};
-
-type DirectoryRequest = {
-  readonly location: LocationRef;
-  readonly path: string;
 };
 
 type DirectoryListInput = NonNullable<Parameters<OpenCodeClient["file"]["list"]>[0]>;
@@ -36,10 +31,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
   let entriesList: HTMLUListElement | undefined;
   let hasResolvedDirectory = false;
   let requestID = 0;
-  let retryInput: DirectoryRequest = {
-    location: props.initialLocation,
-    path: props.initialPath ?? ".",
-  };
+  let retryLocation = props.initialLocation;
 
   const setBrowserLoading = (next: boolean): void => {
     setLoading(next);
@@ -54,19 +46,19 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
     });
   };
 
-  const loadDirectory = async (baseLocation: LocationRef, path: string): Promise<void> => {
+  const loadDirectory = async (requestedLocation: LocationRef): Promise<void> => {
     const request = ++requestID;
-    retryInput = { location: baseLocation, path };
+    retryLocation = requestedLocation;
     setBrowserLoading(true);
     setError(undefined);
 
     let response: FileListOutput;
     try {
       const requestLocation: NonNullable<DirectoryListInput["location"]> =
-        baseLocation.workspaceID === undefined
-          ? { directory: baseLocation.directory }
-          : { directory: baseLocation.directory, workspace: baseLocation.workspaceID };
-      response = await props.listDirectory({ location: requestLocation, path });
+        requestedLocation.workspaceID === undefined
+          ? { directory: requestedLocation.directory }
+          : { directory: requestedLocation.directory, workspace: requestedLocation.workspaceID };
+      response = await props.listDirectory({ location: requestLocation, path: "." });
     } catch (cause) {
       if (request !== requestID) return;
       setBrowserLoading(false);
@@ -98,10 +90,11 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
   };
 
   createEffect(() => {
-    void loadDirectory(initialLocation(), props.initialPath ?? ".");
+    void loadDirectory(initialLocation());
   });
 
   const navigationDisabled = () => props.disabled === true || loading();
+  const parentDirectory = () => serverPathParent(location().directory);
 
   return (
     <section class="server-directory-browser-shell" aria-label={props.label}>
@@ -141,10 +134,10 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
               {listingError()}
               <Button
                 type="button"
-                size="small"
+                size="normal"
                 variant="outline"
                 disabled={navigationDisabled()}
-                onClick={() => void loadDirectory(retryInput.location, retryInput.path)}
+                onClick={() => void loadDirectory(retryLocation)}
               >
                 Retry
               </Button>
@@ -165,10 +158,10 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
                 type="button"
                 size="small"
                 variant="ghost-muted"
-                disabled={navigationDisabled()}
+                disabled={navigationDisabled() || parentDirectory() === location().directory}
                 aria-describedby={props.validationError ? validationErrorId : undefined}
                 aria-label="Go to parent directory"
-                onClick={() => void loadDirectory(location(), "..")}
+                onClick={() => void loadDirectory({ ...location(), directory: parentDirectory() })}
               >
                 <Icon name="folder" />
                 <span>..</span>
@@ -184,7 +177,12 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
                     disabled={navigationDisabled()}
                     aria-describedby={props.validationError ? validationErrorId : undefined}
                     aria-label={`Browse directory ${directoryName}`}
-                    onClick={() => void loadDirectory(location(), directoryName)}
+                    onClick={() =>
+                      void loadDirectory({
+                        ...location(),
+                        directory: serverPathChild(location().directory, directoryName),
+                      })
+                    }
                   >
                     <Icon name="folder" />
                     <span

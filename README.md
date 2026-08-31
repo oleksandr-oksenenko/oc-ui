@@ -46,7 +46,29 @@ pnpm opencode:server    # Start the installed OpenCode 0.0.0-beta-18155 server
 pnpm opencode:version   # Print the installed OpenCode 0.0.0-beta-18155 version
 pnpm test               # Run the automated tests
 pnpm ready              # Run checks, tests, the desktop build, and static Storybook build
+pnpm package:mac        # Build an unpacked macOS arm64 .app in apps/desktop/dist
+pnpm make:mac           # Build the unpacked .app and a macOS arm64 DMG
+pnpm test:acceptance:mac # Package and test the macOS arm64 app with WebdriverIO
 ```
+
+## macOS packaging
+
+Packaging is local macOS arm64 only. `pnpm package:mac` and `pnpm make:mac`
+build `out/`, validate the pinned OpenCode CLI, stage its arm64 executable, and
+then run the pinned electron-builder release. The app is written to
+`apps/desktop/dist/` and keeps the compiled Electron-Vite output in
+`apps/desktop/out/`. The staged CLI is bundled at
+`Contents/Resources/opencode/opencode2`.
+
+By default the app uses ad-hoc signing for local testing. To use
+an installed Apple Development identity, provide its exact name through
+`CSC_NAME`, for example:
+
+```sh
+CSC_NAME="Apple Development: Developer (TEAMID)" pnpm make:mac
+```
+
+This packaging slice does not notarize, publish, or configure an updater.
 
 ## OpenCode connection modes
 
@@ -76,11 +98,6 @@ is not part of this slice. A remote password is never persisted in plaintext.
 While the local child runs, its generated password exists in the app-private
 service registration file with owner-only permissions; stopping the child
 removes that file.
-
-There is currently no Electron packager or installer in this repository. The
-managed sidecar is accepted for the installed workspace/development runtime;
-standalone packaged distribution, embedded CLI assets, signing, and updater
-behavior remain deferred until a packaging design exists.
 
 On NixOS, set `ELECTRON_EXEC_PATH` to a wrapped Electron 42 executable when
 running `pnpm dev`; the executable downloaded by the npm package is not wrapped

@@ -46,6 +46,24 @@ const disclosureGutterSessions: readonly SessionInfo[] = [
   ),
 ];
 
+const longContentSessions: readonly SessionInfo[] = [
+  updated(
+    storySession(
+      "long-parent",
+      "Investigate a deeply nested renderer regression with a very long session title",
+    ),
+    storyNow - 60 * 60 * 1000,
+  ),
+  updated(
+    storySession(
+      "long-child",
+      "Compare the complete server-provided workspace location without truncating its meaning",
+      "long-parent",
+    ),
+    storyNow - 2 * 60 * 60 * 1000,
+  ),
+];
+
 const meta = {
   title: "Sessions/SessionSidebar",
   component: SessionSidebar,
@@ -61,6 +79,9 @@ type StoryOptions = Partial<
   readonly runningIDs?: readonly string[];
   readonly requiresInputIDs?: readonly string[];
   readonly serverStatus?: SessionSidebarProps["serverStatus"];
+  readonly serverName?: string;
+  readonly autoFocusClose?: boolean;
+  readonly showHideAction?: boolean;
   readonly height?: string;
   readonly width?: string;
 };
@@ -106,7 +127,7 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
   return (
     <div
       style={{
-        width: options.width ?? "240px",
+        width: options.width ?? "220px",
         height: options.height ?? "560px",
         background: "#090909",
       }}
@@ -130,7 +151,8 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
         }
         requiresInputForSession={(id) => options.requiresInputIDs?.includes(id) ?? false}
         showHeader={options.showHeader}
-        serverName="Local server"
+        autoFocusClose={options.autoFocusClose}
+        serverName={options.serverName ?? "Local server"}
         serverStatus={serverStatus()}
         onSelect={setSelectedID}
         onToggleExpanded={(id) =>
@@ -141,6 +163,7 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
         onDelete={deleteSession}
         onCreate={createSession}
         onRetry={() => setServerStatus("connected")}
+        onHide={options.showHideAction ? () => undefined : undefined}
         onSelectServer={() =>
           setServerStatus((current) => (current === "connected" ? "reconnecting" : "connected"))
         }
@@ -173,7 +196,7 @@ export const FilterableDeepHierarchy = {
       expandedIDs: ["level-1", "level-2", "level-3", "level-4"],
       runningIDs: ["level-5"],
       height: "100vh",
-      width: "360px",
+      width: "220px",
     }),
 };
 
@@ -183,7 +206,7 @@ export const DisclosureGutterAlignment = {
       selectedID: "parent",
       expandedIDs: ["parent", "child", "grandchild", "great-grandchild"],
       height: "320px",
-      width: "360px",
+      width: "220px",
     }),
 };
 
@@ -230,4 +253,30 @@ export const StatusGlyphs = {
       ],
       { runningIDs: ["running"], requiresInputIDs: ["input"] },
     ),
+};
+
+export const LongContentAtProductionWidth = {
+  render: () =>
+    interactiveSidebar(longContentSessions, {
+      selectedID: "long-child",
+      expandedIDs: ["long-parent"],
+      runningIDs: ["long-parent"],
+      serverName: "remote-development-server-with-a-long-hostname.example.internal:4096",
+    }),
+};
+
+export const FilterFocused = {
+  render: () => interactiveSidebar(flatSessions),
+  play: ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    canvasElement.querySelector<HTMLInputElement>('input[aria-label="Filter sessions"]')?.focus();
+  },
+};
+
+export const MobileCloseFocused = {
+  render: () =>
+    interactiveSidebar(flatSessions, {
+      width: "220px",
+      showHideAction: true,
+      autoFocusClose: true,
+    }),
 };

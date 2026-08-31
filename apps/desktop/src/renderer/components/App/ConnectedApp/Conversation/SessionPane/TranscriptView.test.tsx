@@ -37,6 +37,77 @@ const assistant = (
 });
 
 describe("TranscriptView", () => {
+  it("renders a pending interaction after transcript messages", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const messages: readonly SessionMessageInfo[] = [
+      {
+        id: "user",
+        time: base,
+        type: "user",
+        text: "Prompt",
+      },
+    ];
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <TranscriptView
+          sessionID="session"
+          messages={messages}
+          sessionStatus="idle"
+          pendingInteraction={<form data-testid="pending-interaction">Choose a workspace</form>}
+        />
+      ),
+      host,
+    );
+
+    const documentChildren = [...host.querySelectorAll<HTMLElement>(".transcript-document > *")];
+    expect(documentChildren.at(-1)?.dataset.testid).toBe("pending-interaction");
+    expect(documentChildren.at(-1)?.textContent).toBe("Choose a workspace");
+
+    dispose();
+    host.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders a pending interaction instead of the empty transcript state", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <TranscriptView
+          sessionID="session"
+          messages={[]}
+          sessionStatus="idle"
+          pendingInteraction={<form>Choose a workspace</form>}
+        />
+      ),
+      host,
+    );
+
+    expect(host.querySelector(".transcript-empty-state")).toBeNull();
+    expect(host.querySelector("form")?.textContent).toBe("Choose a workspace");
+
+    dispose();
+    host.remove();
+    vi.unstubAllGlobals();
+  });
+
   it("renders every SDK message variant and preserves assistant source order", () => {
     vi.stubGlobal(
       "ResizeObserver",
@@ -121,7 +192,24 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("Agent switched");
     expect(host.textContent).toContain("Model switched");
     expect(host.textContent).toContain("Location switched");
-    expect(host.textContent).toContain("Compaction completed");
+    expect(host.textContent).toContain("Compaction");
+    expect(
+      host.querySelector(".transcript-shell-exited .transcript-context-status")?.textContent,
+    ).toBe("Completed");
+    expect(
+      host
+        .querySelector(".transcript-shell-exited .transcript-context-status")
+        ?.getAttribute("data-status"),
+    ).toBe("success");
+    expect(
+      host.querySelector(".transcript-compaction-completed .transcript-context-status")
+        ?.textContent,
+    ).toBe("Completed");
+    expect(
+      host
+        .querySelector(".transcript-compaction-completed .transcript-context-status")
+        ?.getAttribute("data-status"),
+    ).toBe("success");
     expect(host.textContent).toContain("System context");
     expect(host.textContent).toContain("Context");
     expect(host.textContent).not.toContain("secret");

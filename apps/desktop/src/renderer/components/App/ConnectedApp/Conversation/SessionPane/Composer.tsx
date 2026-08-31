@@ -1,3 +1,5 @@
+import { Icon } from "@opencode-ai/ui/icon";
+import { Loader } from "@opencode-ai/ui/loader";
 import { createEffect } from "solid-js";
 
 import "./Composer/Composer.css";
@@ -13,10 +15,10 @@ const COMPOSER_MAX_HEIGHT = 168;
 
 export type ComposerProps = {
   readonly value: string;
-  /** Disables submission while the current session cannot accept a prompt. */
+  /** The one action represented by the composer button. */
+  readonly action: "send" | "sending" | "running";
+  /** Disables the action currently represented by the composer button. */
   readonly disabled: boolean;
-  readonly submitting: boolean;
-  readonly running: boolean;
   readonly error?: string;
   readonly modelSelection: {
     readonly state: "loading" | "ready" | "failed";
@@ -41,10 +43,11 @@ export type ComposerProps = {
   };
   readonly onInput: (value: string) => void;
   readonly onSubmit: () => void;
+  readonly onStop?: () => void;
 };
 
 function selectionControls(
-  props: Pick<ComposerProps, "agentSelection" | "modelSelection" | "submitting">,
+  props: Pick<ComposerProps, "action" | "agentSelection" | "modelSelection">,
 ) {
   return (
     <div class="composer-v2-picker-row">
@@ -60,7 +63,7 @@ function selectionControls(
             props.agentSelection.disabled ||
             props.agentSelection.switching ||
             props.modelSelection.switching ||
-            props.submitting
+            props.action === "sending"
           }
           onSelect={props.agentSelection.onSelectAgent}
         />
@@ -78,7 +81,7 @@ function selectionControls(
               props.modelSelection.disabled ||
               props.agentSelection.switching ||
               props.modelSelection.switching ||
-              props.submitting
+              props.action === "sending"
             }
             onSelect={props.modelSelection.onSelectModel}
           />
@@ -95,7 +98,7 @@ function selectionControls(
               props.modelSelection.disabled ||
               props.agentSelection.switching ||
               props.modelSelection.switching ||
-              props.submitting
+              props.action === "sending"
             }
             onSelect={props.modelSelection.onSelectVariant}
           />
@@ -170,8 +173,7 @@ export function Composer(props: ComposerProps) {
     event?.preventDefault();
     if (
       props.disabled ||
-      props.submitting ||
-      props.running ||
+      props.action !== "send" ||
       props.modelSelection.switching ||
       props.agentSelection.switching ||
       props.value.trim() === ""
@@ -196,7 +198,7 @@ export function Composer(props: ComposerProps) {
           class="composer-v2-input"
           aria-label="Prompt"
           disabled={false}
-          placeholder={props.running ? "Draft your next prompt…" : "Send a message…"}
+          placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}
           rows={1}
           value={props.value}
           onInput={(event) => {
@@ -210,22 +212,34 @@ export function Composer(props: ComposerProps) {
       <div class="composer-v2-controls-row">
         {selectionControls(props)}
         <button
-          class="composer-v2-send"
-          type="submit"
-          aria-label="Send"
-          title="Send"
+          class="composer-v2-action"
+          type={props.action === "running" ? "button" : "submit"}
+          aria-label={props.action === "running" ? "Stop" : "Send"}
+          title={props.action === "running" ? "Stop" : "Send"}
           disabled={
             props.disabled ||
-            props.submitting ||
-            props.running ||
-            props.modelSelection.switching ||
-            props.agentSelection.switching ||
-            props.value.trim() === ""
+            props.action === "sending" ||
+            (props.action === "running" && props.onStop === undefined) ||
+            (props.action === "send" &&
+              (props.modelSelection.switching ||
+                props.agentSelection.switching ||
+                props.value.trim() === ""))
           }
+          onClick={() => {
+            if (props.action === "running") props.onStop?.();
+          }}
         >
-          <span class="composer-v2-send-icon" aria-hidden="true">
-            {props.submitting ? "…" : "↑"}
-          </span>
+          {props.action === "running" ? (
+            <Icon name="stop" size="small" aria-hidden="true" />
+          ) : (
+            <span class="composer-v2-action-icon" aria-hidden="true">
+              {props.action === "sending" ? (
+                <Loader width={16} height={16} />
+              ) : (
+                <Icon name="arrow-up" />
+              )}
+            </span>
+          )}
         </button>
       </div>
 

@@ -4,8 +4,8 @@
   align-items: center;
   min-width: 0;
   height: 36px;
-  color: #e5e5e5;
-  background: #000;
+  color: var(--oc-text-contrast);
+  background: var(--oc-surface-canvas);
   -webkit-app-region: drag;
 }
 
@@ -37,30 +37,13 @@
 }
 
 .titlebar-icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  color: #a3a3a3;
-  background: transparent;
-  box-shadow: none;
-  cursor: pointer;
+  flex: none;
 }
 
-.titlebar-icon-button:hover {
-  color: #f5f5f5;
-  background: #1c1c1c;
-}
-
-.titlebar-icon-button:focus-visible {
-  color: #f5f5f5;
-  background: #1c1c1c;
-  outline: none;
-  box-shadow: none;
+[data-component="icon-button-v2"].titlebar-icon-button:is(:focus-visible, [data-state="focus"]):not(
+    :disabled
+  ) {
+  outline-offset: -2px;
 }
 
 .titlebar-session {
@@ -76,8 +59,8 @@
   display: block;
   max-width: 100%;
   overflow: hidden;
-  color: #d4d4d4;
-  font-size: 12px;
+  color: var(--oc-text-base);
+  font-size: var(--oc-type-metadata-size);
   font-weight: 550;
   text-align: center;
   text-overflow: ellipsis;

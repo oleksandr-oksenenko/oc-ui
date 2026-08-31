@@ -24,19 +24,22 @@ const unavailableAgentSelection = {
 };
 
 describe("Composer", () => {
-  it("does not explain the running state with extra prose", () => {
+  it("replaces Send with Stop while running", () => {
     const host = document.createElement("div");
+    document.body.append(host);
+    const stop = vi.fn<() => void>();
+    const submit = vi.fn<() => void>();
     const dispose = render(
       () => (
         <Composer
           value=""
-          disabled
-          submitting={false}
-          running
+          disabled={false}
+          action="running"
           modelSelection={unavailableSelection}
           agentSelection={unavailableAgentSelection}
           onInput={() => undefined}
-          onSubmit={() => undefined}
+          onSubmit={submit}
+          onStop={stop}
         />
       ),
       host,
@@ -44,7 +47,44 @@ describe("Composer", () => {
 
     expect(host.textContent).not.toContain("Draft saved while this run finishes.");
     expect(host.querySelector("output")).toBeNull();
+    expect(host.querySelector('[aria-label="Send"]')).toBeNull();
+    const stopButton = host.querySelector<HTMLButtonElement>('[aria-label="Stop"]');
+    expect(stopButton).not.toBeNull();
+    expect(stopButton?.disabled).toBe(false);
+    expect(stopButton?.querySelector('[data-slot="icon-svg"]')).not.toBeNull();
+    stopButton?.click();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(submit).not.toHaveBeenCalled();
     dispose();
+    host.remove();
+  });
+
+  it("keeps Send disabled while the prompt is being sent", () => {
+    const host = document.createElement("div");
+    const submit = vi.fn<() => void>();
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Composer
+          value="Send this"
+          action="sending"
+          disabled={false}
+          modelSelection={unavailableSelection}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={submit}
+        />
+      ),
+      host,
+    );
+
+    const sendButton = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    expect(sendButton?.disabled).toBe(true);
+    expect(sendButton?.querySelector('[data-component="loader-v2"]')).not.toBeNull();
+    sendButton?.click();
+    expect(submit).not.toHaveBeenCalled();
+    dispose();
+    host.remove();
   });
 
   it("shows independent loading states", () => {
@@ -55,8 +95,7 @@ describe("Composer", () => {
         <Composer
           value=""
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={{
             ...unavailableSelection,
             state: "ready",
@@ -90,8 +129,7 @@ describe("Composer", () => {
           <Composer
             value=""
             disabled={false}
-            submitting={false}
-            running={false}
+            action="send"
             modelSelection={unavailableSelection}
             agentSelection={agentSelection}
             onInput={() => undefined}
@@ -139,8 +177,7 @@ describe("Composer", () => {
         <Composer
           value=""
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={{
             state: "ready",
             switching: false,
@@ -226,8 +263,7 @@ describe("Composer", () => {
         <Composer
           value=""
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={{
             ...unavailableSelection,
             state: "ready",
@@ -270,8 +306,7 @@ describe("Composer", () => {
         <Composer
           value=""
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={{
             ...unavailableSelection,
             state: "ready",
@@ -324,8 +359,7 @@ describe("Composer", () => {
         <Composer
           value=""
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={{
             ...unavailableSelection,
             state: "ready",
@@ -371,8 +405,7 @@ describe("Composer", () => {
         <Composer
           value="send this"
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={{
             state: "ready",
             switching: false,
@@ -414,8 +447,7 @@ describe("Composer", () => {
         <Composer
           value=""
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={unavailableSelection}
           agentSelection={{
             ...unavailableAgentSelection,
@@ -460,8 +492,7 @@ describe("Composer", () => {
         <Composer
           value=""
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={unavailableSelection}
           agentSelection={{
             ...unavailableAgentSelection,
@@ -516,8 +547,7 @@ describe("Composer", () => {
         <Composer
           value={value()}
           disabled={disabled()}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={unavailableSelection}
           agentSelection={unavailableAgentSelection}
           onInput={setValue}
@@ -545,6 +575,40 @@ describe("Composer", () => {
     host.remove();
   });
 
+  it("keeps native submit behavior while switching its pinned artwork", () => {
+    const host = document.createElement("div");
+    const [action, setAction] = createSignal<ComposerProps["action"]>("send");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Composer
+          value="send this"
+          disabled={false}
+          action={action()}
+          modelSelection={unavailableSelection}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={() => undefined}
+        />
+      ),
+      host,
+    );
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    if (!button) throw new Error("Composer did not render its send button");
+
+    expect(button.type).toBe("submit");
+    expect(button.querySelector('[data-slot="icon-svg"]')).not.toBeNull();
+    expect(button.querySelector('[data-component="loader-v2"]')).toBeNull();
+
+    setAction("sending");
+    expect(button.disabled).toBe(true);
+    expect(button.querySelector('[data-slot="icon-svg"]')).toBeNull();
+    expect(button.querySelector('[data-component="loader-v2"]')).not.toBeNull();
+
+    dispose();
+    host.remove();
+  });
+
   it("submits with Enter but keeps Shift+Enter for newlines", () => {
     const host = document.createElement("div");
     const submit = vi.fn<() => void>();
@@ -554,8 +618,7 @@ describe("Composer", () => {
         <Composer
           value="two\nlines"
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={unavailableSelection}
           agentSelection={unavailableAgentSelection}
           onInput={() => undefined}
@@ -586,8 +649,7 @@ describe("Composer", () => {
         <Composer
           value={value()}
           disabled={false}
-          submitting={false}
-          running={false}
+          action="send"
           modelSelection={unavailableSelection}
           agentSelection={unavailableAgentSelection}
           onInput={setValue}

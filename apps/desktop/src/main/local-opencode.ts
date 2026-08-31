@@ -61,6 +61,8 @@ export type LocalOpenCodeServiceOptions = {
   readonly userDataPath?: string;
   /** An explicit app-private registration file, useful for tests. */
   readonly registrationFile?: string;
+  /** An explicit sidecar executable, used by packaged apps. */
+  readonly binaryPath?: string;
   readonly connectTimeoutMs?: number;
   readonly healthTimeoutMs?: number;
   readonly monitorIntervalMs?: number;
@@ -104,6 +106,10 @@ const HealthResponseSchema = Schema.Struct({ version: Schema.String });
 const parseHealthResponse = Schema.decodeUnknownSync(HealthResponseSchema);
 
 const requireFromMain = createRequire(import.meta.url);
+
+/** Resolve the executable location bundled into a packaged app. */
+export const packagedOpenCodeBinaryPath = (resourcesPath: string): string =>
+  join(resourcesPath, "opencode", "opencode2");
 
 /** Resolve the packaged, pinned CLI binary; never fall back to a PATH command. */
 function resolveLocalOpenCodeBinary(): string {
@@ -233,7 +239,11 @@ export function createLocalOpenCodeService(
     options.monitorIntervalMs,
     DEFAULT_MONITOR_INTERVAL_MS,
   );
-  const resolveBinary = options.resolveCliBinary ?? resolveLocalOpenCodeBinary;
+  const binaryPath = options.binaryPath;
+  const resolveBinary =
+    binaryPath === undefined
+      ? (options.resolveCliBinary ?? resolveLocalOpenCodeBinary)
+      : () => binaryPath;
   const unavailableListeners = new Set<() => void>();
 
   let currentStatus: LocalOpenCodeStatus = "disconnected";

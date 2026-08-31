@@ -60,7 +60,14 @@ const meta = {
   parameters: { layout: "centered" },
   decorators: [
     ((Story) => (
-      <div style={{ width: "520px", height: "620px", display: "flex", "align-items": "stretch" }}>
+      <div
+        style={{
+          width: "min(360px, 100vw)",
+          height: "620px",
+          display: "flex",
+          "align-items": "stretch",
+        }}
+      >
         <Story />
       </div>
     )) satisfies Decorator,
@@ -225,5 +232,43 @@ export const NoClose: Story = {
   args: {
     onClose: undefined,
     diff: { files: diffFiles, loading: false },
+  },
+};
+
+export const CloseFocused: Story = {
+  args: {
+    autoFocusClose: true,
+    diff: { files: diffFiles, loading: false },
+  },
+};
+
+const narrowViewport = {
+  options: {
+    narrow320: { name: "Narrow 320x720", styles: { width: "320px", height: "720px" } },
+  },
+};
+
+export const NarrowLongPath: Story = {
+  parameters: { viewport: narrowViewport },
+  globals: { viewport: { value: "narrow320", isRotated: false } },
+  args: {
+    diff: {
+      loading: false,
+      comparison: "branch",
+      comparisonOptions: [
+        { value: "working", label: "Working changes" },
+        { value: "branch", label: "Changes against the long-lived release branch" },
+      ],
+      files: [
+        {
+          path: "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DeeplyNestedFeatureWithAnIntentionallyLongFileName.tsx",
+          additions: 128,
+          deletions: 47,
+          status: "modified",
+          defaultExpanded: false,
+          patch: "",
+        },
+      ],
+    },
   },
 };

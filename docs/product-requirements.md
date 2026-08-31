@@ -372,11 +372,12 @@ offer a directory picker. The pinned local service uses the user's home
 directory; a remote connection uses that server's default. The desktop app
 does not choose or persist a directory.
 
-There is no Electron packager or installer in this repository. The managed
-sidecar is therefore accepted for the installed workspace/development runtime,
-where `apps/desktop` resolves its pinned CLI dependency. This milestone does
-not claim standalone packaged-app behavior, embedded platform assets, signing,
-or updater support. Those require a future packaging design.
+The repository packages a local macOS ARM64 app with electron-builder. The
+pinned CLI executable is staged outside ASAR at
+`Contents/Resources/opencode/opencode2`, signed with the app, and resolved from
+`process.resourcesPath`. Development continues to resolve the package-local
+CLI dependency. Public distribution, notarization, other platforms, and
+updater behavior remain outside this boundary.
 
 ## Explicitly deferred
 
@@ -396,7 +397,7 @@ The first slice does not include:
 - Todos, task progress, token usage, or costs.
 - An embedded terminal.
 - Notifications and other desktop extras.
-- Standalone packaging or installers that embed the managed CLI.
+- Cross-platform installers, notarized public distribution, and auto-update.
 - A plugin system or UI-variant framework.
 
 Deferred means not required for the first integration slice, not rejected from
@@ -420,7 +421,8 @@ OpenCode `0.0.0-beta-18155` server:
 For the managed sidecar path, acceptance additionally requires a healthy local
 `0.0.0-beta-18155` server, clean shutdown without a leftover child process,
 clear fallback to a configured remote server when local startup fails, and no
-directory picker. No standalone packaged-app acceptance is claimed while this
-repository has no packager.
+directory picker. The local macOS ARM64 package must embed the exact pinned
+CLI, load the renderer from the packaged `oc://renderer` origin, and quit even
+if sidecar cleanup fails.
 
 No other deferred feature is needed to satisfy this boundary.

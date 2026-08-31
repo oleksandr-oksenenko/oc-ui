@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vp run desktop#build",
-    "check": "vp check && pnpm lint:styles && pnpm check:components && knip",
+    "check": "vp check && tsc -p apps/desktop/tsconfig.wdio.json --noEmit && pnpm lint:styles && pnpm check:components && knip",
     "check:components": "node tools/check-component-layout.mjs",
     "dev": "vp run desktop#dev",
     "format": "vp fmt",
@@ -19,6 +19,9 @@
     "storybook": "vp run desktop#storybook",
     "storybook:preview": "vp run desktop#storybook:preview",
     "build-storybook": "vp run desktop#build-storybook",
+    "package:mac": "pnpm --filter desktop package:mac",
+    "make:mac": "pnpm --filter desktop make:mac",
+    "test:acceptance:mac": "pnpm --filter desktop test:acceptance:mac",
     "test": "vp run desktop#test"
   },
   "devDependencies": {

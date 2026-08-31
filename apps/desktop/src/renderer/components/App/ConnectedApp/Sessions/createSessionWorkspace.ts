@@ -18,7 +18,7 @@ type TranscriptState = {
 
 export type SessionWorkspaceRuntime = {
   readonly api: {
-    readonly session: Pick<ConnectedRuntime["api"]["session"], "active">;
+    readonly session: Pick<ConnectedRuntime["api"]["session"], "active" | "interrupt">;
   };
   readonly data: {
     readonly session: Pick<ConnectedRuntime["data"]["session"], "list" | "status" | "setStatus"> & {
@@ -34,11 +34,13 @@ export type SessionWorkspace = {
   readonly selectedID: Accessor<string | undefined>;
   readonly selectedSession: Accessor<SessionInfo | undefined>;
   readonly running: Accessor<boolean>;
+  readonly stopError: Accessor<string | undefined>;
   readonly transcript: Accessor<readonly SessionMessage[]>;
   readonly transcriptStatus: Accessor<DataSessionStatus>;
   readonly transcriptLoading: Accessor<boolean>;
   readonly transcriptError: Accessor<string | undefined>;
   readonly select: (sessionID: string) => void;
+  readonly stop: () => Promise<void>;
   readonly hydrate: (sessionID: string) => Promise<void>;
   readonly syncCatalog: () => Promise<void>;
   readonly retryCatalog: () => Promise<void>;
@@ -59,6 +61,8 @@ export type CreateSessionWorkspaceInput = {
 export function createSessionWorkspace(input: CreateSessionWorkspaceInput): SessionWorkspace {
   const [selectedID, setSelectedID] = createSignal<string>();
   const [transcriptState, setTranscriptState] = createSignal<TranscriptState>({ status: "idle" });
+  const [stopError, setStopError] = createSignal<string>();
+  let stoppingID: string | undefined;
   let alive = true;
   let hydration = 0;
   let selectedAncestorIDs: readonly string[] = [];
@@ -90,6 +94,30 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   });
 
   const running = createMemo(() => transcriptStatus() === "running");
+
+  const stop = async (): Promise<void> => {
+    const sessionID = selectedID();
+    if (
+      sessionID === undefined ||
+      !input.connected() ||
+      input.runtime.data.session.status(sessionID) !== "running" ||
+      stoppingID !== undefined
+    ) {
+      return;
+    }
+
+    setStopError(undefined);
+    stoppingID = sessionID;
+    try {
+      await input.runtime.api.session.interrupt({ sessionID });
+    } catch {
+      if (selectedID() === sessionID) {
+        setStopError("The session could not be stopped. Try again.");
+      }
+    } finally {
+      stoppingID = undefined;
+    }
+  };
 
   const transcript = createMemo<readonly SessionMessage[]>(() => {
     const id = selectedID();
@@ -198,6 +226,11 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   };
 
   createEffect(() => {
+    selectedID();
+    setStopError(undefined);
+  });
+
+  createEffect(() => {
     if (input.runtime.sessions.state() !== "ready") return;
     const current = selectedID();
     if (current && input.runtime.sessions.ids().includes(current)) {
@@ -251,11 +284,13 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     selectedID,
     selectedSession,
     running,
+    stopError,
     transcript,
     transcriptStatus,
     transcriptLoading,
     transcriptError,
     select,
+    stop,
     hydrate,
     syncCatalog,
     retryCatalog,

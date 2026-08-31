@@ -12,11 +12,14 @@ import { IPC_CHANNELS, parseSaveTargetInput } from "../shared/desktop-api.ts";
 import {
   createLocalOpenCodeService,
   LocalOpenCodeUnavailableError,
+  packagedOpenCodeBinaryPath,
   type LocalOpenCodeService,
 } from "./local-opencode.ts";
 import type { SettingsService } from "./settings.ts";
 import type { SettingsError } from "./settings.ts";
 import { normalizeServerUrl, settingsLayer, Settings, validatePassword } from "./settings.ts";
+import { disconnectSidecarForQuit } from "./shutdown.ts";
+import { resolveSessionDataPath, resolveUserDataPath } from "./user-data-path.ts";
 
 const RENDERER_SCHEME = "oc";
 const RENDERER_HOST = "renderer";
@@ -25,8 +28,8 @@ const APP_NAME = "Ocui";
 // Raw development launches otherwise inherit Electron's shared profile. Give
 // this app the same isolated identity and Chromium state it will have packaged.
 app.setName(APP_NAME);
-const appUserData = join(app.getPath("appData"), APP_NAME);
-const appSessionData = join(appUserData, "Session Data");
+const appUserData = resolveUserDataPath(join(app.getPath("appData"), APP_NAME), process.argv);
+const appSessionData = resolveSessionDataPath(appUserData);
 mkdirSync(appSessionData, { recursive: true });
 app.setPath("userData", appUserData);
 app.setPath("sessionData", appSessionData);
@@ -56,6 +59,24 @@ let quitting = false;
 let quitCleanupComplete = false;
 let localOpenCodeWasConnected = false;
 let settingsMutation: Promise<void> = Promise.resolve();
+
+type DesktopRuntimeEnvironment = {
+  readonly rendererUrl: string | undefined;
+  readonly localOpenCodeBinary: string | undefined;
+};
+
+const resolveDesktopRuntimeEnvironment = (): DesktopRuntimeEnvironment => {
+  if (app.isPackaged) {
+    return {
+      rendererUrl: undefined,
+      localOpenCodeBinary: packagedOpenCodeBinaryPath(process.resourcesPath),
+    };
+  }
+  return {
+    rendererUrl: process.env.ELECTRON_RENDERER_URL,
+    localOpenCodeBinary: undefined,
+  };
+};
 
 const withSettings = <A>(
   operation: (service: SettingsService) => Effect.Effect<A, SettingsError>,
@@ -258,7 +279,7 @@ const configurePermissions = (): void => {
 };
 
 const createMainWindow = async (): Promise<void> => {
-  const developmentUrl = process.env.ELECTRON_RENDERER_URL;
+  const { rendererUrl: developmentUrl } = resolveDesktopRuntimeEnvironment();
   const developmentOrigin =
     developmentUrl === undefined ? undefined : new URL(developmentUrl).origin;
 
@@ -308,7 +329,10 @@ const start = async (): Promise<void> => {
   await app.whenReady();
   configurePermissions();
   desktopRuntime = ManagedRuntime.make(settingsLayer(app.getPath("userData"), safeStorage));
-  localOpenCode = createLocalOpenCodeService({ userDataPath: app.getPath("userData") });
+  localOpenCode = createLocalOpenCodeService({
+    userDataPath: app.getPath("userData"),
+    binaryPath: resolveDesktopRuntimeEnvironment().localOpenCodeBinary,
+  });
   removeLocalOpenCodeUnavailableListener = localOpenCode.onUnavailable(
     forwardLocalOpenCodeUnavailable,
   );
@@ -335,12 +359,7 @@ app.on("before-quit", (event) => {
   quitting = true;
   const sidecar = localOpenCode;
   void (async () => {
-    try {
-      await sidecar?.disconnect();
-    } catch {
-      quitting = false;
-      return;
-    }
+    await disconnectSidecarForQuit(sidecar);
     await settingsMutation;
     removeIpcHandlers?.();
     removeLocalOpenCodeUnavailableListener?.();

@@ -35,9 +35,7 @@ const projects = [
 ] as const satisfies readonly NewSessionProject[];
 
 const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
-  const base = input?.location?.directory ?? "/";
-  const directory =
-    input?.path === ".." && base === projects[0].location.directory ? "/srv/projects" : base;
+  const directory = input?.location?.directory ?? "/";
   return Promise.resolve({
     location: {
       directory,
@@ -221,6 +219,9 @@ export const ProjectRequired = {
       mode: "direct",
       error: { kind: "validation", field: "project", message: "Choose a project." },
     }),
+  play: ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    canvasElement.ownerDocument.querySelector<HTMLElement>(".new-session-project-trigger")?.focus();
+  },
 };
 
 export const WorktreeForm = {
@@ -272,5 +273,44 @@ export const DirectSessionCreationFailure = {
       selectedProjectID: "oc-ui",
       mode: "direct",
       error: { kind: "session", message: "The session could not be created. Try again." },
+    }),
+};
+
+const narrowViewport = {
+  options: {
+    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
+  },
+};
+
+export const NarrowProjectSelection = {
+  parameters: { viewport: narrowViewport },
+  globals: { viewport: { value: "mobile390", isRotated: false } },
+  render: () => interactiveProjectSelection(),
+};
+
+export const NarrowWorktreeForm = {
+  parameters: { viewport: narrowViewport },
+  globals: { viewport: { value: "mobile390", isRotated: false } },
+  render: () => staticDialog(worktreeState),
+};
+
+export const LongProjectContent = {
+  render: () =>
+    staticDialog({
+      view: "select-project",
+      projects: [
+        ...projects,
+        {
+          id: "long-project",
+          name: "Renderer infrastructure and remote workspace compatibility",
+          location: {
+            directory:
+              "/srv/projects/teams/platform/renderer-infrastructure-and-remote-workspace-compatibility",
+          },
+          vcs: "git",
+        },
+      ],
+      selectedProjectID: "long-project",
+      mode: "worktree",
     }),
 };

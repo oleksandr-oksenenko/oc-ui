@@ -5,6 +5,7 @@ import { Show } from "solid-js";
 import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
 
 import { ServerDirectoryBrowser } from "../../../../../../../ui/ServerDirectoryBrowser.tsx";
+import { serverPathParent } from "../../../../../../../ui/serverPath.ts";
 import type { NewSessionDialogState } from "../NewSessionDialog.tsx";
 
 type WorktreeState = Extract<NewSessionDialogState, { view: "worktree" }>;
@@ -23,6 +24,11 @@ export type WorktreeFormProps = {
 };
 
 export function WorktreeForm(props: WorktreeFormProps) {
+  const initialLocation = {
+    ...props.state.project.location,
+    directory: serverPathParent(props.state.project.location.directory),
+  };
+
   return (
     <section class="new-session-worktree-form">
       <div class="new-session-source">
@@ -33,8 +39,7 @@ export function WorktreeForm(props: WorktreeFormProps) {
       <ServerDirectoryBrowser
         listDirectory={props.listDirectory}
         label="Worktree parent directory"
-        initialLocation={props.state.project.location}
-        initialPath=".."
+        initialLocation={initialLocation}
         disabled={props.disabled}
         validationError={props.parentValidationError}
         onBrowserReady={props.onBrowserReady}
