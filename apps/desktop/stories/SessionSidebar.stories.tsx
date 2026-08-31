@@ -113,6 +113,7 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
     >
       <SessionSidebar
         sessions={visibleSessions()}
+        now={storyNow}
         statusForSession={(id) => (options.runningIDs?.includes(id) ? "running" : "idle")}
         selectedID={selectedID()}
         expandedIDs={expandedIDs()}

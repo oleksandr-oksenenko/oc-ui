@@ -112,7 +112,7 @@ describe("DiffFile", () => {
     });
   });
 
-  it("renders collapsed context that Pierre can expand on click", async () => {
+  it("labels collapsed context and lets the keyboard expand it", async () => {
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -135,12 +135,51 @@ describe("DiffFile", () => {
     let shadow: ShadowRoot | null | undefined;
     await vi.waitFor(() => {
       shadow = host.querySelector("diffs-container")?.shadowRoot;
-      expect(shadow?.querySelector("[data-expand-button]")).not.toBeNull();
+      const expandButton = shadow?.querySelector<HTMLElement>("[data-expand-button]");
+      expect(expandButton?.getAttribute("aria-label")).toBe("Expand unchanged lines below");
+      expect(expandButton?.tabIndex).toBe(0);
+      expect(shadow?.querySelector<HTMLElement>("code[data-code]")?.tabIndex).toBe(0);
     });
     const before = shadow?.querySelectorAll("[data-line]").length ?? 0;
-    shadow?.querySelector<HTMLElement>("[data-expand-button]")?.click();
+    shadow
+      ?.querySelector<HTMLElement>("[data-expand-button]")
+      ?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await vi.waitFor(() => {
       expect(shadow?.querySelectorAll("[data-line]").length).toBeGreaterThan(before);
+    });
+
+    dispose();
+    host.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("labels Pierre's chunked expand-all control truthfully", async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const body = Array.from({ length: 241 }, (_, index) => {
+      const line = `line ${index + 1}`;
+      return index === 120 ? `-${line}\n+changed line\n` : ` ${line}\n`;
+    }).join("");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => <DiffFile file={{ ...file, patch: `@@ -1,241 +1,241 @@\n${body}` }} />,
+      host,
+    );
+
+    await vi.waitFor(() => {
+      const shadow = host.querySelector("diffs-container")?.shadowRoot;
+      const expandAllButton = shadow?.querySelector<HTMLElement>("[data-expand-all-button]");
+      expect(expandAllButton?.getAttribute("aria-label")).toBe("Expand all unchanged lines");
+      expect(expandAllButton?.getAttribute("aria-label")).not.toBe(
+        "Expand unchanged lines above and below",
+      );
     });
 
     dispose();

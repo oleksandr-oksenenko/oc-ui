@@ -137,7 +137,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
               role="combobox"
               class="new-session-project-trigger"
               disabled={props.disabled}
-              aria-label="Select a project"
+              aria-label={`Project: ${selectedOption()?.name ?? "Select a project"}`}
               aria-haspopup="dialog"
               aria-expanded={pickerOpen()}
               aria-controls={pickerOpen() ? pickerContentID : undefined}

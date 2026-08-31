@@ -34,6 +34,11 @@ export function AgentPicker(props: AgentPickerProps) {
     queueMicrotask(focusTrigger);
   });
 
+  createEffect(() => {
+    const trigger = root?.querySelector<HTMLElement>('[data-component="select-v2"]');
+    trigger?.setAttribute("aria-label", `Agent: ${selected()?.label ?? currentPlaceholder()}`);
+  });
+
   return (
     <span
       ref={(element) => {
@@ -47,7 +52,7 @@ export function AgentPicker(props: AgentPickerProps) {
         </span>
       ) : (
         <Select
-          aria-label="Agent"
+          aria-label={`Agent: ${selected()?.label ?? currentPlaceholder()}`}
           class="composer-picker-control"
           options={[...props.options]}
           current={selected()}

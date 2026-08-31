@@ -10,6 +10,7 @@ import "./SessionTree.css";
 
 export type SessionTreeProps = {
   readonly sessions: readonly SessionInfo[];
+  readonly now?: number;
   readonly statusForSession: (sessionID: string) => DataSessionStatus;
   readonly selectedID?: string;
   readonly expandedIDs: readonly string[];
@@ -25,7 +26,7 @@ export type SessionTreeProps = {
 export function SessionTree(props: SessionTreeProps) {
   const isExpanded = (id: string) => props.expandedIDs.includes(id);
   const query = createMemo(() => props.query?.trim().toLowerCase() ?? "");
-  const projection = createMemo(() => projectSessionTree(props.sessions, query()));
+  const projection = createMemo(() => projectSessionTree(props.sessions, query(), props.now));
 
   const renderSessions = (nodes: readonly SessionTreeNode[], depth: number) => (
     <For each={nodes}>

@@ -15,7 +15,7 @@
     "opencode:server": "pnpm --filter desktop exec opencode2 serve",
     "opencode:version": "pnpm --filter desktop exec opencode2 --version",
     "prepare": "effect-tsgo patch --no-typescript --oxlint",
-    "ready": "pnpm check && vp run desktop#test && vp run desktop#build",
+    "ready": "pnpm check && vp run desktop#test && vp run desktop#build && vp run desktop#build-storybook",
     "storybook": "vp run desktop#storybook",
     "storybook:preview": "vp run desktop#storybook:preview",
     "build-storybook": "vp run desktop#build-storybook",

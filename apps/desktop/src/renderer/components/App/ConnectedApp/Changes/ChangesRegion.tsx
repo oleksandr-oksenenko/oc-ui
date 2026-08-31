@@ -13,6 +13,7 @@ export function ChangesRegion(props: ChangesRegionProps) {
     <ContextPanel
       tabsIdBase={props.idBase}
       showTabs={props.showTabs}
+      autoFocusClose={props.showTabs}
       onClose={props.onClose}
       diff={props.changes}
     />

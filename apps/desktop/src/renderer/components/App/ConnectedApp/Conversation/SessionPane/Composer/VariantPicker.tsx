@@ -1,4 +1,5 @@
 import { Select } from "@opencode-ai/ui/select";
+import { createEffect } from "solid-js";
 
 export type VariantPickerOption = {
   readonly id: string;
@@ -15,17 +16,28 @@ type VariantPickerProps = {
 };
 
 export function VariantPicker(props: VariantPickerProps) {
+  let root: HTMLSpanElement | undefined;
   const selected = () => props.options.find((option) => option.id === props.selectedID);
 
+  createEffect(() => {
+    const trigger = root?.querySelector<HTMLElement>('[data-component="select-v2"]');
+    trigger?.setAttribute("aria-label", `Variant: ${selected()?.label ?? props.placeholder}`);
+  });
+
   return (
-    <span class="composer-picker">
+    <span
+      ref={(element) => {
+        root = element;
+      }}
+      class="composer-picker"
+    >
       {props.options.length === 0 ? (
         <span class="composer-picker--unavailable" aria-disabled="true">
           {props.unavailableLabel}
         </span>
       ) : (
         <Select
-          aria-label="Variant"
+          aria-label={`Variant: ${selected()?.label ?? props.placeholder}`}
           class="composer-picker-control"
           options={[...props.options]}
           current={selected()}

@@ -19,6 +19,16 @@ An Electron desktop client for OpenCode.
 pnpm install
 ```
 
+Storybook browser tests, which run as part of `pnpm test` and `pnpm ready`,
+require Chromium to be provisioned once per machine:
+
+```sh
+pnpm --filter desktop exec playwright install chromium
+```
+
+See [Storybook verification](docs/storybook-verification.md) for the full
+verification workflow.
+
 The desktop package owns the pinned OpenCode CLI, client, and UI packages. The
 CLI is installed as a runtime dependency of `apps/desktop`, so the Electron
 main process can resolve the same `0.0.0-beta-18155` executable used by the
@@ -35,7 +45,7 @@ pnpm knip               # Find unused files, exports, and dependencies
 pnpm opencode:server    # Start the installed OpenCode 0.0.0-beta-18155 server
 pnpm opencode:version   # Print the installed OpenCode 0.0.0-beta-18155 version
 pnpm test               # Run the automated tests
-pnpm ready              # Run all repository checks and the production build
+pnpm ready              # Run checks, tests, the desktop build, and static Storybook build
 ```
 
 ## OpenCode connection modes

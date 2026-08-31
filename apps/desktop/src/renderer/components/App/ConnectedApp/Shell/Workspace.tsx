@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, type JSX } from "solid-js";
+import { createEffect, createSignal, onCleanup, type JSX } from "solid-js";
 
 import "./Workspace.css";
 
@@ -45,6 +45,25 @@ export function Workspace(props: WorkspaceProps) {
   const contextOpen = () => context != null && props.rightPanelOpen;
   const mobileOverlayOpen = () =>
     props.mobile === true && ((props.leftSidebarOpen && sidebarPresent) || contextOpen());
+
+  createEffect(() => {
+    const overlay =
+      props.mobile === true
+        ? props.leftSidebarOpen && sidebarPresent
+          ? "left"
+          : contextOpen()
+            ? "right"
+            : undefined
+        : undefined;
+    if (!overlay) return;
+
+    queueMicrotask(() => {
+      const selector = overlay === "left" ? ".shell-left-sidebar" : ".shell-right-panel";
+      workspace
+        ?.querySelector<HTMLElement>(`${selector} [autofocus]`)
+        ?.focus({ preventScroll: true });
+    });
+  });
 
   function removePointerListeners() {
     window.removeEventListener("pointermove", continueResize);

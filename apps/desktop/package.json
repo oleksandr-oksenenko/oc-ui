@@ -29,10 +29,13 @@
   },
   "devDependencies": {
     "@storybook/addon-a11y": "catalog:",
+    "@storybook/addon-vitest": "catalog:",
     "@testing-library/jest-dom": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
     "electron": "catalog:",
     "electron-vite": "catalog:",
     "jsdom": "catalog:",
+    "playwright": "catalog:",
     "storybook": "catalog:",
     "storybook-solidjs-vite": "10.7.1",
     "typescript": "^7.0.2",

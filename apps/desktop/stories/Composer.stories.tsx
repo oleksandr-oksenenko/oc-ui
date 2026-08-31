@@ -1,5 +1,8 @@
+/* oxlint-disable effecttsgo/async-function */
+
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { createSignal } from "solid-js";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
@@ -20,6 +23,8 @@ const frameStyle = {
   padding: "32px",
   background: "#050506",
 };
+const idleOnSubmit = fn<() => void>();
+const idleOnSelectModel = fn<(id: string) => void>();
 
 export const Idle: Story = {
   render: () => {
@@ -37,7 +42,10 @@ export const Idle: Story = {
           modelSelection={composerModelSelection({
             selectedModelID: modelID(),
             selectedVariantID: variantID(),
-            onSelectModel: setModelID,
+            onSelectModel: (id) => {
+              idleOnSelectModel(id);
+              setModelID(id);
+            },
             onSelectVariant: setVariantID,
           })}
           agentSelection={composerAgentSelection({
@@ -45,10 +53,59 @@ export const Idle: Story = {
             onSelectAgent: setAgentID,
           })}
           onInput={setValue}
-          onSubmit={() => setValue("")}
+          onSubmit={() => {
+            idleOnSubmit();
+            setValue("");
+          }}
         />
       </div>
     );
+  },
+  play: async ({ canvasElement, step }) => {
+    idleOnSubmit.mockClear();
+    idleOnSelectModel.mockClear();
+
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+
+    await step("Submit a non-empty draft with Enter", async () => {
+      await userEvent.type(prompt, "Send");
+      await userEvent.keyboard("{Enter}");
+      await expect(prompt).toHaveValue("");
+      await expect(idleOnSubmit).toHaveBeenCalledOnce();
+    });
+
+    await step("Search models with an autofocus input", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Model: GPT-5" }));
+      const modelDialog = await screen.findByRole("dialog", { name: "Models" });
+      await expect(modelDialog).toBeVisible();
+      const modelPicker = within(modelDialog);
+      const search = await modelPicker.findByPlaceholderText("Search models");
+      await expect(search).toHaveFocus();
+
+      await userEvent.type(search, "mini");
+      await expect(modelPicker.getByText("GPT-5 Mini", { exact: true })).toBeVisible();
+      await expect(modelPicker.queryByText("Claude", { exact: true })).toBeNull();
+    });
+
+    await step("Recover from a no-match search and select by keyboard", async () => {
+      const modelDialog = await screen.findByRole("dialog", { name: "Models" });
+      const modelPicker = within(modelDialog);
+      const search = modelPicker.getByPlaceholderText("Search models");
+      await userEvent.clear(search);
+      await userEvent.type(search, "nothing-matches");
+      await expect(modelPicker.getByText("No matching models.", { exact: true })).toBeVisible();
+
+      await userEvent.clear(search);
+      const modelList = modelDialog.querySelector<HTMLElement>('[data-component="list"]');
+      if (!modelList) throw new Error("Model picker list did not render");
+      await expect(within(modelList).getByText("GPT-5", { exact: true })).toBeVisible();
+      await userEvent.keyboard("{ArrowDown}{Enter}");
+      await expect(idleOnSelectModel).toHaveBeenCalledWith("openai/gpt-5-mini");
+      await expect(canvas.getByRole("button", { name: "Model: GPT-5 Mini" })).toHaveTextContent(
+        "GPT-5 Mini",
+      );
+    });
   },
 };
 
@@ -155,13 +212,38 @@ export const RunningDraft: Story = {
           disabled
           submitting={false}
           running
-          modelSelection={composerModelSelection()}
-          agentSelection={composerAgentSelection()}
+          modelSelection={composerModelSelection({ disabled: true })}
+          agentSelection={composerAgentSelection({ disabled: true })}
           onInput={setValue}
           onSubmit={() => undefined}
         />
       </div>
     );
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    const send = canvas.getByRole("button", { name: "Send" });
+    const pickers = canvasElement.querySelectorAll<HTMLElement>('[data-component="select-v2"]');
+    const model = canvas.getByRole("button", { name: "Model: GPT-5" });
+
+    await step("Keep the running draft editable", async () => {
+      await expect(prompt).not.toBeDisabled();
+      await userEvent.click(prompt);
+      await userEvent.type(prompt, " Add a follow-up.");
+      await expect(prompt).toHaveValue(
+        "This draft remains editable while the run is active. Add a follow-up.",
+      );
+    });
+
+    await step("Disable submission and selection controls during the run", async () => {
+      await expect(send).toBeDisabled();
+      await expect(model).toBeDisabled();
+      await expect(pickers).toHaveLength(2);
+      for (const picker of pickers) {
+        await expect(picker).toHaveAttribute("data-disabled");
+      }
+    });
   },
 };
 
@@ -200,6 +282,25 @@ export const AdmissionError: Story = {
         />
       </div>
     );
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+
+    await step("Expose the admission failure without losing the draft", async () => {
+      await expect(canvas.getByRole("alert")).toHaveTextContent(
+        "The server could not admit this prompt. Try again.",
+      );
+      await expect(prompt).toHaveValue("The draft is preserved after admission fails.");
+    });
+
+    await step("Allow the preserved draft to be edited", async () => {
+      await userEvent.click(prompt);
+      await userEvent.type(prompt, " Edit and retry.");
+      await expect(prompt).toHaveValue(
+        "The draft is preserved after admission fails. Edit and retry.",
+      );
+    });
   },
 };
 

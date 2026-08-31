@@ -1,7 +1,7 @@
 import { Icon } from "@opencode-ai/ui/icon";
 import { List } from "@opencode-ai/ui/list";
 import { Popover } from "@opencode-ai/ui/popover";
-import { createSignal } from "solid-js";
+import { createEffect, createSignal } from "solid-js";
 
 export type ModelPickerOption = {
   readonly id: string;
@@ -17,6 +17,7 @@ type ModelPickerProps = {
 };
 
 export function ModelPicker(props: ModelPickerProps) {
+  let root: HTMLSpanElement | undefined;
   const [open, setOpen] = createSignal(false);
   const selected = () => props.options.find((option) => option.id === props.selectedID);
 
@@ -26,8 +27,28 @@ export function ModelPicker(props: ModelPickerProps) {
     setOpen(false);
   };
 
+  createEffect(() => {
+    if (props.disabled || props.options.length === 0) {
+      setOpen(false);
+      return;
+    }
+    if (!open()) return;
+    queueMicrotask(() => {
+      if (props.disabled || !open()) return;
+      const contentID = root
+        ?.querySelector<HTMLElement>("[aria-controls]")
+        ?.getAttribute("aria-controls");
+      if (contentID) document.getElementById(contentID)?.setAttribute("aria-label", "Models");
+    });
+  });
+
   return (
-    <span class="composer-picker">
+    <span
+      ref={(element) => {
+        root = element;
+      }}
+      class="composer-picker"
+    >
       {props.options.length === 0 ? (
         <span class="composer-picker--unavailable" aria-disabled="true">
           No models
@@ -35,7 +56,13 @@ export function ModelPicker(props: ModelPickerProps) {
       ) : (
         <Popover
           open={open()}
-          onOpenChange={setOpen}
+          onOpenChange={(next) => {
+            if (props.disabled) {
+              setOpen(false);
+              return;
+            }
+            setOpen(next);
+          }}
           placement="top-start"
           fitViewport
           class="composer-model-popover"
@@ -44,7 +71,7 @@ export function ModelPicker(props: ModelPickerProps) {
             type: "button",
             disabled: props.disabled,
             class: "composer-model-trigger",
-            "aria-label": "Model",
+            "aria-label": `Model: ${selected()?.label ?? "Select model"}`,
           }}
           trigger={
             <>

@@ -368,6 +368,11 @@
   outline: none;
 }
 
+.composer-picker-control[data-component="select-v2"]
+  [data-slot="select-v2-value-text"][data-placeholder-shown] {
+  color: var(--composer-muted);
+}
+
 .composer-picker-control[data-component="select-v2"] [data-slot="select-v2-chevron"] {
   display: flex;
   align-items: center;

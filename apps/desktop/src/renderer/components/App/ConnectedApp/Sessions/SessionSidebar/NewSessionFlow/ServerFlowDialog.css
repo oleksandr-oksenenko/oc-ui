@@ -331,6 +331,10 @@
   border-top: 1px solid var(--v2-state-border-danger);
 }
 
+.server-flow-operation-error .new-session-existing-worktree span {
+  color: #9a9a9a;
+}
+
 .new-session-field-error {
   color: var(--v2-state-fg-danger);
   font-size: 12px;

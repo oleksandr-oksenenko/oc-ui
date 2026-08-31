@@ -194,4 +194,36 @@ describe("Workspace", () => {
     dispose();
     host.remove();
   });
+
+  it("moves focus into a mobile overlay when it opens", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const [leftOpen, setLeftOpen] = createSignal(false);
+    const [rightOpen, setRightOpen] = createSignal(false);
+    const dispose = render(
+      () => (
+        <Workspace
+          mobile
+          leftSidebarOpen={leftOpen()}
+          rightPanelOpen={rightOpen()}
+          sidebar={<button autofocus>Hide sessions</button>}
+          main={<button type="button">Transcript action</button>}
+          context={<button autofocus>Hide context</button>}
+        />
+      ),
+      host,
+    );
+
+    setLeftOpen(true);
+    await Promise.resolve();
+    expect(host.querySelector(".shell-left-sidebar [autofocus]")).toBe(document.activeElement);
+
+    setLeftOpen(false);
+    setRightOpen(true);
+    await Promise.resolve();
+    expect(host.querySelector(".shell-right-panel [autofocus]")).toBe(document.activeElement);
+
+    dispose();
+    host.remove();
+  });
 });

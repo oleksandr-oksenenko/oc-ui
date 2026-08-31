@@ -194,8 +194,6 @@ describe("SessionTree", () => {
   });
 
   it("groups roots into Today, This week, and Earlier using updated timestamps", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(fixedNow);
     const now = fixedNow;
     const host = document.createElement("div");
     document.body.append(host);
@@ -203,6 +201,7 @@ describe("SessionTree", () => {
       () => (
         <SessionSidebar
           {...sidebarProps({
+            now,
             sessions: [
               session("today", "Today session", undefined, now - 60 * 60 * 1000),
               session("week", "This week session", undefined, now - 3 * 24 * 60 * 60 * 1000),
@@ -225,8 +224,6 @@ describe("SessionTree", () => {
   });
 
   it("keeps a recently updated descendant with its old root in Today", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(fixedNow);
     const now = fixedNow;
     const host = document.createElement("div");
     document.body.append(host);
@@ -234,6 +231,7 @@ describe("SessionTree", () => {
       () => (
         <SessionSidebar
           {...sidebarProps({
+            now,
             sessions: [
               session("old-root", "Old root", undefined, now - 14 * 24 * 60 * 60 * 1000),
               session("recent-child", "Recent child", "old-root", now - 60 * 60 * 1000),
@@ -289,6 +287,7 @@ describe("SessionTree", () => {
     expect(host.querySelector(".shell-session-status")?.getAttribute("data-status")).toBe(
       "running",
     );
+    expect(host.querySelector(".shell-session-status")?.getAttribute("aria-hidden")).toBe("true");
     expect(host.querySelector(".shell-session-status")?.parentElement?.className).toBe(
       "shell-session-row-end",
     );
@@ -321,7 +320,8 @@ describe("SessionTree", () => {
     );
 
     const status = host.querySelector('[data-status="requires-input"]');
-    expect(status?.getAttribute("aria-label")).toBe("Requires input");
+    expect(status?.getAttribute("aria-hidden")).toBe("true");
+    expect(host.querySelector('[aria-label="Needs input, Requires input"]')).not.toBeNull();
     expect(status?.querySelector(".shell-session-input-required")).not.toBeNull();
     expect(status?.parentElement?.className).toBe("shell-session-row-end");
     expect(host.querySelector('[aria-label="Delete Needs input"]')?.parentElement).toBe(

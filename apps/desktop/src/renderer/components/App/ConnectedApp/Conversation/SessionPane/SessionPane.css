@@ -186,6 +186,8 @@
 
 .transcript-markdown a {
   color: var(--text-interactive-base, #74a7ff);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .transcript-markdown code {

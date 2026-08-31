@@ -73,6 +73,10 @@
   gap: 8px;
 }
 
+.connection-form-mode :is([data-slot="radio-v2-label"], [data-slot="radio-v2-description"]) {
+  color: var(--v2-text-text-muted, #888);
+}
+
 .connection-form-mode [data-slot="radio-v2-item"] {
   gap: 10px;
   padding: 11px 12px;

@@ -1,12 +1,16 @@
-import { Show, createEffect, createSignal } from "solid-js";
-import type { Meta } from "storybook-solidjs-vite";
+/* oxlint-disable effecttsgo/async-function */
+
+import { createEffect, createSignal } from "solid-js";
+import { expect, userEvent, within } from "storybook/test";
+import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import { AppShell } from "../src/renderer/components/App/ConnectedApp/Shell/AppShell.tsx";
 import { createShellPanelState } from "../src/renderer/components/App/ConnectedApp/Shell/createShellPanelState.ts";
+import { ShellRegion } from "../src/renderer/components/App/ConnectedApp/Shell/ShellRegion.tsx";
 import { Titlebar } from "../src/renderer/components/App/ConnectedApp/Shell/Titlebar.tsx";
 import { Workspace } from "../src/renderer/components/App/ConnectedApp/Shell/Workspace.tsx";
-import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
-import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/ContextTabs.tsx";
+import { ChangesRegion } from "../src/renderer/components/App/ConnectedApp/Changes/ChangesRegion.tsx";
+import { ChangesTitlebarRegion } from "../src/renderer/components/App/ConnectedApp/Changes/ChangesTitlebarRegion.tsx";
 import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
 import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
@@ -49,6 +53,7 @@ const meta = {
 } satisfies Meta<typeof AppShell>;
 
 export default meta;
+type StoryPlayContext = Parameters<NonNullable<StoryObj["play"]>>[0];
 type MobileStoryState = "transcript" | "sessions" | "context";
 
 function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
@@ -74,93 +79,69 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
   };
 
   return (
-    <div style={{ height: mobileStoryState === undefined ? "min(620px, 100vh)" : "100vh" }}>
-      <AppShell
-        titlebar={
-          <Titlebar
-            selectedTitle="Test coverage"
-            rightControls={
-              <Show when={!panelState.mobile()}>
-                <ContextTabs
-                  idBase={contextTabsId}
-                  onClose={() => panelState.setRightPanelOpen(false)}
-                />
-              </Show>
-            }
-            mobile={panelState.mobile()}
-            leftSidebarOpen={panelState.leftSidebarOpen()}
-            rightPanelOpen={panelState.rightPanelOpen()}
-            rightPanelAvailable={true}
-            onToggleLeftSidebar={panelState.toggleLeftSidebar}
-            onToggleRightPanel={panelState.toggleRightPanel}
+    <div style={{ height: "100vh" }}>
+      <ShellRegion
+        panels={panelState}
+        selectedTitle={() => "Test coverage"}
+        rightControls={
+          <ChangesTitlebarRegion onClose={() => panelState.setRightPanelOpen(false)} />
+        }
+        sidebar={
+          <SessionSidebar
+            sessions={sessions}
+            statusForSession={(id) => (id === "api" ? "running" : "idle")}
+            selectedID="tests"
+            expandedIDs={expandedIDs()}
+            loading={false}
+            canCreate={true}
+            canDelete
+            deletionStatusForSession={() => "ready"}
+            autoFocusClose={panelState.mobile()}
+            serverName="homie.lan:4096"
+            serverStatus="connected"
+            onSelect={() => {
+              if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
+            }}
+            onToggleExpanded={toggleExpanded}
+            onDelete={() => undefined}
+            onCreate={() => undefined}
+            onRetry={() => undefined}
+            onHide={panelState.mobile() ? () => panelState.setLeftSidebarOpen(false) : undefined}
+            onSelectServer={() => undefined}
           />
         }
-        workspace={
-          <Workspace
-            mobile={panelState.mobile()}
-            leftSidebarOpen={panelState.leftSidebarOpen()}
-            rightPanelOpen={panelState.rightPanelOpen()}
-            sidebar={
-              <SessionSidebar
-                sessions={sessions}
-                statusForSession={(id) => (id === "api" ? "running" : "idle")}
-                selectedID="tests"
-                expandedIDs={expandedIDs()}
+        main={
+          <SessionPane
+            selected
+            title="Test coverage"
+            transcript={
+              <TranscriptView
+                sessionID="integrated"
+                messages={transcript}
                 loading={false}
-                canCreate={true}
-                canDelete
-                deletionStatusForSession={() => "ready"}
-                autoFocusClose={panelState.mobile()}
-                serverName="homie.lan:4096"
-                serverStatus="connected"
-                onSelect={() => {
-                  if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
-                }}
-                onToggleExpanded={toggleExpanded}
-                onDelete={() => undefined}
-                onCreate={() => undefined}
-                onRetry={() => undefined}
-                onHide={
-                  panelState.mobile() ? () => panelState.setLeftSidebarOpen(false) : undefined
-                }
-                onSelectServer={() => undefined}
+                sessionStatus="running"
               />
             }
-            main={
-              <SessionPane
-                selected
-                title="Test coverage"
-                transcript={
-                  <TranscriptView
-                    sessionID="integrated"
-                    messages={transcript}
-                    loading={false}
-                    sessionStatus="running"
-                  />
-                }
-                composer={
-                  <Composer
-                    value={draft()}
-                    disabled={false}
-                    submitting={false}
-                    running={false}
-                    modelSelection={composerModelSelection()}
-                    agentSelection={composerAgentSelection()}
-                    onInput={setDraft}
-                    onSubmit={() => setDraft("")}
-                  />
-                }
+            composer={
+              <Composer
+                value={draft()}
+                disabled={false}
+                submitting={false}
+                running={false}
+                modelSelection={composerModelSelection()}
+                agentSelection={composerAgentSelection()}
+                onInput={setDraft}
+                onSubmit={() => setDraft("")}
               />
             }
-            context={
-              <ContextPanel
-                onClose={() => panelState.setRightPanelOpen(false)}
-                showTabs={panelState.mobile()}
-                autoFocusClose={panelState.mobile()}
-                tabsIdBase={contextTabsId}
-                diff={{ files: diffFiles, loading: false }}
-              />
-            }
+          />
+        }
+        context={
+          <ChangesRegion
+            idBase={contextTabsId}
+            changes={{ files: diffFiles, loading: false }}
+            showTabs={panelState.mobile()}
+            onClose={() => panelState.setRightPanelOpen(false)}
           />
         }
       />
@@ -170,16 +151,41 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
 
 export const Integrated = {
   render: () => IntegratedFixture(),
-};
+  play: async ({ canvasElement, step }: StoryPlayContext) => {
+    const canvas = within(canvasElement);
 
-const mobileViewport = {
-  options: {
-    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
+    await step("Hide and restore the sessions sidebar", async () => {
+      await expect(canvas.getByRole("complementary", { name: "Sessions" })).toBeInTheDocument();
+      await userEvent.click(canvas.getByRole("button", { name: "Hide sessions" }));
+      await expect(
+        canvas.queryByRole("complementary", { name: "Sessions" }),
+      ).not.toBeInTheDocument();
+      await userEvent.click(canvas.getByRole("button", { name: "Show sessions" }));
+      await expect(canvas.getByRole("complementary", { name: "Sessions" })).toBeInTheDocument();
+    });
+
+    await step("Close and reopen workspace context", async () => {
+      await expect(
+        canvas.getByRole("complementary", { name: "Workspace context panel" }),
+      ).toBeInTheDocument();
+      await userEvent.click(canvas.getByRole("button", { name: "Hide context panel" }));
+      await expect(
+        canvas.queryByRole("complementary", { name: "Workspace context panel" }),
+      ).not.toBeInTheDocument();
+      await userEvent.click(canvas.getByRole("button", { name: "Show context" }));
+      await expect(
+        canvas.getByRole("complementary", { name: "Workspace context panel" }),
+      ).toBeInTheDocument();
+    });
   },
 };
 
 const mobileGlobals = {
-  viewport: { value: "mobile390", isRotated: false },
+  viewport: { value: "mobile", isRotated: false },
+};
+
+const narrowGlobals = {
+  viewport: { value: "narrow", isRotated: false },
 };
 
 export const MainOnly = {
@@ -234,6 +240,7 @@ export const MainOnly = {
 };
 
 export const NarrowRightPanelCollapsed = {
+  globals: narrowGlobals,
   render: () => (
     <div style={{ width: "760px", height: "540px" }}>
       <AppShell
@@ -302,22 +309,123 @@ export const NarrowRightPanelCollapsed = {
       />
     </div>
   ),
+  play: async ({ canvasElement }: StoryPlayContext) => {
+    const canvas = within(canvasElement);
+    await expect(canvasElement.querySelector(".shell-titlebar")).not.toHaveClass("mobile");
+    await expect(canvasElement.querySelector(".shell-workspace")).not.toHaveClass("mobile");
+    await expect(canvas.getByRole("complementary", { name: "Sessions" })).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("separator", { name: "Resize sessions sidebar" }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("complementary", { name: "Workspace context panel" }),
+    ).not.toBeInTheDocument();
+  },
 };
 
 export const MobileTranscript = {
-  parameters: { viewport: mobileViewport },
   globals: mobileGlobals,
   render: () => IntegratedFixture("transcript"),
+  play: async ({ canvasElement, step }: StoryPlayContext) => {
+    const canvas = within(canvasElement);
+    const titlebar = canvasElement.querySelector<HTMLElement>(".shell-titlebar");
+    const main = canvasElement.querySelector<HTMLElement>(".shell-main");
+
+    if (!titlebar || !main) throw new Error("Mobile shell regions did not render");
+
+    const expectOverlayIsolation = async () => {
+      await expect(titlebar).toHaveAttribute("aria-hidden", "true");
+      await expect(titlebar).toHaveAttribute("inert");
+      await expect(titlebar.inert).toBe(true);
+      await expect(main).toHaveAttribute("aria-hidden", "true");
+      await expect(main).toHaveAttribute("inert");
+      await expect(main.inert).toBe(true);
+    };
+
+    const expectShellRestored = async () => {
+      await expect(titlebar).not.toHaveAttribute("aria-hidden");
+      await expect(titlebar).not.toHaveAttribute("inert");
+      await expect(titlebar.inert).toBe(false);
+      await expect(main).not.toHaveAttribute("aria-hidden");
+      await expect(main).not.toHaveAttribute("inert");
+      await expect(main.inert).toBe(false);
+    };
+
+    const showSessions = canvas.getByRole("button", { name: "Show sessions" });
+    const showContext = canvas.getByRole("button", { name: "Show context" });
+
+    await step("Open and dismiss the sessions overlay with Escape", async () => {
+      await userEvent.click(showSessions);
+      const sessionsDialog = canvas.getByRole("dialog", { name: "Sessions" });
+      await expect(
+        within(sessionsDialog).getByRole("button", { name: "Hide sessions" }),
+      ).toHaveFocus();
+      await expect(sessionsDialog).toHaveAttribute("aria-modal", "true");
+      await expect(
+        canvas.queryByRole("dialog", { name: "Workspace context" }),
+      ).not.toBeInTheDocument();
+      await expectOverlayIsolation();
+
+      await userEvent.keyboard("{Escape}");
+      await expect(canvas.queryByRole("dialog", { name: "Sessions" })).not.toBeInTheDocument();
+      await expect(canvas.getByRole("button", { name: "Show sessions" })).toHaveFocus();
+      await expectShellRestored();
+    });
+
+    await step("Open and dismiss the context overlay with Escape", async () => {
+      await userEvent.click(showContext);
+      const contextDialog = canvas.getByRole("dialog", { name: "Workspace context" });
+      await expect(
+        within(contextDialog).getByRole("button", { name: "Hide context panel" }),
+      ).toHaveFocus();
+      await expect(contextDialog).toHaveAttribute("aria-modal", "true");
+      await expect(canvas.queryByRole("dialog", { name: "Sessions" })).not.toBeInTheDocument();
+      await expectOverlayIsolation();
+
+      await userEvent.keyboard("{Escape}");
+      await expect(
+        canvas.queryByRole("dialog", { name: "Workspace context" }),
+      ).not.toBeInTheDocument();
+      await expect(canvas.getByRole("button", { name: "Show context" })).toHaveFocus();
+      await expectShellRestored();
+    });
+
+    await step("Close each overlay from its own close control", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Show sessions" }));
+      const sessionsDialog = canvas.getByRole("dialog", { name: "Sessions" });
+      await expect(
+        within(sessionsDialog).getByRole("button", { name: "Hide sessions" }),
+      ).toHaveFocus();
+      await expectOverlayIsolation();
+      await userEvent.click(within(sessionsDialog).getByRole("button", { name: "Hide sessions" }));
+      await expect(canvas.queryByRole("dialog", { name: "Sessions" })).not.toBeInTheDocument();
+      await expect(canvas.getByRole("button", { name: "Show sessions" })).toHaveFocus();
+      await expectShellRestored();
+
+      await userEvent.click(canvas.getByRole("button", { name: "Show context" }));
+      const contextDialog = canvas.getByRole("dialog", { name: "Workspace context" });
+      await expect(
+        within(contextDialog).getByRole("button", { name: "Hide context panel" }),
+      ).toHaveFocus();
+      await expectOverlayIsolation();
+      await userEvent.click(
+        within(contextDialog).getByRole("button", { name: "Hide context panel" }),
+      );
+      await expect(
+        canvas.queryByRole("dialog", { name: "Workspace context" }),
+      ).not.toBeInTheDocument();
+      await expect(canvas.getByRole("button", { name: "Show context" })).toHaveFocus();
+      await expectShellRestored();
+    });
+  },
 };
 
 export const MobileSessionsOverlay = {
-  parameters: { viewport: mobileViewport },
   globals: mobileGlobals,
   render: () => IntegratedFixture("sessions"),
 };
 
 export const MobileContextOverlay = {
-  parameters: { viewport: mobileViewport },
   globals: mobileGlobals,
   render: () => IntegratedFixture("context"),
 };

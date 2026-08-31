@@ -7,7 +7,10 @@
     ".storybook/**/*.ts",
     "stories/**/*.ts",
     "stories/**/*.tsx",
+    "vite.config.ts",
+    "vitest.config.ts",
     "src/renderer/**/*.ts",
-    "src/renderer/**/*.tsx"
+    "src/renderer/**/*.tsx",
+    "src/shared/**/*.ts"
   ]
 }

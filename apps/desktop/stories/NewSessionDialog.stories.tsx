@@ -1,6 +1,9 @@
+/* oxlint-disable effecttsgo/async-function */
+
 import type { FileListOutput, OpenCodeClient } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
-import type { Meta } from "storybook-solidjs-vite";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
+import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import {
   NewSessionDialog,
@@ -69,6 +72,8 @@ const meta = {
 } satisfies Meta<typeof NewSessionDialog>;
 
 export default meta;
+type Story = StoryObj;
+const chooseOnOpenWorktreeForm = fn<NewSessionDialogProps["onOpenWorktreeForm"]>();
 
 function staticDialog(state: NewSessionDialogState, mutation?: NewSessionDialogProps["mutation"]) {
   return (
@@ -85,7 +90,10 @@ function staticDialog(state: NewSessionDialogState, mutation?: NewSessionDialogP
   );
 }
 
-function interactiveProjectSelection(initialMode: NewSessionLocationMode = "direct") {
+function interactiveProjectSelection(
+  initialMode: NewSessionLocationMode = "direct",
+  onOpenWorktreeForm: NewSessionDialogProps["onOpenWorktreeForm"] = callbacks.onOpenWorktreeForm,
+) {
   const [projectID, setProjectID] = createSignal<string | undefined>(projects[0].id);
   const [mode, setMode] = createSignal<NewSessionLocationMode>(initialMode);
   return (
@@ -102,6 +110,7 @@ function interactiveProjectSelection(initialMode: NewSessionLocationMode = "dire
           {...callbacks}
           onProjectChange={setProjectID}
           onModeChange={setMode}
+          onOpenWorktreeForm={onOpenWorktreeForm}
         />
       )}
     </DialogStory>
@@ -116,8 +125,59 @@ const worktreeState = {
   finalDirectory: "/srv/worktrees/new-session-location",
 } as const satisfies NewSessionDialogState;
 
-export const ChooseProjectAndLocation = {
-  render: () => interactiveProjectSelection(),
+export const ChooseProjectAndLocation: Story = {
+  render: () => interactiveProjectSelection("direct", chooseOnOpenWorktreeForm),
+  play: async ({ step }) => {
+    chooseOnOpenWorktreeForm.mockClear();
+    const currentDialog = await screen.findByRole("dialog", { name: "New session" });
+    const dialogCanvas = within(currentDialog);
+    const trigger = await dialogCanvas.findByRole("combobox", { name: "Project: oc-ui" });
+
+    await step("Choose the OpenCode project from the portal picker", async () => {
+      await userEvent.click(trigger);
+      await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"));
+      const pickerID = trigger.getAttribute("aria-controls");
+      if (!pickerID) throw new Error("Project picker did not expose its content");
+      const picker = document.getElementById(pickerID);
+      if (!picker) throw new Error("Project picker content did not render");
+      await expect(currentDialog.contains(picker)).toBe(false);
+
+      const search = within(picker).getByPlaceholderText("Search projects");
+      await expect(search).toHaveFocus();
+      await userEvent.type(search, "not-a-project");
+      await expect(within(picker).findByText("No matching projects.")).resolves.toBeVisible();
+      await expect(picker.querySelectorAll('[data-slot="list-item"]')).toHaveLength(0);
+
+      await userEvent.clear(search);
+      await userEvent.type(search, "OpenCode");
+      await waitFor(() =>
+        expect(picker.querySelectorAll('[data-slot="list-item"]')).toHaveLength(1),
+      );
+      await userEvent.click(await within(picker).findByText("OpenCode"));
+      await waitFor(() => expect(trigger).toHaveTextContent("OpenCode"));
+      await expect(trigger).toHaveFocus();
+    });
+
+    await step("Verify Escape closes only the nested picker", async () => {
+      await userEvent.click(trigger);
+      await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"));
+      const pickerID = trigger.getAttribute("aria-controls");
+      if (!pickerID) throw new Error("Project picker did not expose its content");
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "false"));
+      await waitFor(() => expect(document.getElementById(pickerID)).toBeNull());
+      await expect(currentDialog).toBeVisible();
+      await expect(trigger).toHaveFocus();
+    });
+
+    await step("Choose a worktree and continue", async () => {
+      const worktree = dialogCanvas.getByRole("radio", { name: /^Create a worktree\b/ });
+      await userEvent.click(worktree);
+      await userEvent.click(await dialogCanvas.findByRole("button", { name: "Continue" }));
+      await expect(chooseOnOpenWorktreeForm).toHaveBeenCalledOnce();
+      await expect(chooseOnOpenWorktreeForm).toHaveBeenCalledWith("opencode");
+    });
+  },
 };
 
 export const WorktreeSelected = {

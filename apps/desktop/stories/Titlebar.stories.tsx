@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
 import { Titlebar } from "../src/renderer/components/App/ConnectedApp/Shell/Titlebar.tsx";
-import { ContextTabs } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/ContextTabs.tsx";
+import { ChangesTitlebarRegion } from "../src/renderer/components/App/ConnectedApp/Changes/ChangesTitlebarRegion.tsx";
 
 const meta = {
   title: "Shell/Titlebar",
@@ -19,7 +19,7 @@ function interactiveTitlebar() {
     <div style={{ width: "100%", "min-width": "720px" }}>
       <Titlebar
         selectedTitle="API contract review"
-        rightControls={<ContextTabs onClose={() => setRightPanelOpen(false)} />}
+        rightControls={<ChangesTitlebarRegion onClose={() => setRightPanelOpen(false)} />}
         leftSidebarOpen={leftSidebarOpen()}
         rightPanelOpen={rightPanelOpen()}
         rightPanelAvailable={true}
@@ -50,7 +50,7 @@ export const BothPanelsHidden = {
 export const NoSessionSelected = {
   render: () => (
     <Titlebar
-      rightControls={<ContextTabs onClose={() => undefined} />}
+      rightControls={<ChangesTitlebarRegion onClose={() => undefined} />}
       leftSidebarOpen={true}
       rightPanelOpen={true}
       rightPanelAvailable={true}
@@ -66,7 +66,7 @@ export const MacOSLayout = {
       <div data-platform="macos" style={{ width: "100%", "min-width": "720px" }}>
         <Titlebar
           selectedTitle="Compact Ledger Transcript"
-          rightControls={<ContextTabs onClose={() => undefined} />}
+          rightControls={<ChangesTitlebarRegion onClose={() => undefined} />}
           leftSidebarOpen={true}
           rightPanelOpen={true}
           rightPanelAvailable={true}

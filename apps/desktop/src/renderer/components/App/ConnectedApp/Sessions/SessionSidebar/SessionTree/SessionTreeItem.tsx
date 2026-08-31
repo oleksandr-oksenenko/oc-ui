@@ -73,7 +73,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               <span
                 class="shell-session-status"
                 data-status={props.status}
-                aria-label={statusLabel()}
+                aria-hidden="true"
                 title={statusLabel()}
               >
                 <Loader width={13} height={13} />
@@ -82,7 +82,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               <span
                 class="shell-session-status"
                 data-status="requires-input"
-                aria-label={statusLabel()}
+                aria-hidden="true"
                 title={statusLabel()}
               >
                 <span class="shell-session-input-required" aria-hidden="true" />

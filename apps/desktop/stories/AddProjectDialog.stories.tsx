@@ -1,15 +1,41 @@
+/* oxlint-disable effecttsgo/async-function */
+
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
-import type { Meta } from "storybook-solidjs-vite";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
+import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import {
   AddProjectDialog,
   type AddProjectDialogError,
 } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/NewSessionFlow/AddProjectDialog.tsx";
 import { DialogStory } from "./DialogStory.tsx";
-function response(directory: string, entries: readonly string[]): FileListOutput {
+
+type ControlledDeferred<T> = {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+};
+
+function deferred<T>(): ControlledDeferred<T> {
+  let resolve!: (value: T) => void;
+  // oxlint-disable-next-line effecttsgo/new-promise
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return {
+    promise,
+    resolve,
+  };
+}
+
+function response(
+  directory: string,
+  entries: readonly string[],
+  workspaceID?: string,
+): FileListOutput {
   return {
     location: {
       directory,
+      workspaceID,
       project: { id: "project", directory, canonical: directory },
     },
     data: entries.map((path) => ({ path, type: "directory" })),
@@ -37,7 +63,7 @@ const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
       : directory === "/srv"
         ? ["projects", "worktrees"]
         : [];
-  return Promise.resolve(response(directory, entries));
+  return Promise.resolve(response(directory, entries, input?.location?.workspace));
 };
 
 // This fixture intentionally never resolves so Storybook can show the loading state.
@@ -51,6 +77,9 @@ const meta = {
 } satisfies Meta<typeof AddProjectDialog>;
 
 export default meta;
+type Story = StoryObj;
+const browseOnAddProject = fn<(location: LocationRef) => void>();
+const browseStoryState = new WeakMap<Element, ControlledDeferred<FileListOutput>>();
 
 function dialog(
   options: {
@@ -58,6 +87,7 @@ function dialog(
     readonly listDirectory?: OpenCodeClient["file"]["list"];
     readonly error?: AddProjectDialogError;
     readonly adding?: boolean;
+    readonly onAddProject?: (location: LocationRef) => void;
   } = {},
 ) {
   return (
@@ -69,15 +99,83 @@ function dialog(
           error={options.error}
           adding={options.adding}
           onDismissBlockedChange={onDismissBlockedChange}
-          onAddProject={() => undefined}
+          onAddProject={options.onAddProject ?? (() => undefined)}
         />
       )}
     </DialogStory>
   );
 }
 
-export const BrowseServerProjects = {
-  render: () => dialog(),
+export const BrowseServerProjects: Story = {
+  render: () => {
+    const childNavigation = deferred<FileListOutput>();
+    return (
+      <div
+        data-story-fixture="browse-server-projects"
+        ref={(element) => browseStoryState.set(element, childNavigation)}
+      >
+        {dialog({
+          initialLocation: { directory: "/srv/projects", workspaceID: "workspace-1" },
+          listDirectory: (input) => {
+            if (input?.path === "oc-ui") return childNavigation.promise;
+            return listDirectory(input);
+          },
+          onAddProject: browseOnAddProject,
+        })}
+      </div>
+    );
+  },
+  play: async ({ canvasElement, step }) => {
+    browseOnAddProject.mockClear();
+    const fixture = canvasElement.querySelector('[data-story-fixture="browse-server-projects"]');
+    if (!fixture) throw new Error("Browse story fixture did not render");
+    const currentDialog = await screen.findByRole("dialog", { name: "Add project" });
+    const dialogCanvas = within(currentDialog);
+    await expect(canvasElement.contains(currentDialog)).toBe(false);
+
+    await step("Keep the previous directory from being submitted while browsing", async () => {
+      const childDirectory = await dialogCanvas.findByRole("button", {
+        name: "Browse directory oc-ui",
+      });
+      await userEvent.click(childDirectory);
+
+      const browserShell = dialogCanvas.getByRole("region", { name: "Project directory" });
+      const browser = browserShell.querySelector<HTMLElement>(".server-directory-browser");
+      if (!browser) throw new Error("Project directory browser did not render");
+      const addProject = dialogCanvas.getByRole("button", { name: "Add project" });
+      await expect(dialogCanvas.getByText("/srv/projects")).toBeVisible();
+      await expect(browser).toHaveAttribute("aria-busy", "true");
+      await expect(addProject).toBeDisabled();
+      await expect(
+        dialogCanvas.getByRole("button", { name: "Go to parent directory" }),
+      ).toBeDisabled();
+
+      const form = currentDialog.querySelector<HTMLFormElement>("form");
+      if (!form) throw new Error("Add project form did not render");
+      form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+      await expect(browseOnAddProject).not.toHaveBeenCalled();
+    });
+
+    await step("Add the resolved directory with its workspace identity", async () => {
+      const childNavigation = browseStoryState.get(fixture);
+      if (!childNavigation) throw new Error("Browse story did not create child navigation");
+      childNavigation.resolve(response("/srv/projects/oc-ui", [], "workspace-1"));
+
+      await expect(await dialogCanvas.findByText("/srv/projects/oc-ui")).toBeVisible();
+      const browserShell = dialogCanvas.getByRole("region", { name: "Project directory" });
+      const browser = browserShell.querySelector<HTMLElement>(".server-directory-browser");
+      if (!browser) throw new Error("Project directory browser did not render");
+      const addProject = dialogCanvas.getByRole("button", { name: "Add project" });
+      await expect(browser).not.toHaveAttribute("aria-busy", "true");
+      await expect(addProject).not.toBeDisabled();
+      await userEvent.click(addProject);
+      await expect(browseOnAddProject).toHaveBeenCalledOnce();
+      await expect(browseOnAddProject).toHaveBeenCalledWith({
+        directory: "/srv/projects/oc-ui",
+        workspaceID: "workspace-1",
+      });
+    });
+  },
 };
 
 export const DeepServerDirectory = {

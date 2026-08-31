@@ -98,7 +98,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
       <ShellRegion
         panels={panels}
         selectedTitle={() => sessions.selectedSession()?.title}
-        rightControls={<ChangesTitlebarRegion idBase={changesTabsId} onClose={closeRightPanel} />}
+        rightControls={<ChangesTitlebarRegion onClose={closeRightPanel} />}
         sidebar={
           <SessionsRegion
             runtime={runtime}

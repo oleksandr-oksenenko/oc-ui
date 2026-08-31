@@ -177,11 +177,14 @@ describe("Composer", () => {
 
     const modelTrigger = host.querySelector<HTMLButtonElement>(".composer-model-trigger");
     expect(modelTrigger?.textContent).toContain("Model One");
+    expect(modelTrigger?.getAttribute("aria-label")).toBe("Model: Model One");
 
     const controls = host.querySelectorAll<HTMLElement>('[data-component="select-v2"]');
     expect(controls).toHaveLength(2);
     expect(controls[0]?.textContent).toContain("Build");
     expect(controls[1]?.textContent).toContain("deep");
+    expect(controls[0]?.getAttribute("aria-label")).toBe("Agent: Build");
+    expect(controls[1]?.getAttribute("aria-label")).toBe("Variant: deep");
 
     modelTrigger?.click();
     await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -189,6 +192,9 @@ describe("Composer", () => {
       '.composer-model-popover [data-component="list"] input',
     );
     expect(search?.placeholder).toBe("Search models");
+    expect(document.body.querySelector(".composer-model-popover")?.getAttribute("aria-label")).toBe(
+      "Models",
+    );
 
     const modelTwo = [
       ...document.body.querySelectorAll<HTMLButtonElement>('[data-slot="list-item"]'),
@@ -206,6 +212,151 @@ describe("Composer", () => {
     ].find((item) => item.textContent?.includes("Plan"));
     plan?.click();
     expect(selectAgent).toHaveBeenCalledWith("plan");
+
+    dispose();
+    host.remove();
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  });
+
+  it("gives unselected picker triggers coherent accessible names", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Composer
+          value=""
+          disabled={false}
+          submitting={false}
+          running={false}
+          modelSelection={{
+            ...unavailableSelection,
+            state: "ready",
+            models: [{ id: "model", label: "Model" }],
+            variants: [{ id: "variant", label: "Variant" }],
+          }}
+          agentSelection={{
+            ...unavailableAgentSelection,
+            state: "ready",
+            agents: [{ id: "agent", label: "Agent" }],
+          }}
+          onInput={() => undefined}
+          onSubmit={() => undefined}
+        />
+      ),
+      host,
+    );
+
+    expect(
+      host.querySelector<HTMLButtonElement>(".composer-model-trigger")?.getAttribute("aria-label"),
+    ).toBe("Model: Select model");
+    const controls = host.querySelectorAll<HTMLElement>('[data-component="select-v2"]');
+    expect(controls[0]?.getAttribute("aria-label")).toBe("Agent: Default agent");
+    expect(controls[1]?.getAttribute("aria-label")).toBe("Variant: Select variant");
+
+    dispose();
+    host.remove();
+  });
+
+  it("closes the model picker when it becomes disabled", async () => {
+    const host = document.createElement("div");
+    const [disabled, setDisabled] = createSignal(false);
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: () => undefined,
+    });
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Composer
+          value=""
+          disabled={false}
+          submitting={false}
+          running={false}
+          modelSelection={{
+            ...unavailableSelection,
+            state: "ready",
+            disabled: disabled(),
+            models: [
+              { id: "one", label: "Model One" },
+              { id: "two", label: "Model Two" },
+            ],
+          }}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={() => undefined}
+        />
+      ),
+      host,
+    );
+
+    const trigger = host.querySelector<HTMLButtonElement>(".composer-model-trigger");
+    if (!trigger) throw new Error("Composer did not render a model picker");
+    trigger.click();
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    const contentID = trigger.getAttribute("aria-controls");
+    expect(contentID).not.toBeNull();
+
+    setDisabled(true);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(contentID ? document.getElementById(contentID) : null).toBeNull();
+
+    dispose();
+    host.remove();
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  });
+
+  it("does not reopen the model picker when models disappear and return", async () => {
+    const host = document.createElement("div");
+    const availableModels = [
+      { id: "one", label: "Model One" },
+      { id: "two", label: "Model Two" },
+    ];
+    const [models, setModels] = createSignal(availableModels);
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: () => undefined,
+    });
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Composer
+          value=""
+          disabled={false}
+          submitting={false}
+          running={false}
+          modelSelection={{
+            ...unavailableSelection,
+            state: "ready",
+            models: models(),
+          }}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={() => undefined}
+        />
+      ),
+      host,
+    );
+
+    const trigger = host.querySelector<HTMLButtonElement>(".composer-model-trigger");
+    if (!trigger) throw new Error("Composer did not render a model picker");
+    trigger.click();
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    setModels([]);
+    await vi.waitFor(() => expect(host.querySelector(".composer-model-trigger")).toBeNull());
+    setModels(availableModels);
+
+    await vi.waitFor(() => {
+      expect(
+        host
+          .querySelector<HTMLButtonElement>(".composer-model-trigger")
+          ?.getAttribute("aria-expanded"),
+      ).toBe("false");
+      expect(document.body.querySelector(".composer-model-popover")).toBeNull();
+    });
 
     dispose();
     host.remove();

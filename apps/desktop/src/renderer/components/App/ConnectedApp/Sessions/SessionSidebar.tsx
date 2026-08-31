@@ -15,6 +15,7 @@ type SessionSidebarStatus = "connected" | "reconnecting" | "failed";
 
 export type SessionSidebarProps = {
   readonly sessions: readonly SessionInfo[];
+  readonly now?: number;
   readonly statusForSession: (sessionID: string) => DataSessionStatus;
   readonly selectedID?: string;
   readonly expandedIDs: readonly string[];
@@ -104,6 +105,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
       <Show when={props.sessions.length > 0 && !props.error}>
         <SessionTree
           sessions={props.sessions}
+          now={props.now}
           statusForSession={props.statusForSession}
           selectedID={props.selectedID}
           expandedIDs={props.expandedIDs}
@@ -127,10 +129,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
           title="Select server"
           onClick={props.onSelectServer}
         >
-          <span
-            class={`shell-server-status ${props.serverStatus}`}
-            aria-label={statusLabel[props.serverStatus]}
-          >
+          <span class={`shell-server-status ${props.serverStatus}`} aria-hidden="true">
             {props.serverStatus === "connected" ? (
               <span class="shell-server-status-dot" aria-hidden="true" />
             ) : props.serverStatus === "reconnecting" ? (

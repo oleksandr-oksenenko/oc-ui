@@ -8,7 +8,7 @@ import "./ContextTabs.css";
 
 export type ContextTabsProps = {
   readonly autoFocusClose?: boolean;
-  readonly diffContent?: JSX.Element;
+  readonly diffContent: JSX.Element;
   readonly idBase?: string;
   readonly onClose?: () => void;
   readonly showHeader?: boolean;
@@ -47,19 +47,15 @@ export function ContextTabs(props: ContextTabsProps) {
           />
         </div>
       </Show>
-      <Show when={props.diffContent !== undefined}>
-        <Tabs.Content
-          value="diff"
-          class="context-panel-tab-content"
-          id={panelId}
-          aria-label={props.showHeader === false && props.idBase === undefined ? "Diff" : undefined}
-          aria-labelledby={
-            props.showHeader === false && props.idBase === undefined ? undefined : tabId
-          }
-        >
-          {props.diffContent}
-        </Tabs.Content>
-      </Show>
+      <Tabs.Content
+        value="diff"
+        class="context-panel-tab-content"
+        id={panelId}
+        aria-label={props.showHeader === false ? "Diff" : undefined}
+        aria-labelledby={props.showHeader === false ? undefined : tabId}
+      >
+        {props.diffContent}
+      </Tabs.Content>
     </Tabs>
   );
 }

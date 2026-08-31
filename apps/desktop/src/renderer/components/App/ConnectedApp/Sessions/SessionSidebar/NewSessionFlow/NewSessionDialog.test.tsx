@@ -138,6 +138,7 @@ describe("NewSessionDialog", () => {
     expect(mounted.actions.onAddProject).toHaveBeenCalledOnce();
 
     const trigger = mounted.root.querySelector<HTMLButtonElement>(".new-session-project-trigger");
+    expect(trigger?.getAttribute("aria-label")).toBe("Project: oc-ui");
     trigger?.click();
     await flushDialogMount();
     const picker = document.getElementById(trigger?.getAttribute("aria-controls") ?? "");
@@ -249,6 +250,11 @@ describe("NewSessionDialog", () => {
   it("keeps creation disabled until a project is selected", async () => {
     const mounted = mount(() => ({ view: "select-project", projects, mode: "direct" }));
     await flushDialogMount();
+    expect(
+      mounted.root
+        .querySelector<HTMLButtonElement>(".new-session-project-trigger")
+        ?.getAttribute("aria-label"),
+    ).toBe("Project: Select a project");
     expect(mounted.root.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
       true,
     );
