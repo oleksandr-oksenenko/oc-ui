@@ -10,18 +10,17 @@ form state and the OpenCode mutations. It renders either `NewSessionDialog` or
 `AddProjectDialog`.
 
 `ServerDirectoryBrowser` is the shared server-filesystem component. It calls
-`file.list` with the current server directory and a relative path for its initial
-location and every navigation action. Child entries use the server-returned path;
-the `..` entry is also resolved by the server. The browser treats the returned
-`LocationRef` as authoritative and reports only successfully resolved locations
-to its caller. It preserves server workspace scope across browsing, project
-lookup, and session creation. It owns loading, listing errors and retry,
-stale-request protection, and the `..` parent entry.
+`file.list` with the absolute open server directory as its location and `.` as its
+relative path. Child and parent navigation first derive another absolute server
+location, then re-root the next listing there. One server-path module owns POSIX,
+Windows-drive, and UNC path operations; the Electron host's path rules are never
+used. The browser reports a location only after that location lists successfully.
+It preserves server workspace scope across browsing, project lookup, and session
+creation. It owns loading, listing errors and retry, stale-request protection,
+and the `..` parent entry.
 
-The pinned client does not expose the connected server user's home directory.
-`NewSessionFlow` therefore still derives a conventional home from the server's
-default directory when possible. This is an explicit compatibility limitation;
-the Electron host filesystem is never consulted.
+Add project starts at the server's exact default location. It does not infer a
+home directory from the server path.
 
 The dialogs own modal behavior, accessible focus, keyboard handling, fields, and
 mutation presentation. They do not repeat server transactions.

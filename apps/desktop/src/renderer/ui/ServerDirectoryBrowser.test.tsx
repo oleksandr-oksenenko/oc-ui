@@ -55,7 +55,6 @@ function mount(
   listDirectory: OpenCodeClient["file"]["list"],
   options: {
     readonly initialLocation?: LocationRef;
-    readonly initialPath?: string;
     readonly disabled?: boolean;
     readonly validationError?: string;
   } = {},
@@ -69,7 +68,6 @@ function mount(
         listDirectory={listDirectory}
         label="Project directory"
         initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
-        initialPath={options.initialPath}
         disabled={options.disabled}
         validationError={options.validationError}
         onDirectoryChange={onDirectoryChange}
@@ -110,7 +108,7 @@ describe("ServerDirectoryBrowser", () => {
     mounted.dispose();
   });
 
-  it("preserves the workspace identity while navigating", async () => {
+  it("preserves the server workspace identity while navigating", async () => {
     const queued = queuedApi();
     const mounted = mount(queued.list, {
       initialLocation: { directory: "/srv/projects", workspaceID: "workspace-1" },
@@ -124,8 +122,15 @@ describe("ServerDirectoryBrowser", () => {
       .at(-1)
       ?.resolve(response("/srv/projects", [{ path: "oc-ui", type: "directory" }], "workspace-2"));
     await flush();
+    mounted.host.querySelector<HTMLButtonElement>('[aria-label="Browse directory oc-ui"]')?.click();
+    expect(queued.list).toHaveBeenLastCalledWith({
+      location: { directory: "/srv/projects/oc-ui", workspace: "workspace-2" },
+      path: ".",
+    });
+    queued.requests.at(-1)?.resolve(response("/srv/projects/oc-ui", [], "workspace-2"));
+    await flush();
     expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith({
-      directory: "/srv/projects",
+      directory: "/srv/projects/oc-ui",
       workspaceID: "workspace-2",
     });
     mounted.dispose();
@@ -146,28 +151,6 @@ describe("ServerDirectoryBrowser", () => {
     expect(browser?.getAttribute("aria-invalid")).toBe("true");
     expect(browser?.getAttribute("aria-describedby")).toBe(error?.id);
     expect(parent?.getAttribute("aria-describedby")).toBe(error?.id);
-    mounted.dispose();
-  });
-
-  it("lets the server resolve an initial relative path", async () => {
-    const queued = queuedApi();
-    const mounted = mount(queued.list, {
-      initialLocation: { directory: "/srv/projects/oc-ui" },
-      initialPath: "..",
-    });
-    await flush();
-
-    expect(queued.list).toHaveBeenCalledWith({
-      location: { directory: "/srv/projects/oc-ui" },
-      path: "..",
-    });
-    queued.requests[0]?.resolve(response("/srv/projects", []));
-    await flush();
-
-    expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(
-      "/srv/projects",
-    );
-    expect(mounted.onDirectoryChange).toHaveBeenCalledWith({ directory: "/srv/projects" });
     mounted.dispose();
   });
 
@@ -192,8 +175,8 @@ describe("ServerDirectoryBrowser", () => {
         ?.disabled,
     ).toBe(true);
     expect(queued.list).toHaveBeenLastCalledWith({
-      location: { directory: "/srv/projects" },
-      path: "oc-ui",
+      location: { directory: "/srv/projects/oc-ui" },
+      path: ".",
     });
     queued.requests[1]?.resolve(response("/srv/projects/oc-ui", []));
     await flush();
@@ -208,8 +191,8 @@ describe("ServerDirectoryBrowser", () => {
     parent?.click();
     expect(queued.requests).toHaveLength(3);
     expect(queued.list).toHaveBeenLastCalledWith({
-      location: { directory: "/srv/projects/oc-ui" },
-      path: "..",
+      location: { directory: "/srv/projects" },
+      path: ".",
     });
     queued.requests[2]?.resolve(response("/srv/projects", [{ path: "oc-ui", type: "directory" }]));
     await flush();

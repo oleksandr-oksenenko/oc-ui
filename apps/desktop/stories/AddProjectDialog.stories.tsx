@@ -16,21 +16,8 @@ function response(directory: string, entries: readonly string[]): FileListOutput
   };
 }
 
-const destinations = new Map<string, string>([
-  ["/srv|projects", "/srv/projects"],
-  ["/srv/projects|..", "/srv"],
-  ["/srv/projects|oc-ui", "/srv/projects/oc-ui"],
-  ["/srv/projects|opencode", "/srv/projects/opencode"],
-  ["/srv/projects|api", "/srv/projects/api"],
-  ["/srv/projects/oc-ui|..", "/srv/projects"],
-  ["/srv/projects/opencode|..", "/srv/projects"],
-  ["/srv/projects/api|..", "/srv/projects"],
-]);
-
 const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
-  const base = input?.location?.directory ?? "/";
-  const target = input?.path ?? ".";
-  const directory = destinations.get(`${base}|${target}`) ?? base;
+  const directory = input?.location?.directory ?? "/";
   const entries =
     directory === "/srv/projects"
       ? ["oc-ui", "opencode", "api"]

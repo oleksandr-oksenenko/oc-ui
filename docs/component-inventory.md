@@ -65,7 +65,9 @@ apps/desktop/src/renderer/
 
 Shared renderer UI lives under `apps/desktop/src/renderer/ui/`. `ServerDirectoryBrowser` is shared
 by the Add project and worktree forms. It reads the connected server filesystem through the
-OpenCode file API and reports successfully resolved directories.
+OpenCode file API, re-roots each listing at the absolute open server directory, and reports only
+directories that list successfully. `serverPath` is the single authority for remote child and
+parent path operations; renderer code never uses the Electron host's path rules.
 
 ### Ownership
 

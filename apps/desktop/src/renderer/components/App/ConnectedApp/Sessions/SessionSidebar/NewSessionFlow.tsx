@@ -17,6 +17,7 @@ import {
 } from "./NewSessionFlow/NewSessionDialog.tsx";
 import { restoreDialogFocusAfterClose } from "../../../../../ui/restoreDialogFocusAfterClose.ts";
 import { useServerFlowDismissBlock } from "../../../../../ui/ServerFlowDialogProvider.tsx";
+import { serverPathChild } from "../../../../../ui/serverPath.ts";
 
 export type NewSessionFlowRuntime = {
   readonly api: {
@@ -103,7 +104,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   const finalDirectory = () =>
     folderName().trim() === ""
       ? (parentLocation()?.directory ?? "")
-      : worktreePathPreview(parentLocation()?.directory ?? "", folderName().trim());
+      : serverPathChild(parentLocation()?.directory ?? "", folderName().trim());
 
   const state = createMemo<NewSessionDialogState>(() => {
     const project = worktreeProject();
@@ -354,10 +355,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       () => (
         <AddProjectDialog
           listDirectory={props.runtime.api.file.list}
-          initialLocation={{
-            ...props.runtime.defaultLocation,
-            directory: inferServerHomeDirectory(props.runtime.defaultLocation.directory),
-          }}
+          initialLocation={props.runtime.defaultLocation}
           adding={addingProject()}
           error={addProjectError()}
           onDismissBlockedChange={setDismissBlocked}
@@ -394,38 +392,4 @@ function projectOption(project: Project, workspaceID?: string): NewSessionProjec
       : { directory: project.canonical },
     vcs: project.vcs,
   };
-}
-
-function worktreePathPreview(parentDirectory: string, folderName: string): string {
-  if (parentDirectory === "" || folderName === "") return parentDirectory || folderName;
-  const last = parentDirectory.at(-1);
-  if (last === "/" || last === "\\") return `${parentDirectory}${folderName}`;
-  const separator = parentDirectory.includes("\\") && !parentDirectory.includes("/") ? "\\" : "/";
-  return `${parentDirectory}${separator}${folderName}`;
-}
-
-function inferServerHomeDirectory(directory: string): string {
-  const separator = directory.includes("\\") && !directory.includes("/") ? "\\" : "/";
-  const normalized = directory.replaceAll("\\", "/");
-  const segments = normalized.split("/").filter((segment) => segment !== "");
-  const first = segments[0]?.toLowerCase();
-
-  if (isWindowsDrive(segments[0]) && segments[1]?.toLowerCase() === "users" && segments[2]) {
-    return segments.slice(0, 3).join(separator);
-  }
-  if (!normalized.startsWith("/")) return directory;
-  if ((first === "users" || first === "home") && segments[1]) {
-    return `/${segments.slice(0, 2).join("/")}`;
-  }
-  if (first === "var" && segments[1]?.toLowerCase() === "home" && segments[2]) {
-    return `/${segments.slice(0, 3).join("/")}`;
-  }
-  if (first === "root") return "/root";
-  return directory;
-}
-
-function isWindowsDrive(segment: string | undefined): boolean {
-  if (!segment || segment.length !== 2 || segment[1] !== ":") return false;
-  const letter = segment.charAt(0).toLowerCase();
-  return letter >= "a" && letter <= "z";
 }

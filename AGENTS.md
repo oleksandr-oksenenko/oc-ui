@@ -8,7 +8,7 @@
 - Inspect the pinned OpenCode SDK, UI package, and existing oc-ui code before adding a local type, projection, helper, control, icon, or behavior. Reuse upstream types and primitives when they already express the requirement.
 - Reuse must preserve behavior, not just appearance. Check events, accessibility, CSS selectors, mount and remount behavior, and pointer and keyboard interaction before replacing local code with a package primitive.
 - Do not invent OpenCode APIs, server behavior, persistence, IPC, or runtime data. If a runtime contract does not exist, keep the UI controlled through honest data and callback props and show an empty or disabled state where needed.
-- Treat the connected OpenCode server as the authority for its filesystem. Preserve the complete server-provided location context and let the server resolve navigation. Do not use the Electron host's path rules or regexes to interpret remote paths.
+- Treat the connected OpenCode server as the authority for its filesystem. Preserve the complete server-provided location context and validate each navigation by listing the new absolute location. Do not use the Electron host's path rules; keep the minimal POSIX, Windows-drive, and UNC child/parent operations in the shared `serverPath` module.
 
 # UI implementation and verification
 
