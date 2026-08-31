@@ -42,8 +42,7 @@ afterAll(() => {
 });
 
 const listDirectory = vi.fn<OpenCodeClient["file"]["list"]>((input) => {
-  const base = input?.location?.directory ?? "/";
-  const directory = input?.path === ".." ? "/srv/projects" : base;
+  const directory = input?.location?.directory ?? "/";
   return Promise.resolve({
     location: {
       directory,
@@ -315,7 +314,7 @@ describe("NewSessionDialog", () => {
     });
     const directoryList: OpenCodeClient["file"]["list"] = (input) => {
       const base = input?.location?.directory ?? "/";
-      if (input?.path === "feature") return child;
+      if (base === "/srv/projects/feature") return child;
       return Promise.resolve({
         location: {
           directory: "/srv/projects",

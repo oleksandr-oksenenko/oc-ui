@@ -32,9 +32,7 @@ const projects = [
 ] as const satisfies readonly NewSessionProject[];
 
 const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
-  const base = input?.location?.directory ?? "/";
-  const directory =
-    input?.path === ".." && base === projects[0].location.directory ? "/srv/projects" : base;
+  const directory = input?.location?.directory ?? "/";
   return Promise.resolve({
     location: {
       directory,
