@@ -42,7 +42,7 @@ function setup(ready: Promise<void>) {
       },
     },
   };
-  const syncSelections = vi.fn<() => Promise<void>>(async () => {
+  const syncSelectedFeatures = vi.fn<() => Promise<void>>(async () => {
     calls.push("models");
   });
   const onConnected = vi.fn<() => void>(() => {
@@ -59,7 +59,7 @@ function setup(ready: Promise<void>) {
     sessions,
     runtime,
     setStatus,
-    syncSelections,
+    syncSelectedFeatures,
     onConnected,
     onInitialFailure,
   };
@@ -134,6 +134,7 @@ describe("createConnectedLifecycle", () => {
 
     initialCatalog.resolve();
     await vi.waitFor(() => expect(fixture.sessions.refreshAfterReconnect).toHaveBeenCalledOnce());
+    expect(fixture.syncSelectedFeatures).toHaveBeenCalledTimes(2);
     expect(fixture.calls).toEqual([
       "location",
       "connected",

@@ -10,7 +10,7 @@ import { Checkbox } from "@opencode-ai/ui/checkbox";
 import { Field } from "@opencode-ai/ui/field";
 import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
 import { TextInput } from "@opencode-ai/ui/text-input";
-import type { JSX } from "solid-js";
+import { For, createSignal, type JSX } from "solid-js";
 import { fn } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
@@ -278,6 +278,47 @@ export const InTranscript: Story = {
       </section>
     </main>
   ),
+};
+
+export const MultiplePendingInTranscript: Story = {
+  render: (args) => {
+    const [forms, setForms] = createSignal<readonly FormInfo[]>([workspaceQuestionForm, fullForm]);
+    const settle = (formID: string): void => {
+      setForms((current) => current.filter((form) => form.id !== formID));
+    };
+
+    return (
+      <main style={transcriptFrameStyle}>
+        <section class="transcript-view" aria-label="Transcript with pending question forms">
+          <div class="transcript-document">
+            <UserMessage message={transcriptUser} />
+            <AssistantMessage message={transcriptAssistant} sessionStatus="idle" />
+            <article
+              class="transcript-message transcript-assistant-message transcript-pending-interaction"
+              data-message-id="question-forms-pending"
+            >
+              <For each={forms()}>
+                {(form) => (
+                  <QuestionForm
+                    {...args}
+                    form={form}
+                    onSubmit={(answer) => {
+                      args.onSubmit(answer);
+                      settle(form.id);
+                    }}
+                    onCancel={() => {
+                      args.onCancel?.();
+                      settle(form.id);
+                    }}
+                  />
+                )}
+              </For>
+            </article>
+          </div>
+        </section>
+      </main>
+    );
+  },
 };
 
 export const OpenCodeDefaults: Story = {

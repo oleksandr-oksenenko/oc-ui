@@ -83,16 +83,144 @@ describe("QuestionForm", () => {
       ],
     } satisfies FormInfo;
     const mounted = mount(form);
-    const current = mounted.host.querySelector<HTMLInputElement>('input[value="current"]');
-    const custom = mounted.host.querySelector<HTMLInputElement>(
-      'input[value="__oc_ui_custom_answer__"]',
-    );
+    const current = mounted.host.querySelector<HTMLInputElement>('input[value="option:0"]');
+    const custom = mounted.host.querySelector<HTMLInputElement>('input[value="custom"]');
 
     custom?.click();
 
     expect(custom?.checked).toBe(true);
     expect(current?.checked).toBe(false);
     expect(mounted.host.querySelector('input[placeholder="Type your answer"]')).not.toBeNull();
+    mounted.dispose();
+  });
+
+  it("submits a predefined answer even when its server value is the custom sentinel", () => {
+    const form = {
+      id: "frm_sentinel_option",
+      sessionID: "ses_test",
+      title: "Choose an answer",
+      fields: [
+        {
+          key: "answer",
+          type: "string",
+          title: "Answer",
+          required: true,
+          custom: true,
+          options: [
+            { value: "custom", label: "Server-defined answer" },
+            { value: "other", label: "Other" },
+          ],
+        },
+      ],
+    } satisfies FormInfo;
+    const mounted = mount(form);
+
+    mounted.host.querySelector<HTMLInputElement>('input[value="option:0"]')?.click();
+    submit(mounted.host);
+
+    expect(mounted.onSubmit).toHaveBeenCalledWith({ answer: "custom" });
+    expect(mounted.host.querySelector('input[placeholder="Type your answer"]')).toBeNull();
+    mounted.dispose();
+  });
+
+  it("focuses the visible custom string input when its answer is required", async () => {
+    const form = {
+      id: "frm_custom_required",
+      sessionID: "ses_test",
+      title: "Choose an answer",
+      fields: [
+        {
+          key: "answer",
+          type: "string",
+          title: "Answer",
+          required: true,
+          custom: true,
+          options: [{ value: "predefined", label: "Predefined" }],
+        },
+      ],
+    } satisfies FormInfo;
+    const mounted = mount(form);
+    mounted.host.querySelector<HTMLInputElement>('input[value="custom"]')?.click();
+
+    submit(mounted.host);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    const customInput = mounted.host.querySelector<HTMLInputElement>(
+      "[data-question-form-custom-input]",
+    );
+    expect(customInput).not.toBeNull();
+    expect(document.activeElement).toBe(customInput);
+    const describedBy = customInput?.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy ?? "")?.textContent).toBe("Enter an answer.");
+    mounted.dispose();
+  });
+
+  it("associates choice errors with their controls", async () => {
+    const form = {
+      id: "frm_choice_errors",
+      sessionID: "ses_test",
+      title: "Choose answers",
+      fields: [
+        {
+          key: "stringChoice",
+          type: "string",
+          title: "String choice",
+          required: true,
+          options: [{ value: "one", label: "One" }],
+        },
+        {
+          key: "booleanChoice",
+          type: "boolean",
+          title: "Boolean choice",
+          required: true,
+        },
+        {
+          key: "multipleChoice",
+          type: "multiselect",
+          title: "Multiple choice",
+          required: true,
+          options: [{ value: "one", label: "One" }],
+        },
+      ],
+    } satisfies FormInfo;
+    const mounted = mount(form);
+
+    submit(mounted.host);
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    for (const key of ["stringChoice", "booleanChoice"]) {
+      const field = mounted.host.querySelector<HTMLElement>(`[data-form-field-key="${key}"]`);
+      const controls = field?.querySelectorAll<HTMLInputElement>(
+        '[data-slot="radio-v2-item-input"]',
+      );
+      const error = field?.querySelector<HTMLElement>(".question-form-field-error");
+      expect(error?.id).toBeTruthy();
+      expect(
+        [...(controls ?? [])].every((control) =>
+          control
+            .getAttribute("aria-describedby")
+            ?.split(/\s+/)
+            .includes(error?.id ?? ""),
+        ),
+      ).toBe(true);
+    }
+
+    const multipleField = mounted.host.querySelector<HTMLElement>(
+      '[data-form-field-key="multipleChoice"]',
+    );
+    const multipleError = multipleField?.querySelector<HTMLElement>(".question-form-field-error");
+    expect(multipleError?.id).toBeTruthy();
+    const multiselect = multipleField?.querySelector("fieldset");
+    expect(multiselect?.getAttribute("aria-describedby")?.split(/\s+/)).toContain(
+      multipleError?.id,
+    );
+    for (const control of multipleField?.querySelectorAll<HTMLInputElement>(
+      '[data-slot="checkbox-checkbox-input"]',
+    ) ?? []) {
+      const controlDescription = control.getAttribute("aria-describedby");
+      expect(controlDescription).toBeNull();
+    }
     mounted.dispose();
   });
 
@@ -106,7 +234,7 @@ describe("QuestionForm", () => {
 
   it("reveals conditional fields, validates them, and focuses the first missing answer", async () => {
     const mounted = mount(conditionalForm);
-    mounted.host.querySelector<HTMLInputElement>('input[value="custom"]')?.click();
+    mounted.host.querySelector<HTMLInputElement>('input[value="option:1"]')?.click();
     expect(mounted.host.textContent).toContain("Custom details");
 
     submit(mounted.host);
@@ -190,7 +318,7 @@ describe("QuestionForm", () => {
 
   it("uses the large OpenCode input appearance", () => {
     const mounted = mount(conditionalForm);
-    mounted.host.querySelector<HTMLInputElement>('input[value="custom"]')?.click();
+    mounted.host.querySelector<HTMLInputElement>('input[value="option:1"]')?.click();
     const input = mounted.host.querySelector('[data-component="text-input-v2"]');
     expect(input?.getAttribute("data-appearance")).toBe("large");
     mounted.dispose();

@@ -12,7 +12,15 @@ import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on }
 
 import "./QuestionForm.css";
 
-const CUSTOM_VALUE = "__oc_ui_custom_answer__";
+const CUSTOM_TOKEN = "custom";
+
+function optionToken(index: number): string {
+  return `option:${index}`;
+}
+
+function fieldErrorID(formID: string, field: FormField): string {
+  return `question-form-field-error-${formID}-${field.key}`;
+}
 
 type StringField = Extract<FormField, { readonly type: "string" }>;
 type NumberField = Extract<FormField, { readonly type: "number" | "integer" }>;
@@ -152,17 +160,15 @@ export function QuestionForm(props: QuestionFormProps) {
   const [submitted, setSubmitted] = createSignal(false);
   const fieldRoots = new Map<string, HTMLElement>();
   const unavailable = () => props.disabled === true || props.submitting === true;
+  const formIdentity = createMemo(() => `${props.form.sessionID}\u0000${props.form.id}`);
 
   createEffect(
-    on(
-      () => props.form.id,
-      () => {
-        setAnswerState(initialAnswer(props.form.fields));
-        setCustomDraft(new Map());
-        setCustomStringFields(new Set<string>());
-        setSubmitted(false);
-      },
-    ),
+    on(formIdentity, () => {
+      setAnswerState(initialAnswer(props.form.fields));
+      setCustomDraft(new Map());
+      setCustomStringFields(new Set<string>());
+      setSubmitted(false);
+    }),
   );
 
   const visibleFields = createMemo(() =>
@@ -225,13 +231,15 @@ export function QuestionForm(props: QuestionFormProps) {
       );
     }
 
+    const errorID = fieldErrorID(props.form.id, field);
     const selected = () => {
-      if (customStringFields().has(field.key)) return CUSTOM_VALUE;
+      if (customStringFields().has(field.key)) return CUSTOM_TOKEN;
       const value = answer()[field.key];
       if (value === undefined || Array.isArray(value)) return undefined;
       const text = String(value);
       if (text.length === 0) return undefined;
-      return options.some((option) => option.value === text) ? text : CUSTOM_VALUE;
+      const optionIndex = options.findIndex((option) => option.value === text);
+      return optionIndex === -1 ? CUSTOM_TOKEN : optionToken(optionIndex);
     };
     return (
       <div class="question-form-choice-group" data-invalid={error ? "" : undefined}>
@@ -240,9 +248,10 @@ export function QuestionForm(props: QuestionFormProps) {
           description={field.description}
           value={selected()}
           disabled={unavailable()}
+          aria-describedby={error ? errorID : undefined}
           validationState={error ? "invalid" : "valid"}
           onChange={(value) => {
-            if (value === CUSTOM_VALUE) {
+            if (value === CUSTOM_TOKEN) {
               setCustomStringField(field.key, true);
               const existing = answer()[field.key];
               setAnswer(
@@ -255,24 +264,27 @@ export function QuestionForm(props: QuestionFormProps) {
               );
               return;
             }
+            const optionIndex = options.findIndex((_, index) => optionToken(index) === value);
+            const option = options[optionIndex];
+            if (option === undefined) return;
             setCustomStringField(field.key, false);
-            setAnswer(field.key, value);
+            setAnswer(field.key, option.value);
           }}
         >
           <For each={options}>
-            {(option) => (
+            {(option, index) => (
               <RadioItem
-                value={option.value}
+                value={optionToken(index())}
                 label={radioLabel(option.label)}
                 description={option.description}
               />
             )}
           </For>
           <Show when={field.custom}>
-            <RadioItem value={CUSTOM_VALUE} label={radioLabel("Custom answer")} />
+            <RadioItem value={CUSTOM_TOKEN} label={radioLabel("Custom answer")} />
           </Show>
         </RadioGroup>
-        <Show when={field.custom && selected() === CUSTOM_VALUE}>
+        <Show when={field.custom && selected() === CUSTOM_TOKEN}>
           <Field invalid={error !== undefined}>
             <Field.Label>Custom answer</Field.Label>
             <Field.Control>
@@ -285,15 +297,23 @@ export function QuestionForm(props: QuestionFormProps) {
                     : String(answer()[field.key])
                 }
                 placeholder={field.placeholder ?? "Type your answer"}
+                data-question-form-custom-input
                 disabled={unavailable()}
                 invalid={error !== undefined}
                 onInput={(event) => setAnswer(field.key, event.currentTarget.value || undefined)}
               />
             </Field.Control>
+            <Show when={error}>
+              {(message) => <Field.Suffix class="sr-only">{message()}</Field.Suffix>}
+            </Show>
           </Field>
         </Show>
         <Show when={error}>
-          {(message) => <p class="question-form-field-error">{message()}</p>}
+          {(message) => (
+            <p id={errorID} class="question-form-field-error">
+              {message()}
+            </p>
+          )}
         </Show>
       </div>
     );
@@ -344,13 +364,20 @@ export function QuestionForm(props: QuestionFormProps) {
               : undefined
         }
         disabled={unavailable()}
+        aria-describedby={error ? fieldErrorID(props.form.id, field) : undefined}
         validationState={error ? "invalid" : "valid"}
         onChange={(value) => setAnswer(field.key, value === "true")}
       >
         <RadioItem value="true" label={radioLabel("Yes")} />
         <RadioItem value="false" label={radioLabel("No")} />
       </RadioGroup>
-      <Show when={error}>{(message) => <p class="question-form-field-error">{message()}</p>}</Show>
+      <Show when={error}>
+        {(message) => (
+          <p id={fieldErrorID(props.form.id, field)} class="question-form-field-error">
+            {message()}
+          </p>
+        )}
+      </Show>
     </div>
   );
 
@@ -376,7 +403,11 @@ export function QuestionForm(props: QuestionFormProps) {
       setDraft(field.key, "");
     };
     return (
-      <fieldset class="question-form-multiselect" data-invalid={error ? "" : undefined}>
+      <fieldset
+        class="question-form-multiselect"
+        data-invalid={error ? "" : undefined}
+        aria-describedby={error ? fieldErrorID(props.form.id, field) : undefined}
+      >
         <legend>{fieldTitle(field)}</legend>
         <Show when={field.description}>
           {(description) => <p class="question-form-description">{description()}</p>}
@@ -388,7 +419,6 @@ export function QuestionForm(props: QuestionFormProps) {
                 checked={selected().includes(option.value)}
                 disabled={unavailable()}
                 description={option.description}
-                validationState={error ? "invalid" : "valid"}
                 onChange={(checked) => toggle(option.value, checked)}
               >
                 {option.label}
@@ -445,7 +475,11 @@ export function QuestionForm(props: QuestionFormProps) {
           </div>
         </Show>
         <Show when={error}>
-          {(message) => <p class="question-form-field-error">{message()}</p>}
+          {(message) => (
+            <p id={fieldErrorID(props.form.id, field)} class="question-form-field-error">
+              {message()}
+            </p>
+          )}
         </Show>
       </fieldset>
     );
@@ -487,7 +521,11 @@ export function QuestionForm(props: QuestionFormProps) {
     const invalid = visibleFields().find((field) => fieldError(field, answer()[field.key]));
     if (invalid) {
       queueMicrotask(() => {
-        fieldRoots.get(invalid.key)?.querySelector<HTMLElement>("input, textarea, button")?.focus();
+        const root = fieldRoots.get(invalid.key);
+        const target =
+          root?.querySelector<HTMLElement>("[data-question-form-custom-input]") ??
+          root?.querySelector<HTMLElement>("input, textarea, button");
+        target?.focus();
       });
       return;
     }

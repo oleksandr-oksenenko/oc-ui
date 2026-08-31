@@ -11,6 +11,7 @@ import { createWorkspaceChanges } from "./ConnectedApp/Changes/createWorkspaceCh
 import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegion.tsx";
 import { createSessionAgentSelection } from "./ConnectedApp/Conversation/createSessionAgentSelection.ts";
 import { createSessionComposer } from "./ConnectedApp/Conversation/createSessionComposer.ts";
+import { createSessionForms } from "./ConnectedApp/Conversation/createSessionForms.ts";
 import { SessionFlowsRegion } from "./ConnectedApp/Sessions/SessionFlowsRegion.tsx";
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
 import { createSessionFlows } from "./ConnectedApp/Sessions/createSessionFlows.ts";
@@ -50,16 +51,22 @@ export function ConnectedApp(props: ConnectedAppProps) {
     selectedSession: sessions.selectedSession,
     connected,
   });
+  const forms = createSessionForms({
+    data: runtime.data,
+    selectedID: sessions.selectedID,
+    connected,
+  });
   createConnectedLifecycle({
     runtime,
     bootstrapped,
     markBootstrapped: () => setBootstrapped(true),
     connected,
     sessions,
-    syncSelections: () =>
+    syncSelectedFeatures: () =>
       Promise.all([
         modelSelection.sync().catch(() => undefined),
         agentSelection.sync().catch(() => undefined),
+        forms.sync().catch(() => undefined),
       ]).then(() => undefined),
     onConnected: props.onConnected,
     onInitialFailure: props.onInitialFailure,
@@ -117,6 +124,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
             composer={composer}
             modelSelection={modelSelection}
             agentSelection={agentSelection}
+            forms={forms}
             connected={connected}
           />
         }
