@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2023", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023",
+    "types": ["node", "@wdio/globals/types", "@wdio/electron-service", "@wdio/mocha-framework"]
+  },
+  "include": ["wdio.conf.ts", "test/e2e/**/*.ts"]
+}

@@ -38,6 +38,7 @@ pnpm test               # Run the automated tests
 pnpm ready              # Run all repository checks and the production build
 pnpm package:mac        # Build an unpacked macOS arm64 .app in apps/desktop/dist
 pnpm make:mac           # Build the unpacked .app and a macOS arm64 DMG
+pnpm test:acceptance:mac # Package and test the macOS arm64 app with WebdriverIO
 ```
 
 ## macOS packaging
