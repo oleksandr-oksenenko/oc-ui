@@ -29,6 +29,31 @@
   min-height: 40px;
 }
 
+.composer-v2-review-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 22px;
+  padding: 0 2px 0 7px;
+  gap: 4px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.composer-v2-review-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-v2-review-discard[data-component="icon-button-v2"] {
+  flex: 0 0 20px;
+  margin-left: auto;
+  color: var(--oc-text-muted);
+}
+
 .composer-v2-input {
   box-sizing: border-box;
   flex: 1 1 auto;

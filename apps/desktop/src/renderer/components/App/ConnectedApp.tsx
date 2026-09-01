@@ -1,5 +1,6 @@
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 
+import { createReviewDraftStore } from "../../domain/index.ts";
 import {
   createModelSelection,
   useServerRuntime,
@@ -12,6 +13,7 @@ import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegi
 import { createSessionAgentSelection } from "./ConnectedApp/Conversation/createSessionAgentSelection.ts";
 import { createSessionComposer } from "./ConnectedApp/Conversation/createSessionComposer.ts";
 import { createSessionForms } from "./ConnectedApp/Conversation/createSessionForms.ts";
+import { createReviewFlow, ReviewRegion } from "./ConnectedApp/Review/ReviewRegion.tsx";
 import { SessionFlowsRegion } from "./ConnectedApp/Sessions/SessionFlowsRegion.tsx";
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
 import { createSessionFlows } from "./ConnectedApp/Sessions/createSessionFlows.ts";
@@ -33,6 +35,8 @@ export function ConnectedApp(props: ConnectedAppProps) {
   const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   const connected = () => runtime.stream.status() === "connected";
   const [bootstrapped, setBootstrapped] = createSignal(false);
+  const reviewDrafts = createReviewDraftStore();
+  const reviewFlow = createReviewFlow();
 
   const sessions = createSessionWorkspace({
     runtime,
@@ -72,6 +76,23 @@ export function ConnectedApp(props: ConnectedAppProps) {
     onInitialFailure: props.onInitialFailure,
   });
 
+  const changes = createWorkspaceChanges({
+    runtime,
+    selectedSession: sessions.selectedSession,
+    bootstrapped,
+    connected,
+    panelOpen: panels.rightPanelOpen,
+    reviewDrafts,
+    requestRemoveComment: (key, commentID, opener) => {
+      reviewFlow.confirmRemoval({
+        title: "Delete review comment?",
+        description: "This review comment will be permanently deleted.",
+        confirmLabel: "Delete comment",
+        focusTarget: opener,
+        onConfirm: () => reviewDrafts.remove(key, commentID),
+      });
+    },
+  });
   const composer = createSessionComposer({
     runtime,
     selectedID: sessions.selectedID,
@@ -79,19 +100,28 @@ export function ConnectedApp(props: ConnectedAppProps) {
     transcriptLoading: sessions.transcriptLoading,
     connected,
     selectionSwitching: () => modelSelection.switching() || agentSelection.switching(),
+    review: {
+      drafts: reviewDrafts,
+      key: changes.reviewKey,
+      requestDiscard: (key, count, opener) => {
+        reviewFlow.confirmRemoval({
+          title: "Discard code review?",
+          description: `${count} review ${count === 1 ? "comment" : "comments"} will be permanently deleted.`,
+          confirmLabel: "Discard review",
+          focusTarget: opener,
+          onConfirm: () => reviewDrafts.clear(key),
+        });
+      },
+    },
   });
   const flows = createSessionFlows({
     runtime,
     connected,
     workspace: sessions,
-    clearDraft: composer.clear,
-  });
-  const changes = createWorkspaceChanges({
-    runtime,
-    selectedSession: sessions.selectedSession,
-    bootstrapped,
-    connected,
-    panelOpen: panels.rightPanelOpen,
+    clearDraft: (sessionID) => {
+      composer.clear(sessionID);
+      reviewDrafts.clearSession(sessionID);
+    },
   });
 
   const closeLeftSidebarOnMobile = (): void => {
@@ -131,7 +161,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
         context={
           <ChangesRegion
             idBase={changesTabsId}
-            changes={changes()}
+            changes={changes.view()}
             showTabs={panels.mobile()}
             onClose={closeRightPanel}
           />
@@ -143,6 +173,9 @@ export function ConnectedApp(props: ConnectedAppProps) {
         onSessionCreated={sessions.markCreated}
         onSessionOpened={closeLeftSidebarOnMobile}
       />
+      <Show when={reviewFlow.removal()}>
+        <ReviewRegion flow={reviewFlow} />
+      </Show>
     </>
   );
 }

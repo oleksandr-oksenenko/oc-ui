@@ -1,4 +1,5 @@
 import { Icon } from "@opencode-ai/ui/icon";
+import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Loader } from "@opencode-ai/ui/loader";
 import { createEffect } from "solid-js";
 
@@ -13,6 +14,11 @@ import type { VariantPickerOption } from "./Composer/VariantPicker.tsx";
 const COMPOSER_MIN_HEIGHT = 40;
 const COMPOSER_MAX_HEIGHT = 168;
 
+export type ComposerReview = {
+  readonly count: number;
+  readonly onDiscard: (opener: HTMLButtonElement) => void;
+};
+
 export type ComposerProps = {
   readonly value: string;
   /** The one action represented by the composer button. */
@@ -20,6 +26,8 @@ export type ComposerProps = {
   /** Disables the action currently represented by the composer button. */
   readonly disabled: boolean;
   readonly error?: string;
+  /** Omitted review state is equivalent to an empty review attachment. */
+  readonly review?: ComposerReview;
   readonly modelSelection: {
     readonly state: "loading" | "ready" | "failed";
     readonly switching: boolean;
@@ -155,6 +163,7 @@ function selectionStatus(
 
 export function Composer(props: ComposerProps) {
   let textarea: HTMLTextAreaElement | undefined;
+  const review = () => props.review;
   const resizeTextarea = () => {
     if (!textarea) return;
     textarea.style.height = "0px";
@@ -169,16 +178,18 @@ export function Composer(props: ComposerProps) {
     resizeTextarea();
   });
 
+  const sendable = () => review() !== undefined || props.value.trim() !== "";
+
+  const canSubmit = () =>
+    !props.disabled &&
+    props.action === "send" &&
+    !props.modelSelection.switching &&
+    !props.agentSelection.switching &&
+    sendable();
+
   const submit = (event?: Event) => {
     event?.preventDefault();
-    if (
-      props.disabled ||
-      props.action !== "send" ||
-      props.modelSelection.switching ||
-      props.agentSelection.switching ||
-      props.value.trim() === ""
-    )
-      return;
+    if (!canSubmit()) return;
     props.onSubmit();
   };
 
@@ -190,6 +201,25 @@ export function Composer(props: ComposerProps) {
 
   return (
     <form class="composer-v2" aria-label="Message composer" onSubmit={submit}>
+      {review() ? (
+        <div class="composer-v2-review-row">
+          <span class="composer-v2-review-label">
+            Code review · {review()!.count} {review()!.count === 1 ? "comment" : "comments"}
+          </span>
+          <IconButton
+            class="composer-v2-review-discard"
+            type="button"
+            size="small"
+            variant="ghost-muted"
+            aria-label={`Discard ${review()!.count} code review comments`}
+            title={`Discard ${review()!.count} code review comments`}
+            icon={<Icon name="close" size="small" aria-hidden="true" />}
+            onClick={(event) => {
+              review()?.onDiscard(event.currentTarget);
+            }}
+          />
+        </div>
+      ) : null}
       <div class="composer-v2-editor-row">
         <textarea
           ref={(element) => {
@@ -221,9 +251,7 @@ export function Composer(props: ComposerProps) {
             props.action === "sending" ||
             (props.action === "running" && props.onStop === undefined) ||
             (props.action === "send" &&
-              (props.modelSelection.switching ||
-                props.agentSelection.switching ||
-                props.value.trim() === ""))
+              (props.modelSelection.switching || props.agentSelection.switching || !sendable()))
           }
           onClick={() => {
             if (props.action === "running") props.onStop?.();

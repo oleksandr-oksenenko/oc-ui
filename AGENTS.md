@@ -13,10 +13,12 @@
 # UI implementation and verification
 
 - Treat the approved Storybook story, mockup, and latest browser annotations as the visual contract. Match their structure, controls, spacing, density, and placement instead of creating a new interpretation.
+- Use the Codex in-app browser for standalone local web pages and Storybook whenever it can perform the required verification. Use an external browser only when the in-app browser cannot perform the check. This guidance does not cover embedded webviews: the Electron renderer and any view embedded in the app window are not reachable from the in-app browser, so verify them in the running app instead.
 - Prefer installed OpenCode UI controls and icons over custom approximations. Keep a local component only when it owns real oc-ui behavior that the package does not provide.
-- Do not call UI work complete from tests, types, or a browser preview alone. Inspect the actual Electron app after the final change.
-- For affected UI, verify the first open as well as reopen, resize and narrow layouts, scrolling, empty and error states, loading and disabled states, keyboard and Escape behavior, focus restoration, and collapse or remount behavior where applicable.
-- Keep regression tests lean: add one focused test for each real failure mode. Avoid large full-app fixtures and repeated setup for a small policy or component behavior.
+- Complete the following verification checklist as one unit before calling UI work done:
+  - Inspect the actual Electron app after the final change. Do not call UI work complete from tests, types, or a browser preview alone.
+  - For affected UI, verify the first open as well as reopen, resize and narrow layouts, scrolling, empty and error states, loading and disabled states, keyboard and Escape behavior, focus restoration, and collapse or remount behavior where applicable.
+  - Keep regression tests lean: add one focused test for each real failure mode. Avoid large full-app fixtures and repeated setup for a small policy or component behavior.
 
 # Desktop and server runtime
 

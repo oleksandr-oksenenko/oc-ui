@@ -80,6 +80,7 @@ function setup(initialForms: readonly FormInfo[] = []) {
     disabled: () => false,
     submitting: () => false,
     error: () => undefined,
+    review: () => undefined,
     input: () => undefined,
     submit: vi.fn<SessionComposerController["submit"]>(async () => undefined),
     clear: () => undefined,

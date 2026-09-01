@@ -114,6 +114,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               composerAction() === "running" ? !props.connected() : props.composer.disabled()
             }
             error={props.workspace.stopError() ?? props.composer.error()}
+            review={props.composer.review()}
             modelSelection={{
               state: props.modelSelection.state(),
               switching: props.modelSelection.switching(),

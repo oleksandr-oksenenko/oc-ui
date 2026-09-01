@@ -1,9 +1,19 @@
-import type { SessionMessageAssistantTool, SessionMessageInfo } from "@opencode-ai/client";
+import type {
+  SessionMessageAssistantTool,
+  SessionMessageInfo,
+  SessionMessageUser,
+} from "@opencode-ai/client";
 import { batch, createSignal } from "solid-js";
+import { createStore } from "solid-js/store";
 import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { TranscriptView } from "./TranscriptView.tsx";
+import { UserMessage } from "./TranscriptView/UserMessage.tsx";
+import {
+  CODE_REVIEW_METADATA_KEY,
+  createCodeReviewPrompt,
+} from "../../../../../opencode/code-review.ts";
 
 const base = { created: 1 };
 const assistant = (
@@ -35,6 +45,13 @@ const assistant = (
             }
           : { status, input: { command: "check" }, error: { type: "tool", message: "failed" } },
 });
+
+function renderUserMessage(message: SessionMessageUser) {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const dispose = render(() => <UserMessage message={message} />, host);
+  return { host, dispose };
+}
 
 describe("TranscriptView", () => {
   it("renders a pending interaction after transcript messages", () => {
@@ -464,5 +481,118 @@ describe("TranscriptView", () => {
     host.remove();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it("renders a valid sent review collapsed and reveals its immutable snapshot", () => {
+    const prompt = createCodeReviewPrompt({
+      instruction: "Please fix this carefully.",
+      comments: [
+        {
+          path: "src/example.ts",
+          body: "Keep this branch safe.",
+          selection: { start: 4, side: "deletions", end: 5, endSide: "additions" },
+          selectedCode: "const oldValue = 1;\nconst newValue = 2;",
+        },
+      ],
+    });
+    const message: SessionMessageUser = {
+      id: "review",
+      time: base,
+      type: "user",
+      text: prompt.text,
+      metadata: prompt.metadata,
+    };
+    const { host, dispose } = renderUserMessage(message);
+
+    const card = host.querySelector<HTMLElement>(".transcript-code-review-card")!;
+    const trigger = card.querySelector<HTMLButtonElement>(".transcript-code-review-trigger")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(host.textContent).toContain("Please fix this carefully.");
+    expect(host.textContent).toContain("Code review · 1 comment");
+    trigger.click();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.textContent).toContain("src/example.ts");
+    expect(host.textContent).toContain("old 4 to new 5");
+    expect(host.textContent).toContain("const oldValue = 1;");
+    expect(host.textContent).toContain("Keep this branch safe.");
+
+    dispose();
+    host.remove();
+  });
+
+  it("reacts when durable review metadata arrives on an SDK store proxy", () => {
+    const prompt = createCodeReviewPrompt({
+      instruction: "",
+      comments: [
+        {
+          path: "src/example.ts",
+          body: "Use the durable metadata.",
+          selection: { start: 2, end: 3 },
+          selectedCode: "first();\nsecond();",
+        },
+      ],
+    });
+    const [state, setState] = createStore<{ readonly message: SessionMessageUser }>({
+      message: {
+        id: "review",
+        time: base,
+        type: "user",
+        text: prompt.text,
+      },
+    });
+    const { host, dispose } = renderUserMessage(state.message);
+
+    expect(host.textContent).toContain("Please fix all code review comments below.");
+    expect(host.querySelector(".transcript-code-review-card")).toBeNull();
+
+    setState("message", "metadata", prompt.metadata);
+
+    expect(host.textContent).not.toContain("Please fix all code review comments below.");
+    expect(host.textContent).toContain("Code review · 1 comment");
+
+    dispose();
+    host.remove();
+  });
+
+  it("renders an instruction-empty review without the model Markdown", () => {
+    const prompt = createCodeReviewPrompt({
+      instruction: " \n\t",
+      comments: [
+        {
+          path: "empty.ts",
+          body: "Use the existing helper.",
+          selection: { start: 1, end: 1 },
+          selectedCode: "helper();",
+        },
+      ],
+    });
+    const { host, dispose } = renderUserMessage({
+      id: "empty-review",
+      time: base,
+      type: "user",
+      text: prompt.text,
+      metadata: prompt.metadata,
+    });
+
+    expect(host.textContent).toContain("Code review · 1 comment");
+    expect(host.textContent).not.toContain("Please fix all code review comments below.");
+    expect(host.textContent).not.toContain(" \n\t");
+    dispose();
+    host.remove();
+  });
+
+  it("falls back to exact user text when review metadata is malformed", () => {
+    const { host, dispose } = renderUserMessage({
+      id: "malformed-review",
+      time: base,
+      type: "user",
+      text: "Original prompt with malformed metadata",
+      metadata: { [CODE_REVIEW_METADATA_KEY]: { kind: "code-review", version: 2 } },
+    });
+
+    expect(host.textContent).toContain("Original prompt with malformed metadata");
+    expect(host.querySelector(".transcript-code-review-card")).toBeNull();
+    dispose();
+    host.remove();
   });
 });

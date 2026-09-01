@@ -238,11 +238,86 @@
   font-size: var(--oc-type-diff-stat-size);
 }
 
+.pierre-diff-shell,
 .pierre-diff-host,
 .pierre-diff-host > diffs-container {
   display: block;
   width: 100%;
   min-width: 0;
+}
+
+.diff-review-annotation {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 36px 8px 12px;
+  border-top: 1px solid var(--oc-border-strong);
+  color: var(--oc-text-base);
+  background: var(--oc-surface-selected);
+  box-shadow:
+    inset 3px 0 0 var(--oc-status-info),
+    inset 0 -1px 0 var(--oc-border-strong);
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-metadata-size);
+  line-height: var(--oc-type-metadata-line-height);
+}
+
+.diff-review-editor {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 7px 9px;
+  resize: vertical;
+  border: 1px solid var(--oc-border-strong);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-base);
+  background: var(--oc-surface-raised);
+  font: inherit;
+}
+
+.diff-review-editor:focus-visible {
+  border-color: var(--oc-focus-ring);
+  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
+  outline-offset: var(--oc-focus-ring-offset);
+}
+
+.diff-review-text {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: text;
+  font: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.diff-review-remove {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  color: var(--oc-status-danger-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--oc-type-heading-size);
+  line-height: 20px;
+}
+
+.diff-review-remove:hover {
+  color: var(--oc-status-danger);
+}
+
+.diff-review-text:focus-visible,
+.diff-review-remove:focus-visible {
+  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
+  outline-offset: var(--oc-focus-ring-offset);
 }
 
 .diff-file-content {
