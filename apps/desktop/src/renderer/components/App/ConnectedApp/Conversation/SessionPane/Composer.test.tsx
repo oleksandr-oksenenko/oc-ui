@@ -388,6 +388,48 @@ describe("Composer", () => {
     host.remove();
   });
 
+  it("renders a quiet review attachment and sends it without composer text", () => {
+    const host = document.createElement("div");
+    const submit = vi.fn<() => void>();
+    const discard = vi.fn<() => void>();
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Composer
+          value=""
+          disabled={false}
+          action="send"
+          review={{ count: 3, onDiscard: discard }}
+          modelSelection={unavailableSelection}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={submit}
+        />
+      ),
+      host,
+    );
+
+    const row = host.querySelector<HTMLElement>(".composer-v2-review-row");
+    expect(row?.textContent).toContain("Code review · 3 comments");
+    row?.querySelector<HTMLElement>(".composer-v2-review-label")?.click();
+    expect(discard).not.toHaveBeenCalled();
+
+    const send = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    expect(send?.disabled).toBe(false);
+    send?.click();
+    expect(submit).toHaveBeenCalledOnce();
+
+    const discardButton = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Discard 3 code review comments"]',
+    );
+    expect(discardButton).not.toBeNull();
+    discardButton?.click();
+    expect(discard).toHaveBeenCalledWith(discardButton);
+
+    dispose();
+    host.remove();
+  });
+
   it("rejects whitespace and respects application busy state", () => {
     const host = document.createElement("div");
     const [value, setValue] = createSignal("   \n");

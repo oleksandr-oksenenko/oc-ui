@@ -1,8 +1,10 @@
-import { createSignal } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import type { Decorator, Meta, StoryObj } from "storybook-solidjs-vite";
+import type { SelectedLineRange } from "@pierre/diffs";
 
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
 import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
+import type { ReviewComment } from "../src/renderer/domain/review-drafts.ts";
 
 const diffFiles: readonly DiffFileData[] = [
   {
@@ -225,6 +227,43 @@ export const ComparisonControl: Story = {
         }}
       />
     );
+  },
+};
+
+export const ReviewComments: Story = {
+  args: {
+    diff: { files: diffFiles, loading: false },
+  },
+  render: () => {
+    const [editingCommentID, setEditingCommentID] = createSignal<string | undefined>("comment-1");
+    const [body, setBody] = createSignal("Please keep this state controlled by the parent.");
+    const selection: SelectedLineRange = {
+      start: 14,
+      side: "deletions",
+      end: 16,
+      endSide: "additions",
+    };
+    const comment = createMemo<ReviewComment>(() => ({
+      id: "comment-1",
+      path: diffFiles[0]!.path,
+      body: body(),
+      selection,
+      selectedCode: "const previous = createMemo(() => current());\n",
+    }));
+    const view = createMemo(() => ({
+      files: diffFiles,
+      loading: false,
+      review: {
+        comments: [comment()],
+        editingCommentID: editingCommentID(),
+        selectedLines: { path: comment().path, range: selection },
+        onUpdateCommentBody: (_id: string, nextBody: string) => setBody(nextBody),
+        onEditComment: (commentID: string) => setEditingCommentID(commentID),
+        onFinishComment: () => setEditingCommentID(undefined),
+        onRemoveComment: () => setEditingCommentID(undefined),
+      },
+    }));
+    return <ContextPanel diff={view()} />;
   },
 };
 

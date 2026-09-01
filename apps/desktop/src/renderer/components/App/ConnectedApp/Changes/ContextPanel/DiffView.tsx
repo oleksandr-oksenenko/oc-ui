@@ -3,10 +3,27 @@ import { DiffChanges } from "@opencode-ai/ui/diff-changes";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Select } from "@opencode-ai/ui/select";
+import type { SelectedLineRange } from "@pierre/diffs";
 import { createMemo, For, Show } from "solid-js";
 
 import { DiffFile } from "./DiffView/DiffFile.tsx";
 import type { DiffFileData } from "./DiffView/DiffFile.tsx";
+import type { DiffFileReview, ReviewComment } from "./DiffView/diff-render-data.ts";
+
+export type DiffReviewView = {
+  readonly comments: readonly ReviewComment[];
+  readonly editingCommentID?: string;
+  readonly selectedLines?: { readonly path: string; readonly range: SelectedLineRange } | null;
+  readonly onBeginComment?: (
+    path: string,
+    selection: SelectedLineRange,
+    selectedCode: string,
+  ) => void;
+  readonly onUpdateCommentBody?: (commentID: string, body: string) => void;
+  readonly onEditComment?: (commentID: string) => void;
+  readonly onFinishComment?: (commentID: string) => void;
+  readonly onRemoveComment?: (commentID: string, opener: HTMLElement) => void;
+};
 
 export type DiffViewProps = {
   readonly files: readonly DiffFileData[];
@@ -19,6 +36,8 @@ export type DiffViewProps = {
   readonly comparison?: string;
   readonly comparisonOptions?: readonly { readonly value: string; readonly label: string }[];
   readonly onComparisonChange?: (value: string) => void;
+  /** Controlled review interaction. No review state is created by DiffView. */
+  readonly review?: DiffReviewView;
 };
 
 const defaultComparisonOptions = [{ value: "working", label: "Working changes" }] as const;
@@ -133,7 +152,36 @@ export function DiffView(props: DiffViewProps) {
             <p class="diff-refresh-state">Showing cached changes</p>
           </Show>
           <div class="diff-file-list">
-            <For each={props.files}>{(file) => <DiffFile file={file} />}</For>
+            <For each={props.files}>
+              {(file) => {
+                const review = () => props.review;
+                const fileReview: DiffFileReview | undefined = review()
+                  ? {
+                      get comments() {
+                        return (
+                          review()?.comments.filter((comment) => comment.path === file.path) ?? []
+                        );
+                      },
+                      get editingCommentID() {
+                        return review()?.editingCommentID;
+                      },
+                      get selection() {
+                        const selected = review()?.selectedLines;
+                        return selected?.path === file.path ? selected.range : null;
+                      },
+                      onBeginComment: (selection, selectedCode) =>
+                        review()?.onBeginComment?.(file.path, selection, selectedCode),
+                      onUpdateCommentBody: (commentID, body) =>
+                        review()?.onUpdateCommentBody?.(commentID, body),
+                      onEditComment: (commentID) => review()?.onEditComment?.(commentID),
+                      onFinishComment: (commentID) => review()?.onFinishComment?.(commentID),
+                      onRemoveComment: (commentID, opener) =>
+                        review()?.onRemoveComment?.(commentID, opener),
+                    }
+                  : undefined;
+                return <DiffFile file={file} review={fileReview} />;
+              }}
+            </For>
           </div>
         </>
       </Show>

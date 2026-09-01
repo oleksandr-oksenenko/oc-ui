@@ -5,6 +5,7 @@ import {
   TranscriptView,
   type TranscriptViewProps,
 } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
+import { createCodeReviewPrompt } from "../src/renderer/opencode/code-review.ts";
 
 const assistant = (
   id: string,
@@ -180,6 +181,24 @@ const richItems: readonly SessionMessageInfo[] = [
   },
 ];
 
+const reviewPrompt = createCodeReviewPrompt({
+  instruction: "Please address these before merging.",
+  comments: [
+    {
+      path: "src/renderer/components/Workspace.tsx",
+      body: "Keep the controlled state in the workspace owner.",
+      selection: { start: 18, side: "deletions", end: 20, endSide: "additions" },
+      selectedCode: "const local = createSignal(false);\nconst open = props.open;\n",
+    },
+    {
+      path: "src/renderer/components/Composer.tsx",
+      body: "Reuse the existing sendability predicate here.",
+      selection: { start: 74, end: 74 },
+      selectedCode: "const canSubmit = () => !props.disabled;\n",
+    },
+  ],
+});
+
 const meta = {
   title: "Transcript/TranscriptView",
   component: TranscriptView,
@@ -202,6 +221,28 @@ export const Rich: Story = {
 export const Markdown: Story = {
   args: { messages: [markdownAssistant], sessionStatus: "idle", loading: false },
   render: renderTranscript,
+};
+export const SentCodeReview: Story = {
+  args: {
+    messages: [],
+    sessionStatus: "idle",
+    loading: false,
+  },
+  render: () =>
+    renderTranscript({
+      sessionID: "sent-code-review",
+      messages: [
+        {
+          id: "sent-code-review",
+          time: { created: 1 },
+          type: "user",
+          text: reviewPrompt.text,
+          metadata: reviewPrompt.metadata,
+        },
+      ],
+      sessionStatus: "idle",
+      loading: false,
+    }),
 };
 export const Loading: Story = {
   args: { messages: [], sessionStatus: "idle", loading: true },

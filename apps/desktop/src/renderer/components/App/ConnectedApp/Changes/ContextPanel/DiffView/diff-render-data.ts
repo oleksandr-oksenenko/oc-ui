@@ -1,5 +1,8 @@
-import { parsePatchFiles, processFile } from "@pierre/diffs";
-import type { FileContents, FileDiffMetadata } from "@pierre/diffs";
+import { parseDiffFromFile, parsePatchFiles, processFile } from "@pierre/diffs";
+import type { FileContents, FileDiffMetadata, SelectedLineRange } from "@pierre/diffs";
+
+import type { ReviewComment } from "../../../../../../domain/review-drafts.ts";
+export type { ReviewComment } from "../../../../../../domain/review-drafts.ts";
 
 type PatchFile = {
   readonly path: string;
@@ -14,6 +17,8 @@ export type DiffRenderData =
       readonly kind: "files";
       readonly oldFile: FileContents;
       readonly newFile: FileContents;
+      /** Normalized metadata used for review selections. */
+      readonly fileDiff: FileDiffMetadata;
     }
   | {
       readonly kind: "patch";
@@ -47,7 +52,21 @@ const NO_NEWLINE = "\\ No newline at end of file";
 
 export function prepareDiffRender(file: PatchFile): DiffRenderData | undefined {
   const complete = reconstructCompleteFiles(file);
-  if (complete) return { kind: "files", ...complete };
+  if (complete) {
+    try {
+      return {
+        kind: "files",
+        ...complete,
+        fileDiff: {
+          ...parseDiffFromFile(complete.oldFile, complete.newFile, undefined, true),
+          name: file.path,
+          type: file.status === "added" ? "new" : file.status === "deleted" ? "deleted" : "change",
+        },
+      };
+    } catch {
+      return undefined;
+    }
+  }
 
   const fileDiff = parseFilePatch(file);
   return fileDiff ? { kind: "patch", fileDiff } : undefined;
@@ -184,6 +203,126 @@ export function parseFilePatch(file: PatchFile): FileDiffMetadata | undefined {
   } catch {
     return undefined;
   }
+}
+
+export type DiffFileReview = {
+  readonly comments: readonly ReviewComment[];
+  readonly editingCommentID?: string;
+  readonly selection?: SelectedLineRange | null;
+  readonly onBeginComment?: (selection: SelectedLineRange, selectedCode: string) => void;
+  readonly onUpdateCommentBody?: (commentID: string, body: string) => void;
+  readonly onEditComment?: (commentID: string) => void;
+  readonly onFinishComment?: (commentID: string) => void;
+  readonly onRemoveComment?: (commentID: string, opener: HTMLElement) => void;
+};
+
+type DiffRenderLine = {
+  readonly kind: "context" | "deletion" | "addition";
+  readonly oldLineNumber?: number;
+  readonly newLineNumber?: number;
+  readonly text: string;
+};
+
+/** Return the exact selected code from Pierre's normalized metadata. */
+export function getSelectedCode(
+  fileDiff: FileDiffMetadata,
+  selection: SelectedLineRange,
+): string | undefined {
+  const lines = getDiffRenderLines(fileDiff);
+  const range = selectionIndices(lines, selection);
+  if (!range) return undefined;
+
+  const first = Math.min(range.start, range.end);
+  const last = Math.max(range.start, range.end);
+  return lines
+    .slice(first, last + 1)
+    .map((line) => line.text)
+    .join("");
+}
+
+/** Return the visual bottom row where Pierre should place an annotation. */
+export function getAnnotationTarget(
+  fileDiff: FileDiffMetadata,
+  selection: SelectedLineRange,
+): { readonly side: "deletions" | "additions"; readonly lineNumber: number } | undefined {
+  const lines = getDiffRenderLines(fileDiff);
+  const range = selectionIndices(lines, selection);
+  if (!range) return undefined;
+  const line = lines[Math.max(range.start, range.end)];
+  if (!line) return undefined;
+  return {
+    side: line.kind === "deletion" ? "deletions" : "additions",
+    lineNumber: line.kind === "deletion" ? line.oldLineNumber! : line.newLineNumber!,
+  };
+}
+
+function selectionIndices(
+  lines: readonly DiffRenderLine[],
+  selection: SelectedLineRange,
+): { readonly start: number; readonly end: number } | undefined {
+  const start = lines.findIndex((line) =>
+    lineMatchesSelection(line, selection.start, selection.side),
+  );
+  const end = lines.findIndex((line) =>
+    lineMatchesSelection(line, selection.end, selection.endSide ?? selection.side),
+  );
+  return start < 0 || end < 0 ? undefined : { start, end };
+}
+
+function getDiffRenderLines(fileDiff: FileDiffMetadata): DiffRenderLine[] {
+  const lines: DiffRenderLine[] = [];
+
+  for (const hunk of fileDiff.hunks) {
+    let oldLineNumber = hunk.deletionStart;
+    let newLineNumber = hunk.additionStart;
+
+    for (const content of hunk.hunkContent) {
+      if (content.type === "context") {
+        for (let index = 0; index < content.lines; index++) {
+          const text =
+            fileDiff.additionLines[content.additionLineIndex + index] ??
+            fileDiff.deletionLines[content.deletionLineIndex + index] ??
+            "";
+          lines.push({ kind: "context", oldLineNumber, newLineNumber, text });
+          oldLineNumber++;
+          newLineNumber++;
+        }
+        continue;
+      }
+
+      for (let index = 0; index < content.deletions; index++) {
+        lines.push({
+          kind: "deletion",
+          oldLineNumber,
+          text: fileDiff.deletionLines[content.deletionLineIndex + index] ?? "",
+        });
+        oldLineNumber++;
+      }
+      for (let index = 0; index < content.additions; index++) {
+        lines.push({
+          kind: "addition",
+          newLineNumber,
+          text: fileDiff.additionLines[content.additionLineIndex + index] ?? "",
+        });
+        newLineNumber++;
+      }
+    }
+  }
+
+  return lines;
+}
+
+function lineMatchesSelection(
+  line: DiffRenderLine,
+  number: number,
+  side?: "deletions" | "additions",
+) {
+  if (line.kind === "context") {
+    return number === (side === "deletions" ? line.oldLineNumber : line.newLineNumber);
+  }
+  return side === "deletions"
+    ? line.kind === "deletion" && line.oldLineNumber === number
+    : line.kind === "addition" && line.newLineNumber === number;
 }
 
 function splitLines(value: string): string[] {

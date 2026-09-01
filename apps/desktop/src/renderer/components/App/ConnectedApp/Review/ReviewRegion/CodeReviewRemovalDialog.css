@@ -1,0 +1,17 @@
+.code-review-removal-dialog[data-slot="dialog-container"] {
+  width: min(calc(100vw - 32px), 400px);
+}
+
+.code-review-removal-dialog form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+}
+
+.code-review-removal-dialog-body {
+  padding: 0 16px 4px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
+}

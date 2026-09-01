@@ -3,6 +3,7 @@ import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { DiffChanges } from "@opencode-ai/ui/diff-changes";
 
 import { PierreDiffBody } from "./DiffFile/PierreDiffBody.tsx";
+import type { DiffFileReview } from "./diff-render-data.ts";
 import { prepareDiffRender } from "./diff-render-data.ts";
 export { parseFilePatch } from "./diff-render-data.ts";
 
@@ -17,6 +18,7 @@ export type DiffFileData = {
 
 type DiffFileProps = {
   readonly file: DiffFileData;
+  readonly review?: DiffFileReview;
 };
 
 export function DiffFile(props: DiffFileProps) {
@@ -59,7 +61,9 @@ export function DiffFile(props: DiffFileProps) {
             when={renderData()}
             fallback={<p class="diff-file-unavailable">This patch could not be displayed.</p>}
           >
-            {(diff) => <PierreDiffBody diff={diff()} path={props.file.path} />}
+            {(diff) => (
+              <PierreDiffBody diff={diff()} path={props.file.path} review={props.review} />
+            )}
           </Show>
         </Collapsible.Content>
       </Collapsible>

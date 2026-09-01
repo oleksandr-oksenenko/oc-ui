@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { createSignal } from "solid-js";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
+import type { ComposerReview } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
 
 const meta = {
@@ -209,6 +210,30 @@ export const EmptyDisabled: Story = {
       />
     </div>
   ),
+};
+
+export const ReviewAttachment: Story = {
+  render: () => {
+    const [value, setValue] = createSignal("");
+    const [review, setReview] = createSignal<ComposerReview | undefined>({
+      count: 3,
+      onDiscard: () => setReview(undefined),
+    });
+    return (
+      <div style={frameStyle}>
+        <Composer
+          value={value()}
+          disabled={false}
+          action="send"
+          review={review()}
+          modelSelection={composerModelSelection()}
+          agentSelection={composerAgentSelection()}
+          onInput={setValue}
+          onSubmit={() => setValue("")}
+        />
+      </div>
+    );
+  },
 };
 
 export const UnavailableWhileDisabled: Story = {
