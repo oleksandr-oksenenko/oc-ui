@@ -11,7 +11,7 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Show, createEffect, createSignal, on } from "solid-js";
 
-import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import type { LocationRef, OpenCodeClient, Project } from "@opencode-ai/client";
 import { ProjectSelection } from "./NewSessionDialog/ProjectSelection.tsx";
 import { WorktreeForm } from "./NewSessionDialog/WorktreeForm.tsx";
 import "./ServerFlowDialog.css";
@@ -22,7 +22,7 @@ export type NewSessionProject = {
   readonly id: string;
   readonly name: string;
   readonly location: LocationRef;
-  readonly vcs?: "git" | "hg";
+  readonly vcs?: Project["vcs"];
 };
 
 export type NewSessionDialogError =

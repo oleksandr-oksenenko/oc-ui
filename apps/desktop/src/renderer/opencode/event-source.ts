@@ -1,10 +1,12 @@
 import type { OpenCodeEvent } from "@opencode-ai/client";
 
+type EventMap = { [Event in OpenCodeEvent as Event["type"]]: Event };
+
 export type OpenCodeEventSource = {
   readonly emit: (event: OpenCodeEvent) => void;
   readonly on: <Type extends OpenCodeEvent["type"]>(
     type: Type,
-    handler: (event: Extract<OpenCodeEvent, { type: Type }>) => void,
+    handler: (event: EventMap[Type]) => void,
   ) => () => void;
   readonly listen: (
     handler: (event: { name: OpenCodeEvent["type"]; details: OpenCodeEvent }) => void,
@@ -15,7 +17,7 @@ export type OpenCodeEventSource = {
 const isEventType = <Type extends OpenCodeEvent["type"]>(
   event: OpenCodeEvent,
   type: Type,
-): event is Extract<OpenCodeEvent, { type: Type }> => event.type === type;
+): event is EventMap[Type] => event.type === type;
 
 /**
  * A small, typed bridge between the client's event stream and createData.
@@ -39,7 +41,7 @@ export function createOpenCodeEventSource(): OpenCodeEventSource {
 
   function on<Type extends OpenCodeEvent["type"]>(
     type: Type,
-    handler: (event: Extract<OpenCodeEvent, { type: Type }>) => void,
+    handler: (event: EventMap[Type]) => void,
   ): () => void {
     if (closed) return () => undefined;
 
