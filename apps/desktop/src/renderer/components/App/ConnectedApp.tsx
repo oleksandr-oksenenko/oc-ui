@@ -13,6 +13,8 @@ import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegi
 import { createSessionAgentSelection } from "./ConnectedApp/Conversation/createSessionAgentSelection.ts";
 import { createSessionComposer } from "./ConnectedApp/Conversation/createSessionComposer.ts";
 import { createSessionForms } from "./ConnectedApp/Conversation/createSessionForms.ts";
+import { GlobalFormsRegion } from "./ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
+import { createGlobalForms } from "./ConnectedApp/GlobalForms/createGlobalForms.ts";
 import { createReviewFlow, ReviewRegion } from "./ConnectedApp/Review/ReviewRegion.tsx";
 import { SessionFlowsRegion } from "./ConnectedApp/Sessions/SessionFlowsRegion.tsx";
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
@@ -34,6 +36,11 @@ export function ConnectedApp(props: ConnectedAppProps) {
   const runtime = useServerRuntime();
   const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   const connected = () => runtime.stream.status() === "connected";
+  const globalForms = createGlobalForms({
+    runtime,
+    connected,
+    location: runtime.defaultLocation,
+  });
   const [bootstrapped, setBootstrapped] = createSignal(false);
   const reviewDrafts = createReviewDraftStore();
   const reviewFlow = createReviewFlow();
@@ -70,7 +77,6 @@ export function ConnectedApp(props: ConnectedAppProps) {
       Promise.all([
         modelSelection.sync().catch(() => undefined),
         agentSelection.sync().catch(() => undefined),
-        forms.sync().catch(() => undefined),
       ]).then(() => undefined),
     onConnected: props.onConnected,
     onInitialFailure: props.onInitialFailure,
@@ -135,6 +141,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
       <ShellRegion
         panels={panels}
         selectedTitle={() => sessions.selectedSession()?.title}
+        globalControls={<GlobalFormsRegion controller={globalForms} />}
         rightControls={<ChangesTitlebarRegion onClose={closeRightPanel} />}
         sidebar={
           <SessionsRegion

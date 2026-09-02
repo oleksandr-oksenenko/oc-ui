@@ -1,6 +1,8 @@
 import type { FormAnswer, FormInfo } from "@opencode-ai/client";
 import type { Data } from "@opencode-ai/client/solid";
-import { createEffect, createMemo, createSignal, on, onCleanup, type Accessor } from "solid-js";
+import { onCleanup, type Accessor } from "solid-js";
+
+import { createFormController } from "../Forms/createFormController.ts";
 
 type SessionFormsData = {
   readonly on: Data["on"];
@@ -35,193 +37,42 @@ const SYNC_FAILURE_MESSAGE = "Forms could not be refreshed. Try again.";
 const REPLY_FAILURE_MESSAGE = "The form could not be submitted. Try again.";
 const CANCEL_FAILURE_MESSAGE = "The form could not be cancelled. Try again.";
 
-const mutationKey = (sessionID: string, formID: string): string => `${sessionID}\u0000${formID}`;
-
 /** Owns pending forms for the selected session and their server mutations. */
 export function createSessionForms(input: SessionFormsInput): SessionFormsController {
-  const [state, setState] = createSignal<SessionFormsState>(
-    input.selectedID() === undefined ? "ready" : "loading",
-  );
-  const [syncError, setSyncError] = createSignal<string>();
-  const [mutationRevision, setMutationRevision] = createSignal(0);
-  const inFlight = new Set<string>();
-  const mutationErrors = new Map<string, string>();
-
-  let selection = 0;
-  let connectionGeneration = 0;
-  let alive = true;
-  let latestSyncRun = 0;
-
-  const sessionForms = createMemo<readonly FormInfo[]>(() => {
-    const sessionID = input.selectedID();
-    return sessionID === undefined ? [] : (input.data.session.form.list(sessionID) ?? []);
+  const controller = createFormController<FormInfo>({
+    connected: input.connected,
+    sessionID: input.selectedID,
+    list: (sessionID) => input.data.session.form.list(sessionID),
+    sync: (sessionID) => input.data.session.form.sync(sessionID),
+    reply: (request) => input.data.session.form.reply(request),
+    cancel: (request) => input.data.session.form.cancel(request),
+    errorMessage: (kind) => {
+      if (kind === "sync") return SYNC_FAILURE_MESSAGE;
+      return kind === "reply" ? REPLY_FAILURE_MESSAGE : CANCEL_FAILURE_MESSAGE;
+    },
   });
-
-  const isCurrent = (
-    sessionID: string,
-    generation: number,
-    requestConnection = connectionGeneration,
-  ): boolean =>
-    alive &&
-    input.connected() &&
-    connectionGeneration === requestConnection &&
-    selection === generation &&
-    input.selectedID() === sessionID;
-
-  const hasForm = (sessionID: string, formID: string): boolean =>
-    input.data.session.form.list(sessionID)?.some((form) => form.id === formID) === true;
-
-  const sync = async (): Promise<void> => {
-    const run = ++latestSyncRun;
-    const sessionID = input.selectedID();
-    const generation = selection;
-    const requestConnection = connectionGeneration;
-
-    if (!alive) return;
-    if (sessionID === undefined) {
-      setSyncError(undefined);
-      setState("ready");
-      return;
-    }
-    if (!input.connected()) {
-      setSyncError(undefined);
-      setState("ready");
-      return;
-    }
-
-    setSyncError(undefined);
-    setState("loading");
-    try {
-      await input.data.session.form.sync(sessionID);
-      if (isCurrent(sessionID, generation, requestConnection) && latestSyncRun === run) {
-        setState("ready");
-      }
-    } catch {
-      if (isCurrent(sessionID, generation, requestConnection) && latestSyncRun === run) {
-        setSyncError(SYNC_FAILURE_MESSAGE);
-        setState("failed");
-      }
-    }
-  };
-
-  const clearMutationState = (): void => {
-    if (mutationErrors.size === 0) return;
-    mutationErrors.clear();
-    setMutationRevision((revision) => revision + 1);
-  };
-
-  const setMutationInFlight = (key: string, value: boolean): void => {
-    if (value) inFlight.add(key);
-    else inFlight.delete(key);
-    setMutationRevision((revision) => revision + 1);
-  };
-
-  const submitting = (formID: string): boolean => {
-    mutationRevision();
-    const sessionID = input.selectedID();
-    return sessionID !== undefined && inFlight.has(mutationKey(sessionID, formID));
-  };
-
-  const errorFor = (formID: string): string | undefined => {
-    mutationRevision();
-    const sessionID = input.selectedID();
-    return sessionID === undefined ? undefined : mutationErrors.get(mutationKey(sessionID, formID));
-  };
-
-  const mutate = async (
-    formID: string,
-    operation: () => Promise<void>,
-    failureMessage: string,
-  ): Promise<void> => {
-    const sessionID = input.selectedID();
-    if (sessionID === undefined || !input.connected() || !hasForm(sessionID, formID)) {
-      return;
-    }
-
-    const key = mutationKey(sessionID, formID);
-    if (inFlight.has(key)) return;
-    mutationErrors.delete(key);
-    setMutationInFlight(key, true);
-    const generation = selection;
-    const requestConnection = connectionGeneration;
-
-    try {
-      await operation();
-    } catch {
-      if (isCurrent(sessionID, generation, requestConnection) && hasForm(sessionID, formID)) {
-        mutationErrors.set(key, failureMessage);
-        setMutationRevision((revision) => revision + 1);
-      }
-    } finally {
-      if (alive) setMutationInFlight(key, false);
-    }
-  };
-
-  const reply = (formID: string, answer: FormAnswer): Promise<void> => {
-    const sessionID = input.selectedID();
-    if (sessionID === undefined) return Promise.resolve();
-    return mutate(
-      formID,
-      () => input.data.session.form.reply({ sessionID, formID, answer }),
-      REPLY_FAILURE_MESSAGE,
-    );
-  };
-
-  const cancel = (formID: string): Promise<void> => {
-    const sessionID = input.selectedID();
-    if (sessionID === undefined) return Promise.resolve();
-    return mutate(
-      formID,
-      () => input.data.session.form.cancel({ sessionID, formID }),
-      CANCEL_FAILURE_MESSAGE,
-    );
-  };
-
-  createEffect(
-    on(
-      input.selectedID,
-      () => {
-        selection += 1;
-        clearMutationState();
-        void sync();
-      },
-      { defer: false },
-    ),
-  );
-
-  createEffect(
-    on(
-      input.connected,
-      (connected, previous) => {
-        if (!connected && previous !== false) {
-          connectionGeneration += 1;
-        }
-      },
-      { defer: false },
-    ),
-  );
 
   const stopCreated = input.data.on("form.created", (event) => {
     const sessionID = event.data.form.sessionID;
     if (sessionID === "global") return;
     input.data.session.form.invalidate(sessionID);
-    if (sessionID === input.selectedID()) void sync();
+    if (sessionID === input.selectedID()) void controller.sync();
   });
 
-  onCleanup(() => {
-    alive = false;
-    selection += 1;
-    stopCreated();
-  });
+  onCleanup(stopCreated);
 
   return {
-    sessionForms,
-    state,
-    error: syncError,
-    submitting,
-    errorFor,
-    sync,
-    reply,
-    cancel,
+    sessionForms: controller.forms,
+    state: controller.state,
+    error: controller.error,
+    submitting: controller.submitting,
+    errorFor: controller.errorFor,
+    sync: controller.sync,
+    reply: async (formID, answer) => {
+      await controller.reply(formID, answer);
+    },
+    cancel: async (formID) => {
+      await controller.cancel(formID);
+    },
   };
 }

@@ -174,9 +174,9 @@ describe("createSessionForms", () => {
     expect(fixture.forms.error()).toBeUndefined();
     fixture.setConnected(true);
     await Promise.resolve();
-    expect(fixture.sync).toHaveBeenCalledOnce();
-    await fixture.forms.sync();
     expect(fixture.sync).toHaveBeenCalledTimes(2);
+    await fixture.forms.sync();
+    expect(fixture.sync).toHaveBeenCalledTimes(3);
     fixture.dispose();
   });
 

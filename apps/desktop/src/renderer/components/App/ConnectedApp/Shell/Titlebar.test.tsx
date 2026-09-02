@@ -5,6 +5,73 @@ import { describe, expect, it } from "vite-plus/test";
 import { Titlebar } from "./Titlebar.tsx";
 
 describe("Titlebar", () => {
+  it("keeps global controls visible without replacing the context controls", () => {
+    const host = document.createElement("div");
+    const [rightPanelOpen, setRightPanelOpen] = createSignal(true);
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Titlebar
+          selectedTitle="Open session"
+          globalControls={<span data-testid="global-controls">Global requests</span>}
+          rightControls={<span data-testid="right-controls">Context tabs</span>}
+          leftSidebarOpen={false}
+          rightPanelOpen={rightPanelOpen()}
+          rightPanelAvailable
+          onToggleLeftSidebar={() => undefined}
+          onToggleRightPanel={() => setRightPanelOpen((open) => !open)}
+        />
+      ),
+      host,
+    );
+
+    expect(host.querySelector('[data-testid="global-controls"]')?.textContent).toBe(
+      "Global requests",
+    );
+    expect(host.querySelector('[data-testid="right-controls"]')?.textContent).toBe("Context tabs");
+
+    setRightPanelOpen(false);
+
+    expect(host.querySelector('[data-testid="global-controls"]')?.textContent).toBe(
+      "Global requests",
+    );
+    expect(host.querySelector('[data-testid="right-controls"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Show context"]')).not.toBeNull();
+
+    dispose();
+    host.remove();
+  });
+
+  it("keeps mobile titlebar content inert while an overlay is open", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <Titlebar
+          mobile
+          selectedTitle="Open session"
+          globalControls={<span data-testid="global-controls">Global requests</span>}
+          leftSidebarOpen
+          rightPanelOpen={false}
+          rightPanelAvailable={false}
+          onToggleLeftSidebar={() => undefined}
+          onToggleRightPanel={() => undefined}
+        />
+      ),
+      host,
+    );
+
+    const titlebar = host.querySelector<HTMLElement>(".shell-titlebar");
+    expect(titlebar?.getAttribute("aria-hidden")).toBe("true");
+    expect(titlebar?.inert).toBe(true);
+    expect(host.querySelector('[data-testid="global-controls"]')?.textContent).toBe(
+      "Global requests",
+    );
+
+    dispose();
+    host.remove();
+  });
+
   it("restores focus to the mobile sessions trigger after the overlay closes", async () => {
     const host = document.createElement("div");
     document.body.append(host);

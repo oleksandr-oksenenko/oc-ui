@@ -1,119 +1,82 @@
-import type { FormAnswer, FormInfo, LocationRef } from "@opencode-ai/client";
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js";
+import type { FormAnswer, LocationRef } from "@opencode-ai/client";
+import { locationKey, type Data, type FormWithLocation } from "@opencode-ai/client/solid";
+import { createMemo, onCleanup, type Accessor } from "solid-js";
 
-import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
-import { answerableFormDraft, initializeFormDraft, type FormDraft } from "./form.ts";
+import { createFormController } from "../Forms/createFormController.ts";
 
-export type GlobalForm = FormInfo & { readonly location?: LocationRef };
-export type GlobalForms = ReturnType<typeof createGlobalForms>;
+const GLOBAL_SESSION_ID = "global" as const;
+const LOAD_ERROR = "Could not load global forms.";
+const ACTION_ERROR = "Could not complete the form action.";
 
-export type CreateGlobalFormsInput = {
-  readonly runtime: ConnectedRuntime;
-  readonly connected: Accessor<boolean>;
+const errorMessage = (kind: "sync" | "reply" | "cancel", cause: unknown): string => {
+  if (cause instanceof Error && cause.message.trim().length > 0) return cause.message;
+  return kind === "sync" ? LOAD_ERROR : ACTION_ERROR;
 };
 
-export function createGlobalForms(input: CreateGlobalFormsInput) {
-  const location = input.runtime.defaultLocation;
-  const [syncState, setSyncState] = createSignal<"idle" | "loading" | "ready" | "error">("idle");
-  const [syncError, setSyncError] = createSignal<string>();
-  const [draftVersion, setDraftVersion] = createSignal(0);
-  const [actionVersion, setActionVersion] = createSignal(0);
-  const drafts = new Map<string, FormDraft>();
-  const actionErrors = new Map<string, string>();
-  const actions = new Set<string>();
-  let syncGeneration = 0;
-  let connectedOnce = false;
-  let alive = true;
+type GlobalFormsData = {
+  readonly on: Data["on"];
+  readonly session: {
+    readonly form: Pick<
+      Data["session"]["form"],
+      "list" | "sync" | "invalidate" | "reply" | "cancel"
+    >;
+  };
+};
 
-  onCleanup(() => {
-    alive = false;
-    syncGeneration += 1;
+export type GlobalFormsController = {
+  readonly location: LocationRef;
+  readonly forms: Accessor<readonly FormWithLocation[]>;
+  readonly loading: Accessor<boolean>;
+  readonly loadError: Accessor<string | undefined>;
+  readonly connected: Accessor<boolean>;
+  readonly pending: Accessor<boolean>;
+  readonly submitting: (formID: string) => boolean;
+  readonly errorFor: (formID: string) => string | undefined;
+  readonly refresh: () => Promise<void>;
+  readonly reply: (formID: string, answer: FormAnswer) => Promise<boolean>;
+  readonly cancel: (formID: string) => Promise<boolean>;
+};
+
+export type CreateGlobalFormsInput = {
+  readonly runtime: {
+    readonly data: GlobalFormsData;
+  };
+  readonly connected: Accessor<boolean>;
+  readonly location: LocationRef;
+};
+
+export function createGlobalForms(input: CreateGlobalFormsInput): GlobalFormsController {
+  const controller = createFormController<FormWithLocation>({
+    connected: input.connected,
+    sessionID: () => GLOBAL_SESSION_ID,
+    location: input.location,
+    list: (sessionID, location) => input.runtime.data.session.form.list(sessionID, location),
+    sync: (sessionID, location) => input.runtime.data.session.form.sync(sessionID, location),
+    reply: (request, location) => input.runtime.data.session.form.reply(request, location),
+    cancel: (request, location) => input.runtime.data.session.form.cancel(request, location),
+    errorMessage,
   });
 
-  const forms = createMemo<readonly GlobalForm[]>(() =>
-    input.runtime.data.session.form.list("global", location) ?? [],
-  );
-
-  const draft = (form: GlobalForm): FormDraft => {
-    draftVersion();
-    let value = drafts.get(form.id);
-    if (!value) {
-      value = initializeFormDraft(form);
-      drafts.set(form.id, value);
-    }
-    return value;
-  };
-  const setDraftValue = (formID: string, key: string, value: FormDraft[string]) => {
-    const current = drafts.get(formID);
-    if (!current) return;
-    current[key] = value;
-    setDraftVersion((version) => version + 1);
-  };
-  const actionError = (formID: string) => {
-    actionVersion();
-    return actionErrors.get(formID);
-  };
-  const actionPending = (formID: string) => {
-    actionVersion();
-    return actions.has(formID);
-  };
-
-  const sync = async (): Promise<void> => {
-    const generation = ++syncGeneration;
-    setSyncState("loading");
-    setSyncError(undefined);
-    try {
-      await input.runtime.data.session.form.sync("global", location);
-      if (!alive || generation !== syncGeneration) return;
-      setSyncState("ready");
-    } catch (cause) {
-      if (!alive || generation !== syncGeneration) return;
-      setSyncState("error");
-      setSyncError(cause instanceof Error ? cause.message : "Could not load server requests.");
-    }
-  };
-
-  createEffect(() => {
-    if (!input.connected() || connectedOnce) return;
-    connectedOnce = true;
-    void sync();
+  const stopCreated = input.runtime.data.on("form.created", (event) => {
+    if (event.data.form.sessionID !== GLOBAL_SESSION_ID) return;
+    if (event.location && locationKey(event.location) !== locationKey(input.location)) return;
+    input.runtime.data.session.form.invalidate(GLOBAL_SESSION_ID, input.location);
+    void controller.sync();
   });
 
-  const settle = async (form: GlobalForm, operation: "reply" | "cancel", answer?: FormAnswer) => {
-    if (actions.has(form.id)) return false;
-    actions.add(form.id);
-    actionErrors.delete(form.id);
-    setActionVersion((version) => version + 1);
-    try {
-      if (operation === "reply") {
-        await input.runtime.data.session.form.reply(
-          { sessionID: "global", formID: form.id, answer: answer ?? answerableFormDraft(form, draft(form)) },
-          location,
-        );
-      } else {
-        await input.runtime.data.session.form.cancel({ sessionID: "global", formID: form.id }, location);
-      }
-      return true;
-    } catch (cause) {
-      actionErrors.set(form.id, cause instanceof Error ? cause.message : "The server request could not be completed.");
-      return false;
-    } finally {
-      actions.delete(form.id);
-      setActionVersion((version) => version + 1);
-    }
-  };
+  onCleanup(stopCreated);
 
   return {
-    location,
-    forms,
-    sync,
-    syncState,
-    syncError,
-    draft,
-    setDraftValue,
-    actionError,
-    actionPending,
-    reply: (form: GlobalForm, answer?: FormAnswer) => settle(form, "reply", answer),
-    cancel: (form: GlobalForm) => settle(form, "cancel"),
+    location: input.location,
+    forms: controller.forms,
+    loading: createMemo(() => controller.state() === "loading"),
+    loadError: controller.error,
+    connected: input.connected,
+    pending: controller.pending,
+    submitting: controller.submitting,
+    errorFor: controller.errorFor,
+    refresh: controller.sync,
+    reply: (formID, answer) => controller.reply(formID, answer),
+    cancel: (formID) => controller.cancel(formID),
   };
 }

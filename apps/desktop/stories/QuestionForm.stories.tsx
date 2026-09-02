@@ -14,7 +14,7 @@ import { For, createSignal, type JSX } from "solid-js";
 import { fn } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
-import { QuestionForm } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/QuestionForm.tsx";
+import { QuestionForm } from "../src/renderer/ui/QuestionForm.tsx";
 import { AssistantMessage } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/AssistantMessage.tsx";
 import { UserMessage } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/UserMessage.tsx";
 import { workspaceQuestionForm } from "./question-form-fixtures.ts";

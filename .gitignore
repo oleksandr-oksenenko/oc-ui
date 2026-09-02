@@ -15,6 +15,7 @@ storybook-static/
 .cache/
 
 # Local visual QA output
+.artifacts/
 audit-live/
 design-qa-live/
 design-qa.md
