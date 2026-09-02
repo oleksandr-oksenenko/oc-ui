@@ -1,3 +1,4 @@
+/* Shared form surface used by session and global workflows. */
 .question-form-card {
   width: min(620px, 100%);
   padding: 0;

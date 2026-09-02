@@ -33,9 +33,12 @@ const conditionalForm = {
 function mount(
   form: FormInfo,
   options: {
+    readonly initialAnswer?: FormAnswer;
     readonly disabled?: boolean;
     readonly submitting?: boolean;
     readonly error?: string;
+    readonly onAnswerChange?: (answer: FormAnswer) => void;
+    readonly onOpenExternal?: (url: string) => void;
   } = {},
 ) {
   const host = document.createElement("div");
@@ -46,11 +49,14 @@ function mount(
     () => (
       <QuestionForm
         form={form}
+        initialAnswer={options.initialAnswer}
         disabled={options.disabled}
         submitting={options.submitting}
         error={options.error}
         onSubmit={onSubmit}
+        onAnswerChange={options.onAnswerChange}
         onCancel={onCancel}
+        onOpenExternal={options.onOpenExternal}
       />
     ),
     host,
@@ -215,12 +221,7 @@ describe("QuestionForm", () => {
     expect(multiselect?.getAttribute("aria-describedby")?.split(/\s+/)).toContain(
       multipleError?.id,
     );
-    for (const control of multipleField?.querySelectorAll<HTMLInputElement>(
-      '[data-slot="checkbox-checkbox-input"]',
-    ) ?? []) {
-      const controlDescription = control.getAttribute("aria-describedby");
-      expect(controlDescription).toBeNull();
-    }
+    expect(multipleError?.getAttribute("role")).toBe("alert");
     mounted.dispose();
   });
 
@@ -230,6 +231,82 @@ describe("QuestionForm", () => {
     submit(mounted.host);
     expect(mounted.onSubmit).toHaveBeenCalledWith({ approach: "standard" });
     mounted.dispose();
+  });
+
+  it("restores a provided answer snapshot", () => {
+    const mounted = mount(conditionalForm, {
+      initialAnswer: { approach: "custom", details: "Use the saved approach" },
+    });
+
+    expect(mounted.host.querySelector<HTMLInputElement>('input[value="option:1"]')?.checked).toBe(
+      true,
+    );
+    expect(
+      mounted.host.querySelector<HTMLInputElement>('[data-form-field-key="details"] input')?.value,
+    ).toBe("Use the saved approach");
+    submit(mounted.host);
+    expect(mounted.onSubmit).toHaveBeenCalledWith({
+      approach: "custom",
+      details: "Use the saved approach",
+    });
+    mounted.dispose();
+  });
+
+  it("reports answer changes", () => {
+    const onAnswerChange = vi.fn<(answer: FormAnswer) => void>();
+    const mounted = mount(conditionalForm, { onAnswerChange });
+
+    mounted.host.querySelector<HTMLInputElement>('input[value="option:1"]')?.click();
+    expect(onAnswerChange).toHaveBeenLastCalledWith({ approach: "custom" });
+
+    const details = mounted.host.querySelector<HTMLInputElement>(
+      '[data-form-field-key="details"] input',
+    );
+    if (details) {
+      details.value = "Saved details";
+      details.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+    expect(onAnswerChange).toHaveBeenLastCalledWith({
+      approach: "custom",
+      details: "Saved details",
+    });
+    mounted.dispose();
+  });
+
+  it("preserves an explicitly empty snapshot when a default is cleared and remounted", () => {
+    const form = {
+      id: "frm_default_snapshot",
+      sessionID: "ses_test",
+      title: "Enter a value",
+      fields: [
+        {
+          key: "value",
+          type: "string",
+          title: "Value",
+          default: "Default value",
+        },
+      ],
+    } satisfies FormInfo;
+    let snapshot: FormAnswer | undefined;
+    const first = mount(form, {
+      onAnswerChange: (answer) => {
+        snapshot = answer;
+      },
+    });
+    const input = first.host.querySelector<HTMLInputElement>("input");
+    expect(input?.value).toBe("Default value");
+    if (input) {
+      input.value = "";
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+    expect(snapshot).toEqual({});
+    first.dispose();
+
+    const restored = mount(form, { initialAnswer: snapshot });
+    expect(restored.host.querySelector<HTMLInputElement>("input")?.value).toBe("");
+    submit(restored.host);
+    expect(restored.onSubmit).toHaveBeenCalledWith({});
+    restored.dispose();
   });
 
   it("reveals conditional fields, validates them, and focuses the first missing answer", async () => {
@@ -321,6 +398,60 @@ describe("QuestionForm", () => {
     mounted.host.querySelector<HTMLInputElement>('input[value="option:1"]')?.click();
     const input = mounted.host.querySelector('[data-component="text-input-v2"]');
     expect(input?.getAttribute("data-appearance")).toBe("large");
+    mounted.dispose();
+  });
+
+  it("identifies required controls and gives external actions a specific name", () => {
+    const onOpenExternal = vi.fn<(url: string) => void>();
+    const form = {
+      id: "frm_accessible_fields",
+      sessionID: "ses_test",
+      title: "Complete setup",
+      fields: [
+        { key: "name", type: "string", title: "Display name", required: true },
+        {
+          key: "choice",
+          type: "string",
+          title: "Approach",
+          required: true,
+          options: [{ value: "one", label: "One" }],
+        },
+        {
+          key: "features",
+          type: "multiselect",
+          title: "Features",
+          required: true,
+          options: [{ value: "one", label: "One" }],
+        },
+        {
+          key: "docs",
+          type: "external",
+          title: "Setup documentation",
+          url: "https://example.com/setup",
+        },
+      ],
+    } satisfies FormInfo;
+    const mounted = mount(form, { onOpenExternal });
+
+    expect(
+      mounted.host.querySelector<HTMLInputElement>('[data-form-field-key="name"] input')?.required,
+    ).toBe(true);
+    expect(mounted.host.querySelector('[data-form-field-key="name"]')?.textContent).toContain(
+      "Display name (required)",
+    );
+    expect(
+      mounted.host.querySelector<HTMLInputElement>(
+        '[data-form-field-key="choice"] [data-slot="radio-v2-item-input"]',
+      )?.required,
+    ).toBe(true);
+    expect(mounted.host.querySelector('[data-form-field-key="features"] legend')?.textContent).toBe(
+      "Features (required)",
+    );
+    const open = mounted.host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open Setup documentation"]',
+    );
+    open?.click();
+    expect(onOpenExternal).toHaveBeenCalledWith("https://example.com/setup");
     mounted.dispose();
   });
 });

@@ -11,7 +11,7 @@ import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/C
 import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
-import { QuestionForm } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/QuestionForm.tsx";
+import { QuestionForm } from "../src/renderer/ui/QuestionForm.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 import { storySession } from "./session-fixtures.ts";

@@ -27,18 +27,26 @@ type NumberField = Extract<FormField, { readonly type: "number" | "integer" }>;
 type MultiselectField = Extract<FormField, { readonly type: "multiselect" }>;
 type ExternalField = Extract<FormField, { readonly type: "external" }>;
 
+/** Shared renderer for session-scoped and global forms. */
 export type QuestionFormProps = {
   readonly form: FormInfo;
+  readonly initialAnswer?: FormAnswer;
   readonly disabled?: boolean;
   readonly submitting?: boolean;
   readonly error?: string;
   readonly onSubmit: (answer: FormAnswer) => void;
+  readonly onAnswerChange?: (answer: FormAnswer) => void;
   readonly onCancel?: () => void;
   readonly onOpenExternal?: (url: string) => void;
 };
 
 function fieldTitle(field: FormField): string {
   return field.title ?? field.key;
+}
+
+function fieldLabel(field: FormField): string {
+  const title = fieldTitle(field);
+  return "required" in field && field.required ? `${title} (required)` : title;
 }
 
 function initialAnswer(fields: FormInfo["fields"]): FormAnswer {
@@ -53,6 +61,13 @@ function initialAnswer(fields: FormInfo["fields"]): FormAnswer {
     answer[field.key] = Array.isArray(field.default) ? [...field.default] : field.default;
   }
   return answer;
+}
+
+function answerForForm(fields: FormInfo["fields"], answer: FormAnswer | undefined): FormAnswer {
+  if (answer === undefined) return initialAnswer(fields);
+  return Object.fromEntries(
+    Object.entries(answer).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]),
+  );
 }
 
 function conditionMatches(field: FormField, answer: FormAnswer): boolean {
@@ -154,7 +169,9 @@ function radioLabel(label: string) {
 
 export function QuestionForm(props: QuestionFormProps) {
   const titleID = `question-form-title-${createUniqueId()}`;
-  const [answer, setAnswerState] = createSignal<FormAnswer>(initialAnswer(props.form.fields));
+  const [answer, setAnswerState] = createSignal<FormAnswer>(
+    answerForForm(props.form.fields, props.initialAnswer),
+  );
   const [customDraft, setCustomDraft] = createSignal(new Map<string, string>());
   const [customStringFields, setCustomStringFields] = createSignal(new Set<string>());
   const [submitted, setSubmitted] = createSignal(false);
@@ -164,7 +181,7 @@ export function QuestionForm(props: QuestionFormProps) {
 
   createEffect(
     on(formIdentity, () => {
-      setAnswerState(initialAnswer(props.form.fields));
+      setAnswerState(answerForForm(props.form.fields, props.initialAnswer));
       setCustomDraft(new Map());
       setCustomStringFields(new Set<string>());
       setSubmitted(false);
@@ -180,6 +197,7 @@ export function QuestionForm(props: QuestionFormProps) {
       const next = { ...current };
       if (value === undefined) delete next[key];
       else next[key] = value;
+      props.onAnswerChange?.(next);
       return next;
     });
   };
@@ -206,7 +224,7 @@ export function QuestionForm(props: QuestionFormProps) {
     if (!options || options.length === 0) {
       return (
         <Field invalid={error !== undefined}>
-          <Field.Label tooltip={field.description}>{fieldTitle(field)}</Field.Label>
+          <Field.Label tooltip={field.description}>{fieldLabel(field)}</Field.Label>
           <Field.Control>
             <TextInput
               class="question-form-input"
@@ -220,6 +238,7 @@ export function QuestionForm(props: QuestionFormProps) {
               placeholder={field.placeholder}
               disabled={unavailable()}
               invalid={error !== undefined}
+              required={field.required}
               minLength={field.minLength}
               maxLength={field.maxLength}
               pattern={field.pattern}
@@ -244,10 +263,11 @@ export function QuestionForm(props: QuestionFormProps) {
     return (
       <div class="question-form-choice-group" data-invalid={error ? "" : undefined}>
         <RadioGroup
-          label={fieldTitle(field)}
+          label={fieldLabel(field)}
           description={field.description}
           value={selected()}
           disabled={unavailable()}
+          required={field.required}
           aria-describedby={error ? errorID : undefined}
           validationState={error ? "invalid" : "valid"}
           onChange={(value) => {
@@ -321,7 +341,7 @@ export function QuestionForm(props: QuestionFormProps) {
 
   const renderNumber = (field: NumberField, error: string | undefined) => (
     <Field invalid={error !== undefined}>
-      <Field.Label tooltip={field.description}>{fieldTitle(field)}</Field.Label>
+      <Field.Label tooltip={field.description}>{fieldLabel(field)}</Field.Label>
       <Field.Control>
         <TextInput
           class="question-form-input"
@@ -334,6 +354,7 @@ export function QuestionForm(props: QuestionFormProps) {
           }
           disabled={unavailable()}
           invalid={error !== undefined}
+          required={field.required}
           min={field.minimum === undefined ? undefined : Number(field.minimum)}
           max={field.maximum === undefined ? undefined : Number(field.maximum)}
           step={field.type === "integer" ? 1 : "any"}
@@ -354,7 +375,7 @@ export function QuestionForm(props: QuestionFormProps) {
   ) => (
     <div class="question-form-choice-group" data-invalid={error ? "" : undefined}>
       <RadioGroup
-        label={fieldTitle(field)}
+        label={fieldLabel(field)}
         description={field.description}
         value={
           answer()[field.key] === true
@@ -364,6 +385,7 @@ export function QuestionForm(props: QuestionFormProps) {
               : undefined
         }
         disabled={unavailable()}
+        required={field.required}
         aria-describedby={error ? fieldErrorID(props.form.id, field) : undefined}
         validationState={error ? "invalid" : "valid"}
         onChange={(value) => setAnswer(field.key, value === "true")}
@@ -408,7 +430,7 @@ export function QuestionForm(props: QuestionFormProps) {
         data-invalid={error ? "" : undefined}
         aria-describedby={error ? fieldErrorID(props.form.id, field) : undefined}
       >
-        <legend>{fieldTitle(field)}</legend>
+        <legend>{fieldLabel(field)}</legend>
         <Show when={field.description}>
           {(description) => <p class="question-form-description">{description()}</p>}
         </Show>
@@ -476,7 +498,11 @@ export function QuestionForm(props: QuestionFormProps) {
         </Show>
         <Show when={error}>
           {(message) => (
-            <p id={fieldErrorID(props.form.id, field)} class="question-form-field-error">
+            <p
+              id={fieldErrorID(props.form.id, field)}
+              class="question-form-field-error"
+              role="alert"
+            >
               {message()}
             </p>
           )}
@@ -497,6 +523,7 @@ export function QuestionForm(props: QuestionFormProps) {
         type="button"
         variant="outline"
         icon="square-arrow-top-right"
+        aria-label={`Open ${fieldTitle(field)}`}
         disabled={unavailable() || !props.onOpenExternal}
         onClick={() => props.onOpenExternal?.(field.url)}
       >

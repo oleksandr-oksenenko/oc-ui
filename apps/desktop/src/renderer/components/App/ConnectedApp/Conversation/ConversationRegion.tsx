@@ -7,7 +7,7 @@ import type { SessionAgentSelectionController } from "./createSessionAgentSelect
 import type { SessionComposerController } from "./createSessionComposer.ts";
 import type { SessionFormsController } from "./createSessionForms.ts";
 import { Composer } from "./SessionPane/Composer.tsx";
-import { QuestionForm } from "./SessionPane/QuestionForm.tsx";
+import { QuestionForm } from "../../../../ui/QuestionForm.tsx";
 import { SessionPane } from "./SessionPane.tsx";
 import { TranscriptView } from "./SessionPane/TranscriptView.tsx";
 import type { SessionWorkspace } from "../Sessions/createSessionWorkspace.ts";

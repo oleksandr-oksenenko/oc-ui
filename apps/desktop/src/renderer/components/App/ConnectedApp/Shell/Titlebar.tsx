@@ -6,6 +6,7 @@ import "./Titlebar.css";
 
 export type TitlebarProps = {
   readonly selectedTitle?: string;
+  readonly globalControls?: JSX.Element;
   readonly rightControls?: JSX.Element;
   readonly leftSidebarOpen: boolean;
   readonly rightPanelOpen: boolean;
@@ -66,10 +67,13 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
         />
       </div>
 
-      <div class="titlebar-session" aria-live="polite">
-        <span class="titlebar-session-title">
-          {props.selectedTitle?.trim() || "No session selected"}
-        </span>
+      <div class="titlebar-center-region">
+        <div class="titlebar-session" aria-live="polite">
+          <span class="titlebar-session-title">
+            {props.selectedTitle?.trim() || "No session selected"}
+          </span>
+        </div>
+        <div class="titlebar-global-controls">{props.globalControls}</div>
       </div>
 
       <div class="titlebar-right-region">
