@@ -19,6 +19,9 @@ type SavedTarget =
   | { readonly kind: "local" }
   | { readonly kind: "remote"; readonly serverUrl: string };
 
+const LOCAL_CLEANUP_MESSAGE =
+  "The built-in OpenCode server could not be stopped. Retry before connecting to another server.";
+
 /** Owns saved-target setup and the connected/disconnected boundary. */
 export function App() {
   const desktop = window.desktop;
@@ -55,7 +58,7 @@ export function App() {
         await disconnectLocal();
       } catch {
         if (currentAttempt !== attempt) return;
-        setConnection({ status: "failed", message: localCleanupMessage() });
+        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
         return;
       }
       if (currentAttempt !== attempt) return;
@@ -91,7 +94,7 @@ export function App() {
           await disconnectLocal();
         } catch {
           if (currentAttempt !== attempt) return;
-          setConnection({ status: "failed", message: localCleanupMessage() });
+          setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
         }
         return;
       }
@@ -113,7 +116,7 @@ export function App() {
         setConnection({ status: "failed", message: localConnectionMessage(cause) });
       } catch {
         if (currentAttempt !== attempt) return;
-        setConnection({ status: "failed", message: localCleanupMessage() });
+        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
       }
     }
   };
@@ -174,7 +177,7 @@ export function App() {
       },
       () => {
         if (currentAttempt !== attempt) return undefined;
-        setConnection({ status: "failed", message: localCleanupMessage() });
+        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
         return undefined;
       },
     );
@@ -201,7 +204,7 @@ export function App() {
         await disconnectLocal();
       } catch {
         if (currentAttempt !== attempt) return;
-        setConnection({ status: "failed", message: localCleanupMessage() });
+        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
         return;
       }
       if (currentAttempt !== attempt) return;
@@ -219,7 +222,7 @@ export function App() {
       try {
         await disconnectLocal();
       } catch {
-        setConnection({ status: "failed", message: localCleanupMessage() });
+        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
         return;
       }
     }
@@ -259,12 +262,12 @@ export function App() {
         },
         () => {
           if (currentAttempt !== attempt) return undefined;
-          setConnection({ status: "failed", message: localCleanupMessage() });
+          setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
           return undefined;
         },
       );
     });
-    onCleanup(() => unsubscribe?.());
+    onCleanup(unsubscribe);
 
     void (async () => {
       const loadAttempt = attempt;
@@ -367,8 +370,4 @@ function connectionMessage(cause: unknown): string {
 function localConnectionMessage(cause: unknown): string {
   if (cause instanceof OpenCodeConnectionError) return cause.message;
   return "The built-in OpenCode server is unavailable. Retry to start it again, or connect to a remote server.";
-}
-
-function localCleanupMessage(): string {
-  return "The built-in OpenCode server could not be stopped. Retry before connecting to another server.";
 }

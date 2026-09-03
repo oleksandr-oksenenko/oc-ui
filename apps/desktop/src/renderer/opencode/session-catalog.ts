@@ -1,5 +1,5 @@
 import type { Data } from "@opencode-ai/client/solid";
-import type { OpenCodeClient, SessionInfo } from "@opencode-ai/client";
+import type { OpenCodeClient } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
 import type { OpenCodeEventSource } from "./event-source";
 
@@ -66,7 +66,6 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
       const mutations: CatalogMutation[] = [];
       activeSync = { mutations };
       try {
-        const snapshot: SessionInfo[] = [];
         const snapshotIDs = new Set<string>();
         let cursor: string | undefined;
         do {
@@ -83,7 +82,6 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
               )
             ) {
               snapshotIDs.add(info.id);
-              snapshot.push(info);
               input.data.session.remember(info);
             }
           }
@@ -91,13 +89,13 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
         } while (cursor !== undefined);
 
         activeSync = undefined;
-        setIds(snapshot.map((info) => info.id));
+        setIds([...snapshotIDs]);
         for (const mutation of mutations) apply(mutation);
         setState("ready");
       } catch (cause) {
         activeSync = undefined;
         setState("failed");
-        setError(errorMessage(cause));
+        setError("The session list could not be loaded.");
         throw cause;
       } finally {
         inFlight = undefined;
@@ -126,9 +124,4 @@ export async function syncActiveStatuses(input: {
   for (const sessionID of input.sessionIDs) input.data.session.setStatus(sessionID, "idle");
   const active = await input.api.session.active();
   for (const sessionID of Object.keys(active)) input.data.session.setStatus(sessionID, "running");
-}
-
-function errorMessage(cause: unknown): string {
-  void cause;
-  return "The session list could not be loaded.";
 }

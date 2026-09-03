@@ -2,7 +2,6 @@
 .composer-model-popover {
   --composer-bg: var(--oc-surface-raised);
   --composer-hover: var(--oc-surface-control);
-  --composer-surface: var(--oc-surface-raised);
   --composer-border: var(--oc-border-strong);
   --composer-text: var(--oc-text-contrast);
   --composer-muted: var(--oc-text-muted);

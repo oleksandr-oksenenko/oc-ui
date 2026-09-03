@@ -182,7 +182,7 @@ export function mapConnectionFailure(
     });
   }
 
-  if (isTimeout(cause) || isTransportFailure(cause)) {
+  if (isTransportFailure(cause)) {
     return new OpenCodeConnectionError(
       phase === "stream" ? "stream-handshake" : "unreachable",
       phase === "health"
@@ -235,10 +235,6 @@ function findStatus(cause: unknown): number | undefined {
   if ("status" in cause && Predicate.isNumber(cause.status)) return cause.status;
   if ("cause" in cause) return findStatus(cause.cause);
   return undefined;
-}
-
-function isTimeout(cause: unknown): boolean {
-  return cause instanceof OpenCodeConnectionError && cause.reason === "unreachable";
 }
 
 function isTransportFailure(cause: unknown): boolean {

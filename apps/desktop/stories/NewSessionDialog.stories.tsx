@@ -276,21 +276,13 @@ export const DirectSessionCreationFailure = {
     }),
 };
 
-const narrowViewport = {
-  options: {
-    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
-  },
-};
-
 export const NarrowProjectSelection = {
-  parameters: { viewport: narrowViewport },
-  globals: { viewport: { value: "mobile390", isRotated: false } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: () => interactiveProjectSelection(),
 };
 
 export const NarrowWorktreeForm = {
-  parameters: { viewport: narrowViewport },
-  globals: { viewport: { value: "mobile390", isRotated: false } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: () => staticDialog(worktreeState),
 };
 

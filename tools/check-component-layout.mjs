@@ -263,7 +263,6 @@ for (const filePath of componentFiles) {
     }
   }
 
-  if (!filePath.startsWith(`${componentsRoot}${path.sep}`) && filePath !== appFile) continue;
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
       continue;
@@ -278,8 +277,7 @@ for (const filePath of componentFiles) {
     const specifier = statement.moduleSpecifier.text;
     if (!specifier.startsWith(".")) continue;
     const importedFile = resolveImport(specifier, filePath);
-    if (!importedFile || !isProductionComponent(importedFile) || !importedFile.endsWith(".tsx"))
-      continue;
+    if (!importedFile || !isProductionComponent(importedFile)) continue;
 
     const violation = componentImportViolation(filePath, importedFile);
     if (violation) addDiagnostic(filePath, violation);

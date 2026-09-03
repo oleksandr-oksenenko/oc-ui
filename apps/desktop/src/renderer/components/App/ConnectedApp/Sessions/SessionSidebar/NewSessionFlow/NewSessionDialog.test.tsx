@@ -1,9 +1,10 @@
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { createSignal } from "solid-js";
-import { render } from "solid-js/web";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
+import { mount as mountView } from "../../../../../../test/mount.ts";
+import { deferred } from "../../../../../../test/deferred.ts";
 import {
   NewSessionDialog,
   type NewSessionDialogProps,
@@ -73,8 +74,6 @@ function mount(
   mutation?: () => NewSessionDialogProps["mutation"],
   directoryList: OpenCodeClient["file"]["list"] = listDirectory,
 ) {
-  const host = document.createElement("div");
-  document.body.append(host);
   const actions = callbacks();
   const onClose = vi.fn<() => void>();
   let dialogRoot: HTMLDivElement | undefined;
@@ -99,21 +98,18 @@ function mount(
     return null;
   }
 
-  const dispose = render(
-    () => (
-      <ServerFlowDialogProvider>
-        <TestDialogHost />
-      </ServerFlowDialogProvider>
-    ),
-    host,
-  );
+  const { dispose } = mountView(() => (
+    <ServerFlowDialogProvider>
+      <TestDialogHost />
+    </ServerFlowDialogProvider>
+  ));
   return {
     get root() {
       return dialogRoot ?? document.body;
     },
     actions,
     onClose,
-    dispose: () => (dispose(), host.remove()),
+    dispose,
   };
 }
 
@@ -122,13 +118,15 @@ async function flushDialogMount(): Promise<void> {
 }
 
 describe("NewSessionDialog", () => {
-  it("reports project selection and opens the add-project flow", async () => {
-    const mounted = mount(() => ({
+  it("reports project selection and keeps Back and Cancel actions current", async () => {
+    const initialState: NewSessionDialogState = {
       view: "select-project",
       projects,
       selectedProjectID: "oc-ui",
       mode: "direct",
-    }));
+    };
+    const [state, setState] = createSignal<NewSessionDialogState>(initialState);
+    const mounted = mount(state);
     await flushDialogMount();
 
     [...mounted.root.querySelectorAll<HTMLButtonElement>("button")]
@@ -149,6 +147,19 @@ describe("NewSessionDialog", () => {
       .find((button) => button.textContent?.includes("API"))
       ?.click();
     expect(mounted.actions.onProjectChange).toHaveBeenCalledWith("api");
+
+    setState({ view: "worktree", project: projects[0], folderName: "", finalDirectory: "" });
+    mounted.actions.onBack.mockImplementation(() => setState(initialState));
+    const back = [...mounted.root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Back",
+    );
+    expect(back).toBeDefined();
+    back?.click();
+    expect(mounted.actions.onBack).toHaveBeenCalledOnce();
+    expect(mounted.onClose).not.toHaveBeenCalled();
+    expect(back?.textContent).toBe("Cancel");
+    back?.click();
+    expect(mounted.onClose).toHaveBeenCalledOnce();
     mounted.dispose();
   });
 
@@ -299,28 +310,32 @@ describe("NewSessionDialog", () => {
     }
   });
 
-  it("creates a worktree with its project identity and controlled inputs", async () => {
-    const mounted = mount(() => ({
-      view: "worktree",
-      project: projects[0],
-      parentLocation: { directory: "/srv/worktrees" },
-      folderName: "feature-one",
-      finalDirectory: "/srv/worktrees/feature-one",
-    }));
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
-    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
-    expect(mounted.actions.onCreateWorktree).toHaveBeenCalledOnce();
-    mounted.dispose();
-  });
+  it.each([undefined, "worktree", "session"] as const)(
+    "routes worktree submission after %s error",
+    async (kind) => {
+      const mounted = mount(() => ({
+        view: "worktree",
+        project: projects[0],
+        parentLocation: { directory: "/srv/worktrees" },
+        folderName: "feature-one",
+        finalDirectory: "/srv/worktrees/feature-one",
+        error: kind ? { kind, message: "Creation failed." } : undefined,
+      }));
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+      mounted.root
+        .querySelector("form")
+        ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+      expect(mounted.actions.onRetry.mock.calls).toEqual(kind ? [[kind]] : []);
+      expect(mounted.actions.onCreateWorktree).toHaveBeenCalledTimes(kind ? 0 : 1);
+      mounted.dispose();
+    },
+  );
 
   it("does not submit an old worktree parent while navigation is loading", async () => {
-    let resolveChild!: (output: FileListOutput) => void;
-    const child = new Promise<FileListOutput>((resolve) => {
-      resolveChild = resolve;
-    });
+    const child = deferred<FileListOutput>();
     const directoryList: OpenCodeClient["file"]["list"] = (input) => {
       const base = input?.location?.directory ?? "/";
-      if (base === "/srv/projects/feature") return child;
+      if (base === "/srv/projects/feature") return child.promise;
       return Promise.resolve({
         location: {
           directory: "/srv/projects",
@@ -347,7 +362,7 @@ describe("NewSessionDialog", () => {
     mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.actions.onCreateWorktree).not.toHaveBeenCalled();
 
-    resolveChild({
+    child.resolve({
       location: {
         directory: "/srv/projects/feature",
         project: {

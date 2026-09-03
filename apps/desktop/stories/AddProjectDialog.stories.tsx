@@ -8,24 +8,8 @@ import {
   AddProjectDialog,
   type AddProjectDialogError,
 } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/NewSessionFlow/AddProjectDialog.tsx";
+import { deferred } from "../src/renderer/test/deferred.ts";
 import { DialogStory } from "./DialogStory.tsx";
-
-type ControlledDeferred<T> = {
-  readonly promise: Promise<T>;
-  readonly resolve: (value: T) => void;
-};
-
-function deferred<T>(): ControlledDeferred<T> {
-  let resolve!: (value: T) => void;
-  // oxlint-disable-next-line effecttsgo/new-promise
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return {
-    promise,
-    resolve,
-  };
-}
 
 function response(
   directory: string,
@@ -66,7 +50,7 @@ const meta = {
 export default meta;
 type Story = StoryObj;
 const browseOnAddProject = fn<(location: LocationRef) => void>();
-const browseStoryState = new WeakMap<Element, ControlledDeferred<FileListOutput>>();
+const browseStoryState = new WeakMap<Element, ReturnType<typeof deferred<FileListOutput>>>();
 
 function dialog(
   options: {
@@ -200,15 +184,8 @@ export const AddingProject = {
   render: () => dialog({ adding: true }),
 };
 
-const narrowViewport = {
-  options: {
-    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
-  },
-};
-
 export const NarrowDirectoryBrowser = {
-  parameters: { viewport: narrowViewport },
-  globals: { viewport: { value: "mobile390", isRotated: false } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: () =>
     dialog({
       initialLocation: {

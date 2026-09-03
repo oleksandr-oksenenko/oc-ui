@@ -1,7 +1,7 @@
 import type { FormAnswer, FormInfo } from "@opencode-ai/client";
-import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount as mountView } from "../test/mount.ts";
 import { QuestionForm } from "./QuestionForm.tsx";
 
 const conditionalForm = {
@@ -41,27 +41,22 @@ function mount(
     readonly onOpenExternal?: (url: string) => void;
   } = {},
 ) {
-  const host = document.createElement("div");
-  document.body.append(host);
   const onSubmit = vi.fn<(answer: FormAnswer) => void>();
   const onCancel = vi.fn<() => void>();
-  const dispose = render(
-    () => (
-      <QuestionForm
-        form={form}
-        initialAnswer={options.initialAnswer}
-        disabled={options.disabled}
-        submitting={options.submitting}
-        error={options.error}
-        onSubmit={onSubmit}
-        onAnswerChange={options.onAnswerChange}
-        onCancel={onCancel}
-        onOpenExternal={options.onOpenExternal}
-      />
-    ),
-    host,
-  );
-  return { host, onSubmit, onCancel, dispose: () => (dispose(), host.remove()) };
+  const { host, dispose } = mountView(() => (
+    <QuestionForm
+      form={form}
+      initialAnswer={options.initialAnswer}
+      disabled={options.disabled}
+      submitting={options.submitting}
+      error={options.error}
+      onSubmit={onSubmit}
+      onAnswerChange={options.onAnswerChange}
+      onCancel={onCancel}
+      onOpenExternal={options.onOpenExternal}
+    />
+  ));
+  return { host, onSubmit, onCancel, dispose };
 }
 
 function submit(host: HTMLElement): void {

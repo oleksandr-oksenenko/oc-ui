@@ -76,14 +76,7 @@ export const LongContent = {
     }),
 };
 
-const narrowViewport = {
-  options: {
-    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
-  },
-};
-
 export const Narrow = {
-  parameters: { viewport: narrowViewport },
-  globals: { viewport: { value: "mobile390", isRotated: false } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: () => dialog({ descendantCount: 3, worktreeDirectory: "/srv/worktrees/old-session" }),
 };

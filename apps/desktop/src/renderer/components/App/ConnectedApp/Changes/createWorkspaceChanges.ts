@@ -128,27 +128,20 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
   };
 
   const rawFiles = createMemo<readonly FileDiffInfo[]>(() => diffSnapshot()?.files ?? EMPTY_FILES);
-  const mappedFiles = createMemo(() =>
-    rawFiles().map((file) => ({
-      path: file.file,
-      patch: file.patch,
-      additions: file.additions,
-      deletions: file.deletions,
-      status: file.status,
-    })),
-  );
+  // A new snapshot array resets file expansion, even when it reuses SDK objects.
+  const files = createMemo(() => rawFiles().map((file) => ({ ...file })));
 
   const diff = createMemo<DiffViewProps>(() => {
     const location = selectedLocation();
     const snapshot = diffSnapshot();
     const branch = location && input.runtime.data.location.vcs.info(location)?.branch;
     const defaultBranch = branch?.default;
-    const files = mappedFiles();
+    const currentFiles = files();
     const review = reviewView();
 
     if (!location || !snapshot) {
       return {
-        files,
+        files: currentFiles,
         loading: false,
         emptyMessage: "Select a session to view changes",
         emptyDescription: "The Diff panel follows the selected session's workspace location.",
@@ -160,7 +153,7 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
     }
 
     return {
-      files,
+      files: currentFiles,
       loading: snapshot.status === "loading",
       error: snapshot.status === "failed" ? snapshot.error : undefined,
       stale: snapshot.stale,

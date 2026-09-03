@@ -73,7 +73,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   ): void => {
     void dialog.show(element, onClose).then(() => {
       activeDialog = dialog.active;
-      if (closingFlow && dialog.active === activeDialog) dialog.close();
+      if (closingFlow) dialog.close();
       return undefined;
     });
   };

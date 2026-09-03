@@ -1,8 +1,9 @@
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
-import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount as mountView } from "../../../../../../test/mount.ts";
+import { deferred } from "../../../../../../test/deferred.ts";
 import { AddProjectDialog, type AddProjectDialogError } from "./AddProjectDialog.tsx";
 import {
   ServerFlowDialogProvider,
@@ -38,8 +39,6 @@ function mount(
     readonly listDirectory?: OpenCodeClient["file"]["list"];
   } = {},
 ) {
-  const host = document.createElement("div");
-  document.body.append(host);
   const list = options.listDirectory ?? listDirectory();
   const onClose = vi.fn<() => void>();
   const onAddProject = vi.fn<(location: LocationRef) => void>();
@@ -66,14 +65,11 @@ function mount(
     return null;
   }
 
-  const dispose = render(
-    () => (
-      <ServerFlowDialogProvider>
-        <TestDialogHost />
-      </ServerFlowDialogProvider>
-    ),
-    host,
-  );
+  const { dispose } = mountView(() => (
+    <ServerFlowDialogProvider>
+      <TestDialogHost />
+    </ServerFlowDialogProvider>
+  ));
   return {
     get root() {
       return dialogRoot ?? document.body;
@@ -81,7 +77,7 @@ function mount(
     list,
     onClose,
     onAddProject,
-    dispose: () => (dispose(), host.remove()),
+    dispose,
   };
 }
 
@@ -99,14 +95,11 @@ describe("AddProjectDialog", () => {
   });
 
   it("does not submit the previous directory while navigation is loading", async () => {
-    let resolveChild!: (output: FileListOutput) => void;
-    const child = new Promise<FileListOutput>((resolve) => {
-      resolveChild = resolve;
-    });
+    const child = deferred<FileListOutput>();
     const mounted = mount({
       listDirectory: (input) =>
         input?.location?.directory === "/srv/projects/oc-ui"
-          ? child
+          ? child.promise
           : Promise.resolve(response("/srv/projects")),
     });
     await flush();
@@ -121,7 +114,7 @@ describe("AddProjectDialog", () => {
     mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.onAddProject).not.toHaveBeenCalled();
 
-    resolveChild(response("/srv/projects/oc-ui"));
+    child.resolve(response("/srv/projects/oc-ui"));
     await flush();
     mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.onAddProject).toHaveBeenCalledWith({ directory: "/srv/projects/oc-ui" });

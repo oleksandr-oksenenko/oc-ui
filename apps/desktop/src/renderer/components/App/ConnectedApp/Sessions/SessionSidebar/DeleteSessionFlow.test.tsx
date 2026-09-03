@@ -1,20 +1,25 @@
-import type { OpenCodeClient, SessionInfo } from "@opencode-ai/client";
+import type { OpenCodeClient } from "@opencode-ai/client";
 import { createSignal, Show } from "solid-js";
 import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { sessionFixture } from "../../../../../test/session-fixture.ts";
 import { ServerFlowDialogProvider } from "../../../../../ui/ServerFlowDialogProvider.tsx";
 import { DeleteSessionFlow } from "./DeleteSessionFlow.tsx";
 
-const session: SessionInfo = {
+const session = sessionFixture({
   id: "root",
   title: "Remove old experiment",
-  projectID: "project",
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
   location: { directory: "/project" },
-};
+});
+
+function buttonWithText(label: string): HTMLButtonElement {
+  const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+    (item) => item.textContent?.trim() === label,
+  );
+  if (candidate === undefined) throw new Error(`${label} button was not rendered`);
+  return candidate;
+}
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -48,11 +53,7 @@ describe("DeleteSessionFlow", () => {
     }, host);
 
     const cancelButton = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Cancel",
-      );
-      if (candidate === undefined) throw new Error("Cancel button was not rendered");
-      return candidate;
+      return buttonWithText("Cancel");
     });
     cancelButton.click();
 
@@ -94,11 +95,8 @@ describe("DeleteSessionFlow", () => {
       expect(document.body.textContent).toContain(
         "The worktree at /worktrees/experiment, including uncommitted changes and its branch, will also be permanently deleted.",
       );
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
+      const candidate = buttonWithText("Delete session");
       expect(candidate).not.toBeUndefined();
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
       return candidate;
     });
     button.click();
@@ -144,11 +142,8 @@ describe("DeleteSessionFlow", () => {
     );
 
     const button = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
+      const candidate = buttonWithText("Delete session");
       expect(candidate).not.toBeUndefined();
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
       return candidate;
     });
     button.click();
@@ -191,11 +186,7 @@ describe("DeleteSessionFlow", () => {
     );
 
     const button = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
-      return candidate;
+      return buttonWithText("Delete session");
     });
     button.click();
 
@@ -244,11 +235,7 @@ describe("DeleteSessionFlow", () => {
     );
 
     const deleteButton = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
-      return candidate;
+      return buttonWithText("Delete session");
     });
     deleteButton.click();
 
@@ -256,11 +243,7 @@ describe("DeleteSessionFlow", () => {
       expect(document.body.textContent).toContain(
         "The session was deleted, but its worktree could not be removed.",
       );
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Finish deletion",
-      );
-      if (candidate === undefined) throw new Error("Finish deletion button was not rendered");
-      return candidate;
+      return buttonWithText("Finish deletion");
     });
     finishButton.click();
 
@@ -309,11 +292,7 @@ describe("DeleteSessionFlow", () => {
     );
 
     const deleteButton = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
-      return candidate;
+      return buttonWithText("Delete session");
     });
     deleteButton.click();
 

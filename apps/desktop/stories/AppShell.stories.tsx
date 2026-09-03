@@ -31,7 +31,7 @@ const sessions = [
 
 const diffFiles: readonly DiffFileData[] = [
   {
-    path: "src/renderer/components/Workspace.tsx",
+    file: "src/renderer/components/Workspace.tsx",
     additions: 2,
     deletions: 1,
     status: "modified",

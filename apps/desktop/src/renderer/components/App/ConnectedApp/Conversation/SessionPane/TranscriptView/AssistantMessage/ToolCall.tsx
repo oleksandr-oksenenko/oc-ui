@@ -16,7 +16,6 @@ export type ToolCallProps = {
 
 export function ToolCall(props: ToolCallProps): JSX.Element {
   const details = () => toolDetails(props.tool);
-  const expandable = () => details().length > 0;
   const status = () => props.tool.state.status;
   const statusLabel = () =>
     status() === "completed"
@@ -29,7 +28,7 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
 
   return (
     <Collapsible class={`transcript-tool-call transcript-tool-${status()}`} defaultOpen={false}>
-      <Collapsible.Trigger class="transcript-tool-header" disabled={!expandable()}>
+      <Collapsible.Trigger class="transcript-tool-header">
         {renderToolIcon(props.tool.name)}
         <span class="transcript-tool-copy">
           <span class="transcript-tool-name">{props.tool.name}</span>
@@ -49,16 +48,12 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
           </Show>
           <span>{statusLabel()}</span>
         </span>
-        <Show when={expandable()}>
-          <Collapsible.Arrow />
-        </Show>
+        <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content>
-        <Show when={expandable()}>
-          <div class="transcript-tool-details">
-            <For each={details()}>{(detail) => detail}</For>
-          </div>
-        </Show>
+        <div class="transcript-tool-details">
+          <For each={details()}>{(detail) => detail}</For>
+        </div>
       </Collapsible.Content>
     </Collapsible>
   );
@@ -71,10 +66,6 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
     case "running":
       return [<pre class="transcript-tool-output">{formatObject(tool.state)}</pre>];
     case "completed":
-      return [
-        <pre class="transcript-tool-output">{formatObject(tool.state)}</pre>,
-        ...tool.state.content.map((content) => renderToolContent(content)),
-      ];
     case "error":
       return [
         <pre class="transcript-tool-output">{formatObject(tool.state)}</pre>,

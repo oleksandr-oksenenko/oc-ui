@@ -126,15 +126,14 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
 
   const hydrate = async (sessionID: string): Promise<void> => {
     const currentHydration = ++hydration;
+    const isCurrent = () => alive && currentHydration === hydration && selectedID() === sessionID;
     setTranscriptState({ sessionID, status: "loading" });
     try {
-      await input.runtime.syncTranscript(sessionID, {
-        isCurrent: () => alive && currentHydration === hydration && selectedID() === sessionID,
-      });
-      if (!alive || currentHydration !== hydration || selectedID() !== sessionID) return;
+      await input.runtime.syncTranscript(sessionID, { isCurrent });
+      if (!isCurrent()) return;
       setTranscriptState({ sessionID, status: "ready" });
     } catch {
-      if (!alive || currentHydration !== hydration || selectedID() !== sessionID) return;
+      if (!isCurrent()) return;
       setTranscriptState({
         sessionID,
         status: "failed",

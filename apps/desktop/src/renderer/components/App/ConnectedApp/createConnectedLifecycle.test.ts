@@ -1,17 +1,8 @@
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../../../test/deferred.ts";
 import { createConnectedLifecycle } from "./createConnectedLifecycle.ts";
-
-function deferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (cause?: unknown) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return { promise, resolve, reject };
-}
 
 function setup(ready: Promise<void>) {
   const [status, setStatus] = createSignal<"connected" | "reconnecting">("connected");
@@ -65,14 +56,17 @@ function setup(ready: Promise<void>) {
   };
 }
 
+function mount(fixture: ReturnType<typeof setup>) {
+  return createRoot((dispose) => {
+    createConnectedLifecycle(fixture);
+    return dispose;
+  });
+}
+
 describe("createConnectedLifecycle", () => {
   it("announces connection after location setup, then refreshes feature data", async () => {
     const fixture = setup(Promise.resolve());
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      createConnectedLifecycle(fixture);
-    });
+    const dispose = mount(fixture);
 
     await vi.waitFor(() => expect(fixture.sessions.syncCatalog).toHaveBeenCalledOnce());
     expect(fixture.calls).toEqual(["location", "connected", "catalog", "models"]);
@@ -83,11 +77,7 @@ describe("createConnectedLifecycle", () => {
   it("reports initial setup failure while mounted", async () => {
     const failure = new Error("offline");
     const fixture = setup(Promise.reject(failure));
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      createConnectedLifecycle(fixture);
-    });
+    const dispose = mount(fixture);
 
     await vi.waitFor(() => expect(fixture.onInitialFailure).toHaveBeenCalledWith(failure));
     expect(fixture.onConnected).not.toHaveBeenCalled();
@@ -95,13 +85,9 @@ describe("createConnectedLifecycle", () => {
   });
 
   it("does not publish setup results after its owner is disposed", async () => {
-    const ready = deferred<void>();
+    const ready = deferred();
     const fixture = setup(ready.promise);
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      createConnectedLifecycle(fixture);
-    });
+    const dispose = mount(fixture);
 
     dispose();
     ready.resolve();
@@ -113,17 +99,13 @@ describe("createConnectedLifecycle", () => {
   });
 
   it("waits for initial feature sync before refreshing after reconnect", async () => {
-    const initialCatalog = deferred<void>();
+    const initialCatalog = deferred();
     const fixture = setup(Promise.resolve());
     fixture.sessions.syncCatalog.mockImplementationOnce(async () => {
       fixture.calls.push("catalog");
       await initialCatalog.promise;
     });
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      createConnectedLifecycle(fixture);
-    });
+    const dispose = mount(fixture);
 
     await vi.waitFor(() => expect(fixture.sessions.syncCatalog).toHaveBeenCalledOnce());
     fixture.setStatus("reconnecting");
@@ -155,11 +137,7 @@ describe("createConnectedLifecycle", () => {
       fixture.calls.push("catalog");
       throw initialFailure;
     });
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      createConnectedLifecycle(fixture);
-    });
+    const dispose = mount(fixture);
 
     await vi.waitFor(() => expect(fixture.sessions.syncCatalog).toHaveBeenCalledOnce());
     fixture.setStatus("reconnecting");
@@ -172,13 +150,9 @@ describe("createConnectedLifecycle", () => {
   });
 
   it("does not refresh feature data after disconnecting during location recovery", async () => {
-    const reconnectLocation = deferred<void>();
+    const reconnectLocation = deferred();
     const fixture = setup(Promise.resolve());
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      createConnectedLifecycle(fixture);
-    });
+    const dispose = mount(fixture);
     await vi.waitFor(() => expect(fixture.sessions.syncCatalog).toHaveBeenCalledOnce());
     fixture.runtime.data.location.syncInfo.mockImplementationOnce(async () => {
       fixture.calls.push("location");

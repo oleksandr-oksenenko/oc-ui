@@ -1,16 +1,9 @@
+import type { FileDiffInfo } from "@opencode-ai/client";
 import { parseDiffFromFile, parsePatchFiles, processFile } from "@pierre/diffs";
 import type { FileContents, FileDiffMetadata, SelectedLineRange } from "@pierre/diffs";
 
 import type { ReviewComment } from "../../../../../../domain/review-drafts.ts";
 export type { ReviewComment } from "../../../../../../domain/review-drafts.ts";
-
-type PatchFile = {
-  readonly path: string;
-  readonly patch: string;
-  readonly additions: number;
-  readonly deletions: number;
-  readonly status: "added" | "deleted" | "modified";
-};
 
 export type DiffRenderData =
   | {
@@ -50,7 +43,7 @@ type PatchState = {
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 const NO_NEWLINE = "\\ No newline at end of file";
 
-export function prepareDiffRender(file: PatchFile): DiffRenderData | undefined {
+export function prepareDiffRender(file: FileDiffInfo): DiffRenderData | undefined {
   const complete = reconstructCompleteFiles(file);
   if (complete) {
     try {
@@ -59,7 +52,7 @@ export function prepareDiffRender(file: PatchFile): DiffRenderData | undefined {
         ...complete,
         fileDiff: {
           ...parseDiffFromFile(complete.oldFile, complete.newFile, undefined, true),
-          name: file.path,
+          name: file.file,
           type: file.status === "added" ? "new" : file.status === "deleted" ? "deleted" : "change",
         },
       };
@@ -73,7 +66,7 @@ export function prepareDiffRender(file: PatchFile): DiffRenderData | undefined {
 }
 
 export function reconstructCompleteFiles(
-  file: PatchFile,
+  file: FileDiffInfo,
 ): { readonly oldFile: FileContents; readonly newFile: FileContents } | undefined {
   const state = readCompletePatch(file.patch);
   if (!state || state.additions !== file.additions || state.deletions !== file.deletions)
@@ -83,8 +76,8 @@ export function reconstructCompleteFiles(
   if (file.status === "deleted" && state.newLines.length !== 0) return undefined;
 
   return {
-    oldFile: { name: file.path, contents: state.oldLines.join("") },
-    newFile: { name: file.path, contents: state.newLines.join("") },
+    oldFile: { name: file.file, contents: state.oldLines.join("") },
+    newFile: { name: file.file, contents: state.newLines.join("") },
   };
 }
 
@@ -185,19 +178,19 @@ function appendBodyLine(state: PatchState, prefix: string, rawLine: string): boo
   return current.oldSeen <= current.oldCount && current.newSeen <= current.newCount;
 }
 
-export function parseFilePatch(file: PatchFile): FileDiffMetadata | undefined {
+export function parseFilePatch(file: FileDiffInfo): FileDiffMetadata | undefined {
   try {
     const candidates = parsePatchFiles(file.patch, undefined, true).flatMap((patch) => patch.files);
-    const parsed = candidates.find((candidate) => candidate.name === file.path) ?? candidates[0];
+    const parsed = candidates.find((candidate) => candidate.name === file.file) ?? candidates[0];
     const fallback =
       parsed ??
-      processFile(`--- a/${file.path}\n+++ b/${file.path}\n${file.patch}`, {
+      processFile(`--- a/${file.file}\n+++ b/${file.file}\n${file.patch}`, {
         throwOnError: true,
       });
     if (!fallback || fallback.hunks.length === 0) return undefined;
     return {
       ...fallback,
-      name: file.path,
+      name: file.file,
       type: file.status === "added" ? "new" : file.status === "deleted" ? "deleted" : "change",
     };
   } catch {

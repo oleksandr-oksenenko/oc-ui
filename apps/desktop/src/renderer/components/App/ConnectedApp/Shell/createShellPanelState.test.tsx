@@ -1,17 +1,29 @@
-import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount } from "../../../../test/mount.ts";
 import { createShellPanelState, MOBILE_SHELL_MEDIA_QUERY } from "./createShellPanelState.ts";
 
 function mountState(options?: { leftSidebarOpen?: boolean; rightPanelOpen?: boolean }) {
   let state!: ReturnType<typeof createShellPanelState>;
-  const host = document.createElement("div");
-  document.body.append(host);
-  const dispose = render(() => {
+  const { host, dispose } = mount(() => {
     state = createShellPanelState(options);
     return <div />;
-  }, host);
+  });
   return { state, dispose, host };
+}
+
+function stubMatchMedia(matches: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches,
+      media: MOBILE_SHELL_MEDIA_QUERY,
+      addEventListener:
+        vi.fn<(type: string, listener: (event: MediaQueryListEvent) => void) => void>(),
+      removeEventListener:
+        vi.fn<(type: string, listener: (event: MediaQueryListEvent) => void) => void>(),
+    })),
+  );
 }
 
 describe("createShellPanelState", () => {
@@ -34,22 +46,11 @@ describe("createShellPanelState", () => {
     expect(mounted.state.leftSidebarOpen()).toBe(false);
     expect(mounted.state.rightPanelOpen()).toBe(false);
     mounted.dispose();
-    mounted.host.remove();
     vi.unstubAllGlobals();
   });
 
   it("keeps mobile overlays mutually exclusive", () => {
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn(() => ({
-        matches: true,
-        media: MOBILE_SHELL_MEDIA_QUERY,
-        addEventListener:
-          vi.fn<(type: string, listener: (event: MediaQueryListEvent) => void) => void>(),
-        removeEventListener:
-          vi.fn<(type: string, listener: (event: MediaQueryListEvent) => void) => void>(),
-      })),
-    );
+    stubMatchMedia(true);
     const mounted = mountState();
     mounted.state.setLeftSidebarOpen(true);
     expect(mounted.state.leftSidebarOpen()).toBe(true);
@@ -58,22 +59,11 @@ describe("createShellPanelState", () => {
     expect(mounted.state.leftSidebarOpen()).toBe(false);
     expect(mounted.state.rightPanelOpen()).toBe(true);
     mounted.dispose();
-    mounted.host.remove();
     vi.unstubAllGlobals();
   });
 
   it("closes an open mobile overlay with Escape", () => {
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn(() => ({
-        matches: true,
-        media: MOBILE_SHELL_MEDIA_QUERY,
-        addEventListener:
-          vi.fn<(type: string, listener: (event: MediaQueryListEvent) => void) => void>(),
-        removeEventListener:
-          vi.fn<(type: string, listener: (event: MediaQueryListEvent) => void) => void>(),
-      })),
-    );
+    stubMatchMedia(true);
     const mounted = mountState();
     mounted.state.setRightPanelOpen(true);
     const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
@@ -82,28 +72,16 @@ describe("createShellPanelState", () => {
     expect(mounted.state.rightPanelOpen()).toBe(false);
     expect(event.defaultPrevented).toBe(true);
     mounted.dispose();
-    mounted.host.remove();
     vi.unstubAllGlobals();
   });
 
   it("preserves desktop panel options", () => {
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn(() => ({
-        matches: false,
-        media: MOBILE_SHELL_MEDIA_QUERY,
-        addEventListener:
-          vi.fn<(type: string, listener: (event: MediaQueryListEvent) => void) => void>(),
-        removeEventListener:
-          vi.fn<(type: string, listener: (event: MediaQueryListEvent) => void) => void>(),
-      })),
-    );
+    stubMatchMedia(false);
     const mounted = mountState({ leftSidebarOpen: true, rightPanelOpen: true });
     expect(mounted.state.mobile()).toBe(false);
     expect(mounted.state.leftSidebarOpen()).toBe(true);
     expect(mounted.state.rightPanelOpen()).toBe(true);
     mounted.dispose();
-    mounted.host.remove();
     vi.unstubAllGlobals();
   });
 });

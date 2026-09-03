@@ -3,6 +3,7 @@ import type { FormWithLocation } from "@opencode-ai/client/solid";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../../../../test/deferred.ts";
 import { createOpenCodeEventSource } from "../../../../opencode/event-source.ts";
 import { createGlobalForms, type CreateGlobalFormsInput } from "./createGlobalForms.ts";
 
@@ -44,26 +45,6 @@ function created(
   };
   if (eventLocation === undefined) return event;
   return { ...event, location: eventLocation };
-}
-
-function deferred<T>() {
-  let resolvePromise: ((value: T | PromiseLike<T>) => void) | undefined;
-  let rejectPromise: ((reason: Error) => void) | undefined;
-  const promise = new Promise<T>((resolve, reject) => {
-    resolvePromise = resolve;
-    rejectPromise = (reason) => reject(reason);
-  });
-  return {
-    promise,
-    resolve(value: T) {
-      if (!resolvePromise) throw new Error("Deferred promise was not initialized.");
-      resolvePromise(value);
-    },
-    reject(reason: Error) {
-      if (!rejectPromise) throw new Error("Deferred promise was not initialized.");
-      rejectPromise(reason);
-    },
-  };
 }
 
 function setup(initialConnected = false, initialForms: FormWithLocation[] = []) {
@@ -159,8 +140,8 @@ describe("createGlobalForms", () => {
     root.setConnected(true);
     await settle();
     root.sync.mockClear();
-    const first = deferred<void>();
-    const second = deferred<void>();
+    const first = deferred();
+    const second = deferred();
     root.sync
       .mockImplementationOnce(() => first.promise)
       .mockImplementationOnce(() => second.promise);
@@ -186,8 +167,8 @@ describe("createGlobalForms", () => {
     root.setConnected(true);
     await settle();
     root.sync.mockClear();
-    const stale = deferred<void>();
-    const current = deferred<void>();
+    const stale = deferred();
+    const current = deferred();
     root.sync
       .mockImplementationOnce(() => stale.promise)
       .mockImplementationOnce(() => current.promise);
@@ -210,7 +191,7 @@ describe("createGlobalForms", () => {
 
   it("invalidates an in-flight refresh when the connection drops", async () => {
     const root = setup();
-    const pending = deferred<void>();
+    const pending = deferred();
     root.sync.mockImplementationOnce(() => pending.promise);
 
     root.setConnected(true);
@@ -253,7 +234,7 @@ describe("createGlobalForms", () => {
     const root = setup(false, [form("one")]);
     root.setConnected(true);
     await settle();
-    const pending = deferred<void>();
+    const pending = deferred();
     root.reply.mockImplementationOnce(() => pending.promise);
 
     const first = root.value.reply("one", { answer: "first" });
@@ -274,7 +255,7 @@ describe("createGlobalForms", () => {
     const root = setup(false, [form("replying"), form("blocked")]);
     root.setConnected(true);
     await settle();
-    const replyPending = deferred<void>();
+    const replyPending = deferred();
     root.reply.mockImplementationOnce(() => replyPending.promise);
     root.cancel.mockRejectedValueOnce(new Error("Cancellation refused."));
 

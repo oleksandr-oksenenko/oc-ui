@@ -181,6 +181,11 @@ const callbacks = {
 const meta = {
   title: "Conversation/QuestionForm",
   component: QuestionForm,
+  render: (args) => (
+    <main style={frameStyle}>
+      <QuestionForm {...args} />
+    </main>
+  ),
   parameters: { layout: "fullscreen" },
   args: {
     form: workspaceQuestionForm,
@@ -243,21 +248,10 @@ const transcriptFrameStyle: JSX.CSSProperties = {
   background: "#000",
 };
 
-export const SingleQuestion: Story = {
-  render: (args) => (
-    <main style={frameStyle}>
-      <QuestionForm {...args} />
-    </main>
-  ),
-};
+export const SingleQuestion: Story = {};
 
 export const CompleteForm: Story = {
   args: { form: fullForm },
-  render: (args) => (
-    <main style={frameStyle}>
-      <QuestionForm {...args} />
-    </main>
-  ),
 };
 
 export const InTranscript: Story = {
@@ -402,20 +396,10 @@ export const OpenCodeDefaults: Story = {
 
 export const ValidationErrors: Story = {
   args: { form: validationForm },
-  render: (args) => (
-    <main style={frameStyle}>
-      <QuestionForm {...args} />
-    </main>
-  ),
 };
 
 export const Submitting: Story = {
   args: { form: fullForm, submitting: true },
-  render: (args) => (
-    <main style={frameStyle}>
-      <QuestionForm {...args} />
-    </main>
-  ),
 };
 
 export const SubmissionError: Story = {
@@ -423,20 +407,10 @@ export const SubmissionError: Story = {
     form: fullForm,
     error: "The server could not accept this answer. Review the fields and try again.",
   },
-  render: (args) => (
-    <main style={frameStyle}>
-      <QuestionForm {...args} />
-    </main>
-  ),
 };
 
 export const Disabled: Story = {
   args: { form: fullForm, disabled: true },
-  render: (args) => (
-    <main style={frameStyle}>
-      <QuestionForm {...args} />
-    </main>
-  ),
 };
 
 export const NarrowLayout: Story = {

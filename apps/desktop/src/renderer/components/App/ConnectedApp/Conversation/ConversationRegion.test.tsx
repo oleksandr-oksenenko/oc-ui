@@ -1,8 +1,10 @@
-import type { FormInfo, SessionInfo } from "@opencode-ai/client";
+import type { FormInfo } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
-import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount } from "../../../../test/mount.ts";
+import { sessionFixture } from "../../../../test/session-fixture.ts";
+import { stubResizeObserver } from "../../../../test/resize-observer.ts";
 import { ConversationRegion } from "./ConversationRegion.tsx";
 import type { SessionFormsController } from "./createSessionForms.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
@@ -10,15 +12,11 @@ import type { SessionAgentSelectionController } from "./createSessionAgentSelect
 import type { SessionWorkspace } from "../Sessions/createSessionWorkspace.ts";
 import type { ModelSelection } from "../../../../opencode/model-selection.ts";
 
-const session: SessionInfo = {
+const session = sessionFixture({
   id: "ses_forms",
   title: "Forms",
-  projectID: "project",
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
   location: { directory: "/workspace" },
-};
+});
 
 const form = (id: string, title: string): FormInfo => ({
   id,
@@ -33,14 +31,7 @@ const formForSession = (sessionID: string, id: string, title: string): FormInfo 
 });
 
 function setup(initialForms: readonly FormInfo[] = []) {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
+  stubResizeObserver();
   const [forms, setForms] = createSignal<readonly FormInfo[]>(initialForms);
   const [state, setState] = createSignal<"loading" | "ready" | "failed">("ready");
   const [connected, setConnected] = createSignal(true);
@@ -106,21 +97,16 @@ function setup(initialForms: readonly FormInfo[] = []) {
     sync: vi.fn<SessionAgentSelectionController["sync"]>(async () => undefined),
     selectAgent: vi.fn<SessionAgentSelectionController["selectAgent"]>(async () => undefined),
   };
-  const host = document.createElement("div");
-  document.body.append(host);
-  const dispose = render(
-    () => (
-      <ConversationRegion
-        workspace={workspace}
-        composer={composer}
-        modelSelection={modelSelection}
-        agentSelection={agentSelection}
-        forms={formsController}
-        connected={connected}
-      />
-    ),
-    host,
-  );
+  const { host, dispose } = mount(() => (
+    <ConversationRegion
+      workspace={workspace}
+      composer={composer}
+      modelSelection={modelSelection}
+      agentSelection={agentSelection}
+      forms={formsController}
+      connected={connected}
+    />
+  ));
   return {
     host,
     formsController,
@@ -129,7 +115,6 @@ function setup(initialForms: readonly FormInfo[] = []) {
     setConnected,
     dispose: () => {
       dispose();
-      host.remove();
       vi.unstubAllGlobals();
     },
   };

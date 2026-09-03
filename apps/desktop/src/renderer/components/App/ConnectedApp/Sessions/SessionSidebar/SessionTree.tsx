@@ -45,30 +45,28 @@ export function SessionTree(props: SessionTreeProps) {
           return undefined;
         });
         return (
-          <>
-            <SessionTreeItem
-              session={session()}
-              status={props.statusForSession(session().id)}
-              requiresInput={props.requiresInputForSession?.(session().id)}
-              hasChildren={node.children.length > 0}
-              depth={depth}
-              selected={props.selectedID === session().id}
-              expanded={filtering() || isExpanded(session().id)}
-              deleteDisabled={deleteDisabledReason() !== undefined}
-              deleteDisabledReason={deleteDisabledReason()}
-              onSelect={props.onSelect}
-              onToggleExpanded={(sessionID) => {
-                if (!filtering()) props.onToggleExpanded(sessionID);
-              }}
-              onDelete={props.onDelete}
-            >
-              {node.children.length > 0 ? (
-                <div class="shell-session-children" style={{ "--session-depth": `${depth + 1}` }}>
-                  {renderSessions(node.children, depth + 1)}
-                </div>
-              ) : null}
-            </SessionTreeItem>
-          </>
+          <SessionTreeItem
+            session={session()}
+            status={props.statusForSession(session().id)}
+            requiresInput={props.requiresInputForSession?.(session().id)}
+            hasChildren={node.children.length > 0}
+            depth={depth}
+            selected={props.selectedID === session().id}
+            expanded={filtering() || isExpanded(session().id)}
+            deleteDisabled={deleteDisabledReason() !== undefined}
+            deleteDisabledReason={deleteDisabledReason()}
+            onSelect={props.onSelect}
+            onToggleExpanded={(sessionID) => {
+              if (!filtering()) props.onToggleExpanded(sessionID);
+            }}
+            onDelete={props.onDelete}
+          >
+            {node.children.length > 0 ? (
+              <div class="shell-session-children" style={{ "--session-depth": `${depth + 1}` }}>
+                {renderSessions(node.children, depth + 1)}
+              </div>
+            ) : null}
+          </SessionTreeItem>
         );
       }}
     </For>
@@ -84,17 +82,15 @@ export function SessionTree(props: SessionTreeProps) {
           }
         >
           <For each={projection().groups}>
-            {(group) => {
-              return (
-                <section
-                  class="shell-session-group"
-                  aria-labelledby={`shell-session-group-${group.id}`}
-                >
-                  <h2 id={`shell-session-group-${group.id}`}>{group.label}</h2>
-                  <div class="shell-session-group-tree">{renderSessions(group.roots, 0)}</div>
-                </section>
-              );
-            }}
+            {(group) => (
+              <section
+                class="shell-session-group"
+                aria-labelledby={`shell-session-group-${group.id}`}
+              >
+                <h2 id={`shell-session-group-${group.id}`}>{group.label}</h2>
+                <div class="shell-session-group-tree">{renderSessions(group.roots, 0)}</div>
+              </section>
+            )}
           </For>
         </Show>
       </nav>

@@ -124,7 +124,6 @@
   --text-diff-delete-base: var(--oc-diff-deletion);
 
   /* Published OpenCode tokens are the bridge into every upstream primitive. */
-  --v2-text-text-strong: var(--oc-text-strong);
   --v2-text-text-base: var(--oc-text-base);
   --v2-text-text-muted: var(--oc-text-muted);
   --v2-text-text-faint: var(--oc-text-faint);

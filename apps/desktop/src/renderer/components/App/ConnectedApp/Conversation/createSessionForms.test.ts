@@ -2,6 +2,7 @@ import type { FormAnswer, FormInfo, OpenCodeEvent } from "@opencode-ai/client";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../../../../test/deferred.ts";
 import { createOpenCodeEventSource } from "../../../../opencode/event-source.ts";
 import { createSessionForms } from "./createSessionForms.ts";
 
@@ -87,7 +88,7 @@ describe("createSessionForms", () => {
 
   it("syncs only the selected session and projects its live form list", async () => {
     const fixture = setup({ selectedID: "one", listed: [form("one-form", "one")] });
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one"));
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
     expect(fixture.forms.sessionForms()).toEqual([form("one-form", "one")]);
 
     fixture.setListed([form("replacement", "one")]);
@@ -100,29 +101,29 @@ describe("createSessionForms", () => {
   });
 
   it("starts the next selected session without waiting for an active read", async () => {
-    let resolveFirst!: () => void;
-    let resolveSecond!: () => void;
+    const firstRead = deferred();
+    const secondRead = deferred();
     const sync = vi
       .fn<FormData["sync"]>()
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (resolveFirst = resolve)))
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (resolveSecond = resolve)));
+      .mockReturnValueOnce(firstRead.promise)
+      .mockReturnValueOnce(secondRead.promise);
     const fixture = setup({ selectedID: "one", sync });
 
     // The setup read is already owned by the controller; wait for its first call.
-    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one"));
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one", undefined));
     fixture.setSelectedID("two");
-    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("two"));
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("two", undefined));
     expect(sync).toHaveBeenCalledTimes(2);
 
-    resolveFirst();
-    resolveSecond();
+    firstRead.resolve();
+    secondRead.resolve();
     await Promise.resolve();
     fixture.dispose();
   });
 
   it("invalidates every local form event immediately and ignores global forms", async () => {
     const fixture = setup({ selectedID: "one" });
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one"));
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
     fixture.sync.mockClear();
     const order: string[] = [];
     fixture.invalidate.mockImplementation(() => order.push("invalidate"));
@@ -131,11 +132,11 @@ describe("createSessionForms", () => {
     });
 
     fixture.emitCreated(created("one"));
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one"));
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
     expect(order).toEqual(["invalidate", "sync"]);
 
     fixture.setSelectedID("two");
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("two"));
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("two", undefined));
     fixture.sync.mockClear();
     fixture.invalidate.mockClear();
     fixture.emitCreated(created("one", "unselected"));
@@ -145,23 +146,23 @@ describe("createSessionForms", () => {
     expect(fixture.invalidate).toHaveBeenCalledWith("one");
 
     fixture.setSelectedID("one");
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one"));
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
     expect(fixture.invalidate).toHaveBeenCalledOnce();
     fixture.dispose();
   });
 
   it("does not sync or mutate while disconnected, and ignores a late sync failure", async () => {
-    let rejectSync!: (cause: Error) => void;
+    const syncRead = deferred();
     const sync = vi
       .fn<FormData["sync"]>()
-      .mockImplementationOnce(() => new Promise<void>((_, reject) => (rejectSync = reject)))
+      .mockReturnValueOnce(syncRead.promise)
       .mockResolvedValue(undefined);
     const fixture = setup({
       selectedID: "one",
       listed: [form("one-form", "one")],
       sync,
     });
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one"));
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
 
     fixture.setConnected(false);
     await fixture.forms.reply("one-form", { answer: "no" });
@@ -169,7 +170,7 @@ describe("createSessionForms", () => {
     expect(fixture.reply).not.toHaveBeenCalled();
     expect(fixture.cancel).not.toHaveBeenCalled();
 
-    rejectSync(new Error("offline"));
+    syncRead.reject(new Error("offline"));
     await Promise.resolve();
     expect(fixture.forms.error()).toBeUndefined();
     fixture.setConnected(true);
@@ -181,13 +182,11 @@ describe("createSessionForms", () => {
   });
 
   it("clears the previous session state when selection changes while disconnected", async () => {
-    let rejectSync!: (cause: Error) => void;
-    const sync = vi
-      .fn<FormData["sync"]>()
-      .mockImplementationOnce(() => new Promise<void>((_, reject) => (rejectSync = reject)));
+    const syncRead = deferred();
+    const sync = vi.fn<FormData["sync"]>().mockReturnValueOnce(syncRead.promise);
     const fixture = setup({ selectedID: "one", sync });
-    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one"));
-    rejectSync(new Error("offline"));
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one", undefined));
+    syncRead.reject(new Error("offline"));
     await vi.waitFor(() => expect(fixture.forms.state()).toBe("failed"));
 
     fixture.setConnected(false);
@@ -200,39 +199,39 @@ describe("createSessionForms", () => {
   });
 
   it("does not let an old session failure affect the newly selected session", async () => {
-    let rejectFirst!: (cause: Error) => void;
-    let resolveSecond!: () => void;
+    const firstRead = deferred();
+    const secondRead = deferred();
     const sync = vi
       .fn<FormData["sync"]>()
-      .mockImplementationOnce(() => new Promise<void>((_, reject) => (rejectFirst = reject)))
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (resolveSecond = resolve)));
+      .mockReturnValueOnce(firstRead.promise)
+      .mockReturnValueOnce(secondRead.promise);
     const fixture = setup({ selectedID: "one", sync });
 
-    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one"));
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one", undefined));
     fixture.setSelectedID("two");
-    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("two"));
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("two", undefined));
 
-    rejectFirst(new Error("old session failed"));
+    firstRead.reject(new Error("old session failed"));
     await Promise.resolve();
     expect(fixture.forms.state()).toBe("loading");
     expect(fixture.forms.error()).toBeUndefined();
 
-    resolveSecond();
+    secondRead.resolve();
     await vi.waitFor(() => expect(fixture.forms.state()).toBe("ready"));
     fixture.dispose();
   });
 
   it("keeps cached forms on failure and returns ready after a successful retry", async () => {
-    let rejectFirst!: (cause: Error) => void;
+    const firstRead = deferred();
     const sync = vi
       .fn<FormData["sync"]>()
-      .mockImplementationOnce(() => new Promise<void>((_, reject) => (rejectFirst = reject)))
+      .mockReturnValueOnce(firstRead.promise)
       .mockResolvedValue(undefined);
     const listed = [form("cached", "one")];
     const fixture = setup({ selectedID: "one", listed, sync });
 
-    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one"));
-    rejectFirst(new Error("offline"));
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one", undefined));
+    firstRead.reject(new Error("offline"));
     await vi.waitFor(() => expect(fixture.forms.state()).toBe("failed"));
     expect(fixture.forms.sessionForms()).toEqual(listed);
     expect(fixture.forms.error()).toBe("Forms could not be refreshed. Try again.");
@@ -244,39 +243,35 @@ describe("createSessionForms", () => {
   });
 
   it("invalidates and requests another sync when a form is created during a read", async () => {
-    let resolveFirst!: () => void;
-    let resolveSecond!: () => void;
+    const firstRead = deferred();
+    const secondRead = deferred();
     const sync = vi
       .fn<FormData["sync"]>()
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (resolveFirst = resolve)))
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (resolveSecond = resolve)));
+      .mockReturnValueOnce(firstRead.promise)
+      .mockReturnValueOnce(secondRead.promise);
     const fixture = setup({ selectedID: "one", sync });
 
-    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one"));
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledWith("one", undefined));
     fixture.emitCreated(created("one", "during-sync"));
     expect(fixture.invalidate).toHaveBeenCalledWith("one");
     expect(sync).toHaveBeenCalledTimes(2);
 
-    resolveFirst();
-    resolveSecond();
+    firstRead.resolve();
+    secondRead.resolve();
     await Promise.resolve();
     fixture.dispose();
   });
 
   it("tracks mutations independently, keeps failed forms, and scopes errors per form", async () => {
-    let resolveReply!: () => void;
-    let rejectCancel!: (cause: Error) => void;
+    const replyRequest = deferred();
+    const cancelRequest = deferred();
     const fixture = setup({
       selectedID: "one",
       listed: [form("reply-form", "one"), form("cancel-form", "one")],
     });
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one"));
-    fixture.reply.mockImplementationOnce(
-      () => new Promise<void>((resolve) => (resolveReply = resolve)),
-    );
-    fixture.cancel.mockImplementationOnce(
-      () => new Promise<void>((_, reject) => (rejectCancel = reject)),
-    );
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+    fixture.reply.mockReturnValueOnce(replyRequest.promise);
+    fixture.cancel.mockReturnValueOnce(cancelRequest.promise);
 
     const answer: FormAnswer = { answer: "yes" };
     const reply = fixture.forms.reply("reply-form", answer);
@@ -285,44 +280,47 @@ describe("createSessionForms", () => {
     expect(fixture.forms.submitting("reply-form")).toBe(true);
     expect(fixture.forms.submitting("cancel-form")).toBe(true);
     expect(fixture.forms.sessionForms()).toHaveLength(2);
-    expect(fixture.reply).toHaveBeenCalledWith({ sessionID: "one", formID: "reply-form", answer });
+    expect(fixture.reply).toHaveBeenCalledWith(
+      { sessionID: "one", formID: "reply-form", answer },
+      undefined,
+    );
     expect(fixture.reply).toHaveBeenCalledTimes(1);
-    expect(fixture.cancel).toHaveBeenCalledWith({ sessionID: "one", formID: "cancel-form" });
+    expect(fixture.cancel).toHaveBeenCalledWith(
+      { sessionID: "one", formID: "cancel-form" },
+      undefined,
+    );
 
-    rejectCancel(new Error("cancel failed"));
-    await cancel;
+    cancelRequest.reject(new Error("cancel failed"));
+    await expect(cancel).resolves.toBeUndefined();
     expect(fixture.forms.errorFor("cancel-form")).toBe(
       "The form could not be cancelled. Try again.",
     );
     expect(fixture.forms.errorFor("reply-form")).toBeUndefined();
-    resolveReply();
-    await reply;
+    replyRequest.resolve();
+    await expect(reply).resolves.toBeUndefined();
     expect(fixture.forms.submitting("reply-form")).toBe(false);
     expect(fixture.forms.sessionForms()).toHaveLength(2);
     fixture.dispose();
   });
 
   it("does not present a late mutation error after selection changes or unmount", async () => {
-    let rejectReply!: (cause: Error) => void;
+    const replyRequest = deferred();
     const fixture = setup({ selectedID: "one", listed: [form("one-form", "one")] });
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one"));
-    fixture.reply.mockImplementationOnce(
-      () => new Promise<void>((_, reject) => (rejectReply = reject)),
-    );
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+    fixture.reply.mockReturnValueOnce(replyRequest.promise);
     const reply = fixture.forms.reply("one-form", { answer: "yes" });
     fixture.setSelectedID("two");
-    rejectReply(new Error("late"));
-    await reply;
+    replyRequest.reject(new Error("late"));
+    await expect(reply).resolves.toBeUndefined();
     expect(fixture.forms.errorFor("one-form")).toBeUndefined();
 
     fixture.setSelectedID("one");
-    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one"));
-    fixture.reply.mockImplementationOnce(
-      () => new Promise<void>((_, reject) => (rejectReply = reject)),
-    );
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+    const unmountedReply = deferred();
+    fixture.reply.mockReturnValueOnce(unmountedReply.promise);
     const unmounted = fixture.forms.reply("one-form", { answer: "again" });
     fixture.dispose();
-    rejectReply(new Error("unmounted"));
+    unmountedReply.reject(new Error("unmounted"));
     await unmounted;
   });
 });

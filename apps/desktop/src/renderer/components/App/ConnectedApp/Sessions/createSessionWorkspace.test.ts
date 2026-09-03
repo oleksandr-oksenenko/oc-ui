@@ -2,18 +2,17 @@ import type { SessionInfo, SessionMessageInfo } from "@opencode-ai/client";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { createSessionWorkspace, type SessionWorkspaceRuntime } from "./createSessionWorkspace.ts";
 
-const session = (id: string, updated: number, parentID?: string): SessionInfo => ({
-  id,
-  parentID,
-  title: id,
-  projectID: "project",
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: updated, updated },
-  location: { directory: "/project" },
-});
+const session = (id: string, updated: number, parentID?: string): SessionInfo =>
+  sessionFixture({
+    id,
+    parentID,
+    title: id,
+    time: { created: updated, updated },
+    location: { directory: "/project" },
+  });
 
 const bootstrapped = () => true;
 
@@ -61,6 +60,17 @@ function setup(initial: readonly SessionInfo[]) {
   };
 }
 
+function mount(fixture: ReturnType<typeof setup>) {
+  return createRoot((dispose) => ({
+    workspace: createSessionWorkspace({
+      runtime: fixture.runtime,
+      connected: fixture.connected,
+      bootstrapped: fixture.bootstrapped,
+    }),
+    dispose,
+  }));
+}
+
 describe("createSessionWorkspace", () => {
   it("interrupts the selected running session and serializes repeated stops", async () => {
     const fixture = setup([session("one", 1)]);
@@ -71,16 +81,7 @@ describe("createSessionWorkspace", () => {
           resolveInterrupt = () => resolve({ interrupted: true });
         }),
     );
-    let workspace!: ReturnType<typeof createSessionWorkspace>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      workspace = createSessionWorkspace({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        bootstrapped: fixture.bootstrapped,
-      });
-    });
+    const { workspace, dispose } = mount(fixture);
     fixture.setStatus("one", "running");
 
     const firstStop = workspace.stop();
@@ -96,16 +97,7 @@ describe("createSessionWorkspace", () => {
   it("reports an interrupt failure for the selected session", async () => {
     const fixture = setup([session("one", 1)]);
     vi.mocked(fixture.runtime.api.session.interrupt).mockRejectedValue(new Error("offline"));
-    let workspace!: ReturnType<typeof createSessionWorkspace>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      workspace = createSessionWorkspace({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        bootstrapped: fixture.bootstrapped,
-      });
-    });
+    const { workspace, dispose } = mount(fixture);
     fixture.setStatus("one", "running");
 
     await workspace.stop();
@@ -116,16 +108,7 @@ describe("createSessionWorkspace", () => {
 
   it("sorts catalog-admitted sessions by update time and id", () => {
     const fixture = setup([session("z", 1), session("b", 4), session("a", 4)]);
-    let workspace!: ReturnType<typeof createSessionWorkspace>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      workspace = createSessionWorkspace({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        bootstrapped: fixture.bootstrapped,
-      });
-    });
+    const { workspace, dispose } = mount(fixture);
 
     expect(workspace.sessions().map((item) => item.id)).toEqual(["a", "b", "z"]);
     dispose();
@@ -133,16 +116,7 @@ describe("createSessionWorkspace", () => {
 
   it("ignores disconnected and unchanged selections", async () => {
     const fixture = setup([session("one", 1), session("two", 2)]);
-    let workspace!: ReturnType<typeof createSessionWorkspace>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      workspace = createSessionWorkspace({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        bootstrapped: fixture.bootstrapped,
-      });
-    });
+    const { workspace, dispose } = mount(fixture);
 
     expect(workspace.selectedID()).toBe("two");
     fixture.setConnected(false);
@@ -160,16 +134,7 @@ describe("createSessionWorkspace", () => {
     const root = session("root", 1);
     const child = session("child", 2, "root");
     const fixture = setup([root, child]);
-    let workspace!: ReturnType<typeof createSessionWorkspace>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      workspace = createSessionWorkspace({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        bootstrapped: fixture.bootstrapped,
-      });
-    });
+    const { workspace, dispose } = mount(fixture);
 
     workspace.select("child");
     await vi.waitFor(() => expect(workspace.selectedID()).toBe("child"));
@@ -183,16 +148,7 @@ describe("createSessionWorkspace", () => {
 
   it("preserves recovery failure for the session that remains selected", () => {
     const fixture = setup([session("one", 1), session("two", 2)]);
-    let workspace!: ReturnType<typeof createSessionWorkspace>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      workspace = createSessionWorkspace({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        bootstrapped: fixture.bootstrapped,
-      });
-    });
+    const { workspace, dispose } = mount(fixture);
 
     workspace.select("two");
     workspace.beginRecovery();
@@ -205,16 +161,7 @@ describe("createSessionWorkspace", () => {
 
   it("does not fail a newly selected session after recovery begins", () => {
     const fixture = setup([session("one", 1), session("two", 2)]);
-    let workspace!: ReturnType<typeof createSessionWorkspace>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      workspace = createSessionWorkspace({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        bootstrapped: fixture.bootstrapped,
-      });
-    });
+    const { workspace, dispose } = mount(fixture);
 
     workspace.select("two");
     workspace.beginRecovery();
@@ -226,16 +173,7 @@ describe("createSessionWorkspace", () => {
 
   it("does not fail a session when recovery started without a selection", () => {
     const fixture = setup([]);
-    let workspace!: ReturnType<typeof createSessionWorkspace>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      workspace = createSessionWorkspace({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        bootstrapped: fixture.bootstrapped,
-      });
-    });
+    const { workspace, dispose } = mount(fixture);
 
     workspace.beginRecovery();
     workspace.failRecovery();

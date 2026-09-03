@@ -2,6 +2,7 @@ import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { describe, expect, it } from "vite-plus/test";
 
+import { mount } from "../../../../test/mount.ts";
 import { Workspace } from "./Workspace.tsx";
 
 function pointerEvent(
@@ -48,22 +49,17 @@ describe("Workspace", () => {
   });
 
   it("resizes both sidebars from accessible separator controls", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <main class="app-shell-v2">
-          <Workspace
-            leftSidebarOpen
-            rightPanelOpen
-            sidebar={<div>Sessions</div>}
-            main={<div>Transcript</div>}
-            context={<div>Context</div>}
-          />
-        </main>
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <main class="app-shell-v2">
+        <Workspace
+          leftSidebarOpen
+          rightPanelOpen
+          sidebar={<div>Sessions</div>}
+          main={<div>Transcript</div>}
+          context={<div>Context</div>}
+        />
+      </main>
+    ));
 
     const separators = host.querySelectorAll<HTMLElement>('[role="separator"]');
     expect(separators).toHaveLength(2);
@@ -80,26 +76,20 @@ describe("Workspace", () => {
     expect(shell?.style.getPropertyValue("--shell-right-panel-width")).toBe("536px");
 
     dispose();
-    host.remove();
   });
 
   it("tracks pointer drags outside the resize handle and highlights only the active side", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <main class="app-shell-v2">
-          <Workspace
-            leftSidebarOpen
-            rightPanelOpen
-            sidebar={<div>Sessions</div>}
-            main={<div>Transcript</div>}
-            context={<div>Context</div>}
-          />
-        </main>
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <main class="app-shell-v2">
+        <Workspace
+          leftSidebarOpen
+          rightPanelOpen
+          sidebar={<div>Sessions</div>}
+          main={<div>Transcript</div>}
+          context={<div>Context</div>}
+        />
+      </main>
+    ));
 
     const workspace = host.querySelector<HTMLElement>(".shell-workspace");
     const left = host.querySelector<HTMLElement>(".shell-left-resize-handle");
@@ -140,7 +130,6 @@ describe("Workspace", () => {
     expect(workspace.classList.contains("resizing")).toBe(false);
 
     dispose();
-    host.remove();
   });
 
   it("only exposes resize handles for visible sidebars", () => {
@@ -163,21 +152,16 @@ describe("Workspace", () => {
   });
 
   it("uses modal dialogs, inert main content, and no resize handles on mobile", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Workspace
-          mobile
-          leftSidebarOpen
-          rightPanelOpen
-          sidebar={<div>Sessions</div>}
-          main={<button type="button">Transcript action</button>}
-          context={<div>Context</div>}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Workspace
+        mobile
+        leftSidebarOpen
+        rightPanelOpen
+        sidebar={<div>Sessions</div>}
+        main={<button type="button">Transcript action</button>}
+        context={<div>Context</div>}
+      />
+    ));
 
     expect(
       host.querySelector('[role="dialog"][aria-label="Sessions"]')?.getAttribute("aria-modal"),
@@ -192,27 +176,21 @@ describe("Workspace", () => {
     expect(host.querySelectorAll('[role="separator"]')).toHaveLength(0);
 
     dispose();
-    host.remove();
   });
 
   it("moves focus into a mobile overlay when it opens", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
     const [leftOpen, setLeftOpen] = createSignal(false);
     const [rightOpen, setRightOpen] = createSignal(false);
-    const dispose = render(
-      () => (
-        <Workspace
-          mobile
-          leftSidebarOpen={leftOpen()}
-          rightPanelOpen={rightOpen()}
-          sidebar={<button autofocus>Hide sessions</button>}
-          main={<button type="button">Transcript action</button>}
-          context={<button autofocus>Hide context</button>}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Workspace
+        mobile
+        leftSidebarOpen={leftOpen()}
+        rightPanelOpen={rightOpen()}
+        sidebar={<button autofocus>Hide sessions</button>}
+        main={<button type="button">Transcript action</button>}
+        context={<button autofocus>Hide context</button>}
+      />
+    ));
 
     setLeftOpen(true);
     await Promise.resolve();
@@ -224,6 +202,5 @@ describe("Workspace", () => {
     expect(host.querySelector(".shell-right-panel [autofocus]")).toBe(document.activeElement);
 
     dispose();
-    host.remove();
   });
 });

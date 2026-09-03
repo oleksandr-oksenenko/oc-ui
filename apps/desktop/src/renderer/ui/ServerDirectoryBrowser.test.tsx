@@ -1,25 +1,10 @@
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
-import { render } from "solid-js/web";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount as mountView } from "../test/mount.ts";
+import { deferred } from "../test/deferred.ts";
 import { ServerDirectoryBrowser } from "./ServerDirectoryBrowser.tsx";
-
-type Deferred<T> = {
-  readonly promise: Promise<T>;
-  readonly resolve: (value: T) => void;
-  readonly reject: (cause: unknown) => void;
-};
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (cause: unknown) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return { promise, resolve, reject };
-}
 
 function response(
   directory: string,
@@ -37,7 +22,7 @@ function response(
 }
 
 function queuedApi() {
-  const requests: Deferred<FileListOutput>[] = [];
+  const requests: ReturnType<typeof deferred<FileListOutput>>[] = [];
   const list = vi.fn<OpenCodeClient["file"]["list"]>(() => {
     const request = deferred<FileListOutput>();
     requests.push(request);
@@ -59,23 +44,18 @@ function mount(
     readonly validationError?: string;
   } = {},
 ) {
-  const host = document.createElement("div");
-  document.body.append(host);
   const onDirectoryChange = vi.fn<(location: LocationRef) => void>();
-  const dispose = render(
-    () => (
-      <ServerDirectoryBrowser
-        listDirectory={listDirectory}
-        label="Project directory"
-        initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
-        disabled={options.disabled}
-        validationError={options.validationError}
-        onDirectoryChange={onDirectoryChange}
-      />
-    ),
-    host,
-  );
-  return { host, onDirectoryChange, dispose: () => (dispose(), host.remove()) };
+  const { host, dispose } = mountView(() => (
+    <ServerDirectoryBrowser
+      listDirectory={listDirectory}
+      label="Project directory"
+      initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
+      disabled={options.disabled}
+      validationError={options.validationError}
+      onDirectoryChange={onDirectoryChange}
+    />
+  ));
+  return { host, onDirectoryChange, dispose };
 }
 
 describe("ServerDirectoryBrowser", () => {
@@ -208,20 +188,15 @@ describe("ServerDirectoryBrowser", () => {
   it("ignores stale responses from an older directory request", async () => {
     const queued = queuedApi();
     const [initialDirectory, setInitialDirectory] = createSignal("/srv/first");
-    const mountedHost = document.createElement("div");
-    document.body.append(mountedHost);
     const onDirectoryChange = vi.fn<(location: LocationRef) => void>();
-    const dispose = render(
-      () => (
-        <ServerDirectoryBrowser
-          listDirectory={queued.list}
-          label="Project directory"
-          initialLocation={{ directory: initialDirectory() }}
-          onDirectoryChange={onDirectoryChange}
-        />
-      ),
-      mountedHost,
-    );
+    const { host: mountedHost, dispose } = mountView(() => (
+      <ServerDirectoryBrowser
+        listDirectory={queued.list}
+        label="Project directory"
+        initialLocation={{ directory: initialDirectory() }}
+        onDirectoryChange={onDirectoryChange}
+      />
+    ));
     await flush();
     setInitialDirectory("/srv/second");
     await flush();
@@ -237,7 +212,6 @@ describe("ServerDirectoryBrowser", () => {
     expect(onDirectoryChange).toHaveBeenCalledOnce();
     expect(onDirectoryChange).toHaveBeenCalledWith({ directory: "/srv/second" });
     dispose();
-    mountedHost.remove();
   });
 
   it("keeps the last resolved directory when navigation fails", async () => {

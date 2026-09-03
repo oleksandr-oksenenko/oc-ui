@@ -1,3 +1,4 @@
+import type { FileDiffInfo } from "@opencode-ai/client";
 import { Show, createMemo, createSignal } from "solid-js";
 import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { DiffChanges } from "@opencode-ai/ui/diff-changes";
@@ -7,12 +8,7 @@ import type { DiffFileReview } from "./diff-render-data.ts";
 import { prepareDiffRender } from "./diff-render-data.ts";
 export { parseFilePatch } from "./diff-render-data.ts";
 
-export type DiffFileData = {
-  readonly path: string;
-  readonly patch: string;
-  readonly additions: number;
-  readonly deletions: number;
-  readonly status: "added" | "deleted" | "modified";
+export type DiffFileData = FileDiffInfo & {
   readonly defaultExpanded?: boolean;
 };
 
@@ -36,11 +32,11 @@ export function DiffFile(props: DiffFileProps) {
         <header class="diff-file-header">
           <Collapsible.Trigger
             class="diff-file-toggle"
-            aria-label={`${expanded() ? "Collapse" : "Expand"} ${props.file.path}`}
+            aria-label={`${expanded() ? "Collapse" : "Expand"} ${props.file.file}`}
           >
             <span class="diff-file-name">
               <Collapsible.Arrow class="diff-file-disclosure" />
-              <span title={props.file.path}>{props.file.path}</span>
+              <span title={props.file.file}>{props.file.file}</span>
             </span>
           </Collapsible.Trigger>
           <div class="diff-file-stats">
@@ -62,7 +58,7 @@ export function DiffFile(props: DiffFileProps) {
             fallback={<p class="diff-file-unavailable">This patch could not be displayed.</p>}
           >
             {(diff) => (
-              <PierreDiffBody diff={diff()} path={props.file.path} review={props.review} />
+              <PierreDiffBody diff={diff()} path={props.file.file} review={props.review} />
             )}
           </Show>
         </Collapsible.Content>

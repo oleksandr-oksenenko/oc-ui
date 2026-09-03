@@ -1,4 +1,4 @@
-import type { LocationRef, SessionMessageInfo } from "@opencode-ai/client";
+import type { SessionMessageInfo } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { Button } from "@opencode-ai/ui/button";
 import { createAutoScroll } from "@opencode-ai/ui/hooks";
@@ -134,25 +134,17 @@ function renderMessage(message: SessionMessageInfo, sessionStatus: DataSessionSt
           id={message.id}
           icon="folder"
           label="Location switched"
-          detail={locationName(message.location)}
+          detail={message.location.directory}
         />
       );
     case "compaction":
       return <CompactionMessage message={message} />;
     case "system":
-      return (
-        <ContextMessage
-          id={message.id}
-          label="System context"
-          text={message.text}
-          description={message.description}
-        />
-      );
     case "synthetic":
       return (
         <ContextMessage
           id={message.id}
-          label="Context"
+          label={message.type === "system" ? "System context" : "Context"}
           text={message.text}
           description={message.description}
         />
@@ -166,8 +158,4 @@ function renderMessage(message: SessionMessageInfo, sessionStatus: DataSessionSt
 
 function modelName(model: { readonly providerID: string; readonly id: string }): string {
   return `${model.providerID}/${model.id}`;
-}
-
-function locationName(location: LocationRef): string {
-  return location.directory;
 }

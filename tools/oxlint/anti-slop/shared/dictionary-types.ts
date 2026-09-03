@@ -1,3 +1,5 @@
+import { typeReferenceName, unwrapExpression } from "./ast.ts";
+
 import type { ESTree } from "@oxlint/plugins";
 
 const BUILT_INS = new Set([
@@ -95,10 +97,6 @@ export function createTypeEnvironment(program: ESTree.Program): TypeEnvironment 
 	return { aliases, interfaces, shadowedBuiltIns };
 }
 
-function typeReferenceName(type: ESTree.TSTypeReference): string | null {
-	return type.typeName.type === "Identifier" ? type.typeName.name : null;
-}
-
 function isBuiltIn(name: string, environment: TypeEnvironment): boolean {
 	return BUILT_INS.has(name) && !environment.shadowedBuiltIns.has(name);
 }
@@ -140,7 +138,7 @@ function isEffectivelyEmptyMember(member: ESTree.TSSignature): boolean {
 }
 
 function isEffectivelyEmptyTypeLiteral(type: ESTree.TSTypeLiteral): boolean {
-	return type.members.length === 0 || type.members.every(isEffectivelyEmptyMember);
+	return type.members.every(isEffectivelyEmptyMember);
 }
 
 function isEffectivelyEmptyInterface(
@@ -151,7 +149,7 @@ function isEffectivelyEmptyInterface(
 	return (
 		type !== undefined &&
 		type.extends.length === 0 &&
-		(type.body.body.length === 0 || type.body.body.every(isEffectivelyEmptyMember))
+		type.body.body.every(isEffectivelyEmptyMember)
 	);
 }
 
@@ -371,13 +369,12 @@ export function classifyWideningTarget(
 	}
 	const substitutions = aliasSubstitution(alias, unwrapped, new Map());
 	if (substitutions === null) return null;
-	const resolved = classifyAliasBroadTarget(
+	return classifyAliasBroadTarget(
 		alias.typeAnnotation,
 		environment,
 		substitutions,
 		new Set([name]),
 	);
-	return resolved;
 }
 
 function isBroadMappedKey(
@@ -478,16 +475,7 @@ export function isPopulatedObjectExpression(expression: ESTree.Expression): bool
 }
 
 export function isKnownEvidenceExpression(expression: ESTree.Expression): boolean {
-	let current = expression;
-	while (
-		current.type === "ParenthesizedExpression" ||
-		current.type === "TSAsExpression" ||
-		current.type === "TSTypeAssertion" ||
-		current.type === "TSNonNullExpression" ||
-		current.type === "TSSatisfiesExpression"
-	) {
-		current = current.expression;
-	}
+	const current = unwrapExpression(expression);
 	if (current.type === "ObjectExpression") return true;
 	return (
 		current.type === "ArrayExpression" ||

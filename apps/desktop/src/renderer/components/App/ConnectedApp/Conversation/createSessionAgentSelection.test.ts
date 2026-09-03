@@ -2,6 +2,7 @@ import type { AgentInfo, LocationRef, SessionInfo } from "@opencode-ai/client";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { createSessionAgentSelection } from "./createSessionAgentSelection.ts";
 
 const location = { directory: "/workspace", workspaceID: "workspace" } satisfies LocationRef;
@@ -29,15 +30,11 @@ function session(
   sessionLocation: LocationRef = location,
   agentID?: string,
 ): SessionInfo {
-  return {
+  return sessionFixture({
     id,
     agent: agentID,
-    projectID: "project",
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 1, updated: 1 },
     location: sessionLocation,
-  };
+  });
 }
 
 function setup(
@@ -241,12 +238,10 @@ describe("createSessionAgentSelection", () => {
 
   it("does not let a stale load failure replace the current session state", async () => {
     let rejectFirst!: (cause: Error) => void;
-    let call = 0;
-    const syncAgents = vi.fn<SelectionData["location"]["agent"]["sync"]>(() => {
-      call += 1;
-      if (call > 1) return Promise.resolve();
-      return new Promise<void>((_, reject) => (rejectFirst = reject));
-    });
+    const syncAgents = vi
+      .fn<SelectionData["location"]["agent"]["sync"]>()
+      .mockResolvedValue(undefined)
+      .mockImplementationOnce(() => new Promise<void>((_, reject) => (rejectFirst = reject)));
     const fixture = setup({
       selected: session("one", location),
       listed: [agent("primary")],

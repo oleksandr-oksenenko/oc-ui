@@ -3,7 +3,6 @@ import type { Data, ClientConnectionStatus } from "@opencode-ai/client/solid";
 import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { createEffect, getOwner, onCleanup } from "solid-js";
 import { createOpenCodeEventSource } from "./event-source";
-import type { OpenCodeEventSource } from "./event-source";
 import { mapConnectionFailure } from "./connection";
 import { createSessionCatalog } from "./session-catalog";
 import type { SessionCatalog } from "./session-catalog";
@@ -35,20 +34,16 @@ export type ConnectedRuntime = {
   ) => Promise<void>;
 };
 
-type RuntimeFactoryInput = RuntimeConnection & {
-  readonly events?: OpenCodeEventSource;
-};
-
 /**
  * Create one OpenCode data runtime. Call this from a mounted Solid component
  * or another Solid owner; the public client uses that owner for stream cleanup.
  */
-export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRuntime {
+export function createConnectedRuntime(input: RuntimeConnection): ConnectedRuntime {
   if (!getOwner()) {
     throw new Error("createConnectedRuntime must run inside a Solid owner");
   }
 
-  const events = input.events ?? createOpenCodeEventSource();
+  const events = createOpenCodeEventSource();
   const stream = createClientConnection(input.api, { onEvent: events.emit });
   const data = createData({
     api: () => input.api,
@@ -96,7 +91,7 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
   // This hook only owns the bridge created by this module.
   onCleanup(() => {
     stopReady();
-    if (!input.events) events.close();
+    events.close();
   });
 
   const syncTranscript = (sessionID: string, options?: { readonly isCurrent?: () => boolean }) =>

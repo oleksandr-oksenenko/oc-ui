@@ -1,32 +1,19 @@
 import type { FormAnswer, LocationRef } from "@opencode-ai/client";
+import type { Data, FormWithLocation } from "@opencode-ai/client/solid";
 import { createEffect, createMemo, createSignal, on, onCleanup, type Accessor } from "solid-js";
-
-export type FormControllerForm = {
-  readonly id: string;
-  readonly sessionID: string;
-};
 
 type FormControllerState = "loading" | "ready" | "failed";
 
-export type FormControllerInput<Form extends FormControllerForm> = {
+type FormControllerInput = {
   readonly connected: Accessor<boolean>;
   readonly sessionID: Accessor<string | undefined>;
   readonly location?: LocationRef;
-  readonly list: (sessionID: string, location?: LocationRef) => readonly Form[] | undefined;
-  readonly sync: (sessionID: string, location?: LocationRef) => Promise<void>;
-  readonly reply: (
-    input: { readonly sessionID: string; readonly formID: string; readonly answer: FormAnswer },
-    location?: LocationRef,
-  ) => Promise<void>;
-  readonly cancel: (
-    input: { readonly sessionID: string; readonly formID: string },
-    location?: LocationRef,
-  ) => Promise<void>;
+  readonly form: Pick<Data["session"]["form"], "list" | "sync" | "reply" | "cancel">;
   readonly errorMessage: (kind: "sync" | "reply" | "cancel", cause: unknown) => string;
 };
 
-export type FormController<Form extends FormControllerForm> = {
-  readonly forms: Accessor<readonly Form[]>;
+type FormController = {
+  readonly forms: Accessor<readonly FormWithLocation[]>;
   readonly state: Accessor<FormControllerState>;
   readonly error: Accessor<string | undefined>;
   readonly pending: Accessor<boolean>;
@@ -41,13 +28,8 @@ type MutationKind = "reply" | "cancel";
 
 const mutationKey = (sessionID: string, formID: string): string => `${sessionID}\u0000${formID}`;
 
-/**
- * Shared lifecycle and mutation state for session-scoped and location-scoped forms.
- * Adapters supply the client methods because the client has optional location arguments.
- */
-export function createFormController<Form extends FormControllerForm>(
-  input: FormControllerInput<Form>,
-): FormController<Form> {
+/** Shared lifecycle and mutation state for session-scoped and location-scoped forms. */
+export function createFormController(input: FormControllerInput): FormController {
   const selectedAtStart = input.sessionID();
   const [state, setState] = createSignal<FormControllerState>(
     selectedAtStart !== undefined && input.connected() ? "loading" : "ready",
@@ -63,10 +45,10 @@ export function createFormController<Form extends FormControllerForm>(
   let alive = true;
   let previouslyConnected = input.connected();
 
-  const forms = createMemo<readonly Form[]>(() => {
+  const forms = createMemo<readonly FormWithLocation[]>(() => {
     formsVersion();
     const sessionID = input.sessionID();
-    return sessionID === undefined ? [] : (input.list(sessionID, input.location) ?? []);
+    return sessionID === undefined ? [] : (input.form.list(sessionID, input.location) ?? []);
   });
 
   const isCurrent = (sessionID: string, generation: number, run: number): boolean =>
@@ -76,7 +58,7 @@ export function createFormController<Form extends FormControllerForm>(
     input.sessionID() === sessionID;
 
   const hasForm = (sessionID: string, formID: string): boolean =>
-    input.list(sessionID, input.location)?.some((form) => form.id === formID) === true;
+    input.form.list(sessionID, input.location)?.some((form) => form.id === formID) === true;
 
   const sync = async (): Promise<void> => {
     const run = ++syncGeneration;
@@ -84,12 +66,7 @@ export function createFormController<Form extends FormControllerForm>(
     const generation = scopeGeneration;
 
     if (!alive) return;
-    if (sessionID === undefined) {
-      setError(undefined);
-      setState("ready");
-      return;
-    }
-    if (!input.connected()) {
+    if (sessionID === undefined || !input.connected()) {
       setError(undefined);
       setState("ready");
       return;
@@ -98,7 +75,7 @@ export function createFormController<Form extends FormControllerForm>(
     setError(undefined);
     setState("loading");
     try {
-      await input.sync(sessionID, input.location);
+      await input.form.sync(sessionID, input.location);
       if (!isCurrent(sessionID, generation, run)) return;
       setFormsVersion((version) => version + 1);
       setState("ready");
@@ -151,32 +128,28 @@ export function createFormController<Form extends FormControllerForm>(
     setMutationVersion((version) => version + 1);
     const generation = scopeGeneration;
 
-    const run = async (): Promise<boolean> => {
-      if (!alive) {
-        pendingMutations.delete(key);
-        return false;
+    if (!alive) {
+      pendingMutations.delete(key);
+      return false;
+    }
+    try {
+      if (kind === "reply") {
+        await input.form.reply({ sessionID, formID, answer: answer ?? {} }, input.location);
+      } else {
+        await input.form.cancel({ sessionID, formID }, input.location);
       }
-      try {
-        if (kind === "reply") {
-          await input.reply({ sessionID, formID, answer: answer ?? {} }, input.location);
-        } else {
-          await input.cancel({ sessionID, formID }, input.location);
-        }
-        return true;
-      } catch (cause) {
-        if (alive && scopeGeneration === generation && input.sessionID() === sessionID) {
-          const message = input.errorMessage(kind, cause);
-          mutationErrors.set(key, message);
-          setMutationVersion((version) => version + 1);
-        }
-        return false;
-      } finally {
-        pendingMutations.delete(key);
+      return true;
+    } catch (cause) {
+      if (alive && scopeGeneration === generation && input.sessionID() === sessionID) {
+        const message = input.errorMessage(kind, cause);
+        mutationErrors.set(key, message);
         setMutationVersion((version) => version + 1);
       }
-    };
-
-    return run();
+      return false;
+    } finally {
+      pendingMutations.delete(key);
+      setMutationVersion((version) => version + 1);
+    }
   };
 
   createEffect(

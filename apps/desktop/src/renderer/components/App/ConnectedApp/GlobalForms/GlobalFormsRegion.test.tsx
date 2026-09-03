@@ -4,6 +4,7 @@ import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../../../../test/deferred.ts";
 import type { GlobalFormsController } from "./createGlobalForms.ts";
 import { GlobalFormsRegion } from "./GlobalFormsRegion.tsx";
 
@@ -18,20 +19,6 @@ function form(
   fields: FormInfo["fields"] = [{ key: "answer", type: "string", title: "Answer", required: true }],
 ): FormInfo {
   return { id, sessionID: "global", title, fields };
-}
-
-function deferred<T>() {
-  let resolvePromise: ((value: T | PromiseLike<T>) => void) | undefined;
-  const promise = new Promise<T>((resolve) => {
-    resolvePromise = resolve;
-  });
-  return {
-    promise,
-    resolve(value: T) {
-      if (!resolvePromise) throw new Error("Deferred promise was not initialized.");
-      resolvePromise(value);
-    },
-  };
 }
 
 function controller(initial: readonly FormInfo[] = []) {

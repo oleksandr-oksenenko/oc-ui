@@ -1,21 +1,19 @@
 import type { SessionInfo } from "@opencode-ai/client";
 import { describe, expect, it } from "vite-plus/test";
 
+import { sessionFixture } from "../../../../test/session-fixture.ts";
 import {
   chooseSessionFallback,
   sessionAncestorIDs,
   sessionSubtreeIDs,
 } from "./session-selection.ts";
 
-const session = (id: string, parentID?: string): SessionInfo => ({
-  id,
-  parentID,
-  projectID: "project",
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-  location: { directory: "/project" },
-});
+const session = (id: string, parentID?: string): SessionInfo =>
+  sessionFixture({
+    id,
+    parentID,
+    location: { directory: "/project" },
+  });
 
 describe("session selection fallback", () => {
   it("prefers the nearest surviving ancestor, then the first ordered session", () => {

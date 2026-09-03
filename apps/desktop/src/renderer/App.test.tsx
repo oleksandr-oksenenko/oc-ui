@@ -1,6 +1,7 @@
 import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "./test/deferred.ts";
 import type {
   DesktopApi,
   LocalOpenCodeConnectResult,
@@ -35,26 +36,6 @@ vi.mock("./components/App/ConnectedApp.tsx", () => ({
 }));
 
 import { App } from "./App.tsx";
-
-type Deferred<A> = {
-  readonly promise: Promise<A>;
-  readonly resolve: (value: A) => void;
-  readonly reject: (cause: unknown) => void;
-};
-
-const deferred = <A,>(): Deferred<A> => {
-  let resolvePromise: ((value: A) => void) | undefined;
-  let rejectPromise: ((cause: unknown) => void) | undefined;
-  const promise = new Promise<A>((resolve, reject) => {
-    resolvePromise = resolve;
-    rejectPromise = reject;
-  });
-  return {
-    promise,
-    resolve: (value) => resolvePromise?.(value),
-    reject: (cause) => rejectPromise?.(cause),
-  };
-};
 
 const flush = async (): Promise<void> => {
   await Promise.resolve();
@@ -288,7 +269,7 @@ describe("App target startup", () => {
   });
 
   it("reports a local startup failure without waiting for cleanup", async () => {
-    const disconnecting = deferred<void>();
+    const disconnecting = deferred();
     const desktop = makeDesktop({
       load: () => Promise.resolve({ kind: "local" }),
       connectLocal: () =>

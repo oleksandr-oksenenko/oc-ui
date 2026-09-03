@@ -92,26 +92,6 @@ function projectSelectionUnavailable(state: NewSessionDialogState): boolean {
   );
 }
 
-function dispatchSubmit(props: NewSessionDialogProps, state: NewSessionDialogState): void {
-  const projectID = state.view === "select-project" ? state.selectedProjectID : state.project.id;
-  if (!projectID) return;
-
-  if (state.view === "worktree" && state.error?.kind === "worktree") {
-    props.onRetry("worktree");
-    return;
-  }
-  if (state.view === "worktree" && state.error?.kind === "session") {
-    props.onRetry("session");
-    return;
-  }
-  if (state.view === "worktree") {
-    props.onCreateWorktree();
-    return;
-  }
-  if (state.mode === "worktree") props.onOpenWorktreeForm(projectID);
-  else props.onUseProject(projectID);
-}
-
 function focusDialogState(
   view: NewSessionDialogState["view"],
   error: NewSessionDialogError | undefined,
@@ -191,10 +171,9 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
     if (
-      busy() ||
+      blocked() ||
       projectSelectionUnavailable(props.state) ||
-      (props.state.view === "worktree" && parentBrowserLoading()) ||
-      submitted()
+      (props.state.view === "worktree" && parentBrowserLoading())
     )
       return;
 
@@ -202,11 +181,12 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
     const projectID = state.view === "select-project" ? state.selectedProjectID : state.project.id;
     if (!projectID) return;
     setSubmitted(true);
-    dispatchSubmit(props, state);
-  };
-
-  const goBack = () => {
-    if (!blocked()) props.onBack();
+    if (state.view === "worktree") {
+      if (state.error?.kind === "worktree" || state.error?.kind === "session") {
+        props.onRetry(state.error.kind);
+      } else props.onCreateWorktree();
+    } else if (state.mode === "worktree") props.onOpenWorktreeForm(projectID);
+    else props.onUseProject(projectID);
   };
 
   createEffect(() => {
@@ -334,23 +314,18 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
         </DialogBody>
 
         <DialogFooter>
-          <Show
-            when={!blocked() && props.state.view === "worktree"}
-            fallback={
-              <Show when={!blocked()}>
-                <Button
-                  type="button"
-                  size="normal"
-                  variant="outline"
-                  onClick={() => dialog.close()}
-                >
-                  Cancel
-                </Button>
-              </Show>
-            }
-          >
-            <Button type="button" size="normal" variant="outline" onClick={goBack}>
-              Back
+          <Show when={!blocked()}>
+            <Button
+              type="button"
+              size="normal"
+              variant="outline"
+              onClick={() => {
+                if (blocked()) return;
+                if (props.state.view === "worktree") props.onBack();
+                else dialog.close();
+              }}
+            >
+              {props.state.view === "worktree" ? "Back" : "Cancel"}
             </Button>
           </Show>
           <Button

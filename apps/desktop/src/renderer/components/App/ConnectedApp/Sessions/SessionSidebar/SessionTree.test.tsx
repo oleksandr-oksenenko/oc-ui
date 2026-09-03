@@ -2,19 +2,15 @@ import type { SessionInfo } from "@opencode-ai/client";
 import { render } from "solid-js/web";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { mount } from "../../../../../test/mount.ts";
+import { sessionFixture } from "../../../../../test/session-fixture.ts";
+import { stubResizeObserver } from "../../../../../test/resize-observer.ts";
 import { SessionSidebar } from "../SessionSidebar.tsx";
 import { SessionTree } from "./SessionTree.tsx";
 import { SessionTreeItem } from "./SessionTree/SessionTreeItem.tsx";
 
 beforeEach(() => {
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  );
+  stubResizeObserver();
 });
 
 afterEach(() => {
@@ -22,16 +18,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const session = (id: string, title: string, parentID?: string, updated = 1): SessionInfo => ({
-  id,
-  title,
-  parentID,
-  projectID: "project",
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated },
-  location: { directory: "/project" },
-});
+const session = (id: string, title: string, parentID?: string, updated = 1): SessionInfo =>
+  sessionFixture({
+    id,
+    title,
+    parentID,
+    time: { created: 1, updated },
+    location: { directory: "/project" },
+  });
 
 const sidebarProps = (overrides: Partial<Parameters<typeof SessionSidebar>[0]> = {}) => ({
   sessions: [],
@@ -61,29 +55,24 @@ const fixedNow = 1788004800000;
 
 describe("SessionTree", () => {
   it("renders recursive children and selects them through the same callback", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
     const onSelect = vi.fn<(sessionID: string) => void>();
-    const dispose = render(
-      () => (
-        <SessionTree
-          sessions={[
-            session("root", "Root"),
-            session("child", "Child", "root"),
-            session("grandchild", "Grandchild", "child"),
-          ]}
-          statusForSession={(sessionID) => (sessionID === "child" ? "running" : "idle")}
-          selectedID="child"
-          expandedIDs={["root", "child"]}
-          canDelete
-          deletionStatusForSession={() => "ready"}
-          onSelect={onSelect}
-          onToggleExpanded={() => undefined}
-          onDelete={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <SessionTree
+        sessions={[
+          session("root", "Root"),
+          session("child", "Child", "root"),
+          session("grandchild", "Grandchild", "child"),
+        ]}
+        statusForSession={(sessionID) => (sessionID === "child" ? "running" : "idle")}
+        selectedID="child"
+        expandedIDs={["root", "child"]}
+        canDelete
+        deletionStatusForSession={() => "ready"}
+        onSelect={onSelect}
+        onToggleExpanded={() => undefined}
+        onDelete={() => undefined}
+      />
+    ));
 
     expect(host.querySelector('[aria-label="Child, Running"]')?.getAttribute("aria-current")).toBe(
       "page",
@@ -99,32 +88,26 @@ describe("SessionTree", () => {
     expect(onSelect).toHaveBeenCalledWith("grandchild");
 
     dispose();
-    host.remove();
   });
 
   it("uses the OpenCode collapsible disclosure for nested sessions", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
     const onToggleExpanded = vi.fn<(sessionID: string) => void>();
-    const dispose = render(
-      () => (
-        <SessionTreeItem
-          session={session("parent", "Parent")}
-          status="idle"
-          hasChildren
-          depth={0}
-          selected
-          expanded
-          deleteDisabled={false}
-          onSelect={() => undefined}
-          onToggleExpanded={onToggleExpanded}
-          onDelete={() => undefined}
-        >
-          <div>Child</div>
-        </SessionTreeItem>
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <SessionTreeItem
+        session={session("parent", "Parent")}
+        status="idle"
+        hasChildren
+        depth={0}
+        selected
+        expanded
+        deleteDisabled={false}
+        onSelect={() => undefined}
+        onToggleExpanded={onToggleExpanded}
+        onDelete={() => undefined}
+      >
+        <div>Child</div>
+      </SessionTreeItem>
+    ));
 
     const disclosure = host.querySelector<HTMLButtonElement>('[aria-label="Collapse Parent"]');
     expect(disclosure?.getAttribute("data-slot")).toBe("collapsible-trigger");
@@ -135,7 +118,6 @@ describe("SessionTree", () => {
     expect(onToggleExpanded).toHaveBeenCalledWith("parent");
 
     dispose();
-    host.remove();
   });
 
   it("keeps a session visible when its parent is absent", () => {
@@ -195,23 +177,18 @@ describe("SessionTree", () => {
 
   it("groups roots into Today, This week, and Earlier using updated timestamps", () => {
     const now = fixedNow;
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <SessionSidebar
-          {...sidebarProps({
-            now,
-            sessions: [
-              session("today", "Today session", undefined, now - 60 * 60 * 1000),
-              session("week", "This week session", undefined, now - 3 * 24 * 60 * 60 * 1000),
-              session("earlier", "Earlier session", undefined, now - 14 * 24 * 60 * 60 * 1000),
-            ],
-          })}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({
+          now,
+          sessions: [
+            session("today", "Today session", undefined, now - 60 * 60 * 1000),
+            session("week", "This week session", undefined, now - 3 * 24 * 60 * 60 * 1000),
+            session("earlier", "Earlier session", undefined, now - 14 * 24 * 60 * 60 * 1000),
+          ],
+        })}
+      />
+    ));
 
     expect([...host.querySelectorAll("section h2")].map((heading) => heading.textContent)).toEqual([
       "Today",
@@ -220,29 +197,23 @@ describe("SessionTree", () => {
     ]);
 
     dispose();
-    host.remove();
   });
 
   it("keeps a recently updated descendant with its old root in Today", () => {
     const now = fixedNow;
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <SessionSidebar
-          {...sidebarProps({
-            now,
-            sessions: [
-              session("old-root", "Old root", undefined, now - 14 * 24 * 60 * 60 * 1000),
-              session("recent-child", "Recent child", "old-root", now - 60 * 60 * 1000),
-              session("old-other", "Old other", undefined, now - 14 * 24 * 60 * 60 * 1000),
-            ],
-            expandedIDs: ["old-root"],
-          })}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({
+          now,
+          sessions: [
+            session("old-root", "Old root", undefined, now - 14 * 24 * 60 * 60 * 1000),
+            session("recent-child", "Recent child", "old-root", now - 60 * 60 * 1000),
+            session("old-other", "Old other", undefined, now - 14 * 24 * 60 * 60 * 1000),
+          ],
+          expandedIDs: ["old-root"],
+        })}
+      />
+    ));
 
     const today = [...host.querySelectorAll("section")].find(
       (section) => section.querySelector("h2")?.textContent === "Today",
@@ -256,7 +227,6 @@ describe("SessionTree", () => {
     expect(earlier?.textContent).not.toContain("Old root");
 
     dispose();
-    host.remove();
   });
 
   it("reserves the disclosure gutter for leaf titles and shows runtime status", () => {
@@ -332,24 +302,19 @@ describe("SessionTree", () => {
   });
 
   it("places a delete action at the end of each session row", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
     const onDelete = vi.fn<(sessionID: string, opener: HTMLButtonElement) => void>();
-    const dispose = render(
-      () => (
-        <SessionTree
-          sessions={[session("one", "One")]}
-          statusForSession={() => "idle"}
-          expandedIDs={[]}
-          canDelete
-          deletionStatusForSession={() => "ready"}
-          onSelect={() => undefined}
-          onToggleExpanded={() => undefined}
-          onDelete={onDelete}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <SessionTree
+        sessions={[session("one", "One")]}
+        statusForSession={() => "idle"}
+        expandedIDs={[]}
+        canDelete
+        deletionStatusForSession={() => "ready"}
+        onSelect={() => undefined}
+        onToggleExpanded={() => undefined}
+        onDelete={onDelete}
+      />
+    ));
 
     const button = host.querySelector<HTMLButtonElement>('[aria-label="Delete One"]');
     expect(button).not.toBeNull();
@@ -359,7 +324,6 @@ describe("SessionTree", () => {
     expect(onDelete).toHaveBeenCalledWith("one", button);
 
     dispose();
-    host.remove();
   });
 
   it("uses deletion eligibility supplied by the Sessions domain", () => {
@@ -393,25 +357,20 @@ describe("SessionTree", () => {
 
 describe("SessionSidebar", () => {
   it("renders the filter and keeps matching ancestors while pruning unrelated branches", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <SessionSidebar
-          {...sidebarProps({
-            sessions: [
-              session("matching-root", "Project work"),
-              session("matching-parent", "Architecture notes", "matching-root"),
-              session("matching-child", "Deep MATCH result", "matching-parent"),
-              session("unrelated-root", "Personal notes"),
-              session("unrelated-child", "Unrelated child", "unrelated-root"),
-            ],
-            expandedIDs: [],
-          })}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({
+          sessions: [
+            session("matching-root", "Project work"),
+            session("matching-parent", "Architecture notes", "matching-root"),
+            session("matching-child", "Deep MATCH result", "matching-parent"),
+            session("unrelated-root", "Personal notes"),
+            session("unrelated-child", "Unrelated child", "unrelated-root"),
+          ],
+          expandedIDs: [],
+        })}
+      />
+    ));
 
     const filter = host.querySelector<HTMLInputElement>('[aria-label="Filter sessions"]');
     expect(filter).not.toBeNull();
@@ -427,23 +386,17 @@ describe("SessionSidebar", () => {
     expect(host.querySelector('[aria-label="Collapse Architecture notes"]')).not.toBeNull();
 
     dispose();
-    host.remove();
   });
 
   it("clearing the filter restores controlled expansion and reports no matches distinctly", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <SessionSidebar
-          {...sidebarProps({
-            sessions: [session("root", "Root"), session("child", "Matching child", "root")],
-            expandedIDs: [],
-          })}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({
+          sessions: [session("root", "Root"), session("child", "Matching child", "root")],
+          expandedIDs: [],
+        })}
+      />
+    ));
     const filter = host.querySelector<HTMLInputElement>('[aria-label="Filter sessions"]');
     expect(filter).not.toBeNull();
 
@@ -459,7 +412,6 @@ describe("SessionSidebar", () => {
     expect(host.querySelector('[aria-label="Expand Root"]')).not.toBeNull();
 
     dispose();
-    host.remove();
   });
 
   it("does not expose a requires-input state", () => {
@@ -505,28 +457,7 @@ describe("SessionSidebar", () => {
 
   it("places the create action at the top of the session list", () => {
     const host = document.createElement("div");
-    const dispose = render(
-      () => (
-        <SessionSidebar
-          sessions={[]}
-          statusForSession={() => "idle"}
-          expandedIDs={[]}
-          loading={false}
-          canCreate
-          canDelete
-          deletionStatusForSession={() => "ready"}
-          serverName="Local server"
-          serverStatus="connected"
-          onSelect={() => undefined}
-          onToggleExpanded={() => undefined}
-          onDelete={() => undefined}
-          onCreate={() => undefined}
-          onRetry={() => undefined}
-          onSelectServer={() => undefined}
-        />
-      ),
-      host,
-    );
+    const dispose = render(() => <SessionSidebar {...sidebarProps()} />, host);
 
     const sidebar = host.querySelector(".shell-session-sidebar");
     expect(sidebar?.firstElementChild?.classList.contains("shell-session-header")).toBe(true);

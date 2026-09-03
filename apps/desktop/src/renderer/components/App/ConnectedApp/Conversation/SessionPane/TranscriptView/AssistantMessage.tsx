@@ -1,9 +1,4 @@
-import type {
-  SessionMessageAssistant,
-  SessionMessageAssistantReasoning,
-  SessionMessageAssistantText,
-  SessionMessageAssistantTool,
-} from "@opencode-ai/client";
+import type { SessionMessageAssistant } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { For, Show, type JSX } from "solid-js";
 
@@ -43,12 +38,7 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
   );
 }
 
-function renderContent(
-  content:
-    | SessionMessageAssistantText
-    | SessionMessageAssistantReasoning
-    | SessionMessageAssistantTool,
-): JSX.Element {
+function renderContent(content: SessionMessageAssistant["content"][number]): JSX.Element {
   switch (content.type) {
     case "text":
       return <Markdown text={content.text} />;

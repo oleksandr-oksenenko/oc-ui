@@ -2,6 +2,7 @@ import type { FileDiffInfo, SessionInfo } from "@opencode-ai/client";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { createReviewDraftStore, type ReviewDraftKey } from "../../../../domain/review-drafts.ts";
 import {
   createWorkspaceChanges,
@@ -11,14 +12,11 @@ import {
 
 const location = { directory: "/workspace" } as const;
 
-const session = (id = "session-1"): SessionInfo => ({
-  id,
-  projectID: "project",
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-  location,
-});
+const session = (id = "session-1"): SessionInfo =>
+  sessionFixture({
+    id,
+    location,
+  });
 
 const file = (name: string): FileDiffInfo => ({
   file: name,
@@ -151,7 +149,7 @@ describe("createWorkspaceChanges", () => {
     expect(root.changes.view()).toMatchObject({
       files: [
         {
-          path: "src/example.ts",
+          file: "src/example.ts",
           patch: expect.any(String),
           additions: 1,
           deletions: 1,
@@ -265,6 +263,10 @@ describe("createWorkspaceChanges", () => {
     root.setSnapshot({ files, status: "loading", stale: true });
     expect(root.changes.view().files).toBe(projected);
     expect(root.changes.view().files[0]).toBe(projectedFile);
+
+    root.setSnapshot({ files: [...files], status: "ready", stale: false });
+    expect(root.changes.view().files[0]).toEqual(projectedFile);
+    expect(root.changes.view().files[0]).not.toBe(projectedFile);
 
     root.dispose();
   });

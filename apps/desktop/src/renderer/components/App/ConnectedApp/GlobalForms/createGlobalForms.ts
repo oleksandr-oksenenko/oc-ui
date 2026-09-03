@@ -15,12 +15,7 @@ const errorMessage = (kind: "sync" | "reply" | "cancel", cause: unknown): string
 
 type GlobalFormsData = {
   readonly on: Data["on"];
-  readonly session: {
-    readonly form: Pick<
-      Data["session"]["form"],
-      "list" | "sync" | "invalidate" | "reply" | "cancel"
-    >;
-  };
+  readonly session: Pick<Data["session"], "form">;
 };
 
 export type GlobalFormsController = {
@@ -46,14 +41,11 @@ export type CreateGlobalFormsInput = {
 };
 
 export function createGlobalForms(input: CreateGlobalFormsInput): GlobalFormsController {
-  const controller = createFormController<FormWithLocation>({
+  const controller = createFormController({
     connected: input.connected,
     sessionID: () => GLOBAL_SESSION_ID,
     location: input.location,
-    list: (sessionID, location) => input.runtime.data.session.form.list(sessionID, location),
-    sync: (sessionID, location) => input.runtime.data.session.form.sync(sessionID, location),
-    reply: (request, location) => input.runtime.data.session.form.reply(request, location),
-    cancel: (request, location) => input.runtime.data.session.form.cancel(request, location),
+    form: input.runtime.data.session.form,
     errorMessage,
   });
 
@@ -76,7 +68,7 @@ export function createGlobalForms(input: CreateGlobalFormsInput): GlobalFormsCon
     submitting: controller.submitting,
     errorFor: controller.errorFor,
     refresh: controller.sync,
-    reply: (formID, answer) => controller.reply(formID, answer),
-    cancel: (formID) => controller.cancel(formID),
+    reply: controller.reply,
+    cancel: controller.cancel,
   };
 }

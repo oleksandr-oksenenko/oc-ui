@@ -77,7 +77,7 @@ export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
       .then(() => {
         openingDialog = false;
         ownedDialogID = dialog.active?.id;
-        if (disposed && ownedDialogID && dialog.active?.id === ownedDialogID) dialog.close();
+        if (disposed && ownedDialogID) dialog.close();
         return undefined;
       });
   };

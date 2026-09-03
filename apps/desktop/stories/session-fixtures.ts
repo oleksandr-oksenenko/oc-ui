@@ -1,14 +1,12 @@
 import type { SessionInfo } from "@opencode-ai/client";
 
+import { sessionFixture } from "../src/renderer/test/session-fixture.ts";
 export function storySession(id: string, title: string, parentID?: string): SessionInfo {
-  return {
+  return sessionFixture({
     id,
     title,
     parentID,
     projectID: "storybook",
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 1, updated: 1 },
     location: { directory: "/storybook" },
-  };
+  });
 }

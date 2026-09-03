@@ -1,29 +1,9 @@
+import { parameterAnnotation, type FunctionSignature } from "../shared/ast.ts";
+
 import { defineRule } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 
 type Parameter = ESTree.ParamPattern;
-type ParameterOwner =
-  | ESTree.ArrowFunctionExpression
-  | ESTree.Function
-  | ESTree.TSCallSignatureDeclaration
-  | ESTree.TSConstructSignatureDeclaration
-  | ESTree.TSConstructorType
-  | ESTree.TSFunctionType
-  | ESTree.TSMethodSignature;
-
-function parameterAnnotation(parameter: Parameter): ESTree.TSTypeAnnotation | null | undefined {
-  if (parameter.type === "TSParameterProperty") {
-    return parameterAnnotation(parameter.parameter);
-  }
-  if (parameter.type === "RestElement") {
-    return parameter.typeAnnotation ?? parameterAnnotation(parameter.argument);
-  }
-  if (parameter.type === "AssignmentPattern") {
-    return parameter.typeAnnotation ?? parameter.left.typeAnnotation;
-  }
-  return parameter.typeAnnotation;
-}
-
 function parameterName(parameter: Parameter, sourceText: string): string {
   if (parameter.type === "TSParameterProperty") {
     return parameterName(parameter.parameter, sourceText);
@@ -53,7 +33,7 @@ export const noUnknownParametersRule = defineRule({
     },
   },
   createOnce(context) {
-    const checkParameters = (node: ParameterOwner) => {
+    const checkParameters = (node: FunctionSignature) => {
       for (const parameter of node.params) {
         const annotation = parameterAnnotation(parameter);
         if (annotation?.typeAnnotation.type !== "TSUnknownKeyword") continue;

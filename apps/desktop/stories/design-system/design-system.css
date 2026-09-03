@@ -304,10 +304,6 @@
   background: var(--oc-surface-raised);
 }
 
-.design-system-family-card-wide {
-  grid-column: 1 / -1;
-}
-
 .design-system-card-header {
   display: grid;
   gap: 4px;
@@ -364,11 +360,6 @@
 
 .design-system-field {
   width: min(100%, 360px);
-}
-
-.design-system-radio-list {
-  display: grid;
-  gap: 4px;
 }
 
 .design-system-select {

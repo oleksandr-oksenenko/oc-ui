@@ -6,12 +6,7 @@ import { createFormController } from "../Forms/createFormController.ts";
 
 type SessionFormsData = {
   readonly on: Data["on"];
-  readonly session: {
-    readonly form: Pick<
-      Data["session"]["form"],
-      "list" | "sync" | "invalidate" | "reply" | "cancel"
-    >;
-  };
+  readonly session: Pick<Data["session"], "form">;
 };
 
 type SessionFormsInput = {
@@ -39,13 +34,10 @@ const CANCEL_FAILURE_MESSAGE = "The form could not be cancelled. Try again.";
 
 /** Owns pending forms for the selected session and their server mutations. */
 export function createSessionForms(input: SessionFormsInput): SessionFormsController {
-  const controller = createFormController<FormInfo>({
+  const controller = createFormController({
     connected: input.connected,
     sessionID: input.selectedID,
-    list: (sessionID) => input.data.session.form.list(sessionID),
-    sync: (sessionID) => input.data.session.form.sync(sessionID),
-    reply: (request) => input.data.session.form.reply(request),
-    cancel: (request) => input.data.session.form.cancel(request),
+    form: input.data.session.form,
     errorMessage: (kind) => {
       if (kind === "sync") return SYNC_FAILURE_MESSAGE;
       return kind === "reply" ? REPLY_FAILURE_MESSAGE : CANCEL_FAILURE_MESSAGE;

@@ -2,22 +2,20 @@ import type { SessionInfo } from "@opencode-ai/client";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { sessionFixture } from "../../../../test/session-fixture.ts";
 import {
   createSessionFlows,
   type SessionFlowsRuntime,
   type SessionFlowsWorkspace,
 } from "./createSessionFlows.ts";
 
-const session = (id: string, parentID?: string): SessionInfo => ({
-  id,
-  parentID,
-  title: id,
-  projectID: "project",
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
-  location: { directory: "/srv/worktree" },
-});
+const session = (id: string, parentID?: string): SessionInfo =>
+  sessionFixture({
+    id,
+    parentID,
+    title: id,
+    location: { directory: "/srv/worktree" },
+  });
 
 function setup() {
   const [streamStatus, setStreamStatus] = createSignal<"connected" | "reconnecting">("connected");
@@ -45,21 +43,23 @@ function setup() {
   };
 }
 
+function mount(fixture: ReturnType<typeof setup>, clearDraft: (sessionID: string) => void) {
+  return createRoot((dispose) => ({
+    flows: createSessionFlows({
+      runtime: fixture.runtime,
+      connected: fixture.connected,
+      workspace: fixture.workspace,
+      clearDraft,
+    }),
+    dispose,
+  }));
+}
+
 describe("createSessionFlows", () => {
   it("prunes expanded sessions when deleting a subtree", () => {
     const fixture = setup();
     const clearDraft = vi.fn<(sessionID: string) => void>();
-    let flows!: ReturnType<typeof createSessionFlows>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      flows = createSessionFlows({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        workspace: fixture.workspace,
-        clearDraft,
-      });
-    });
+    const { flows, dispose } = mount(fixture, clearDraft);
 
     flows.toggleExpanded("root");
     flows.toggleExpanded("child");
@@ -74,17 +74,7 @@ describe("createSessionFlows", () => {
   it("rejects running deletion and keeps the server-provided worktree path", () => {
     const fixture = setup();
     fixture.status.set("child", "running");
-    let flows!: ReturnType<typeof createSessionFlows>;
-    let dispose!: () => void;
-    createRoot((rootDispose) => {
-      dispose = rootDispose;
-      flows = createSessionFlows({
-        runtime: fixture.runtime,
-        connected: fixture.connected,
-        workspace: fixture.workspace,
-        clearDraft: vi.fn<(sessionID: string) => void>(),
-      });
-    });
+    const { flows, dispose } = mount(fixture, vi.fn<(sessionID: string) => void>());
     const opener = document.createElement("button");
     document.body.append(opener);
 
@@ -112,17 +102,7 @@ describe("createSessionFlows", () => {
     vi.useFakeTimers();
     try {
       const fixture = setup();
-      let flows!: ReturnType<typeof createSessionFlows>;
-      let dispose!: () => void;
-      createRoot((rootDispose) => {
-        dispose = rootDispose;
-        flows = createSessionFlows({
-          runtime: fixture.runtime,
-          connected: fixture.connected,
-          workspace: fixture.workspace,
-          clearDraft: vi.fn<(sessionID: string) => void>(),
-        });
-      });
+      const { flows, dispose } = mount(fixture, vi.fn<(sessionID: string) => void>());
       const opener = document.createElement("button");
       document.body.append(opener);
       opener.focus();
@@ -146,17 +126,7 @@ describe("createSessionFlows", () => {
     vi.useFakeTimers();
     try {
       const fixture = setup();
-      let flows!: ReturnType<typeof createSessionFlows>;
-      let dispose!: () => void;
-      createRoot((rootDispose) => {
-        dispose = rootDispose;
-        flows = createSessionFlows({
-          runtime: fixture.runtime,
-          connected: fixture.connected,
-          workspace: fixture.workspace,
-          clearDraft: vi.fn<(sessionID: string) => void>(),
-        });
-      });
+      const { flows, dispose } = mount(fixture, vi.fn<(sessionID: string) => void>());
       const opener = document.createElement("button");
       const fallback = document.createElement("button");
       const resolveFallback = vi.fn<() => HTMLElement | undefined>(() => fallback);
@@ -182,17 +152,7 @@ describe("createSessionFlows", () => {
     vi.useFakeTimers();
     try {
       const fixture = setup();
-      let flows!: ReturnType<typeof createSessionFlows>;
-      let dispose!: () => void;
-      createRoot((rootDispose) => {
-        dispose = rootDispose;
-        flows = createSessionFlows({
-          runtime: fixture.runtime,
-          connected: fixture.connected,
-          workspace: fixture.workspace,
-          clearDraft: vi.fn<(sessionID: string) => void>(),
-        });
-      });
+      const { flows, dispose } = mount(fixture, vi.fn<(sessionID: string) => void>());
       const opener = document.createElement("button");
       const fallback = document.createElement("button");
       const resolveFallback = vi.fn<() => HTMLElement | undefined>(() => fallback);

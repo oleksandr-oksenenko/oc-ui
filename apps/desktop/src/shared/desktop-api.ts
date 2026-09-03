@@ -12,22 +12,9 @@ const OpenCodeTargetSchema = Schema.Union([LocalTargetSchema, RemoteTargetSchema
 
 export type OpenCodeTarget = typeof OpenCodeTargetSchema.Type;
 
-const SaveTargetInputSchema = Schema.Union([
-  LocalTargetSchema,
-  Schema.Struct({
-    kind: Schema.Literal("remote"),
-    serverUrl: Schema.String,
-    password: Schema.optionalKey(Schema.String),
-  }),
-]);
+export type SaveTargetInput = OpenCodeTarget;
 
-export type SaveTargetInput = typeof SaveTargetInputSchema.Type;
-
-const SaveRemoteTargetInputSchema = Schema.Struct({
-  serverUrl: Schema.String,
-  password: Schema.optionalKey(Schema.String),
-});
-type SaveRemoteTargetInput = typeof SaveRemoteTargetInputSchema.Type;
+type SaveRemoteTargetInput = Omit<typeof RemoteTargetSchema.Type, "kind">;
 
 const SaveTargetResultSchema = Schema.Struct({ passwordSaved: Schema.Boolean });
 export type SaveTargetResult = typeof SaveTargetResultSchema.Type;
@@ -68,10 +55,7 @@ export const IPC_CHANNELS = {
 
 const ipcParseOptions = { onExcessProperty: "error" } as const;
 
-export const parseSaveTargetInput = Schema.decodeUnknownSync(
-  SaveTargetInputSchema,
-  ipcParseOptions,
-);
+export const parseSaveTargetInput = Schema.decodeUnknownSync(OpenCodeTargetSchema, ipcParseOptions);
 export const parseTargetLoadResult = Schema.decodeUnknownSync(
   Schema.UndefinedOr(OpenCodeTargetSchema),
   ipcParseOptions,

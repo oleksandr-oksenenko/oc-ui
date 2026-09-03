@@ -1,7 +1,7 @@
 import { createSignal } from "solid-js";
-import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount } from "../../../../../test/mount.ts";
 import { Composer } from "./Composer.tsx";
 import type { ComposerProps } from "./Composer.tsx";
 
@@ -25,25 +25,20 @@ const unavailableAgentSelection = {
 
 describe("Composer", () => {
   it("replaces Send with Stop while running", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
     const stop = vi.fn<() => void>();
     const submit = vi.fn<() => void>();
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="running"
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={submit}
-          onStop={stop}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="running"
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={submit}
+        onStop={stop}
+      />
+    ));
 
     expect(host.textContent).not.toContain("Draft saved while this run finishes.");
     expect(host.querySelector("output")).toBeNull();
@@ -56,27 +51,21 @@ describe("Composer", () => {
     expect(stop).toHaveBeenCalledOnce();
     expect(submit).not.toHaveBeenCalled();
     dispose();
-    host.remove();
   });
 
   it("keeps Send disabled while the prompt is being sent", () => {
-    const host = document.createElement("div");
     const submit = vi.fn<() => void>();
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value="Send this"
-          action="sending"
-          disabled={false}
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={submit}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value="Send this"
+        action="sending"
+        disabled={false}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={submit}
+      />
+    ));
 
     const sendButton = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
     expect(sendButton?.disabled).toBe(true);
@@ -84,31 +73,25 @@ describe("Composer", () => {
     sendButton?.click();
     expect(submit).not.toHaveBeenCalled();
     dispose();
-    host.remove();
   });
 
   it("shows independent loading states", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="send"
-          modelSelection={{
-            ...unavailableSelection,
-            state: "ready",
-            models: [{ id: "model", label: "Model" }],
-            variants: [{ id: "variant", label: "Variant" }],
-          }}
-          agentSelection={{ ...unavailableAgentSelection, state: "loading" }}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        modelSelection={{
+          ...unavailableSelection,
+          state: "ready",
+          models: [{ id: "model", label: "Model" }],
+          variants: [{ id: "variant", label: "Variant" }],
+        }}
+        agentSelection={{ ...unavailableAgentSelection, state: "loading" }}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
 
     const placeholders = host.querySelectorAll('.composer-picker[aria-disabled="true"]');
     expect(placeholders).toHaveLength(1);
@@ -117,34 +100,25 @@ describe("Composer", () => {
     expect(host.querySelector(".composer-model-trigger")).not.toBeNull();
 
     dispose();
-    host.remove();
   });
 
   it("keeps agent empty, missing, and failed states honest", () => {
-    const renderComposer = (agentSelection: ComposerProps["agentSelection"]) => {
-      const host = document.createElement("div");
-      document.body.append(host);
-      const dispose = render(
-        () => (
-          <Composer
-            value=""
-            disabled={false}
-            action="send"
-            modelSelection={unavailableSelection}
-            agentSelection={agentSelection}
-            onInput={() => undefined}
-            onSubmit={() => undefined}
-          />
-        ),
-        host,
-      );
-      return { host, dispose };
-    };
+    const renderComposer = (agentSelection: ComposerProps["agentSelection"]) =>
+      mount(() => (
+        <Composer
+          value=""
+          disabled={false}
+          action="send"
+          modelSelection={unavailableSelection}
+          agentSelection={agentSelection}
+          onInput={() => undefined}
+          onSubmit={() => undefined}
+        />
+      ));
 
     const empty = renderComposer({ ...unavailableAgentSelection, state: "ready" });
     expect(empty.host.textContent).toContain("No agents");
     empty.dispose();
-    empty.host.remove();
 
     const missing = renderComposer({
       ...unavailableAgentSelection,
@@ -154,16 +128,13 @@ describe("Composer", () => {
     });
     expect(missing.host.textContent).toContain("Agent unavailable");
     missing.dispose();
-    missing.host.remove();
 
     const failed = renderComposer(unavailableAgentSelection);
     expect(failed.host.textContent).toContain("Agents unavailable");
     failed.dispose();
-    failed.host.remove();
   });
 
   it("renders a searchable model picker and a simple variant picker", async () => {
-    const host = document.createElement("div");
     const selectModel = vi.fn<(id: string) => void>();
     const selectAgent = vi.fn<(id: string) => void>();
     const scrollTo = vi.fn<HTMLElement["scrollTo"]>();
@@ -171,46 +142,42 @@ describe("Composer", () => {
       configurable: true,
       value: scrollTo,
     });
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="send"
-          modelSelection={{
-            state: "ready",
-            switching: false,
-            disabled: false,
-            models: [
-              { id: "one", label: "Model One", group: "provider-a" },
-              { id: "two", label: "Model Two", group: "provider-b" },
-            ],
-            selectedModelID: "one",
-            variants: [
-              { id: "fast", label: "fast" },
-              { id: "deep", label: "deep" },
-            ],
-            selectedVariantID: "deep",
-            onSelectModel: selectModel,
-            onSelectVariant: () => undefined,
-          }}
-          agentSelection={{
-            ...unavailableAgentSelection,
-            state: "ready",
-            agents: [
-              { id: "build", label: "Build" },
-              { id: "plan", label: "Plan" },
-            ],
-            selectedAgentID: "build",
-            onSelectAgent: selectAgent,
-          }}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        modelSelection={{
+          state: "ready",
+          switching: false,
+          disabled: false,
+          models: [
+            { id: "one", label: "Model One", group: "provider-a" },
+            { id: "two", label: "Model Two", group: "provider-b" },
+          ],
+          selectedModelID: "one",
+          variants: [
+            { id: "fast", label: "fast" },
+            { id: "deep", label: "deep" },
+          ],
+          selectedVariantID: "deep",
+          onSelectModel: selectModel,
+          onSelectVariant: () => undefined,
+        }}
+        agentSelection={{
+          ...unavailableAgentSelection,
+          state: "ready",
+          agents: [
+            { id: "build", label: "Build" },
+            { id: "plan", label: "Plan" },
+          ],
+          selectedAgentID: "build",
+          onSelectAgent: selectAgent,
+        }}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
 
     const modelTrigger = host.querySelector<HTMLButtonElement>(".composer-model-trigger");
     expect(modelTrigger?.textContent).toContain("Model One");
@@ -251,36 +218,30 @@ describe("Composer", () => {
     expect(selectAgent).toHaveBeenCalledWith("plan");
 
     dispose();
-    host.remove();
     Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
   });
 
   it("gives unselected picker triggers coherent accessible names", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="send"
-          modelSelection={{
-            ...unavailableSelection,
-            state: "ready",
-            models: [{ id: "model", label: "Model" }],
-            variants: [{ id: "variant", label: "Variant" }],
-          }}
-          agentSelection={{
-            ...unavailableAgentSelection,
-            state: "ready",
-            agents: [{ id: "agent", label: "Agent" }],
-          }}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        modelSelection={{
+          ...unavailableSelection,
+          state: "ready",
+          models: [{ id: "model", label: "Model" }],
+          variants: [{ id: "variant", label: "Variant" }],
+        }}
+        agentSelection={{
+          ...unavailableAgentSelection,
+          state: "ready",
+          agents: [{ id: "agent", label: "Agent" }],
+        }}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
 
     expect(
       host.querySelector<HTMLButtonElement>(".composer-model-trigger")?.getAttribute("aria-label"),
@@ -290,39 +251,33 @@ describe("Composer", () => {
     expect(controls[1]?.getAttribute("aria-label")).toBe("Variant: Select variant");
 
     dispose();
-    host.remove();
   });
 
   it("closes the model picker when it becomes disabled", async () => {
-    const host = document.createElement("div");
     const [disabled, setDisabled] = createSignal(false);
     Object.defineProperty(HTMLElement.prototype, "scrollTo", {
       configurable: true,
       value: () => undefined,
     });
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="send"
-          modelSelection={{
-            ...unavailableSelection,
-            state: "ready",
-            disabled: disabled(),
-            models: [
-              { id: "one", label: "Model One" },
-              { id: "two", label: "Model Two" },
-            ],
-          }}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        modelSelection={{
+          ...unavailableSelection,
+          state: "ready",
+          disabled: disabled(),
+          models: [
+            { id: "one", label: "Model One" },
+            { id: "two", label: "Model Two" },
+          ],
+        }}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
 
     const trigger = host.querySelector<HTMLButtonElement>(".composer-model-trigger");
     if (!trigger) throw new Error("Composer did not render a model picker");
@@ -338,12 +293,10 @@ describe("Composer", () => {
     expect(contentID ? document.getElementById(contentID) : null).toBeNull();
 
     dispose();
-    host.remove();
     Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
   });
 
   it("does not reopen the model picker when models disappear and return", async () => {
-    const host = document.createElement("div");
     const availableModels = [
       { id: "one", label: "Model One" },
       { id: "two", label: "Model Two" },
@@ -353,25 +306,21 @@ describe("Composer", () => {
       configurable: true,
       value: () => undefined,
     });
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="send"
-          modelSelection={{
-            ...unavailableSelection,
-            state: "ready",
-            models: models(),
-          }}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        modelSelection={{
+          ...unavailableSelection,
+          state: "ready",
+          models: models(),
+        }}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
 
     const trigger = host.querySelector<HTMLButtonElement>(".composer-model-trigger");
     if (!trigger) throw new Error("Composer did not render a model picker");
@@ -393,42 +342,36 @@ describe("Composer", () => {
     });
 
     dispose();
-    host.remove();
     Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
   });
 
   it("disables every picker and send while either selection switches", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value="send this"
-          disabled={false}
-          action="send"
-          modelSelection={{
-            state: "ready",
-            switching: false,
-            disabled: false,
-            models: [{ id: "model", label: "Model" }],
-            variants: [{ id: "variant", label: "Variant" }],
-            onSelectModel: () => undefined,
-            onSelectVariant: () => undefined,
-          }}
-          agentSelection={{
-            state: "ready",
-            switching: true,
-            disabled: false,
-            agents: [{ id: "build", label: "Build" }],
-            selectedAgentID: "build",
-            onSelectAgent: () => undefined,
-          }}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value="send this"
+        disabled={false}
+        action="send"
+        modelSelection={{
+          state: "ready",
+          switching: false,
+          disabled: false,
+          models: [{ id: "model", label: "Model" }],
+          variants: [{ id: "variant", label: "Variant" }],
+          onSelectModel: () => undefined,
+          onSelectVariant: () => undefined,
+        }}
+        agentSelection={{
+          state: "ready",
+          switching: true,
+          disabled: false,
+          agents: [{ id: "build", label: "Build" }],
+          selectedAgentID: "build",
+          onSelectAgent: () => undefined,
+        }}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
 
     expect(host.querySelector<HTMLButtonElement>(".composer-model-trigger")?.disabled).toBe(true);
     expect(host.querySelectorAll('[data-component="select-v2"][data-disabled]')).toHaveLength(2);
@@ -436,34 +379,28 @@ describe("Composer", () => {
     expect(host.textContent).toContain("Switching agent…");
 
     dispose();
-    host.remove();
   });
 
   it("closes the agent picker with Escape and restores trigger focus", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="send"
-          modelSelection={unavailableSelection}
-          agentSelection={{
-            ...unavailableAgentSelection,
-            state: "ready",
-            agents: [
-              { id: "build", label: "Build" },
-              { id: "plan", label: "Plan" },
-            ],
-            selectedAgentID: "build",
-          }}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        modelSelection={unavailableSelection}
+        agentSelection={{
+          ...unavailableAgentSelection,
+          state: "ready",
+          agents: [
+            { id: "build", label: "Build" },
+            { id: "plan", label: "Plan" },
+          ],
+          selectedAgentID: "build",
+        }}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
     const trigger = host.querySelector<HTMLElement>('[data-component="select-v2"]');
     if (!trigger) throw new Error("Composer did not render an agent picker");
 
@@ -480,37 +417,31 @@ describe("Composer", () => {
     expect(document.activeElement).toBe(trigger);
 
     dispose();
-    host.remove();
   });
 
   it("restores agent trigger focus after a selection finishes switching", async () => {
-    const host = document.createElement("div");
     const [switching, setSwitching] = createSignal(false);
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="send"
-          modelSelection={unavailableSelection}
-          agentSelection={{
-            ...unavailableAgentSelection,
-            state: "ready",
-            switching: switching(),
-            agents: [
-              { id: "build", label: "Build" },
-              { id: "plan", label: "Plan" },
-            ],
-            selectedAgentID: "build",
-            onSelectAgent: () => setSwitching(true),
-          }}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        modelSelection={unavailableSelection}
+        agentSelection={{
+          ...unavailableAgentSelection,
+          state: "ready",
+          switching: switching(),
+          agents: [
+            { id: "build", label: "Build" },
+            { id: "plan", label: "Plan" },
+          ],
+          selectedAgentID: "build",
+          onSelectAgent: () => setSwitching(true),
+        }}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
     const trigger = host.querySelector<HTMLElement>('[data-component="select-v2"]');
     if (!trigger) throw new Error("Composer did not render an agent picker");
 
@@ -533,29 +464,23 @@ describe("Composer", () => {
     expect(document.activeElement).toBe(enabledTrigger);
 
     dispose();
-    host.remove();
   });
 
   it("renders a quiet review attachment and sends it without composer text", () => {
-    const host = document.createElement("div");
     const submit = vi.fn<() => void>();
     const discard = vi.fn<() => void>();
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value=""
-          disabled={false}
-          action="send"
-          review={{ count: 3, onDiscard: discard }}
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={submit}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        review={{ count: 3, onDiscard: discard }}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={submit}
+      />
+    ));
 
     const row = host.querySelector<HTMLElement>(".composer-v2-review-row");
     expect(row?.textContent).toContain("Code review · 3 comments");
@@ -575,29 +500,23 @@ describe("Composer", () => {
     expect(discard).toHaveBeenCalledWith(discardButton);
 
     dispose();
-    host.remove();
   });
 
   it("rejects whitespace and respects application busy state", () => {
-    const host = document.createElement("div");
     const [value, setValue] = createSignal("   \n");
     const [disabled, setDisabled] = createSignal(false);
     const submit = vi.fn<() => void>();
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value={value()}
-          disabled={disabled()}
-          action="send"
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={setValue}
-          onSubmit={submit}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value={value()}
+        disabled={disabled()}
+        action="send"
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={setValue}
+        onSubmit={submit}
+      />
+    ));
     const button = host.querySelector("button");
     if (!button) throw new Error("Composer did not render a button");
 
@@ -614,27 +533,21 @@ describe("Composer", () => {
     button.click();
     expect(submit).toHaveBeenCalledOnce();
     dispose();
-    host.remove();
   });
 
   it("keeps native submit behavior while switching its pinned artwork", () => {
-    const host = document.createElement("div");
     const [action, setAction] = createSignal<ComposerProps["action"]>("send");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value="send this"
-          disabled={false}
-          action={action()}
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value="send this"
+        disabled={false}
+        action={action()}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
     const button = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
     if (!button) throw new Error("Composer did not render its send button");
 
@@ -648,27 +561,21 @@ describe("Composer", () => {
     expect(button.querySelector('[data-component="loader-v2"]')).not.toBeNull();
 
     dispose();
-    host.remove();
   });
 
   it("submits with Enter but keeps Shift+Enter for newlines", () => {
-    const host = document.createElement("div");
     const submit = vi.fn<() => void>();
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value="two\nlines"
-          disabled={false}
-          action="send"
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={submit}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value="two\nlines"
+        disabled={false}
+        action="send"
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={submit}
+      />
+    ));
     const textarea = host.querySelector("textarea");
     if (!textarea) throw new Error("Composer did not render a textarea");
 
@@ -679,27 +586,21 @@ describe("Composer", () => {
     textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(submit).toHaveBeenCalledOnce();
     dispose();
-    host.remove();
   });
 
   it("grows with multiline input, caps its height, and shrinks with controlled value", () => {
-    const host = document.createElement("div");
     const [value, setValue] = createSignal("One line");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <Composer
-          value={value()}
-          disabled={false}
-          action="send"
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={setValue}
-          onSubmit={() => undefined}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={setValue}
+        onSubmit={() => undefined}
+      />
+    ));
     const textarea = host.querySelector("textarea");
     if (!textarea) throw new Error("Composer did not render a textarea");
     let scrollHeight = 76;
@@ -725,6 +626,5 @@ describe("Composer", () => {
     expect(textarea.style.overflowY).toBe("hidden");
 
     dispose();
-    host.remove();
   });
 });

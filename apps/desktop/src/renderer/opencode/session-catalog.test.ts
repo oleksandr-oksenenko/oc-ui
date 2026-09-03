@@ -3,34 +3,29 @@ import type { Data } from "@opencode-ai/client/solid";
 import { createRoot } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../test/deferred.ts";
+import { sessionFixture } from "../test/session-fixture.ts";
 import { createOpenCodeEventSource } from "./event-source.ts";
 import { createSessionCatalog, syncActiveStatuses } from "./session-catalog.ts";
 
 const location = { directory: "/workspace" } as const;
 
 const session = (id: string, sessionLocation: LocationRef = location, parentID?: string) => {
-  const info: SessionInfo = {
+  const info: SessionInfo = sessionFixture({
     id,
-    projectID: "project",
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 1, updated: 1 },
     location: sessionLocation,
-  };
+  });
   return parentID === undefined ? info : { ...info, parentID };
 };
 
 describe("session catalog reconciliation", () => {
   it("replays create and delete events that race a server snapshot", async () => {
     type Page = Awaited<ReturnType<OpenCodeClient["session"]["list"]>>;
-    let resolvePage!: (page: Page) => void;
-    const page = new Promise<Page>((resolve) => {
-      resolvePage = resolve;
-    });
+    const page = deferred<Page>();
     const remember = vi.fn<Data["session"]["remember"]>();
     const sync = vi.fn<Data["session"]["sync"]>(() => Promise.resolve());
     const api = {
-      session: { list: vi.fn<OpenCodeClient["session"]["list"]>(() => page) },
+      session: { list: vi.fn<OpenCodeClient["session"]["list"]>(() => page.promise) },
     };
     const data = {
       session: { remember, sync },
@@ -91,7 +86,7 @@ describe("session catalog reconciliation", () => {
           },
         } satisfies OpenCodeEvent);
 
-        resolvePage({
+        page.resolve({
           data: [
             session("kept"),
             session("other-session", { directory: "/other-workspace" }),

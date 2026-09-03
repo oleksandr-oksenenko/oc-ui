@@ -460,25 +460,6 @@
   overflow: hidden;
 }
 
-.transcript-tool-target,
-.transcript-tool-detail {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.transcript-tool-target {
-  flex: 0 1 auto;
-  color: var(--oc-text-base);
-  font-size: var(--oc-type-metadata-size);
-}
-
-.transcript-tool-detail {
-  flex: 0 1 auto;
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-caption-size);
-}
-
 .transcript-tool-name {
   flex: none;
   color: var(--oc-text-strong);
@@ -673,14 +654,4 @@
   margin-top: 6px;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-body-size);
-}
-
-@media (width <= 820px) {
-  .transcript-document {
-    padding-inline: 16px;
-  }
-
-  .transcript-user-bubble {
-    max-width: 62%;
-  }
 }

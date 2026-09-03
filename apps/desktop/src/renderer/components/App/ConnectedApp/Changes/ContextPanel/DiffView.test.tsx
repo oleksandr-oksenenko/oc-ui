@@ -1,10 +1,11 @@
 import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount } from "../../../../../test/mount.ts";
 import { DiffView } from "./DiffView.tsx";
 
 const malformedFile = {
-  path: "src/example.ts",
+  file: "src/example.ts",
   patch: "",
   additions: 2,
   deletions: 1,
@@ -13,24 +14,19 @@ const malformedFile = {
 
 describe("DiffView", () => {
   it("keeps the controlled comparison available while loading", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
     const onComparisonChange = vi.fn<(value: string) => void>();
-    const dispose = render(
-      () => (
-        <DiffView
-          files={[]}
-          loading
-          comparison="working"
-          comparisonOptions={[
-            { value: "working", label: "Working changes" },
-            { value: "branch", label: "Changes vs main" },
-          ]}
-          onComparisonChange={onComparisonChange}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <DiffView
+        files={[]}
+        loading
+        comparison="working"
+        comparisonOptions={[
+          { value: "working", label: "Working changes" },
+          { value: "branch", label: "Changes vs main" },
+        ]}
+        onComparisonChange={onComparisonChange}
+      />
+    ));
 
     const select = host.querySelector<HTMLElement>('[data-component="select-v2"]');
     expect(select).not.toBeNull();
@@ -45,7 +41,6 @@ describe("DiffView", () => {
     expect(onComparisonChange).toHaveBeenCalledWith("branch");
     expect(host.textContent).toContain("Loading diff");
     dispose();
-    host.remove();
   });
 
   it("uses workspace-state wording for an empty comparison", () => {
@@ -68,21 +63,16 @@ describe("DiffView", () => {
   });
 
   it("keeps cached files visible during a failed refresh", () => {
-    const host = document.createElement("div");
-    document.body.append(host);
     const onRetry = vi.fn<() => void>();
-    const dispose = render(
-      () => (
-        <DiffView
-          files={[malformedFile]}
-          loading={false}
-          stale
-          error="The server is unavailable."
-          onRetry={onRetry}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <DiffView
+        files={[malformedFile]}
+        loading={false}
+        stale
+        error="The server is unavailable."
+        onRetry={onRetry}
+      />
+    ));
 
     expect(host.textContent).toContain("src/example.ts");
     expect(host.textContent).toContain("The server is unavailable.");
@@ -94,6 +84,5 @@ describe("DiffView", () => {
     retry?.click();
     expect(onRetry).toHaveBeenCalledOnce();
     dispose();
-    host.remove();
   });
 });

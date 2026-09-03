@@ -82,8 +82,12 @@ function conditionMatches(field: FormField, answer: FormAnswer): boolean {
   });
 }
 
+function answerText(value: FormValue | undefined): string {
+  return value === undefined || Array.isArray(value) ? "" : String(value);
+}
+
 function stringError(field: StringField, value: FormValue | undefined): string | undefined {
-  const text = value === undefined || Array.isArray(value) ? "" : String(value);
+  const text = answerText(value);
   if (field.required && text.length === 0) return "Enter an answer.";
   if (text.length === 0) return undefined;
   if (field.minLength !== undefined && text.length < field.minLength) {
@@ -98,10 +102,7 @@ function stringError(field: StringField, value: FormValue | undefined): string |
 
   const input = document.createElement("input");
   input.value = text;
-  if (field.format === "email") input.type = "email";
-  if (field.format === "uri") input.type = "url";
-  if (field.format === "date") input.type = "date";
-  if (field.format === "date-time") input.type = "datetime-local";
+  input.type = inputType(field);
   if (field.pattern) input.pattern = field.pattern;
   return input.checkValidity() ? undefined : "Enter a valid value.";
 }
@@ -230,11 +231,7 @@ export function QuestionForm(props: QuestionFormProps) {
               class="question-form-input"
               appearance="large"
               type={inputType(field)}
-              value={
-                answer()[field.key] === undefined || Array.isArray(answer()[field.key])
-                  ? ""
-                  : String(answer()[field.key])
-              }
+              value={answerText(answer()[field.key])}
               placeholder={field.placeholder}
               disabled={unavailable()}
               invalid={error !== undefined}
@@ -253,9 +250,7 @@ export function QuestionForm(props: QuestionFormProps) {
     const errorID = fieldErrorID(props.form.id, field);
     const selected = () => {
       if (customStringFields().has(field.key)) return CUSTOM_TOKEN;
-      const value = answer()[field.key];
-      if (value === undefined || Array.isArray(value)) return undefined;
-      const text = String(value);
+      const text = answerText(answer()[field.key]);
       if (text.length === 0) return undefined;
       const optionIndex = options.findIndex((option) => option.value === text);
       return optionIndex === -1 ? CUSTOM_TOKEN : optionToken(optionIndex);
@@ -311,11 +306,7 @@ export function QuestionForm(props: QuestionFormProps) {
               <TextInput
                 class="question-form-input"
                 appearance="large"
-                value={
-                  answer()[field.key] === undefined || Array.isArray(answer()[field.key])
-                    ? ""
-                    : String(answer()[field.key])
-                }
+                value={answerText(answer()[field.key])}
                 placeholder={field.placeholder ?? "Type your answer"}
                 data-question-form-custom-input
                 disabled={unavailable()}
@@ -347,11 +338,7 @@ export function QuestionForm(props: QuestionFormProps) {
           class="question-form-input"
           appearance="large"
           type="number"
-          value={
-            answer()[field.key] === undefined || Array.isArray(answer()[field.key])
-              ? ""
-              : String(answer()[field.key])
-          }
+          value={answerText(answer()[field.key])}
           disabled={unavailable()}
           invalid={error !== undefined}
           required={field.required}

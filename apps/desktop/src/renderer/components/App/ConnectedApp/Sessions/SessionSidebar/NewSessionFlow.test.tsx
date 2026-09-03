@@ -1,8 +1,10 @@
 import type { FileListOutput, Project, SessionInfo } from "@opencode-ai/client";
 import { Show, createSignal } from "solid-js";
-import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount as mountView } from "../../../../../test/mount.ts";
+import { deferred } from "../../../../../test/deferred.ts";
+import { sessionFixture } from "../../../../../test/session-fixture.ts";
 import {
   NewSessionFlow,
   type NewSessionFlowProps,
@@ -28,14 +30,11 @@ const nonGitProject: Project = {
 };
 
 function session(id: string, directory: string): SessionInfo {
-  return {
+  return sessionFixture({
     id,
     projectID: project.id,
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 1, updated: 1 },
     location: { directory },
-  };
+  });
 }
 
 function fileResponse(directory: string, workspaceID?: string): FileListOutput {
@@ -53,14 +52,6 @@ function fileResponse(directory: string, workspaceID?: string): FileListOutput {
     location,
     data: [{ path: "worktrees", type: "directory" }],
   };
-}
-
-function deferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
 }
 
 function fakeRuntime(
@@ -144,26 +135,21 @@ async function flushDialogClose(): Promise<void> {
 }
 
 function mount(runtime: NewSessionFlowProps["runtime"]) {
-  const host = document.createElement("div");
-  document.body.append(host);
   const onDismiss = vi.fn<() => void>();
   const onSessionCreated = vi.fn<(sessionID: string) => void>();
   const [visible, setVisible] = createSignal(true);
 
-  const dispose = render(
-    () => (
-      <ServerFlowDialogProvider>
-        <Show when={visible()}>
-          <NewSessionFlow
-            runtime={runtime}
-            onDismiss={onDismiss}
-            onSessionCreated={onSessionCreated}
-          />
-        </Show>
-      </ServerFlowDialogProvider>
-    ),
-    host,
-  );
+  const { dispose } = mountView(() => (
+    <ServerFlowDialogProvider>
+      <Show when={visible()}>
+        <NewSessionFlow
+          runtime={runtime}
+          onDismiss={onDismiss}
+          onSessionCreated={onSessionCreated}
+        />
+      </Show>
+    </ServerFlowDialogProvider>
+  ));
   return {
     get root() {
       return [...document.querySelectorAll<HTMLElement>("[data-dialog-layer]")].at(-1)!;
@@ -171,7 +157,7 @@ function mount(runtime: NewSessionFlowProps["runtime"]) {
     onDismiss,
     onSessionCreated,
     unmountFlow: () => setVisible(false),
-    dispose: () => (dispose(), host.remove()),
+    dispose,
   };
 }
 
@@ -546,13 +532,10 @@ describe("NewSessionFlow", () => {
 
   it("reconciles session creation after a request rejection while hydration is pending", async () => {
     const acknowledged = session("session-1", project.canonical);
-    let resolveSync!: () => void;
-    const syncGate = new Promise<void>((resolve) => {
-      resolveSync = resolve;
-    });
+    const syncGate = deferred();
     const fake = fakeRuntime([Promise.reject(new Error("response lost"))], {
       syncAcknowledgement: acknowledged,
-      syncGate,
+      syncGate: syncGate.promise,
     });
     const mounted = mount(fake.runtime);
     await flush();
@@ -564,7 +547,7 @@ describe("NewSessionFlow", () => {
     expect(fake.sessionGet).not.toHaveBeenCalled();
     expect(fake.remove).not.toHaveBeenCalled();
 
-    resolveSync();
+    syncGate.resolve();
     await flushDialogClose();
 
     expect(fake.sessionGet).toHaveBeenCalledWith("session-1");

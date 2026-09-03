@@ -50,7 +50,7 @@ const sessions = [
 
 const diff: readonly DiffFileData[] = [
   {
-    path: "lazygit/config.yml",
+    file: "lazygit/config.yml",
     additions: 2,
     deletions: 2,
     status: "modified",
@@ -70,7 +70,7 @@ const diff: readonly DiffFileData[] = [
 `,
   },
   {
-    path: "nix/hosts/personal/flake.lock",
+    file: "nix/hosts/personal/flake.lock",
     additions: 39,
     deletions: 39,
     status: "modified",
@@ -92,7 +92,7 @@ const diff: readonly DiffFileData[] = [
 `,
   },
   {
-    path: "src/components/SessionList.test.tsx",
+    file: "src/components/SessionList.test.tsx",
     additions: 4,
     deletions: 1,
     status: "modified",
@@ -110,7 +110,7 @@ const diff: readonly DiffFileData[] = [
 `,
   },
   {
-    path: "src/components/Composer.test.tsx",
+    file: "src/components/Composer.test.tsx",
     additions: 3,
     deletions: 2,
     status: "modified",

@@ -8,7 +8,7 @@ type DialogStoryProps = {
   readonly children: (onDismissBlockedChange: (blocked: boolean) => void) => JSXElement;
 };
 
-function DialogStoryContent(props: DialogStoryProps) {
+export function DialogStory(props: DialogStoryProps) {
   const dialog = useDialog();
   const setDismissBlocked = useServerFlowDismissBlock();
   let ownedDialog: typeof dialog.active;
@@ -30,8 +30,4 @@ function DialogStoryContent(props: DialogStoryProps) {
     setDismissBlocked(false);
   });
   return null;
-}
-
-export function DialogStory(props: DialogStoryProps) {
-  return <DialogStoryContent>{props.children}</DialogStoryContent>;
 }

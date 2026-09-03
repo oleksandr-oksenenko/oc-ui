@@ -1,16 +1,14 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../../../../test/deferred.ts";
 import { createReconnectRefreshQueue, retryCatalogAndTranscript } from "./sessionRecovery.ts";
 
 describe("session recovery", () => {
   it("runs one queued refresh after reconnecting during an active refresh", async () => {
-    let finish!: () => void;
-    const first = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
+    const first = deferred();
     const refresh = vi
       .fn<() => Promise<void>>()
-      .mockImplementationOnce(() => first)
+      .mockReturnValueOnce(first.promise)
       .mockResolvedValue(undefined);
     const queue = createReconnectRefreshQueue(refresh, () => true);
 
@@ -20,7 +18,7 @@ describe("session recovery", () => {
     queue.refreshIfPending();
 
     expect(refresh).toHaveBeenCalledTimes(1);
-    finish();
+    first.resolve();
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
   });
 

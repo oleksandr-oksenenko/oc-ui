@@ -54,15 +54,8 @@ const encodeStoredTarget = Schema.encodeSync(WritableStoredTargetJsonSchema);
 
 const readSettings = (filePath: string): Effect.Effect<StoredTarget | undefined> =>
   Effect.promise(async () => {
-    let contents: string;
     try {
-      contents = await readFile(filePath, "utf8");
-    } catch {
-      return undefined;
-    }
-
-    try {
-      return parseStoredTarget(contents);
+      return parseStoredTarget(await readFile(filePath, "utf8"));
     } catch {
       return undefined;
     }

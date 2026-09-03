@@ -51,17 +51,11 @@ describe("connection settings", () => {
     };
 
     const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.save(input);
-      }).pipe(Effect.provide(layer)),
+      Effect.flatMap(Settings, (settings) => settings.save(input)).pipe(Effect.provide(layer)),
     );
     const stored = await readFile(join(directory, "connection-settings.json"), "utf8");
     const loaded = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.load;
-      }).pipe(Effect.provide(layer)),
+      Effect.flatMap(Settings, (settings) => settings.load).pipe(Effect.provide(layer)),
     );
 
     expect(result).toEqual({ passwordSaved: true });
@@ -75,21 +69,17 @@ describe("connection settings", () => {
     const layer = settingsLayer(directory, unavailableStorage);
 
     const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.save({
+      Effect.flatMap(Settings, (settings) =>
+        settings.save({
           kind: "remote",
           serverUrl: "http://homie:4096",
           password: "secret",
-        });
-      }).pipe(Effect.provide(layer)),
+        }),
+      ).pipe(Effect.provide(layer)),
     );
     const stored = await readFile(join(directory, "connection-settings.json"), "utf8");
     const loaded = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.load;
-      }).pipe(Effect.provide(layer)),
+      Effect.flatMap(Settings, (settings) => settings.load).pipe(Effect.provide(layer)),
     );
 
     expect(result).toEqual({ passwordSaved: false });
@@ -110,17 +100,13 @@ describe("connection settings", () => {
     const layer = settingsLayer(directory, storage);
 
     const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.save({ kind: "local" });
-      }).pipe(Effect.provide(layer)),
+      Effect.flatMap(Settings, (settings) => settings.save({ kind: "local" })).pipe(
+        Effect.provide(layer),
+      ),
     );
     const stored = await readFile(join(directory, "connection-settings.json"), "utf8");
     const loaded = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.load;
-      }).pipe(Effect.provide(layer)),
+      Effect.flatMap(Settings, (settings) => settings.load).pipe(Effect.provide(layer)),
     );
 
     expect(result).toEqual({ passwordSaved: false });
@@ -137,10 +123,9 @@ describe("connection settings", () => {
     );
 
     const loaded = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.load;
-      }).pipe(Effect.provide(settingsLayer(directory, encryptedStorage))),
+      Effect.flatMap(Settings, (settings) => settings.load).pipe(
+        Effect.provide(settingsLayer(directory, encryptedStorage)),
+      ),
     );
 
     expect(loaded).toEqual({
@@ -155,16 +140,12 @@ describe("connection settings", () => {
     const layer = settingsLayer(directory, encryptedStorage);
 
     const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.save({ kind: "remote", serverUrl: "http://homie:4096" });
-      }).pipe(Effect.provide(layer)),
+      Effect.flatMap(Settings, (settings) =>
+        settings.save({ kind: "remote", serverUrl: "http://homie:4096" }),
+      ).pipe(Effect.provide(layer)),
     );
     const loaded = await Effect.runPromise(
-      Effect.gen(function* () {
-        const settings = yield* Settings;
-        return yield* settings.load;
-      }).pipe(Effect.provide(layer)),
+      Effect.flatMap(Settings, (settings) => settings.load).pipe(Effect.provide(layer)),
     );
 
     expect(result).toEqual({ passwordSaved: false });

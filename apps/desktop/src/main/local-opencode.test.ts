@@ -74,15 +74,16 @@ describe("local OpenCode sidecar", () => {
 
   it("waits for an in-flight stop before reconnecting", async () => {
     let finishFirstStop: (() => void) | undefined;
-    let stopCalls = 0;
     const ensure = vi.fn<() => Promise<typeof endpoint>>(() => Promise.resolve(endpoint));
-    const stop = vi.fn<() => Promise<void>>(() => {
-      stopCalls += 1;
-      if (stopCalls > 1) return Promise.resolve();
-      return new Promise<void>((resolve) => {
-        finishFirstStop = resolve;
-      });
-    });
+    const stop = vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValue(undefined)
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishFirstStop = resolve;
+          }),
+      );
     const service = createLocalOpenCodeService({
       registrationFile: "/private/app-data/service.json",
       service: { ensure, stop },

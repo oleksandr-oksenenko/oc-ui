@@ -10,7 +10,6 @@ type SessionDraftStore = {
    */
   readonly clearIfUnchanged: (sessionID: string, submittedText: string) => boolean;
   readonly clear: (sessionID: string) => void;
-  readonly clearAll: () => void;
 };
 
 /** Creates an in-memory, reactive draft store keyed by session ID. */
@@ -35,8 +34,5 @@ export function createSessionDraftStore(): SessionDraftStore {
       return true;
     },
     clear,
-    clearAll: () => {
-      setDrafts({});
-    },
   };
 }

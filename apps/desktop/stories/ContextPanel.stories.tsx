@@ -8,7 +8,7 @@ import type { ReviewComment } from "../src/renderer/domain/review-drafts.ts";
 
 const diffFiles: readonly DiffFileData[] = [
   {
-    path: "src/renderer/components/Workspace.tsx",
+    file: "src/renderer/components/Workspace.tsx",
     additions: 3,
     deletions: 1,
     status: "modified",
@@ -40,7 +40,7 @@ const diffFiles: readonly DiffFileData[] = [
 `,
   },
   {
-    path: "src/renderer/styles.css",
+    file: "src/renderer/styles.css",
     additions: 1,
     deletions: 0,
     status: "added",
@@ -179,7 +179,7 @@ export const DiffEdgeCases: Story = {
     diff: {
       files: [
         {
-          path: "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/very-long-file-name.tsx",
+          file: "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/very-long-file-name.tsx",
           additions: 0,
           deletions: 2,
           status: "deleted",
@@ -194,7 +194,7 @@ deleted file mode 100644
 `,
         },
         {
-          path: "README.md",
+          file: "README.md",
           additions: 0,
           deletions: 0,
           status: "modified",
@@ -245,7 +245,7 @@ export const ReviewComments: Story = {
     };
     const comment = createMemo<ReviewComment>(() => ({
       id: "comment-1",
-      path: diffFiles[0]!.path,
+      path: diffFiles[0]!.file,
       body: body(),
       selection,
       selectedCode: "const previous = createMemo(() => current());\n",
@@ -300,7 +300,7 @@ export const NarrowLongPath: Story = {
       ],
       files: [
         {
-          path: "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DeeplyNestedFeatureWithAnIntentionallyLongFileName.tsx",
+          file: "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DeeplyNestedFeatureWithAnIntentionallyLongFileName.tsx",
           additions: 128,
           deletions: 47,
           status: "modified",

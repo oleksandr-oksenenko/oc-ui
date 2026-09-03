@@ -47,6 +47,28 @@ describe("code-review prompt codec", () => {
     expect(prompt.text).toContain("`````\ncontains ```` inside\n`````");
   });
 
+  it("captures only serializable comment fields without retaining mutable draft data", () => {
+    const draft = {
+      ...comment("file.ts", "Original comment"),
+      id: "draft-only",
+      selection: { start: 2, end: 3, draftOnly: true },
+    };
+    const prompt = createCodeReviewPrompt({ instruction: "", comments: [draft] });
+    draft.body = "Edited while sending";
+    draft.selection.start = 10;
+
+    expect(readCodeReviewMetadata(prompt.metadata)?.comments).toEqual([
+      {
+        path: "file.ts",
+        selection: { start: 2, end: 3 },
+        selectedCode: draft.selectedCode,
+        body: "Original comment",
+      },
+    ]);
+    expect(prompt.text).toContain("Range: line 2 to line 3");
+    expect(prompt.text).toContain("Original comment");
+  });
+
   it("normalizes instruction whitespace for the prompt and metadata codec", () => {
     const prompt = createCodeReviewPrompt({
       instruction: " \n  Fix these carefully. \t",

@@ -5,9 +5,10 @@ import type {
 } from "@opencode-ai/client";
 import { batch, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
-import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { mount } from "../../../../../test/mount.ts";
+import { stubResizeObserver } from "../../../../../test/resize-observer.ts";
 import { TranscriptView } from "./TranscriptView.tsx";
 import { UserMessage } from "./TranscriptView/UserMessage.tsx";
 import {
@@ -47,22 +48,12 @@ const assistant = (
 });
 
 function renderUserMessage(message: SessionMessageUser) {
-  const host = document.createElement("div");
-  document.body.append(host);
-  const dispose = render(() => <UserMessage message={message} />, host);
-  return { host, dispose };
+  return mount(() => <UserMessage message={message} />);
 }
 
 describe("TranscriptView", () => {
   it("renders a pending interaction after transcript messages", () => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+    stubResizeObserver();
     const messages: readonly SessionMessageInfo[] = [
       {
         id: "user",
@@ -71,69 +62,43 @@ describe("TranscriptView", () => {
         text: "Prompt",
       },
     ];
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <TranscriptView
-          sessionID="session"
-          messages={messages}
-          sessionStatus="idle"
-          pendingInteraction={<form data-testid="pending-interaction">Choose a workspace</form>}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID="session"
+        messages={messages}
+        sessionStatus="idle"
+        pendingInteraction={<form data-testid="pending-interaction">Choose a workspace</form>}
+      />
+    ));
 
     const documentChildren = [...host.querySelectorAll<HTMLElement>(".transcript-document > *")];
     expect(documentChildren.at(-1)?.dataset.testid).toBe("pending-interaction");
     expect(documentChildren.at(-1)?.textContent).toBe("Choose a workspace");
 
     dispose();
-    host.remove();
     vi.unstubAllGlobals();
   });
 
   it("renders a pending interaction instead of the empty transcript state", () => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <TranscriptView
-          sessionID="session"
-          messages={[]}
-          sessionStatus="idle"
-          pendingInteraction={<form>Choose a workspace</form>}
-        />
-      ),
-      host,
-    );
+    stubResizeObserver();
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID="session"
+        messages={[]}
+        sessionStatus="idle"
+        pendingInteraction={<form>Choose a workspace</form>}
+      />
+    ));
 
     expect(host.querySelector(".transcript-empty-state")).toBeNull();
     expect(host.querySelector("form")?.textContent).toBe("Choose a workspace");
 
     dispose();
-    host.remove();
     vi.unstubAllGlobals();
   });
 
   it("renders every SDK message variant and preserves assistant source order", () => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+    stubResizeObserver();
     const messages: readonly SessionMessageInfo[] = [
       {
         id: "user",
@@ -192,12 +157,9 @@ describe("TranscriptView", () => {
       { id: "system", time: base, type: "system", text: "System" },
       { id: "synthetic", time: base, type: "synthetic", text: "Synthetic" },
     ];
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />,
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
 
     expect(host.textContent).toContain("notes.txt");
     expect(host.textContent).toContain("reviewer");
@@ -281,19 +243,11 @@ describe("TranscriptView", () => {
       host.querySelector('.transcript-reasoning [data-slot="collapsible-arrow-icon"]'),
     ).not.toBeNull();
     dispose();
-    host.remove();
     vi.unstubAllGlobals();
   });
 
   it("shows raw tool input and structured errors for each tool status", () => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+    stubResizeObserver();
     const messages: readonly SessionMessageInfo[] = [
       {
         id: "assistant",
@@ -319,12 +273,9 @@ describe("TranscriptView", () => {
         recent: "Recent context",
       },
     ];
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />,
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
     expect(
       [...host.querySelectorAll<HTMLButtonElement>(".transcript-tool-header")].map((button) =>
         button.getAttribute("aria-expanded"),
@@ -357,19 +308,11 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("failed");
     expect(host.textContent).toContain("Error");
     dispose();
-    host.remove();
     vi.unstubAllGlobals();
   });
 
   it("renders model text as sanitized Markdown", () => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+    stubResizeObserver();
     const messages: readonly SessionMessageInfo[] = [
       {
         id: "assistant-markdown",
@@ -395,12 +338,9 @@ describe("TranscriptView", () => {
         ],
       },
     ];
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />,
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
 
     const markdown = host.querySelector<HTMLElement>(".transcript-markdown");
     expect(markdown?.querySelector("h2")?.textContent).toBe("Result");
@@ -412,7 +352,6 @@ describe("TranscriptView", () => {
     expect(markdown?.querySelector("a")?.hasAttribute("onclick")).toBe(false);
 
     dispose();
-    host.remove();
     vi.unstubAllGlobals();
   });
 
@@ -446,19 +385,14 @@ describe("TranscriptView", () => {
     );
     const [loading, setLoading] = createSignal(true);
     const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>([]);
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <TranscriptView
-          sessionID="first"
-          messages={messages()}
-          sessionStatus="idle"
-          loading={loading()}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID="first"
+        messages={messages()}
+        sessionStatus="idle"
+        loading={loading()}
+      />
+    ));
     const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
     let scrollHeight = 0;
     Object.defineProperty(transcript, "scrollHeight", {
@@ -478,7 +412,6 @@ describe("TranscriptView", () => {
     expect(transcript.scrollTop).toBe(480);
 
     dispose();
-    host.remove();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
@@ -517,7 +450,6 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("Keep this branch safe.");
 
     dispose();
-    host.remove();
   });
 
   it("reacts when durable review metadata arrives on an SDK store proxy", () => {
@@ -551,7 +483,6 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("Code review · 1 comment");
 
     dispose();
-    host.remove();
   });
 
   it("renders an instruction-empty review without the model Markdown", () => {
@@ -578,7 +509,6 @@ describe("TranscriptView", () => {
     expect(host.textContent).not.toContain("Please fix all code review comments below.");
     expect(host.textContent).not.toContain(" \n\t");
     dispose();
-    host.remove();
   });
 
   it("falls back to exact user text when review metadata is malformed", () => {
@@ -593,6 +523,5 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("Original prompt with malformed metadata");
     expect(host.querySelector(".transcript-code-review-card")).toBeNull();
     dispose();
-    host.remove();
   });
 });

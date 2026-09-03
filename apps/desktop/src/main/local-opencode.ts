@@ -113,14 +113,8 @@ export const packagedOpenCodeBinaryPath = (resourcesPath: string): string =>
 
 /** Resolve the packaged, pinned CLI binary; never fall back to a PATH command. */
 function resolveLocalOpenCodeBinary(): string {
-  let packageJsonPath: string;
   try {
-    packageJsonPath = requireFromMain.resolve(`${CLI_PACKAGE}/package.json`);
-  } catch {
-    throw LocalOpenCodeUnavailableError.fromReason("executable-unavailable");
-  }
-
-  try {
+    const packageJsonPath = requireFromMain.resolve(`${CLI_PACKAGE}/package.json`);
     const packageJson = parseCliPackageJson(readFileSync(packageJsonPath, "utf8"));
     if (packageJson.version !== LOCAL_OPENCODE_VERSION) {
       throw new Error("version mismatch");
@@ -193,10 +187,6 @@ function endpointFromPrivate(input: OpenCodeEndpoint): LocalOpenCodeEndpoint {
   };
 }
 
-function timeoutSignal(milliseconds: number): AbortSignal {
-  return AbortSignal.timeout(milliseconds);
-}
-
 async function probe(
   endpoint: LocalOpenCodeEndpoint,
   fetcher: FetchLike,
@@ -209,7 +199,7 @@ async function probe(
     };
     const response = await fetcher(new URL("/api/health", endpoint.serverUrl), {
       headers: OpenCodeService.headers(privateEndpoint),
-      signal: timeoutSignal(timeoutMs),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return false;
     const body = parseHealthResponse(await response.json());

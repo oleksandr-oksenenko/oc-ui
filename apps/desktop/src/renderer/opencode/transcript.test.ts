@@ -1,6 +1,7 @@
 import type { Data } from "@opencode-ai/client/solid";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../test/deferred.ts";
 import { syncSessionTranscript } from "./transcript.ts";
 
 const makeData = (more: () => boolean) => {
@@ -16,14 +17,6 @@ const makeData = (more: () => boolean) => {
     },
   };
   return { data, syncSession, syncPending, syncMessages, loadMore };
-};
-
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 };
 
 describe("syncSessionTranscript", () => {

@@ -78,19 +78,13 @@ const resolveDesktopRuntimeEnvironment = (): DesktopRuntimeEnvironment => {
   };
 };
 
-const withSettings = <A>(
+const runSettings = <A>(
   operation: (service: SettingsService) => Effect.Effect<A, SettingsError>,
-): Effect.Effect<A, SettingsError, SettingsService> =>
-  Effect.gen(function* () {
-    const service = yield* Settings;
-    return yield* operation(service);
-  });
-
-const runSettings = <A>(program: Effect.Effect<A, SettingsError, SettingsService>): Promise<A> => {
+): Promise<A> => {
   if (desktopRuntime === undefined) {
     return Promise.reject(new Error("Desktop services are not ready"));
   }
-  return desktopRuntime.runPromise(program);
+  return desktopRuntime.runPromise(Effect.flatMap(Settings, operation));
 };
 
 const runLocalOpenCode = <A>(
@@ -129,7 +123,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("target.load does not accept arguments"));
     }
-    return settingsMutation.then(() => runSettings(withSettings((service) => service.load)));
+    return settingsMutation.then(() => runSettings((service) => service.load));
   });
 
   ipcMain.handle(IPC_CHANNELS.targetSave, (event, rawInput) => {
@@ -151,9 +145,7 @@ const installIpcHandlers = (): void => {
               serverUrl: normalizeServerUrl(input.serverUrl),
               password: validatePassword(input.password),
             };
-    return queueSettingsMutation(() =>
-      runSettings(withSettings((service) => service.save(validated))),
-    );
+    return queueSettingsMutation(() => runSettings((service) => service.save(validated)));
   });
 
   ipcMain.handle(IPC_CHANNELS.targetClear, (event, ...args: unknown[]) => {
@@ -161,7 +153,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("target.clear does not accept arguments"));
     }
-    return queueSettingsMutation(() => runSettings(withSettings((service) => service.clear)));
+    return queueSettingsMutation(() => runSettings((service) => service.clear));
   });
 
   ipcMain.handle(IPC_CHANNELS.localOpenCodeConnect, (event, ...args: unknown[]) => {
@@ -253,7 +245,7 @@ const installRendererProtocol = async (rendererRoot: string): Promise<void> => {
     const requestedPath = pathname === "/" ? "/index.html" : pathname;
     const candidate = resolve(root, `.${normalize(requestedPath)}`);
     const candidateRelative = relative(root, candidate);
-    if (candidateRelative.startsWith("..") || candidateRelative.includes("..")) {
+    if (candidateRelative.includes("..")) {
       return new Response("Forbidden", { status: 403 });
     }
 
@@ -263,7 +255,7 @@ const installRendererProtocol = async (rendererRoot: string): Promise<void> => {
       return new Response("Not found", { status: 404 });
     }
     const canonicalRelative = relative(root, canonicalCandidate);
-    if (canonicalRelative.startsWith("..") || canonicalRelative.includes("..")) {
+    if (canonicalRelative.includes("..")) {
       return new Response("Forbidden", { status: 403 });
     }
 

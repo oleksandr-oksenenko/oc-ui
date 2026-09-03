@@ -2,6 +2,7 @@ import type { ModelInfo, SessionInfo } from "@opencode-ai/client";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { sessionFixture } from "../test/session-fixture.ts";
 import { createModelSelection } from "./model-selection.ts";
 
 const location = { directory: "/workspace" } as const;
@@ -36,15 +37,11 @@ function model(input: {
 }
 
 function session(id: string, selected?: SessionInfo["model"]): SessionInfo {
-  return {
+  return sessionFixture({
     id,
-    projectID: "project",
     model: selected,
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 1, updated: 1 },
     location,
-  };
+  });
 }
 
 function data(sync: SelectionData["session"]["sync"]): SelectionData {

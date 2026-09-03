@@ -21,7 +21,6 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
   let rightToggle: HTMLButtonElement | undefined;
   let previousLeftOpen = props.leftSidebarOpen;
   let previousRightOpen = props.rightPanelOpen;
-  const rightLabel = () => (props.rightPanelOpen ? "Hide context" : "Show context");
 
   createEffect(() => {
     const leftOpen = props.leftSidebarOpen;
@@ -91,8 +90,8 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
                 size="normal"
                 variant="ghost-muted"
                 icon={<Icon name="layout-right" />}
-                aria-label={rightLabel()}
-                title={rightLabel()}
+                aria-label="Show context"
+                title="Show context"
                 onClick={props.onToggleRightPanel}
               />
             )}

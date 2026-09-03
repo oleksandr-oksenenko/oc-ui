@@ -1,8 +1,11 @@
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { mount } from "../../../../../../test/mount.ts";
 import { FileDiff as PierreFileDiff } from "@pierre/diffs";
 import type { SelectedLineRange } from "@pierre/diffs";
+
+import { stubResizeObserver } from "../../../../../../test/resize-observer.ts";
 
 import { DiffFile, parseFilePatch } from "./DiffFile.tsx";
 import {
@@ -13,7 +16,7 @@ import {
 } from "./diff-render-data.ts";
 
 const file = {
-  path: "src/example.ts",
+  file: "src/example.ts",
   additions: 1,
   deletions: 1,
   status: "modified" as const,
@@ -111,8 +114,8 @@ describe("DiffFile", () => {
 `,
     });
     expect(modified).toEqual({
-      oldFile: { name: file.path, contents: "first\nold\nlast\n" },
-      newFile: { name: file.path, contents: "first\nnew\nlast\n" },
+      oldFile: { name: file.file, contents: "first\nold\nlast\n" },
+      newFile: { name: file.file, contents: "first\nnew\nlast\n" },
     });
 
     const added = reconstructCompleteFiles({
@@ -123,8 +126,8 @@ describe("DiffFile", () => {
       patch: "@@ -0,0 +1,2 @@\n+first\n+second\n",
     });
     expect(added).toEqual({
-      oldFile: { name: file.path, contents: "" },
-      newFile: { name: file.path, contents: "first\nsecond\n" },
+      oldFile: { name: file.file, contents: "" },
+      newFile: { name: file.file, contents: "first\nsecond\n" },
     });
 
     const deleted = reconstructCompleteFiles({
@@ -135,8 +138,8 @@ describe("DiffFile", () => {
       patch: "@@ -1,2 +0,0 @@\n-first\n-second\n",
     });
     expect(deleted).toEqual({
-      oldFile: { name: file.path, contents: "first\nsecond\n" },
-      newFile: { name: file.path, contents: "" },
+      oldFile: { name: file.file, contents: "first\nsecond\n" },
+      newFile: { name: file.file, contents: "" },
     });
   });
 
@@ -153,7 +156,7 @@ describe("DiffFile", () => {
   it("retains normalized metadata on the complete-file rendering path", () => {
     const prepared = prepareDiffRender(file);
     expect(prepared?.kind).toBe("files");
-    expect(prepared?.kind === "files" && prepared.fileDiff.name).toBe(file.path);
+    expect(prepared?.kind === "files" && prepared.fileDiff.name).toBe(file.file);
     expect(
       prepared?.kind === "files" &&
         getSelectedCode(prepared.fileDiff, {
@@ -181,41 +184,36 @@ describe("DiffFile", () => {
     const onRemoveComment = vi.fn<(commentID: string, opener: HTMLElement) => void>();
     const [editingCommentID, setEditingCommentID] = createSignal<string>();
     const selection = { start: 1, side: "additions", end: 1, endSide: "additions" } as const;
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => (
-        <DiffFile
-          file={file}
-          review={{
-            comments: [
-              {
-                id: "comment-1",
-                path: file.path,
-                body: "Use the existing helper.",
-                selection,
-                selectedCode: "new\n",
-              },
-              {
-                id: "comment-empty",
-                path: file.path,
-                body: "",
-                selection,
-                selectedCode: "new\n",
-              },
-            ],
-            editingCommentID: editingCommentID(),
-            selection,
-            onBeginComment,
-            onUpdateCommentBody,
-            onEditComment,
-            onFinishComment,
-            onRemoveComment,
-          }}
-        />
-      ),
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <DiffFile
+        file={file}
+        review={{
+          comments: [
+            {
+              id: "comment-1",
+              path: file.file,
+              body: "Use the existing helper.",
+              selection,
+              selectedCode: "new\n",
+            },
+            {
+              id: "comment-empty",
+              path: file.file,
+              body: "",
+              selection,
+              selectedCode: "new\n",
+            },
+          ],
+          editingCommentID: editingCommentID(),
+          selection,
+          onBeginComment,
+          onUpdateCommentBody,
+          onEditComment,
+          onFinishComment,
+          onRemoveComment,
+        }}
+      />
+    ));
 
     await vi.waitFor(() => expect(optionsSpy).toHaveBeenCalled());
     const options = optionsSpy.mock.calls.at(-1)?.[0];
@@ -290,7 +288,6 @@ describe("DiffFile", () => {
     expect(onRemoveComment).toHaveBeenLastCalledWith("comment-empty", expect.any(HTMLElement));
 
     dispose();
-    host.remove();
     renderSpy.mockRestore();
     rerenderSpy.mockRestore();
     optionsSpy.mockRestore();
@@ -301,9 +298,7 @@ describe("DiffFile", () => {
   it("syncs comment icons through Pierre's post-render lifecycle", async () => {
     const renderSpy = vi.spyOn(PierreFileDiff.prototype, "render").mockReturnValue(true);
     const optionsSpy = vi.spyOn(PierreFileDiff.prototype, "setOptions");
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(() => <DiffFile file={file} review={{ comments: [] }} />, host);
+    const { dispose } = mount(() => <DiffFile file={file} review={{ comments: [] }} />);
 
     await vi.waitFor(() => expect(optionsSpy).toHaveBeenCalled());
     const options = optionsSpy.mock.calls.at(-1)?.[0];
@@ -324,20 +319,12 @@ describe("DiffFile", () => {
 
     symbol.remove();
     dispose();
-    host.remove();
     renderSpy.mockRestore();
     optionsSpy.mockRestore();
   });
 
   it("keeps Pierre's native gutter drag range for long, reverse, and cross-side reviews", async () => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+    stubResizeObserver();
 
     const exercise = async (
       candidate: Parameters<typeof parseFilePatch>[0],
@@ -346,20 +333,15 @@ describe("DiffFile", () => {
       expected: SelectedLineRange,
     ): Promise<void> => {
       const onBeginComment = vi.fn<(selection: SelectedLineRange, selectedCode: string) => void>();
-      const host = document.createElement("div");
-      document.body.append(host);
-      const dispose = render(
-        () => (
-          <DiffFile
-            file={candidate}
-            review={{
-              comments: [],
-              onBeginComment,
-            }}
-          />
-        ),
-        host,
-      );
+      const { host, dispose } = mount(() => (
+        <DiffFile
+          file={candidate}
+          review={{
+            comments: [],
+            onBeginComment,
+          }}
+        />
+      ));
 
       let shadow: ShadowRoot | undefined;
       await vi.waitFor(() => {
@@ -390,12 +372,11 @@ describe("DiffFile", () => {
       expect(onBeginComment.mock.calls[0]?.[1]).toEqual(expect.any(String));
 
       dispose();
-      host.remove();
     };
 
     const additions = Array.from({ length: 8 }, (_, index) => `+line ${index + 1}\n`).join("");
     const added = {
-      path: "src/added.ts",
+      file: "src/added.ts",
       additions: 8,
       deletions: 0,
       status: "added" as const,
@@ -453,30 +434,20 @@ describe("DiffFile", () => {
         patch: "@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new\n",
       }),
     ).toEqual({
-      oldFile: { name: file.path, contents: "old" },
-      newFile: { name: file.path, contents: "new\n" },
+      oldFile: { name: file.file, contents: "old" },
+      newFile: { name: file.file, contents: "new\n" },
     });
   });
 
   it("labels collapsed context and lets the keyboard expand it", async () => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+    stubResizeObserver();
     const body = Array.from({ length: 20 }, (_, index) => {
       const line = `line ${index + 1}`;
       return index === 10 ? `-${line}\n+changed line\n` : ` ${line}\n`;
     }).join("");
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => <DiffFile file={{ ...file, patch: `@@ -1,20 +1,20 @@\n${body}` }} />,
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <DiffFile file={{ ...file, patch: `@@ -1,20 +1,20 @@\n${body}` }} />
+    ));
 
     let shadow: ShadowRoot | null | undefined;
     await vi.waitFor(() => {
@@ -495,29 +466,18 @@ describe("DiffFile", () => {
     });
 
     dispose();
-    host.remove();
     vi.unstubAllGlobals();
   });
 
   it("labels Pierre's chunked expand-all control truthfully", async () => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+    stubResizeObserver();
     const body = Array.from({ length: 241 }, (_, index) => {
       const line = `line ${index + 1}`;
       return index === 120 ? `-${line}\n+changed line\n` : ` ${line}\n`;
     }).join("");
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(
-      () => <DiffFile file={{ ...file, patch: `@@ -1,241 +1,241 @@\n${body}` }} />,
-      host,
-    );
+    const { host, dispose } = mount(() => (
+      <DiffFile file={{ ...file, patch: `@@ -1,241 +1,241 @@\n${body}` }} />
+    ));
 
     await vi.waitFor(() => {
       const shadow = host.querySelector("diffs-container")?.shadowRoot;
@@ -529,7 +489,6 @@ describe("DiffFile", () => {
     });
 
     dispose();
-    host.remove();
     vi.unstubAllGlobals();
   });
 
@@ -548,9 +507,7 @@ describe("DiffFile", () => {
       return true;
     });
     const cleanupSpy = vi.spyOn(PierreFileDiff.prototype, "cleanUp").mockImplementation(() => {});
-    const host = document.createElement("div");
-    document.body.append(host);
-    const dispose = render(() => <DiffFile file={{ ...file, defaultExpanded: false }} />, host);
+    const { host, dispose } = mount(() => <DiffFile file={{ ...file, defaultExpanded: false }} />);
 
     const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Expand src/example.ts"]');
     expect(host.querySelector("diffs-container")).toBeNull();
@@ -561,8 +518,8 @@ describe("DiffFile", () => {
     expect(renderSpy).toHaveBeenCalledTimes(1);
 
     expect(renderSpy.mock.calls[0]?.[0]).toMatchObject({
-      oldFile: { name: file.path, contents: "old\n" },
-      newFile: { name: file.path, contents: "new\n" },
+      oldFile: { name: file.file, contents: "old\n" },
+      newFile: { name: file.file, contents: "new\n" },
     });
     expect(renderSpy.mock.calls[0]?.[0].fileDiff).toBeUndefined();
 
@@ -576,21 +533,18 @@ describe("DiffFile", () => {
     expect(renderSpy).toHaveBeenCalledTimes(2);
 
     dispose();
-    host.remove();
     renderSpy.mockRestore();
     cleanupSpy.mockRestore();
   });
 
   it("renders new patch content when the same path changes", async () => {
     const renderSpy = vi.spyOn(PierreFileDiff.prototype, "render").mockReturnValue(true);
-    const host = document.createElement("div");
-    document.body.append(host);
     let update!: (next: typeof file) => void;
-    const dispose = render(() => {
+    const { dispose } = mount(() => {
       const [current, setCurrent] = createSignal(file);
       update = setCurrent;
       return <DiffFile file={current()} />;
-    }, host);
+    });
 
     await vi.waitFor(() => expect(renderSpy).toHaveBeenCalledTimes(1));
     const firstNewFile = renderSpy.mock.calls[0]?.[0].newFile;
@@ -603,7 +557,6 @@ describe("DiffFile", () => {
     expect(secondNewFile?.cacheKey).toBeUndefined();
 
     dispose();
-    host.remove();
     renderSpy.mockRestore();
   });
 });

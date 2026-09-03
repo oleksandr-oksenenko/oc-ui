@@ -16,7 +16,7 @@ import {
   GLOBAL_FORM_LOCATION,
   type FakeControllerOptions,
 } from "./global-form-fixtures.ts";
-import { GlobalFormsShell } from "./index.ts";
+import { GlobalFormsShell } from "./global-forms.tsx";
 
 import "./beacon.css";
 
@@ -205,12 +205,6 @@ export const LongHostileContent = {
   ),
 };
 
-const narrowViewport = {
-  options: {
-    narrow390: { name: "Narrow 390x760", styles: { width: "390px", height: "760px" } },
-  },
-};
-
 const shortHeightViewport = {
   options: {
     short640x400: { name: "Short 640x400", styles: { width: "640px", height: "400px" } },
@@ -218,8 +212,7 @@ const shortHeightViewport = {
 };
 
 export const NarrowViewport = {
-  parameters: { viewport: narrowViewport },
-  globals: { viewport: { value: "narrow390", isRotated: false } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: () => (
     <BeaconStory
       forms={defaultForms.slice(0, 2)}

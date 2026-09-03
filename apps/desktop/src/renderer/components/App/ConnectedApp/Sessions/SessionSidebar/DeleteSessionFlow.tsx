@@ -95,7 +95,7 @@ export function DeleteSessionFlow(props: DeleteSessionFlowProps) {
       )
       .then(() => {
         activeDialog = dialog.active;
-        if (closingFlow && dialog.active === activeDialog) dialog.close();
+        if (closingFlow) dialog.close();
         return undefined;
       });
   });

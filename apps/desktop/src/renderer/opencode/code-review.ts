@@ -28,12 +28,7 @@ type CodeReviewPromptInput = {
   readonly comments: readonly SentReviewComment[];
 };
 
-type MutableSelection = {
-  start: number;
-  side?: SelectedLineRange["side"];
-  end: number;
-  endSide?: SelectedLineRange["endSide"];
-};
+type MutableSelection = Pick<SelectedLineRange, "start" | "side" | "end" | "endSide">;
 
 const PositiveLineNumberSchema = Schema.Finite.check(Schema.isInt(), Schema.isGreaterThan(0));
 const ReviewSideSchema = Schema.Union([Schema.Literal("deletions"), Schema.Literal("additions")]);
@@ -60,13 +55,13 @@ const decodeSentCodeReview = Schema.decodeUnknownSync(SentCodeReviewSchema, {
 });
 
 export function createCodeReviewPrompt(input: CodeReviewPromptInput): CodeReviewPrompt {
-  const instruction = normalizeInstruction(input.instruction);
-  const review: SentCodeReview = {
+  const instruction = input.instruction.trim();
+  const review = {
     kind: "code-review",
     version: 1,
     instruction,
     comments: input.comments.map(toSentReviewComment),
-  };
+  } satisfies SentCodeReview;
   const sections = [
     ...(instruction ? [instruction, ""] : []),
     "## Code review",
@@ -91,7 +86,7 @@ export function createCodeReviewPrompt(input: CodeReviewPromptInput): CodeReview
 
   return {
     text: sections.join("\n"),
-    metadata: { [CODE_REVIEW_METADATA_KEY]: toJsonReview(review) },
+    metadata: { [CODE_REVIEW_METADATA_KEY]: review },
   };
 }
 
@@ -102,44 +97,19 @@ export function readCodeReviewMetadata(
   if (value === undefined) return undefined;
   try {
     const review = decodeSentCodeReview(value);
-    return { ...review, instruction: normalizeInstruction(review.instruction) };
+    return { ...review, instruction: review.instruction.trim() };
   } catch {
     return undefined;
   }
 }
 
-function toSentReviewComment(comment: SentReviewComment): SentReviewComment {
+function toSentReviewComment(comment: SentReviewComment) {
   return {
     path: comment.path,
     selection: cloneSelection(comment.selection),
     selectedCode: comment.selectedCode,
     body: comment.body,
   };
-}
-
-function toJsonReview(review: SentCodeReview): JsonValue {
-  return {
-    kind: review.kind,
-    version: review.version,
-    instruction: review.instruction,
-    comments: review.comments.map((comment) => ({
-      path: comment.path,
-      selection: toJsonSelection(comment.selection),
-      selectedCode: comment.selectedCode,
-      body: comment.body,
-    })),
-  };
-}
-
-function toJsonSelection(selection: SelectedLineRange): JsonValue {
-  const value: MutableSelection = { start: selection.start, end: selection.end };
-  if (selection.side !== undefined) value.side = selection.side;
-  if (selection.endSide !== undefined) value.endSide = selection.endSide;
-  return value;
-}
-
-function normalizeInstruction(instruction: string): string {
-  return instruction.trim();
 }
 
 export function formatReviewSelection(selection: SelectedLineRange): string {
@@ -160,7 +130,7 @@ function renderFence(content: string): string {
   return `${fence}\n${content}${content.endsWith("\n") ? "" : "\n"}${fence}`;
 }
 
-function cloneSelection(selection: SelectedLineRange): SelectedLineRange {
+function cloneSelection(selection: SelectedLineRange): MutableSelection {
   const clone: MutableSelection = { start: selection.start, end: selection.end };
   if (selection.side !== undefined) clone.side = selection.side;
   if (selection.endSide !== undefined) clone.endSide = selection.endSide;

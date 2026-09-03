@@ -159,7 +159,7 @@ export function DiffView(props: DiffViewProps) {
                   ? {
                       get comments() {
                         return (
-                          review()?.comments.filter((comment) => comment.path === file.path) ?? []
+                          review()?.comments.filter((comment) => comment.path === file.file) ?? []
                         );
                       },
                       get editingCommentID() {
@@ -167,10 +167,10 @@ export function DiffView(props: DiffViewProps) {
                       },
                       get selection() {
                         const selected = review()?.selectedLines;
-                        return selected?.path === file.path ? selected.range : null;
+                        return selected?.path === file.file ? selected.range : null;
                       },
                       onBeginComment: (selection, selectedCode) =>
-                        review()?.onBeginComment?.(file.path, selection, selectedCode),
+                        review()?.onBeginComment?.(file.file, selection, selectedCode),
                       onUpdateCommentBody: (commentID, body) =>
                         review()?.onUpdateCommentBody?.(commentID, body),
                       onEditComment: (commentID) => review()?.onEditComment?.(commentID),

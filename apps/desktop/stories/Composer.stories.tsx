@@ -11,6 +11,13 @@ import { composerAgentSelection, composerModelSelection } from "./composer-fixtu
 const meta = {
   title: "Composer/Composer",
   component: Composer,
+  decorators: [
+    (Story) => (
+      <div style={frameStyle}>
+        <Story />
+      </div>
+    ),
+  ],
   parameters: {
     layout: "centered",
   },
@@ -35,31 +42,29 @@ export const Idle: Story = {
     const [variantID, setVariantID] = createSignal("deep");
     const [agentID, setAgentID] = createSignal("build");
     return (
-      <div style={frameStyle}>
-        <Composer
-          value={value()}
-          disabled={false}
-          action="send"
-          modelSelection={composerModelSelection({
-            selectedModelID: modelID(),
-            selectedVariantID: variantID(),
-            onSelectModel: (id) => {
-              idleOnSelectModel(id);
-              setModelID(id);
-            },
-            onSelectVariant: setVariantID,
-          })}
-          agentSelection={composerAgentSelection({
-            selectedAgentID: agentID(),
-            onSelectAgent: setAgentID,
-          })}
-          onInput={setValue}
-          onSubmit={() => {
-            idleOnSubmit();
-            setValue("");
-          }}
-        />
-      </div>
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection({
+          selectedModelID: modelID(),
+          selectedVariantID: variantID(),
+          onSelectModel: (id) => {
+            idleOnSelectModel(id);
+            setModelID(id);
+          },
+          onSelectVariant: setVariantID,
+        })}
+        agentSelection={composerAgentSelection({
+          selectedAgentID: agentID(),
+          onSelectAgent: setAgentID,
+        })}
+        onInput={setValue}
+        onSubmit={() => {
+          idleOnSubmit();
+          setValue("");
+        }}
+      />
     );
   },
   play: async ({ canvasElement, step }) => {
@@ -114,66 +119,58 @@ export const LoadingPickers: Story = {
   render: () => {
     const [value, setValue] = createSignal("Explain the latest change");
     return (
-      <div style={frameStyle}>
-        <Composer
-          value={value()}
-          disabled={false}
-          action="send"
-          modelSelection={composerModelSelection({ state: "loading", models: [], variants: [] })}
-          agentSelection={composerAgentSelection({ state: "loading", agents: [] })}
-          onInput={setValue}
-          onSubmit={() => setValue("")}
-        />
-      </div>
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection({ state: "loading", models: [], variants: [] })}
+        agentSelection={composerAgentSelection({ state: "loading", agents: [] })}
+        onInput={setValue}
+        onSubmit={() => setValue("")}
+      />
     );
   },
 };
 
 export const DefaultAgent: Story = {
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value=""
-        disabled={false}
-        action="send"
-        modelSelection={composerModelSelection()}
-        agentSelection={composerAgentSelection({ selectedAgentID: undefined })}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value=""
+      disabled={false}
+      action="send"
+      modelSelection={composerModelSelection()}
+      agentSelection={composerAgentSelection({ selectedAgentID: undefined })}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
 };
 
 export const EmptyAgents: Story = {
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value=""
-        disabled={false}
-        action="send"
-        modelSelection={composerModelSelection()}
-        agentSelection={composerAgentSelection({ agents: [], selectedAgentID: undefined })}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value=""
+      disabled={false}
+      action="send"
+      modelSelection={composerModelSelection()}
+      agentSelection={composerAgentSelection({ agents: [], selectedAgentID: undefined })}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
 };
 
 export const MissingAgent: Story = {
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value=""
-        disabled={false}
-        action="send"
-        modelSelection={composerModelSelection()}
-        agentSelection={composerAgentSelection({ selectedAgentID: "missing" })}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value=""
+      disabled={false}
+      action="send"
+      modelSelection={composerModelSelection()}
+      agentSelection={composerAgentSelection({ selectedAgentID: "missing" })}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
 };
 
@@ -183,17 +180,15 @@ export const Multiline: Story = {
       "Review this change\nThen suggest focused tests\nKeep the answer concise",
     );
     return (
-      <div style={frameStyle}>
-        <Composer
-          value={value()}
-          disabled={false}
-          action="send"
-          modelSelection={composerModelSelection()}
-          agentSelection={composerAgentSelection()}
-          onInput={setValue}
-          onSubmit={() => setValue("")}
-        />
-      </div>
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={setValue}
+        onSubmit={() => setValue("")}
+      />
     );
   },
 };
@@ -202,18 +197,16 @@ export const RunningDraft: Story = {
   render: () => {
     const [value, setValue] = createSignal("This draft remains editable while the run is active.");
     return (
-      <div style={frameStyle}>
-        <Composer
-          value={value()}
-          disabled={false}
-          action="running"
-          modelSelection={composerModelSelection()}
-          agentSelection={composerAgentSelection()}
-          onInput={setValue}
-          onSubmit={() => undefined}
-          onStop={runningOnStop}
-        />
-      </div>
+      <Composer
+        value={value()}
+        disabled={false}
+        action="running"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={setValue}
+        onSubmit={() => undefined}
+        onStop={runningOnStop}
+      />
     );
   },
   play: async ({ canvasElement, step }) => {
@@ -248,17 +241,15 @@ export const RunningDraft: Story = {
 
 export const Submitting: Story = {
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value="Send this prompt"
-        disabled
-        action="sending"
-        modelSelection={composerModelSelection()}
-        agentSelection={composerAgentSelection({ switching: true })}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value="Send this prompt"
+      disabled
+      action="sending"
+      modelSelection={composerModelSelection()}
+      agentSelection={composerAgentSelection({ switching: true })}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
 };
 
@@ -266,18 +257,16 @@ export const AdmissionError: Story = {
   render: () => {
     const [value, setValue] = createSignal("The draft is preserved after admission fails.");
     return (
-      <div style={frameStyle}>
-        <Composer
-          value={value()}
-          disabled={false}
-          action="send"
-          error="The server could not admit this prompt. Try again."
-          modelSelection={composerModelSelection()}
-          agentSelection={composerAgentSelection()}
-          onInput={setValue}
-          onSubmit={() => undefined}
-        />
-      </div>
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        error="The server could not admit this prompt. Try again."
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={setValue}
+        onSubmit={() => undefined}
+      />
     );
   },
   play: async ({ canvasElement, step }) => {
@@ -303,17 +292,15 @@ export const AdmissionError: Story = {
 
 export const EmptyDisabled: Story = {
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value=""
-        disabled
-        action="send"
-        modelSelection={composerModelSelection()}
-        agentSelection={composerAgentSelection()}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value=""
+      disabled
+      action="send"
+      modelSelection={composerModelSelection()}
+      agentSelection={composerAgentSelection()}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
 };
 
@@ -325,60 +312,54 @@ export const ReviewAttachment: Story = {
       onDiscard: () => setReview(undefined),
     });
     return (
-      <div style={frameStyle}>
-        <Composer
-          value={value()}
-          disabled={false}
-          action="send"
-          review={review()}
-          modelSelection={composerModelSelection()}
-          agentSelection={composerAgentSelection()}
-          onInput={setValue}
-          onSubmit={() => setValue("")}
-        />
-      </div>
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        review={review()}
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={setValue}
+        onSubmit={() => setValue("")}
+      />
     );
   },
 };
 
 export const UnavailableWhileDisabled: Story = {
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value="Unavailable while reconnecting"
-        disabled
-        action="send"
-        modelSelection={composerModelSelection({
-          state: "failed",
-          models: [],
-          variants: [],
-          error: "Models could not be loaded. Check the connection and try again.",
-        })}
-        agentSelection={composerAgentSelection({
-          state: "failed",
-          agents: [],
-          error: "Agents could not be loaded. Check the connection and try again.",
-        })}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value="Unavailable while reconnecting"
+      disabled
+      action="send"
+      modelSelection={composerModelSelection({
+        state: "failed",
+        models: [],
+        variants: [],
+        error: "Models could not be loaded. Check the connection and try again.",
+      })}
+      agentSelection={composerAgentSelection({
+        state: "failed",
+        agents: [],
+        error: "Agents could not be loaded. Check the connection and try again.",
+      })}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
 };
 
 export const PromptFocused: Story = {
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value="A focused prompt exposes the canonical composer focus treatment."
-        disabled={false}
-        action="send"
-        modelSelection={composerModelSelection()}
-        agentSelection={composerAgentSelection()}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value="A focused prompt exposes the canonical composer focus treatment."
+      disabled={false}
+      action="send"
+      modelSelection={composerModelSelection()}
+      agentSelection={composerAgentSelection()}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
   play: ({ canvasElement }) => {
     canvasElement.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')?.focus();
@@ -387,54 +368,43 @@ export const PromptFocused: Story = {
 
 export const SwitchingSelection: Story = {
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value="The draft remains visible while the model selection changes."
-        disabled={false}
-        action="send"
-        modelSelection={composerModelSelection({ switching: true })}
-        agentSelection={composerAgentSelection()}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value="The draft remains visible while the model selection changes."
+      disabled={false}
+      action="send"
+      modelSelection={composerModelSelection({ switching: true })}
+      agentSelection={composerAgentSelection()}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
 };
 
-const narrowViewport = {
-  options: {
-    mobile390: { name: "Mobile 390x760", styles: { width: "390px", height: "760px" } },
-  },
-};
-
 export const NarrowLongSelections: Story = {
-  parameters: { viewport: narrowViewport },
-  globals: { viewport: { value: "mobile390", isRotated: false } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: () => (
-    <div style={frameStyle}>
-      <Composer
-        value="Review the complete remote workspace context and preserve the server-provided path."
-        disabled={false}
-        action="send"
-        modelSelection={composerModelSelection({
-          models: [
-            {
-              id: "openai/long-model",
-              label: "OpenAI reasoning model with an intentionally long display name",
-              group: "OpenAI hosted models",
-            },
-          ],
-          selectedModelID: "openai/long-model",
-          variants: [{ id: "maximum-reasoning", label: "maximum reasoning with extended context" }],
-          selectedVariantID: "maximum-reasoning",
-        })}
-        agentSelection={composerAgentSelection({
-          agents: [{ id: "review-long", label: "Independent implementation reviewer" }],
-          selectedAgentID: "review-long",
-        })}
-        onInput={() => undefined}
-        onSubmit={() => undefined}
-      />
-    </div>
+    <Composer
+      value="Review the complete remote workspace context and preserve the server-provided path."
+      disabled={false}
+      action="send"
+      modelSelection={composerModelSelection({
+        models: [
+          {
+            id: "openai/long-model",
+            label: "OpenAI reasoning model with an intentionally long display name",
+            group: "OpenAI hosted models",
+          },
+        ],
+        selectedModelID: "openai/long-model",
+        variants: [{ id: "maximum-reasoning", label: "maximum reasoning with extended context" }],
+        selectedVariantID: "maximum-reasoning",
+      })}
+      agentSelection={composerAgentSelection({
+        agents: [{ id: "review-long", label: "Independent implementation reviewer" }],
+        selectedAgentID: "review-long",
+      })}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
   ),
 };

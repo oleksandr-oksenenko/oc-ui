@@ -22,10 +22,8 @@ export function AgentPicker(props: AgentPickerProps) {
     root?.querySelector<HTMLElement>('[data-component="select-v2"]')?.focus();
   const selected = () => props.options.find((option) => option.id === props.selectedID);
   const currentPlaceholder = () =>
-    props.selectedID === undefined || selected() === undefined
-      ? props.selectedID === undefined
-        ? props.placeholder
-        : props.unavailableLabel
+    props.selectedID !== undefined && selected() === undefined
+      ? props.unavailableLabel
       : props.placeholder;
 
   createEffect(() => {

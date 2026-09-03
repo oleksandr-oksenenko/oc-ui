@@ -2,6 +2,7 @@ import type { SessionInfo } from "@opencode-ai/client";
 import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { projectSessionTree } from "./session-tree-projection.ts";
 
 const day = 24 * 60 * 60 * 1000;
@@ -14,16 +15,13 @@ function session(
   updated: number,
   created = now - 30 * day,
 ): SessionInfo {
-  return {
+  return sessionFixture({
     id,
     title,
     parentID,
-    projectID: "project",
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     time: { created, updated },
     location: { directory: "/project" },
-  };
+  });
 }
 
 const ids = (nodes: readonly { session: SessionInfo }[]) => nodes.map((node) => node.session.id);

@@ -73,16 +73,16 @@ export function projectSessionTree(
   const titleMatches = (session: SessionInfo): boolean =>
     (session.title?.trim() || "Untitled session").toLowerCase().includes(normalizedQuery);
 
-  const buildNode = (session: SessionInfo, filter: boolean): SessionTreeNode | undefined => {
+  const buildNode = (session: SessionInfo): SessionTreeNode | undefined => {
     const children = (childrenByID.get(session.id) ?? [])
-      .map((child) => buildNode(child, filter))
+      .map(buildNode)
       .filter((child): child is SessionTreeNode => child !== undefined);
-    if (filter && !titleMatches(session) && children.length === 0) return undefined;
+    if (!titleMatches(session) && children.length === 0) return undefined;
     return { session, children };
   };
 
   const filteredRoots = roots
-    .map((root) => buildNode(root, normalizedQuery.length > 0))
+    .map(buildNode)
     .filter((root): root is SessionTreeNode => root !== undefined);
 
   const subtreeTimes = (session: SessionInfo, key: "created" | "updated"): number[] => [
