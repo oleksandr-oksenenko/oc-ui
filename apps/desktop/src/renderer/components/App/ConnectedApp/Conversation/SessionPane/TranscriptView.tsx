@@ -4,7 +4,7 @@ import { Button } from "@opencode-ai/ui/button";
 import { createAutoScroll } from "@opencode-ai/ui/hooks";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
-import { createEffect, Show, type JSX } from "solid-js";
+import { createEffect, onCleanup, Show, type JSX } from "solid-js";
 
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
 import { CompactionMessage } from "./TranscriptView/CompactionMessage.tsx";
@@ -12,12 +12,15 @@ import { ContextMessage } from "./TranscriptView/ContextMessage.tsx";
 import { ShellMessage } from "./TranscriptView/ShellMessage.tsx";
 import { SkillMessage } from "./TranscriptView/SkillMessage.tsx";
 import { TimelineRow } from "./TranscriptView/TimelineRow.tsx";
+import type { UserMessageProps } from "./TranscriptView/UserMessage.tsx";
 import { UserMessage } from "./TranscriptView/UserMessage.tsx";
 
 import "./SessionPane.css";
 
 export type TranscriptViewProps = {
   readonly sessionID: string;
+  readonly annotationRootRef?: (element: HTMLDivElement) => (() => void) | void;
+  readonly onOpenAnnotation?: UserMessageProps["onOpenAnnotation"];
   readonly messages: readonly SessionMessageInfo[];
   readonly sessionStatus: DataSessionStatus;
   readonly loading?: boolean;
@@ -29,6 +32,8 @@ export type TranscriptViewProps = {
 };
 
 export function TranscriptView(props: TranscriptViewProps): JSX.Element {
+  let detachAnnotations: (() => void) | void;
+  onCleanup(() => detachAnnotations?.());
   let openedSessionID: string | undefined;
   const working = () => props.sessionStatus === "running";
   const autoScrollActive = () => props.loading === true || working();
@@ -45,8 +50,12 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
   return (
     <div
-      ref={scrollRef}
+      ref={(element) => {
+        scrollRef(element);
+        detachAnnotations = props.annotationRootRef?.(element);
+      }}
       class="transcript-view"
+      tabIndex={-1}
       aria-busy={props.loading === true}
       onScroll={handleScroll}
     >
@@ -84,7 +93,9 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
       <Show when={props.messages.length > 0 || working() || props.pendingInteraction !== undefined}>
         <div ref={contentRef} class="transcript-document">
-          {props.messages.map((message) => renderMessage(message, props.sessionStatus))}
+          {props.messages.map((message) =>
+            renderMessage(message, props.sessionStatus, props.onOpenAnnotation),
+          )}
 
           {props.pendingInteraction}
 
@@ -100,10 +111,14 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   );
 }
 
-function renderMessage(message: SessionMessageInfo, sessionStatus: DataSessionStatus): JSX.Element {
+function renderMessage(
+  message: SessionMessageInfo,
+  sessionStatus: DataSessionStatus,
+  onOpenAnnotation: UserMessageProps["onOpenAnnotation"],
+): JSX.Element {
   switch (message.type) {
     case "user":
-      return <UserMessage message={message} />;
+      return <UserMessage message={message} onOpenAnnotation={onOpenAnnotation} />;
     case "assistant":
       return <AssistantMessage message={message} sessionStatus={sessionStatus} />;
     case "shell":

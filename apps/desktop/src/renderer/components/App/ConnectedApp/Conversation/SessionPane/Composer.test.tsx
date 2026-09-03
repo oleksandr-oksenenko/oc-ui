@@ -25,13 +25,14 @@ const unavailableAgentSelection = {
 
 describe("Composer", () => {
   it("replaces Send with Stop while running", () => {
-    const stop = vi.fn<() => void>();
+    const [action, setAction] = createSignal<ComposerProps["action"]>("running");
+    const stop = vi.fn<() => void>(() => setAction("send"));
     const submit = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        value=""
+        value="Keep this draft after stopping"
         disabled={false}
-        action="running"
+        action={action()}
         modelSelection={unavailableSelection}
         agentSelection={unavailableAgentSelection}
         onInput={() => undefined}
@@ -498,6 +499,75 @@ describe("Composer", () => {
     expect(discardButton).not.toBeNull();
     discardButton?.click();
     expect(discard).toHaveBeenCalledWith(discardButton);
+
+    dispose();
+  });
+
+  it("sends annotation-only prompts with Enter while keeping the count action separate", () => {
+    const submit = vi.fn<() => void>();
+    const open = vi.fn<(opener: HTMLButtonElement) => void>();
+    const discard = vi.fn<(opener: HTMLButtonElement) => void>();
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        annotations={{ count: 2, onOpen: open, onDiscard: discard }}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={submit}
+      />
+    ));
+
+    const countButton = host.querySelector<HTMLButtonElement>(".composer-v2-annotation-count");
+    expect(countButton?.textContent).toContain("Annotations · 2 comments");
+    countButton?.click();
+    expect(open).toHaveBeenCalledWith(countButton);
+    expect(submit).not.toHaveBeenCalled();
+
+    const send = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    expect(send?.disabled).toBe(false);
+    const textarea = host.querySelector<HTMLTextAreaElement>("textarea");
+    if (!textarea) throw new Error("Composer did not render a textarea");
+    textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(submit).toHaveBeenCalledOnce();
+
+    const discardButton = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Discard 2 annotations"]',
+    );
+    if (!discardButton) throw new Error("Composer did not render annotation discard");
+    discardButton.click();
+    expect(discard).toHaveBeenCalledWith(discardButton);
+
+    dispose();
+  });
+
+  it("removes annotation controls when the controlled attachment clears after submit", () => {
+    const [count, setCount] = createSignal(2);
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        annotations={
+          count() > 0
+            ? { count: count(), onOpen: () => undefined, onDiscard: () => undefined }
+            : undefined
+        }
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => setCount(0)}
+      />
+    ));
+
+    const send = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    if (!send) throw new Error("Composer did not render its send button");
+    expect(send.disabled).toBe(false);
+    send.click();
+    expect(host.querySelector(".composer-v2-annotation-row")).toBeNull();
+    expect(send.disabled).toBe(true);
 
     dispose();
   });

@@ -2,6 +2,10 @@ import { Button } from "@opencode-ai/ui/button";
 import { Loader } from "@opencode-ai/ui/loader";
 import { For, Show, createMemo, type JSX } from "solid-js";
 
+import type { AnnotationDraftStore } from "../../../../domain/annotation-drafts.ts";
+import { createTranscriptAnnotations } from "./createTranscriptAnnotations.ts";
+import { AnnotationPopover } from "./AnnotationPopover.tsx";
+
 import type { ModelSelection } from "../../../../opencode/model-selection.ts";
 import type { SessionAgentSelectionController } from "./createSessionAgentSelection.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
@@ -14,6 +18,7 @@ import type { SessionWorkspace } from "../Sessions/createSessionWorkspace.ts";
 
 export type ConversationRegionProps = {
   readonly workspace: SessionWorkspace;
+  readonly annotationDrafts: AnnotationDraftStore;
   readonly composer: SessionComposerController;
   readonly modelSelection: ModelSelection;
   readonly agentSelection: SessionAgentSelectionController;
@@ -25,6 +30,18 @@ const formRenderKey = (form: { readonly sessionID: string; readonly id: string }
   `${form.sessionID}\u0000${form.id}`;
 
 export function ConversationRegion(props: ConversationRegionProps): JSX.Element {
+  let annotationButton: HTMLButtonElement | undefined;
+  const annotationUI = createTranscriptAnnotations({
+    sessionID: props.workspace.selectedID,
+    messages: props.workspace.transcript,
+    drafts: props.annotationDrafts,
+    fallbackFocus: () => annotationButton,
+    enabled: () => !props.composer.disabled(),
+  });
+  const annotationCount = () => {
+    const sessionID = props.workspace.selectedID();
+    return sessionID === undefined ? 0 : props.annotationDrafts.get(sessionID).length;
+  };
   const composerAction = () =>
     props.workspace.running() ? "running" : props.composer.submitting() ? "sending" : "send";
   const formKeys = createMemo(() => props.forms.sessionForms().map(formRenderKey), undefined, {
@@ -80,68 +97,88 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
   );
 
   return (
-    <SessionPane
-      selected={props.workspace.selectedSession() !== undefined}
-      title={props.workspace.selectedSession()?.title}
-      noSelection={
-        <>
-          <h2>No session selected</h2>
-          <p>Select a session from the sidebar.</p>
-        </>
-      }
-      transcript={
-        <Show when={props.workspace.selectedSession()}>
-          <TranscriptView
-            sessionID={props.workspace.selectedID()!}
-            messages={props.workspace.transcript()}
-            sessionStatus={props.workspace.transcriptStatus()}
-            loading={props.workspace.transcriptLoading()}
-            error={props.workspace.transcriptError()}
-            onRetry={() => {
-              const sessionID = props.workspace.selectedID();
-              if (sessionID !== undefined) void props.workspace.hydrate(sessionID);
-            }}
-            pendingInteraction={pendingVisible() ? pendingInteraction : undefined}
-          />
-        </Show>
-      }
-      composer={
-        <Show when={props.workspace.selectedSession()}>
-          <Composer
-            value={props.composer.value()}
-            action={composerAction()}
-            disabled={
-              composerAction() === "running" ? !props.connected() : props.composer.disabled()
-            }
-            error={props.workspace.stopError() ?? props.composer.error()}
-            review={props.composer.review()}
-            modelSelection={{
-              state: props.modelSelection.state(),
-              switching: props.modelSelection.switching(),
-              disabled: !props.connected(),
-              models: props.modelSelection.models(),
-              selectedModelID: props.modelSelection.selectedModelID(),
-              variants: props.modelSelection.variants(),
-              selectedVariantID: props.modelSelection.selectedVariantID(),
-              error: props.modelSelection.error(),
-              onSelectModel: (id) => void props.modelSelection.selectModel(id),
-              onSelectVariant: (id) => void props.modelSelection.selectVariant(id),
-            }}
-            agentSelection={{
-              state: props.agentSelection.state(),
-              switching: props.agentSelection.switching(),
-              disabled: !props.connected(),
-              agents: props.agentSelection.agents(),
-              selectedAgentID: props.agentSelection.selectedAgentID(),
-              error: props.agentSelection.error(),
-              onSelectAgent: (id) => void props.agentSelection.selectAgent(id),
-            }}
-            onInput={props.composer.input}
-            onSubmit={() => void props.composer.submit()}
-            onStop={() => void props.workspace.stop()}
-          />
-        </Show>
-      }
-    />
+    <>
+      <SessionPane
+        selected={props.workspace.selectedSession() !== undefined}
+        title={props.workspace.selectedSession()?.title}
+        noSelection={
+          <>
+            <h2>No session selected</h2>
+            <p>Select a session from the sidebar.</p>
+          </>
+        }
+        transcript={
+          <Show when={props.workspace.selectedSession()}>
+            <TranscriptView
+              sessionID={props.workspace.selectedID()!}
+              annotationRootRef={annotationUI.attach}
+              onOpenAnnotation={annotationUI.openSent}
+              messages={props.workspace.transcript()}
+              sessionStatus={props.workspace.transcriptStatus()}
+              loading={props.workspace.transcriptLoading()}
+              error={props.workspace.transcriptError()}
+              onRetry={() => {
+                const sessionID = props.workspace.selectedID();
+                if (sessionID !== undefined) void props.workspace.hydrate(sessionID);
+              }}
+              pendingInteraction={pendingVisible() ? pendingInteraction : undefined}
+            />
+          </Show>
+        }
+        composer={
+          <Show when={props.workspace.selectedSession()}>
+            <Composer
+              value={props.composer.value()}
+              action={composerAction()}
+              disabled={
+                composerAction() === "running" ? !props.connected() : props.composer.disabled()
+              }
+              error={props.workspace.stopError() ?? props.composer.error()}
+              review={props.composer.review()}
+              annotations={
+                annotationCount() > 0
+                  ? {
+                      count: annotationCount(),
+                      ref: (button) => {
+                        annotationButton = button;
+                      },
+                      onOpen: annotationUI.openDrafts,
+                      onDiscard: annotationUI.discard,
+                    }
+                  : undefined
+              }
+              modelSelection={{
+                state: props.modelSelection.state(),
+                switching: props.modelSelection.switching(),
+                disabled: !props.connected(),
+                models: props.modelSelection.models(),
+                selectedModelID: props.modelSelection.selectedModelID(),
+                variants: props.modelSelection.variants(),
+                selectedVariantID: props.modelSelection.selectedVariantID(),
+                error: props.modelSelection.error(),
+                onSelectModel: (id) => void props.modelSelection.selectModel(id),
+                onSelectVariant: (id) => void props.modelSelection.selectVariant(id),
+              }}
+              agentSelection={{
+                state: props.agentSelection.state(),
+                switching: props.agentSelection.switching(),
+                disabled: !props.connected(),
+                agents: props.agentSelection.agents(),
+                selectedAgentID: props.agentSelection.selectedAgentID(),
+                error: props.agentSelection.error(),
+                onSelectAgent: (id) => void props.agentSelection.selectAgent(id),
+              }}
+              onInput={props.composer.input}
+              onSubmit={() => {
+                annotationUI.close();
+                void props.composer.submit();
+              }}
+              onStop={() => void props.workspace.stop()}
+            />
+          </Show>
+        }
+      />
+      <AnnotationPopover controller={annotationUI} />
+    </>
   );
 }

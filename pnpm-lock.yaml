@@ -18,6 +18,9 @@ catalogs:
     '@opencode-ai/client':
       specifier: 0.0.0-beta-18866
       version: 0.0.0-beta-18866
+    '@opencode-ai/schema':
+      specifier: 0.0.0-beta-18866
+      version: 0.0.0-beta-18866
     '@opencode-ai/ui':
       specifier: 0.0.0-beta-18866
       version: 0.0.0-beta-18866
@@ -164,6 +167,9 @@ importers:
       '@opencode-ai/client':
         specifier: 'catalog:'
         version: 0.0.0-beta-18866(effect@4.0.0-rc.112)(solid-js@1.9.15)
+      '@opencode-ai/schema':
+        specifier: 'catalog:'
+        version: 0.0.0-beta-18866
       '@opencode-ai/ui':
         specifier: 'catalog:'
         version: 0.0.0-beta-18866(@shikijs/themes@4.4.3)(@solidjs/meta@0.29.4(solid-js@1.9.15))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@1.9.15)

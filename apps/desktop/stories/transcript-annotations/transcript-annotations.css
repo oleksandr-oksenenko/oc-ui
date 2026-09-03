@@ -1,0 +1,52 @@
+.transcript-annotation-stage {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 30px 16px;
+  color: var(--oc-text-contrast);
+  background: var(--oc-surface-subtle);
+  font-family: var(--oc-font-sans);
+}
+
+.transcript-annotation-shell {
+  width: min(820px, 100%);
+  margin: 0 auto;
+}
+
+.transcript-annotation-stage--narrow .transcript-annotation-shell {
+  width: min(390px, 100%);
+}
+
+.annotation-exploration-header {
+  margin-bottom: 24px;
+}
+
+.annotation-exploration-header h1 {
+  margin: 10px 0 6px;
+  font-size: var(--oc-type-page-title-size);
+}
+
+.annotation-exploration-header p {
+  margin: 0 0 8px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-body-size);
+}
+
+.annotation-story-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.annotation-story-transcript {
+  display: flex;
+  height: 380px;
+  min-height: 0;
+}
+
+.annotation-story-transcript .transcript-view {
+  width: 100%;
+}
+
+.annotation-story-composer {
+  margin-top: 28px;
+}

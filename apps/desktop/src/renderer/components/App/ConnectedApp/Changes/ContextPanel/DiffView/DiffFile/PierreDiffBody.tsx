@@ -183,6 +183,7 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
       :host {
         --diffs-font-size: 12px;
         --diffs-line-height: 18px;
+        --diffs-bg-selection-override: var(--oc-surface-selected);
       }
 
       code[data-code]:focus-visible {

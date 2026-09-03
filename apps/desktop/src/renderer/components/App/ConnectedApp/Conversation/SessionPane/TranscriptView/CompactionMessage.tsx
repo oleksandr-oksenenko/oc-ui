@@ -4,6 +4,8 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Show, type JSX } from "solid-js";
 
+import { annotationBlock } from "../../annotation-source.ts";
+
 export function CompactionMessage(props: {
   readonly message: SessionMessageCompaction;
 }): JSX.Element {
@@ -51,11 +53,19 @@ export function CompactionMessage(props: {
         <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content>
-        <p class="transcript-context-text">
+        <p
+          data-annotation-block={annotationBlock("compaction", failed ? "error" : "summary")}
+          data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
+          class="transcript-context-text"
+        >
           {failed ? props.message.error.message : props.message.summary}
         </p>
         <Show when={!failed}>
-          <p class="transcript-context-text">
+          <p
+            data-annotation-block={annotationBlock("compaction", "recent")}
+            data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
+            class="transcript-context-text"
+          >
             Recent: {props.message.status === "failed" ? "" : props.message.recent}
           </p>
         </Show>

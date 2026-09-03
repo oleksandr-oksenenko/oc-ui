@@ -1,7 +1,8 @@
+import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Loader } from "@opencode-ai/ui/loader";
-import { createEffect } from "solid-js";
+import { Show, createEffect } from "solid-js";
 
 import "./Composer/Composer.css";
 import { AgentPicker } from "./Composer/AgentPicker.tsx";
@@ -19,6 +20,13 @@ export type ComposerReview = {
   readonly onDiscard: (opener: HTMLButtonElement) => void;
 };
 
+type ComposerAnnotations = {
+  readonly ref?: (button: HTMLButtonElement) => void;
+  readonly count: number;
+  readonly onOpen: (opener: HTMLButtonElement) => void;
+  readonly onDiscard: (opener: HTMLButtonElement) => void;
+};
+
 export type ComposerProps = {
   readonly value: string;
   /** The one action represented by the composer button. */
@@ -28,6 +36,8 @@ export type ComposerProps = {
   readonly error?: string;
   /** Omitted review state is equivalent to an empty review attachment. */
   readonly review?: ComposerReview;
+  /** Omitted annotations state is equivalent to an empty annotation attachment. */
+  readonly annotations?: ComposerAnnotations;
   readonly modelSelection: {
     readonly state: "loading" | "ready" | "failed";
     readonly switching: boolean;
@@ -164,6 +174,7 @@ function selectionStatus(
 export function Composer(props: ComposerProps) {
   let textarea: HTMLTextAreaElement | undefined;
   const review = () => props.review;
+  const annotations = () => ((props.annotations?.count ?? 0) > 0 ? props.annotations : undefined);
   const resizeTextarea = () => {
     if (!textarea) return;
     textarea.style.height = "0px";
@@ -178,7 +189,8 @@ export function Composer(props: ComposerProps) {
     resizeTextarea();
   });
 
-  const sendable = () => review() !== undefined || props.value.trim() !== "";
+  const sendable = () =>
+    review() !== undefined || annotations() !== undefined || props.value.trim() !== "";
 
   const canSubmit = () =>
     !props.disabled &&
@@ -194,7 +206,8 @@ export function Composer(props: ComposerProps) {
   };
 
   const keyDown = (event: KeyboardEvent) => {
-    if (event.key !== "Enter" || event.shiftKey) return;
+    if (event.isComposing || event.keyCode === 229 || event.key !== "Enter" || event.shiftKey)
+      return;
     event.preventDefault();
     submit();
   };
@@ -220,6 +233,37 @@ export function Composer(props: ComposerProps) {
           />
         </div>
       ) : null}
+      <Show when={annotations()}>
+        {(annotation) => (
+          <div class="composer-v2-annotation-row">
+            <Button
+              class="composer-v2-annotation-count"
+              ref={annotation().ref}
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              onClick={(event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
+                annotation().onOpen(event.currentTarget);
+              }}
+            >
+              Annotations · {annotation().count} {annotation().count === 1 ? "comment" : "comments"}
+            </Button>
+            <IconButton
+              class="composer-v2-annotation-discard"
+              disabled={props.disabled || props.action !== "send"}
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              aria-label={`Discard ${annotation().count} annotations`}
+              title={`Discard ${annotation().count} annotations`}
+              icon={<Icon name="close" size="small" aria-hidden="true" />}
+              onClick={(event) => {
+                annotation().onDiscard(event.currentTarget);
+              }}
+            />
+          </div>
+        )}
+      </Show>
       <div class="composer-v2-editor-row">
         <textarea
           ref={(element) => {
@@ -253,8 +297,11 @@ export function Composer(props: ComposerProps) {
             (props.action === "send" &&
               (props.modelSelection.switching || props.agentSelection.switching || !sendable()))
           }
-          onClick={() => {
-            if (props.action === "running") props.onStop?.();
+          onClick={(event) => {
+            if (props.action !== "running") return;
+            // Stopping may synchronously turn this same button into a submit button.
+            event.preventDefault();
+            props.onStop?.();
           }}
         >
           {props.action === "running" ? (

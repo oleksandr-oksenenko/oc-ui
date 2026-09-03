@@ -4,6 +4,8 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Show, type JSX } from "solid-js";
 
+import { annotationBlock } from "../../annotation-source.ts";
+
 export function ShellMessage(props: { readonly message: SessionMessageShell }): JSX.Element {
   const output = props.message.output?.output;
   const hasDetails = output !== undefined || props.message.exit !== undefined;
@@ -41,7 +43,13 @@ export function ShellMessage(props: { readonly message: SessionMessageShell }): 
             <span>Exit: {String(props.message.exit)}</span>
           </Show>
           <Show when={output !== undefined}>
-            <pre class="transcript-tool-output">{output}</pre>
+            <pre
+              data-annotation-block={annotationBlock("shell", "output")}
+              data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
+              class="transcript-tool-output"
+            >
+              {output}
+            </pre>
           </Show>
           <Show when={props.message.output?.truncated === true}>
             <span>Output truncated</span>

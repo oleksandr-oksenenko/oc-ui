@@ -7,6 +7,14 @@ const config: StorybookConfig = {
     name: "storybook-solidjs-vite",
     options: {},
   },
+  viteFinal: (viteConfig) => ({
+    ...viteConfig,
+    optimizeDeps: {
+      ...viteConfig.optimizeDeps,
+      // OpenCode's comment editor reaches this CommonJS dependency through its hooks barrel.
+      include: [...(viteConfig.optimizeDeps?.include ?? []), "@opencode-ai/ui > fuzzysort"],
+    },
+  }),
 };
 
 export default config;

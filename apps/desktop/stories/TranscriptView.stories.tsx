@@ -5,7 +5,7 @@ import {
   TranscriptView,
   type TranscriptViewProps,
 } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
-import { createCodeReviewPrompt } from "../src/renderer/opencode/code-review.ts";
+import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts";
 
 const assistant = (
   id: string,
@@ -181,9 +181,10 @@ const richItems: readonly SessionMessageInfo[] = [
   },
 ];
 
-const reviewPrompt = createCodeReviewPrompt({
+const reviewPrompt = createSessionPrompt({
   instruction: "Please address these before merging.",
-  comments: [
+  annotations: [],
+  reviewComments: [
     {
       path: "src/renderer/components/Workspace.tsx",
       body: "Keep the controlled state in the workspace owner.",

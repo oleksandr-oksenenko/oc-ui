@@ -1,6 +1,8 @@
 import { Icon } from "@opencode-ai/ui/icon";
 import type { JSX } from "solid-js";
 
+import { annotationBlock } from "../../annotation-source.ts";
+
 export function TimelineRow(props: {
   readonly id: string;
   readonly icon: string;
@@ -10,8 +12,18 @@ export function TimelineRow(props: {
   return (
     <div class="transcript-message transcript-timeline-row" data-message-id={props.id}>
       <Icon name={props.icon} size="small" aria-hidden="true" />
-      <span class="transcript-context-label">{props.label}</span>
-      <span class="transcript-context-detail">{props.detail}</span>
+      <span
+        data-annotation-block={annotationBlock("timeline", "label")}
+        class="transcript-context-label"
+      >
+        {props.label}
+      </span>
+      <span
+        data-annotation-block={annotationBlock("timeline", "detail")}
+        class="transcript-context-detail"
+      >
+        {props.detail}
+      </span>
     </div>
   );
 }

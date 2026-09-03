@@ -26,6 +26,7 @@
     "@kobalte/core": "catalog:",
     "@opencode-ai/cli": "catalog:",
     "@opencode-ai/client": "catalog:",
+    "@opencode-ai/schema": "catalog:",
     "@opencode-ai/ui": "catalog:",
     "@pierre/diffs": "catalog:",
     "@solidjs/meta": "catalog:",
