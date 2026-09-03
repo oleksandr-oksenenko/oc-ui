@@ -1,6 +1,6 @@
 import { createClientConnection, createData } from "@opencode-ai/client/solid";
 import type { Data, ClientConnectionStatus } from "@opencode-ai/client/solid";
-import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import type { LocationRef, OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client";
 import { createEffect, getOwner, onCleanup } from "solid-js";
 import { createOpenCodeEventSource } from "./event-source";
 import type { OpenCodeEventSource } from "./event-source";
@@ -29,6 +29,9 @@ export type ConnectedRuntime = {
   readonly diffs: VcsDiffStore;
   /** Resolves after the event stream receives its first server.connected event. */
   readonly ready: Promise<void>;
+  readonly onShellExited: (
+    handler: (event: Extract<OpenCodeEvent, { type: "shell.exited" }>) => void,
+  ) => () => void;
   readonly syncTranscript: (
     sessionID: string,
     options?: { readonly isCurrent?: () => boolean },
@@ -101,6 +104,9 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
 
   const syncTranscript = (sessionID: string, options?: { readonly isCurrent?: () => boolean }) =>
     syncSessionTranscript(data, sessionID, options);
+  const onShellExited = (
+    handler: (event: Extract<OpenCodeEvent, { type: "shell.exited" }>) => void,
+  ): (() => void) => events.on("shell.exited", handler);
 
   return {
     api: input.api,
@@ -110,6 +116,7 @@ export function createConnectedRuntime(input: RuntimeFactoryInput): ConnectedRun
     sessions,
     diffs,
     ready,
+    onShellExited,
     syncTranscript,
   };
 }

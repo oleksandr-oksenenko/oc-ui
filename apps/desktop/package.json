@@ -31,7 +31,7 @@
     "@pierre/diffs": "catalog:",
     "@solidjs/meta": "catalog:",
     "dompurify": "catalog:",
-    "effect": "4.0.0-rc.111",
+    "effect": "4.0.0-rc.112",
     "marked": "catalog:",
     "solid-js": "catalog:"
   },

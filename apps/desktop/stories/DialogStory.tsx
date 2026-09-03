@@ -11,12 +11,24 @@ type DialogStoryProps = {
 function DialogStoryContent(props: DialogStoryProps) {
   const dialog = useDialog();
   const setDismissBlocked = useServerFlowDismissBlock();
+  let ownedDialog: typeof dialog.active;
+  let disposed = false;
   const show = (): void => {
     setDismissBlocked(false);
-    void dialog.show(() => props.children(setDismissBlocked));
+    void dialog
+      .show(() => props.children(setDismissBlocked))
+      .then(() => {
+        ownedDialog = dialog.active;
+        if (disposed) ownedDialog?.dispose();
+        return undefined;
+      });
   };
   onMount(show);
-  onCleanup(() => setDismissBlocked(false));
+  onCleanup(() => {
+    disposed = true;
+    ownedDialog?.dispose();
+    setDismissBlocked(false);
+  });
   return null;
 }
 

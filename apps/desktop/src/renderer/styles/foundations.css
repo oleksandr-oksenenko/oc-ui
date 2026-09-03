@@ -101,11 +101,17 @@
      Keep it bridged to the same product semantics until upstream removes it. */
   --background-stronger: var(--oc-surface-canvas);
   --background-base: var(--oc-surface-canvas);
+  --background-weak: var(--oc-surface-canvas);
   --surface-raised-base: var(--oc-surface-raised);
   --border-weaker-base: var(--oc-border-muted);
   --border-weak-base: var(--oc-border-base);
+  --border-selected: var(--oc-selection);
+  --border-weak-selected: var(--oc-selection-ring);
   --border-interactive-base: var(--oc-border-emphasis);
   --border-interactive-focus: var(--oc-focus-ring);
+  --shadow-xs-border-focus:
+    0 0 0 var(--oc-focus-ring-offset) var(--oc-surface-canvas),
+    0 0 0 calc(var(--oc-focus-ring-offset) + var(--oc-focus-ring-width)) var(--oc-focus-ring);
   --icon-base: var(--oc-icon-base);
   --text-strong: var(--oc-text-strong);
   --text-base: var(--oc-text-base);

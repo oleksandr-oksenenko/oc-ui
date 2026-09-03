@@ -142,11 +142,6 @@
   margin-right: auto;
 }
 
-.diff-comparison-select[data-component="select-v2"]:focus-within {
-  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  outline-offset: 1px;
-}
-
 .diff-summary-changes,
 .diff-file-stats {
   --v2-state-fg-success: var(--oc-diff-addition);
@@ -201,7 +196,6 @@
 }
 
 .diff-file-toggle:focus-visible {
-  outline: 2px solid var(--oc-focus-ring);
   outline-offset: -2px;
 }
 
@@ -276,12 +270,6 @@
   font: inherit;
 }
 
-.diff-review-editor:focus-visible {
-  border-color: var(--oc-focus-ring);
-  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  outline-offset: var(--oc-focus-ring-offset);
-}
-
 .diff-review-text {
   display: block;
   max-width: 100%;
@@ -312,12 +300,6 @@
 
 .diff-review-remove:hover {
   color: var(--oc-status-danger);
-}
-
-.diff-review-text:focus-visible,
-.diff-review-remove:focus-visible {
-  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  outline-offset: var(--oc-focus-ring-offset);
 }
 
 .diff-file-content {

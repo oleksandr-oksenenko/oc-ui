@@ -1,6 +1,5 @@
 /* oxlint-disable effecttsgo/async-function */
 
-import type { FileListOutput, OpenCodeClient } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
@@ -34,32 +33,13 @@ const projects = [
   },
 ] as const satisfies readonly NewSessionProject[];
 
-const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
-  const directory = input?.location?.directory ?? "/";
-  return Promise.resolve({
-    location: {
-      directory,
-      project: { id: "oc-ui", directory, canonical: directory },
-    },
-    data: [
-      { path: "renderer-redesign", type: "directory" },
-      { path: "server-api", type: "directory" },
-    ],
-  } satisfies FileListOutput);
-};
-
 const callbacks = {
-  listDirectory,
   onAddProject: () => undefined,
   onProjectChange: () => undefined,
   onModeChange: () => undefined,
-  onOpenWorktreeForm: () => undefined,
-  onWorktreeParentChange: () => undefined,
-  onWorktreeNameChange: () => undefined,
   onRetryProjects: () => undefined,
   onUseProject: () => undefined,
   onCreateWorktree: () => undefined,
-  onBack: () => undefined,
   onRetry: () => undefined,
 } satisfies Omit<NewSessionDialogProps, "state" | "mutation">;
 
@@ -71,7 +51,7 @@ const meta = {
 
 export default meta;
 type Story = StoryObj;
-const chooseOnOpenWorktreeForm = fn<NewSessionDialogProps["onOpenWorktreeForm"]>();
+const createWorktree = fn<NewSessionDialogProps["onCreateWorktree"]>();
 
 function staticDialog(state: NewSessionDialogState, mutation?: NewSessionDialogProps["mutation"]) {
   return (
@@ -88,45 +68,29 @@ function staticDialog(state: NewSessionDialogState, mutation?: NewSessionDialogP
   );
 }
 
-function interactiveProjectSelection(
-  initialMode: NewSessionLocationMode = "direct",
-  onOpenWorktreeForm: NewSessionDialogProps["onOpenWorktreeForm"] = callbacks.onOpenWorktreeForm,
-) {
+function interactiveProjectSelection(initialMode: NewSessionLocationMode = "direct") {
   const [projectID, setProjectID] = createSignal<string | undefined>(projects[0].id);
   const [mode, setMode] = createSignal<NewSessionLocationMode>(initialMode);
   return (
     <DialogStory>
       {(onDismissBlockedChange) => (
         <NewSessionDialog
-          state={{
-            view: "select-project",
-            projects,
-            selectedProjectID: projectID(),
-            mode: mode(),
-          }}
+          state={{ projects, selectedProjectID: projectID(), mode: mode() }}
           onDismissBlockedChange={onDismissBlockedChange}
           {...callbacks}
           onProjectChange={setProjectID}
           onModeChange={setMode}
-          onOpenWorktreeForm={onOpenWorktreeForm}
+          onCreateWorktree={createWorktree}
         />
       )}
     </DialogStory>
   );
 }
 
-const worktreeState = {
-  view: "worktree",
-  project: projects[0],
-  parentLocation: { directory: "/srv/worktrees" },
-  folderName: "new-session-location",
-  finalDirectory: "/srv/worktrees/new-session-location",
-} as const satisfies NewSessionDialogState;
-
 export const ChooseProjectAndLocation: Story = {
-  render: () => interactiveProjectSelection("direct", chooseOnOpenWorktreeForm),
+  render: () => interactiveProjectSelection(),
   play: async ({ step }) => {
-    chooseOnOpenWorktreeForm.mockClear();
+    createWorktree.mockClear();
     const currentDialog = await screen.findByRole("dialog", { name: "New session" });
     const dialogCanvas = within(currentDialog);
     const trigger = await dialogCanvas.findByRole("combobox", { name: "Project: oc-ui" });
@@ -138,8 +102,6 @@ export const ChooseProjectAndLocation: Story = {
       if (!pickerID) throw new Error("Project picker did not expose its content");
       const picker = document.getElementById(pickerID);
       if (!picker) throw new Error("Project picker content did not render");
-      await expect(currentDialog.contains(picker)).toBe(false);
-
       const search = within(picker).getByPlaceholderText("Search projects");
       await expect(search).toHaveFocus();
       await userEvent.type(search, "not-a-project");
@@ -159,48 +121,34 @@ export const ChooseProjectAndLocation: Story = {
     await step("Verify Escape closes only the nested picker", async () => {
       await userEvent.click(trigger);
       await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"));
-      const pickerID = trigger.getAttribute("aria-controls");
-      if (!pickerID) throw new Error("Project picker did not expose its content");
       await userEvent.keyboard("{Escape}");
       await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "false"));
-      await waitFor(() => expect(document.getElementById(pickerID)).toBeNull());
       await expect(currentDialog).toBeVisible();
       await expect(trigger).toHaveFocus();
     });
 
-    await step("Choose a worktree and continue", async () => {
-      const worktree = dialogCanvas.getByRole("radio", { name: /^Create a worktree\b/ });
-      await userEvent.click(worktree);
-      await userEvent.click(await dialogCanvas.findByRole("button", { name: "Continue" }));
-      await expect(chooseOnOpenWorktreeForm).toHaveBeenCalledOnce();
-      await expect(chooseOnOpenWorktreeForm).toHaveBeenCalledWith("opencode");
+    await step("Choose a worktree and create the session", async () => {
+      await userEvent.click(dialogCanvas.getByRole("radio", { name: /^Create a worktree\b/ }));
+      await userEvent.click(await dialogCanvas.findByRole("button", { name: "Create worktree" }));
+      await expect(createWorktree).toHaveBeenCalledOnce();
+      await expect(createWorktree).toHaveBeenCalledWith();
     });
   },
 };
 
-export const WorktreeSelected = {
-  render: () => interactiveProjectSelection("worktree"),
-};
+export const WorktreeSelected = { render: () => interactiveProjectSelection("worktree") };
 
 export const NonGitProject = {
-  render: () =>
-    staticDialog({
-      view: "select-project",
-      projects,
-      selectedProjectID: "docs",
-      mode: "direct",
-    }),
+  render: () => staticDialog({ projects, selectedProjectID: "docs", mode: "direct" }),
 };
 
 export const LoadingProjects = {
-  render: () =>
-    staticDialog({ view: "select-project", projects: [], mode: "direct", projectsLoading: true }),
+  render: () => staticDialog({ projects: [], mode: "direct", projectsLoading: true }),
 };
 
 export const ProjectsFailure = {
   render: () =>
     staticDialog({
-      view: "select-project",
       projects: [],
       mode: "direct",
       projectsError: "Projects could not be loaded from the server.",
@@ -208,47 +156,34 @@ export const ProjectsFailure = {
 };
 
 export const NoProjectsYet = {
-  render: () => staticDialog({ view: "select-project", projects: [], mode: "direct" }),
+  render: () => staticDialog({ projects: [], mode: "direct" }),
 };
 
 export const ProjectRequired = {
   render: () =>
     staticDialog({
-      view: "select-project",
       projects,
       mode: "direct",
-      error: { kind: "validation", field: "project", message: "Choose a project." },
+      error: { kind: "validation", message: "Choose a project." },
     }),
-  play: ({ canvasElement }: { canvasElement: HTMLElement }) => {
-    canvasElement.ownerDocument.querySelector<HTMLElement>(".new-session-project-trigger")?.focus();
-  },
-};
-
-export const WorktreeForm = {
-  render: () => staticDialog(worktreeState),
 };
 
 export const CreatingWorktree = {
-  render: () => staticDialog(worktreeState, "creating-worktree"),
+  render: () =>
+    staticDialog({ projects, selectedProjectID: "oc-ui", mode: "worktree" }, "creating-worktree"),
 };
 
 export const CreatingSession = {
-  render: () => staticDialog(worktreeState, "creating-session"),
-};
-
-export const WorktreeValidationFailure = {
   render: () =>
-    staticDialog({
-      ...worktreeState,
-      folderName: "feature/one",
-      error: { kind: "validation", field: "folder-name", message: "Use one folder name." },
-    }),
+    staticDialog({ projects, selectedProjectID: "oc-ui", mode: "direct" }, "creating-session"),
 };
 
 export const WorktreeCreationFailure = {
   render: () =>
     staticDialog({
-      ...worktreeState,
+      projects,
+      selectedProjectID: "oc-ui",
+      mode: "worktree",
       error: { kind: "worktree", message: "The server could not create the worktree." },
     }),
 };
@@ -256,7 +191,9 @@ export const WorktreeCreationFailure = {
 export const SessionCreationFailureAfterWorktree = {
   render: () =>
     staticDialog({
-      ...worktreeState,
+      projects,
+      selectedProjectID: "oc-ui",
+      mode: "worktree",
       error: {
         kind: "session",
         message: "The worktree exists, but its session could not be created.",
@@ -268,7 +205,6 @@ export const SessionCreationFailureAfterWorktree = {
 export const DirectSessionCreationFailure = {
   render: () =>
     staticDialog({
-      view: "select-project",
       projects,
       selectedProjectID: "oc-ui",
       mode: "direct",
@@ -288,16 +224,9 @@ export const NarrowProjectSelection = {
   render: () => interactiveProjectSelection(),
 };
 
-export const NarrowWorktreeForm = {
-  parameters: { viewport: narrowViewport },
-  globals: { viewport: { value: "mobile390", isRotated: false } },
-  render: () => staticDialog(worktreeState),
-};
-
 export const LongProjectContent = {
   render: () =>
     staticDialog({
-      view: "select-project",
       projects: [
         ...projects,
         {

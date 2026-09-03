@@ -6,11 +6,11 @@ catalogMode: prefer
 
 catalog:
   "@effect/tsgo": 0.38.0
-  "@kobalte/core": 0.13.11
-  "@opencode-ai/cli": 0.0.0-beta-18155
-  "@opencode-ai/client": 0.0.0-beta-18155
-  "@opencode-ai/schema": 0.0.0-beta-18155
-  "@opencode-ai/ui": 0.0.0-beta-18155
+  "@kobalte/core": 0.13.13
+  "@opencode-ai/cli": 0.0.0-beta-18866
+  "@opencode-ai/client": 0.0.0-beta-18866
+  "@opencode-ai/schema": 0.0.0-beta-18866
+  "@opencode-ai/ui": 0.0.0-beta-18866
   "@oxlint/plugins": 1.79.0
   "@pierre/diffs": 1.2.10
   "@solidjs/meta": ^0.29.4
@@ -71,23 +71,23 @@ minimumReleaseAgeExclude:
   - "@voidzero-dev/vite-plus-win32-arm64-msvc@0.3.0"
   - "@voidzero-dev/vite-plus-win32-x64-msvc@0.3.0"
   - "vite-plus@0.3.0"
-  - "@opencode-ai/cli-darwin-arm64@0.0.0-beta-18155"
-  - "@opencode-ai/cli-darwin-x64-baseline@0.0.0-beta-18155"
-  - "@opencode-ai/cli-darwin-x64@0.0.0-beta-18155"
-  - "@opencode-ai/cli-linux-arm64-musl@0.0.0-beta-18155"
-  - "@opencode-ai/cli-linux-arm64@0.0.0-beta-18155"
-  - "@opencode-ai/cli-linux-x64-baseline-musl@0.0.0-beta-18155"
-  - "@opencode-ai/cli-linux-x64-baseline@0.0.0-beta-18155"
-  - "@opencode-ai/cli-linux-x64-musl@0.0.0-beta-18155"
-  - "@opencode-ai/cli-linux-x64@0.0.0-beta-18155"
-  - "@opencode-ai/cli-windows-arm64@0.0.0-beta-18155"
-  - "@opencode-ai/cli-windows-x64-baseline@0.0.0-beta-18155"
-  - "@opencode-ai/cli-windows-x64@0.0.0-beta-18155"
-  - "@opencode-ai/cli@0.0.0-beta-18155"
-  - "@opencode-ai/client@0.0.0-beta-18155"
-  - "@opencode-ai/protocol@0.0.0-beta-18155"
-  - "@opencode-ai/schema@0.0.0-beta-18155"
-  - "@opencode-ai/ui@0.0.0-beta-18155"
+  - "@opencode-ai/cli-darwin-arm64@0.0.0-beta-18866"
+  - "@opencode-ai/cli-darwin-x64-baseline@0.0.0-beta-18866"
+  - "@opencode-ai/cli-darwin-x64@0.0.0-beta-18866"
+  - "@opencode-ai/cli-linux-arm64-musl@0.0.0-beta-18866"
+  - "@opencode-ai/cli-linux-arm64@0.0.0-beta-18866"
+  - "@opencode-ai/cli-linux-x64-baseline-musl@0.0.0-beta-18866"
+  - "@opencode-ai/cli-linux-x64-baseline@0.0.0-beta-18866"
+  - "@opencode-ai/cli-linux-x64-musl@0.0.0-beta-18866"
+  - "@opencode-ai/cli-linux-x64@0.0.0-beta-18866"
+  - "@opencode-ai/cli-windows-arm64@0.0.0-beta-18866"
+  - "@opencode-ai/cli-windows-x64-baseline@0.0.0-beta-18866"
+  - "@opencode-ai/cli-windows-x64@0.0.0-beta-18866"
+  - "@opencode-ai/cli@0.0.0-beta-18866"
+  - "@opencode-ai/client@0.0.0-beta-18866"
+  - "@opencode-ai/protocol@0.0.0-beta-18866"
+  - "@opencode-ai/schema@0.0.0-beta-18866"
+  - "@opencode-ai/ui@0.0.0-beta-18866"
   - "@types/node@26.3.0"
   - "@effect/tsgo-darwin-arm64@0.38.0"
   - "@effect/tsgo-darwin-x64@0.38.0"

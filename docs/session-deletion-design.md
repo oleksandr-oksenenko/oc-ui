@@ -27,10 +27,24 @@ Selecting the button opens a confirmation dialog. The dialog names the session, 
 cannot be undone, and says how many child sessions will also be deleted. The destructive request is
 sent only after confirmation.
 
-When the session belongs to an OpenCode-managed git worktree, the same confirmation also names that
-worktree and states that its uncommitted changes and branch will be deleted. After OpenCode removes
-the session subtree, the application calls `worktree.remove` with `force: true`. There is no second
-confirmation. Sessions in the primary checkout do not trigger worktree removal.
+The confirmation explains that unused worktrees may also be removed, including
+uncommitted changes. At confirmation, the application refreshes the full session
+catalog and active statuses, checks the selected subtree again, and lists registered
+worktrees for its stored project IDs. It matches each session's stored path to the
+deepest containing registered directory and requires the Git strategy. The primary checkout and unsupported
+workspace locations are never removed.
+
+After confirmed session removal, the application immediately clears the deleted
+subtree and its drafts. It refreshes remaining sessions and removes only candidates
+with no remaining users through `worktree.remove({ ..., force: true })`. Archived,
+independent, and child sessions count as users, including sessions in nested
+directories. There is no branch deletion and no second confirmation.
+No location-resolution requests are made during deletion: OpenCode can register
+missing directories as new projects during those requests. Remaining sessions
+protect candidates whose directory contains their stored path, including the root
+itself. Stale sessions in other worktrees of the same project do not block cleanup.
+These comparisons do not resolve symlink aliases; an aliased path stored by another
+client can evade the usage check.
 
 While deletion is in progress, the dialog cannot be dismissed. A failed request leaves the session
 and its drafts untouched and keeps the dialog open for retry. A successful request removes the
@@ -45,8 +59,13 @@ temporary connection failure look like data was deleted when it was not. Live `s
 events still reconcile deletions made by other clients.
 
 Session removal happens before worktree removal. This keeps a worktree intact if the session request
-fails. If the session is removed but worktree cleanup fails, the dialog stays open and retries only
-the worktree operation.
+fails. If association or the post-deletion refresh is incomplete, the affected
+worktree is retained. Cleanup failures do not undo successful session deletion:
+the dialog closes and a persistent notification names retained paths for manual
+handling. There is no cleanup retry queue or "Finish deletion" state. Cleanup
+runs only from this app's confirmed deletion flow, never from generic events or
+startup inventory scans. A cross-client race after the final usage check is an
+accepted limitation.
 
 ## Archive follow-up
 

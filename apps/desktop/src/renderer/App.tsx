@@ -1,4 +1,5 @@
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
+import { Toast } from "@opencode-ai/ui/toast";
 
 import type { OpenCodeTarget } from "../shared/desktop-api.ts";
 import { ConnectionForm } from "./components/App/ConnectionForm.tsx";
@@ -296,6 +297,8 @@ export function App() {
 
   return (
     <ServerFlowDialogProvider>
+      {/* OpenCode modal overlays start at 50; notifications must not intercept their actions. */}
+      <Toast.Region style={{ "z-index": 40 }} />
       <Show when={candidate()} keyed>
         {(server) => (
           <div class="runtime-layer" hidden={connecting()}>

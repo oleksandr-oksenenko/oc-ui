@@ -8,7 +8,7 @@ import { Show, createEffect, createMemo, createSignal, createUniqueId } from "so
 
 import type { NewSessionDialogState, NewSessionLocationMode } from "../NewSessionDialog.tsx";
 
-type ProjectSelectionState = Extract<NewSessionDialogState, { view: "select-project" }>;
+type ProjectSelectionState = NewSessionDialogState;
 type ProjectOption = {
   readonly project: ProjectSelectionState["projects"][number];
   readonly name: string;
@@ -217,7 +217,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
             <RadioItem
               value="worktree"
               label="Create a worktree"
-              description="Create a separate, isolated Git worktree at the project commit."
+              description="Start an isolated worktree from origin's default branch."
             />
           </RadioGroup>
         </section>

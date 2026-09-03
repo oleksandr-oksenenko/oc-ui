@@ -39,7 +39,6 @@ apps/desktop/src/renderer/
                 NewSessionDialog.tsx
                 NewSessionDialog/
                   ProjectSelection.tsx
-                  WorktreeForm.tsx
             SessionPane.tsx
             SessionPane/
               TranscriptView.tsx
@@ -64,14 +63,15 @@ apps/desktop/src/renderer/
 ```
 
 Shared renderer UI lives under `apps/desktop/src/renderer/ui/`. `ServerDirectoryBrowser` is shared
-by the Add project and worktree forms. It reads the connected server filesystem through the
+by Add project. Automatic worktrees do not expose directory fields. It reads the connected server filesystem through the
 OpenCode file API, re-roots each listing at the absolute open server directory, and reports only
 directories that list successfully. `serverPath` is the single authority for remote child and
 parent path operations; renderer code never uses the Electron host's path rules.
 
 ### Ownership
 
-- `App` owns saved-connection setup and the connected/disconnected boundary.
+- `App` owns saved-connection setup, the connected/disconnected boundary, and the
+  upstream toast region so errors survive dialog dismissal.
 - `ConnectedApp` owns OpenCode-backed controller state: catalog hydration, selection, drafts,
   prompt submission, reconnection, and opening the new-session flow.
 - `ConnectedApp` owns the production left/right visibility signals; the full showcase owns its own
@@ -159,8 +159,8 @@ Stories are grouped under `apps/desktop/stories/`:
 - `Projects/AddProjectDialog`: server-directory browsing, loading, validation,
   add-project failure, and mutation.
 - `Sessions/NewSessionDialog`: project selection, empty catalog, direct and worktree choices,
-  worktree inputs and preview, both mutation phases, validation and creation failures, and
-  orphan-worktree retry.
+  automatic worktree creation, both mutation phases, validation and creation failures, and
+  session-only retry in a retained worktree.
 - `Session/SessionPane`: no selection and selected transcript/composer placement.
 - `Transcript/TranscriptView`: empty, loading, text, streaming, failure, rich
   prose/list/quote/link, reasoning, tool calls, and expanded output.

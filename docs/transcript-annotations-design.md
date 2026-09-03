@@ -239,13 +239,15 @@ After implementation, run root `pnpm check` and `pnpm test` and resolve their fi
 
 The design rechecked the current `ConnectedApp`, `ConversationRegion`, `createSessionComposer`, `createSessionWorkspace`, `TranscriptView`, message renderers, draft stores, and code-review codec. Verify-tier graph discovery/trace used the exact worktree project `Users-alex-.codex-worktrees-e0a3-oc-ui`, ready fast generation `2026-09-02T13:48:49Z`; relevant production paths had no recorded coverage gaps and matched metadata. Current source was also read directly. The prototype, documentation and installed packages were inspected directly where outside that graph scope. Coverage is best-effort, not proof of completeness.
 
-The installed SDK/UI are `0.0.0-beta-18155`. Popover supports a virtual rectangle anchor and has its own Escape/outside-focus behavior. LineComment exposes comment, selection and action slots; it does not supply the full inline-edit lifecycle. The approved local popup therefore retains meaningful behavior while reusing upstream controls.
+The initial design inspected SDK/UI `0.0.0-beta-18155`; integration with main retains its upgrade to `0.0.0-beta-18866`. Popover supports a virtual rectangle anchor and has its own Escape/outside-focus behavior. LineComment exposes comment, selection and action slots; it does not supply the full inline-edit lifecycle. The approved local popup therefore retains meaningful behavior while reusing upstream controls.
 
 The production implementation replaces the earlier selection experiments. No additional broad spike is needed. The concrete implementation gates are Electron Range/highlight behavior across real message blocks and the pinned server's prompt/metadata lifecycle. If either fails, investigate that bounded failure rather than restarting changed-source recovery research.
 
 ## Acceptance status (2026-09-03)
 
 Root `pnpm check` and `pnpm test` pass (76 test files, 501 tests).
+
+Integration with main also passes both root gates (77 test files, 537 tests). The combined version retains main's managed worktrees, SDK upgrade and shared focus rules. Native inspection confirmed the saved annotation and blue source underline load with the upgraded SDK. The annotation composer retains its scoped neutral focus color.
 
 - Browser checks exercised real text selection, adding and reopening annotations, inline editing with a stable caret, outside-click focus, navigation persistence, failed-send restoration, successful simulated retry, read-only sent quote popups, sent-highlight restoration after conversation switching, 390px layout, resize dismissal and disabled running-state edits. Storybook uses the production components with a simulated SDK transport.
 - Independent review corrections cover stale request completion, delayed acknowledgement preserving newer edits, popup focus fallback and transcript unmount cleanup. Regression tests cover these failure modes.

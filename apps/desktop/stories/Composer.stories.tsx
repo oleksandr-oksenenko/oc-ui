@@ -2,7 +2,7 @@
 
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { createSignal } from "solid-js";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import type { ComposerReview } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
@@ -79,7 +79,7 @@ export const Idle: Story = {
     await step("Search models with an autofocus input", async () => {
       await userEvent.click(canvas.getByRole("button", { name: "Model: GPT-5" }));
       const modelDialog = await screen.findByRole("dialog", { name: "Models" });
-      await expect(modelDialog).toBeVisible();
+      await waitFor(() => expect(modelDialog).toBeVisible());
       const modelPicker = within(modelDialog);
       const search = await modelPicker.findByPlaceholderText("Search models");
       await expect(search).toHaveFocus();
