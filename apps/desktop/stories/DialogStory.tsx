@@ -16,7 +16,10 @@ function DialogStoryContent(props: DialogStoryProps) {
     void dialog.show(() => props.children(setDismissBlocked));
   };
   onMount(show);
-  onCleanup(() => setDismissBlocked(false));
+  onCleanup(() => {
+    setDismissBlocked(false);
+    if (dialog.active) dialog.close();
+  });
   return null;
 }
 

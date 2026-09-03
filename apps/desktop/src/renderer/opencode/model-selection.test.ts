@@ -1,4 +1,4 @@
-import type { ModelInfo, SessionInfo } from "@opencode-ai/client";
+import type { ModelInfo, OpenCodeClient, SessionInfo } from "@opencode-ai/client";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -10,7 +10,9 @@ const responseLocation = {
   project: { id: "project", directory: "/workspace", canonical: "/workspace" },
 } as const;
 type SelectionInput = Parameters<typeof createModelSelection>[0];
-type SelectionApi = SelectionInput["api"];
+type SelectionApi = SelectionInput["api"] & {
+  readonly model: Pick<OpenCodeClient["model"], "list" | "default">;
+};
 type SelectionData = SelectionInput["data"];
 
 function model(input: {
@@ -47,8 +49,20 @@ function session(id: string, selected?: SessionInfo["model"]): SessionInfo {
   };
 }
 
-function data(sync: SelectionData["session"]["sync"]): SelectionData {
-  return { session: { sync } };
+function data(api: SelectionApi, sync: SelectionData["session"]["sync"]): SelectionData {
+  const [models, setModels] = createSignal<ModelInfo[]>();
+  return {
+    session: { sync },
+    location: {
+      model: {
+        list: models,
+        sync: async () => {
+          setModels((await api.model.list({ location })).data);
+        },
+        invalidate: () => undefined,
+      },
+    },
+  };
 }
 
 function required<T>(value: T | undefined, message: string): T {
@@ -73,7 +87,10 @@ describe("model selection", () => {
       dispose,
       selection: createModelSelection({
         api,
-        data: data(vi.fn<SelectionData["session"]["sync"]>(() => Promise.resolve())),
+        data: data(
+          api,
+          vi.fn<SelectionData["session"]["sync"]>(() => Promise.resolve()),
+        ),
         defaultLocation: location,
         selectedSession: () => undefined,
       }),
@@ -122,7 +139,10 @@ describe("model selection", () => {
         setSelectedSession,
         selection: createModelSelection({
           api,
-          data: data(vi.fn<SelectionData["session"]["sync"]>(() => Promise.resolve())),
+          data: data(
+            api,
+            vi.fn<SelectionData["session"]["sync"]>(() => Promise.resolve()),
+          ),
           defaultLocation: location,
           selectedSession,
         }),
@@ -147,6 +167,38 @@ describe("model selection", () => {
     expect(root.selection.selectedModelID()).toBe(root.selection.models()[1]?.id);
     expect(root.selection.variants().map((choice) => choice.id)).toEqual(["fast", "deep"]);
     expect(root.selection.selectedVariantID()).toBe("deep");
+    root.dispose();
+  });
+
+  it("updates an initially empty picker when the SDK catalog refreshes", async () => {
+    const available = model({ id: "gpt", providerID: "openai", name: "GPT" });
+    const root = createRoot((dispose) => {
+      const [catalog, setCatalog] = createSignal<ModelInfo[]>([]);
+      const selection = createModelSelection({
+        api: {
+          model: { default: async () => ({ location: responseLocation, data: null }) },
+          session: { switchModel: async () => undefined },
+        },
+        data: {
+          session: { sync: async () => undefined },
+          location: {
+            model: { list: catalog, sync: async () => undefined, invalidate: () => undefined },
+          },
+        },
+        defaultLocation: location,
+        selectedSession: () =>
+          session("session-1", { id: available.id, providerID: available.providerID }),
+      });
+      return { dispose, selection, setCatalog };
+    });
+
+    await root.selection.sync();
+    expect(root.selection.models()).toEqual([]);
+    root.setCatalog([available]);
+    expect(root.selection.models().map((choice) => choice.label)).toEqual(["GPT"]);
+    expect(root.selection.selectedModelID()).toBe(root.selection.models()[0]?.id);
+    root.setCatalog([]);
+    expect(root.selection.models()).toEqual([]);
     root.dispose();
   });
 
@@ -178,7 +230,7 @@ describe("model selection", () => {
         setSelectedSession,
         selection: createModelSelection({
           api,
-          data: data(syncSession),
+          data: data(api, syncSession),
           defaultLocation: location,
           selectedSession,
         }),
@@ -233,7 +285,10 @@ describe("model selection", () => {
         setSelectedSession,
         selection: createModelSelection({
           api,
-          data: data(vi.fn<SelectionData["session"]["sync"]>(() => Promise.resolve())),
+          data: data(
+            api,
+            vi.fn<SelectionData["session"]["sync"]>(() => Promise.resolve()),
+          ),
           defaultLocation: location,
           selectedSession,
         }),
