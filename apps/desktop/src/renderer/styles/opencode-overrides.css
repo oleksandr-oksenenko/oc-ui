@@ -53,6 +53,27 @@
   --tabs-compact-pill-radius: var(--oc-radius);
 }
 
+/* Keep v2 select focus consistent across regular and inline triggers. The
+ * upstream component intentionally hides focus while expanded and delegates
+ * invalid-state treatment to its danger outline. */
+:root
+  [data-component="select-v2"]:where(:focus-within):not(
+    [data-disabled],
+    [data-invalid],
+    [data-expanded]
+  ) {
+  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
+  outline-offset: var(--oc-focus-ring-offset);
+}
+
+/* Collapsible and tab triggers suppress the browser ring upstream;
+ * give every trigger the product ring in one place. Feature styles may still
+ * adjust the offset when the trigger is clipped by its local container. */
+:root :where([data-slot="collapsible-trigger"], [data-slot="tabs-trigger"]):focus-visible {
+  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
+  outline-offset: var(--oc-focus-ring-offset);
+}
+
 /* Radio controls and indicators are real circles, so they retain the full
  * radius token. Disabled descendants keep the not-allowed affordance while
  * remaining in the pointer event path for accessible labels. */

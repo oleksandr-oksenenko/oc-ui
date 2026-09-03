@@ -116,12 +116,6 @@
   opacity: 0.5;
 }
 
-.new-session-project-trigger:focus-visible {
-  border-color: var(--v2-border-border-strong);
-  outline: 2px solid var(--v2-border-border-focus);
-  outline-offset: 1px;
-}
-
 .new-session-project-trigger:hover:not(:disabled) {
   border-color: var(--v2-border-border-strong);
 }

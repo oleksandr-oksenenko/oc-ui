@@ -28,7 +28,6 @@
 .shell-server-selector:focus-visible {
   color: var(--oc-text-contrast);
   background: var(--oc-surface-hover);
-  outline: 2px solid var(--oc-focus-ring);
   outline-offset: -2px;
 }
 

@@ -87,7 +87,6 @@
 
 .context-tab-trigger:focus-visible {
   color: var(--oc-text-base);
-  outline: 2px solid var(--oc-focus-ring);
   outline-offset: -2px;
 }
 

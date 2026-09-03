@@ -74,11 +74,6 @@
   line-height: var(--oc-type-body-line-height);
 }
 
-.composer-v2-input:focus {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
 .composer-v2:focus-within {
   border-color: var(--oc-focus-ring);
 }
@@ -107,11 +102,6 @@
   background: var(--composer-bg) !important;
   background-image: none !important;
   box-shadow: none !important;
-}
-
-.composer-v2-action:focus-visible {
-  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  outline-offset: 1px;
 }
 
 .composer-v2-action:disabled {
@@ -193,11 +183,6 @@
   width: 14px;
   height: 14px;
   color: var(--composer-muted);
-}
-
-.composer-model-trigger:focus-visible {
-  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  outline-offset: 1px;
 }
 
 .composer-model-trigger:disabled {
@@ -379,11 +364,6 @@
   display: flex;
   align-items: center;
   height: 100%;
-}
-
-.composer-picker-control[data-component="select-v2"]:focus-within {
-  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  outline-offset: 1px;
 }
 
 .composer-picker-control[data-component="select-v2"] [data-slot="select-v2-value-text"] {
