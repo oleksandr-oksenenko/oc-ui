@@ -7,6 +7,8 @@ import type {
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
 import { For, Show, type JSX } from "solid-js";
 
+import { annotationBlock } from "../../annotation-source.ts";
+
 import { Markdown } from "./AssistantMessage/Markdown.tsx";
 import { ReasoningBlock } from "./AssistantMessage/ReasoningBlock.tsx";
 import { ToolCall } from "./AssistantMessage/ToolCall.tsx";
@@ -32,9 +34,13 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
       data-state={state()}
     >
       <div class="transcript-assistant-document">
-        <For each={props.message.content}>{(content) => renderContent(content)}</For>
+        <For each={props.message.content}>{(content, index) => renderContent(content, index)}</For>
         <Show when={failed()}>
-          <p class="transcript-message-failure" role="alert">
+          <p
+            class="transcript-message-failure"
+            role="alert"
+            data-annotation-block={annotationBlock("error")}
+          >
             {props.message.error?.message ?? "Response failed"}
           </p>
         </Show>
@@ -48,12 +54,23 @@ function renderContent(
     | SessionMessageAssistantText
     | SessionMessageAssistantReasoning
     | SessionMessageAssistantTool,
+  index: () => number,
 ): JSX.Element {
   switch (content.type) {
     case "text":
-      return <Markdown text={content.text} />;
+      return (
+        <Markdown
+          text={content.text}
+          annotationBlock={annotationBlock("content", index(), "text")}
+        />
+      );
     case "reasoning":
-      return <ReasoningBlock reasoning={content} />;
+      return (
+        <ReasoningBlock
+          reasoning={content}
+          annotationBlock={annotationBlock("content", index(), "reasoning")}
+        />
+      );
     case "tool":
       return <ToolCall tool={content} />;
     default: {

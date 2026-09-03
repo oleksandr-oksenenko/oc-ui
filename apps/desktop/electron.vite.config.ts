@@ -29,6 +29,10 @@ export default defineConfig({
   renderer: {
     root: rendererDirectory,
     plugins: [solid()],
+    optimizeDeps: {
+      // LineComment's hooks import this CommonJS dependency through source files.
+      include: ["@opencode-ai/ui > fuzzysort"],
+    },
     build: {
       rollupOptions: {
         input: resolve(rendererDirectory, "index.html"),

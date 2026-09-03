@@ -10,10 +10,9 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { TranscriptView } from "./TranscriptView.tsx";
 import { UserMessage } from "./TranscriptView/UserMessage.tsx";
-import {
-  CODE_REVIEW_METADATA_KEY,
-  createCodeReviewPrompt,
-} from "../../../../../opencode/code-review.ts";
+import { CODE_REVIEW_METADATA_KEY } from "../../../../../opencode/code-review.ts";
+
+import { createSessionPrompt } from "../../../../../opencode/session-prompt.ts";
 
 const base = { created: 1 };
 const assistant = (
@@ -54,6 +53,36 @@ function renderUserMessage(message: SessionMessageUser) {
 }
 
 describe("TranscriptView", () => {
+  it("releases annotation listeners when the transcript unmounts", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const host = document.createElement("div");
+    const detach = vi.fn<() => void>();
+    const attach = vi.fn<(element: HTMLDivElement) => () => void>(() => detach);
+    const dispose = render(
+      () => (
+        <TranscriptView
+          sessionID="session"
+          messages={[]}
+          sessionStatus="idle"
+          annotationRootRef={attach}
+        />
+      ),
+      host,
+    );
+    expect(attach).toHaveBeenCalledWith(host.firstElementChild);
+    expect(detach).not.toHaveBeenCalled();
+    dispose();
+    expect(detach).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
   it("renders a pending interaction after transcript messages", () => {
     vi.stubGlobal(
       "ResizeObserver",
@@ -307,6 +336,18 @@ describe("TranscriptView", () => {
           assistant("run", "running"),
           assistant("done", "completed"),
           assistant("error", "error"),
+          {
+            type: "tool",
+            id: "error-output",
+            name: "check",
+            time: base,
+            state: {
+              status: "error",
+              input: { command: "check" },
+              error: { type: "tool", message: "failed after output" },
+              content: [{ type: "text", text: "Partial result" }],
+            },
+          },
         ],
       },
       {
@@ -329,7 +370,7 @@ describe("TranscriptView", () => {
       [...host.querySelectorAll<HTMLButtonElement>(".transcript-tool-header")].map((button) =>
         button.getAttribute("aria-expanded"),
       ),
-    ).toEqual(["false", "false", "false", "false"]);
+    ).toEqual(["false", "false", "false", "false", "false"]);
     expect(host.querySelector(".transcript-reasoning-toggle")?.getAttribute("aria-expanded")).toBe(
       "false",
     );
@@ -355,7 +396,21 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("text/plain");
     expect(host.textContent).toContain("file:///tmp/report.txt");
     expect(host.textContent).toContain("failed");
+    expect(host.textContent).toContain("Partial result");
     expect(host.textContent).toContain("Error");
+    expect(
+      [...host.querySelectorAll<HTMLElement>(".transcript-tool-output")].map((element) =>
+        element.getAttribute("data-annotation-block"),
+      ),
+    ).toEqual([
+      null,
+      '["tool","run","input"]',
+      '["tool","done","input"]',
+      '["tool","done","output",0,"text"]',
+      '["tool","error","input"]',
+      '["tool","error-output","input"]',
+      '["tool","error-output","output",0,"text"]',
+    ]);
     dispose();
     host.remove();
     vi.unstubAllGlobals();
@@ -484,9 +539,10 @@ describe("TranscriptView", () => {
   });
 
   it("renders a valid sent review collapsed and reveals its immutable snapshot", () => {
-    const prompt = createCodeReviewPrompt({
+    const prompt = createSessionPrompt({
       instruction: "Please fix this carefully.",
-      comments: [
+      annotations: [],
+      reviewComments: [
         {
           path: "src/example.ts",
           body: "Keep this branch safe.",
@@ -521,9 +577,10 @@ describe("TranscriptView", () => {
   });
 
   it("reacts when durable review metadata arrives on an SDK store proxy", () => {
-    const prompt = createCodeReviewPrompt({
+    const prompt = createSessionPrompt({
       instruction: "",
-      comments: [
+      annotations: [],
+      reviewComments: [
         {
           path: "src/example.ts",
           body: "Use the durable metadata.",
@@ -555,9 +612,10 @@ describe("TranscriptView", () => {
   });
 
   it("renders an instruction-empty review without the model Markdown", () => {
-    const prompt = createCodeReviewPrompt({
+    const prompt = createSessionPrompt({
       instruction: " \n\t",
-      comments: [
+      annotations: [],
+      reviewComments: [
         {
           path: "empty.ts",
           body: "Use the existing helper.",
@@ -581,16 +639,65 @@ describe("TranscriptView", () => {
     host.remove();
   });
 
+  it("renders annotation-only messages as a separate collapsed card and opens their quote", () => {
+    const onOpen = vi.fn<(messageID: string, annotationID: string, opener: HTMLElement) => void>();
+    const prompt = createSessionPrompt({
+      instruction: "",
+      reviewComments: [],
+      annotations: [
+        {
+          id: "annotation-1",
+          source: {
+            messageID: "source-1",
+            block: "body",
+            textDigest: "a".repeat(64),
+            start: 0,
+            end: 6,
+          },
+          quote: "Source",
+          body: "Please explain this.",
+        },
+      ],
+    });
+    const host = document.createElement("div");
+    document.body.append(host);
+    const dispose = render(
+      () => (
+        <UserMessage
+          message={{ id: "sent-1", type: "user", time: base, ...prompt }}
+          onOpenAnnotation={onOpen}
+        />
+      ),
+      host,
+    );
+    const card = host.querySelector<HTMLElement>(".transcript-annotation-card")!;
+    const trigger = card.querySelector<HTMLButtonElement>(".transcript-annotation-trigger")!;
+    expect(host.querySelector(".transcript-user-bubble")).toBeNull();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(host.textContent).not.toContain("Please explain this.");
+    trigger.click();
+    expect(host.textContent).toContain("Please explain this.");
+    const quote = card.querySelector<HTMLButtonElement>(".transcript-annotation-quote")!;
+    quote.click();
+    expect(onOpen).toHaveBeenCalledWith("sent-1", "annotation-1", quote);
+    expect(host.textContent.indexOf("Please explain this.")).toBeLessThan(
+      host.textContent.indexOf("Source"),
+    );
+    dispose();
+    host.remove();
+  });
+
   it("falls back to exact user text when review metadata is malformed", () => {
+    const text = " \n Original prompt with malformed metadata\t ";
     const { host, dispose } = renderUserMessage({
       id: "malformed-review",
       time: base,
       type: "user",
-      text: "Original prompt with malformed metadata",
+      text,
       metadata: { [CODE_REVIEW_METADATA_KEY]: { kind: "code-review", version: 2 } },
     });
 
-    expect(host.textContent).toContain("Original prompt with malformed metadata");
+    expect(host.querySelector(".transcript-user-bubble")?.textContent).toBe(text);
     expect(host.querySelector(".transcript-code-review-card")).toBeNull();
     dispose();
     host.remove();

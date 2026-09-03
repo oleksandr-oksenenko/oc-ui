@@ -2,6 +2,8 @@ import type { JsonValue } from "@opencode-ai/client";
 import { Schema } from "effect";
 import type { SelectedLineRange } from "@pierre/diffs";
 
+import { renderFence } from "./prompt-format.ts";
+
 export const CODE_REVIEW_METADATA_KEY = "oc-ui/code-review" as const;
 
 export type SentReviewComment = {
@@ -14,16 +16,6 @@ export type SentReviewComment = {
 export type SentCodeReview = {
   readonly kind: "code-review";
   readonly version: 1;
-  readonly instruction: string;
-  readonly comments: readonly SentReviewComment[];
-};
-
-export type CodeReviewPrompt = {
-  readonly text: string;
-  readonly metadata: Record<string, JsonValue>;
-};
-
-type CodeReviewPromptInput = {
   readonly instruction: string;
   readonly comments: readonly SentReviewComment[];
 };
@@ -43,7 +35,7 @@ const ReviewSelectionSchema = Schema.Struct({
   end: PositiveLineNumberSchema,
   endSide: Schema.optionalKey(ReviewSideSchema),
 });
-const SentReviewCommentSchema = Schema.Struct({
+export const SentReviewCommentSchema = Schema.Struct({
   path: Schema.String,
   selection: ReviewSelectionSchema,
   selectedCode: Schema.String,
@@ -59,20 +51,13 @@ const decodeSentCodeReview = Schema.decodeUnknownSync(SentCodeReviewSchema, {
   onExcessProperty: "error",
 });
 
-export function createCodeReviewPrompt(input: CodeReviewPromptInput): CodeReviewPrompt {
-  const instruction = normalizeInstruction(input.instruction);
-  const review: SentCodeReview = {
-    kind: "code-review",
-    version: 1,
-    instruction,
-    comments: input.comments.map(toSentReviewComment),
-  };
+/** Formats the review section shared by review-only and combined prompts. */
+export function formatCodeReviewSection(comments: readonly SentReviewComment[]): string {
   const sections = [
-    ...(instruction ? [instruction, ""] : []),
     "## Code review",
     "",
     "Please fix all code review comments below.",
-    ...review.comments.flatMap((comment, index) => [
+    ...comments.flatMap((comment, index) => [
       "",
       `### Comment ${index + 1}`,
       `File: ${JSON.stringify(comment.path)}`,
@@ -88,11 +73,7 @@ export function createCodeReviewPrompt(input: CodeReviewPromptInput): CodeReview
       renderFence(comment.body),
     ]),
   ];
-
-  return {
-    text: sections.join("\n"),
-    metadata: { [CODE_REVIEW_METADATA_KEY]: toJsonReview(review) },
-  };
+  return sections.join("\n");
 }
 
 export function readCodeReviewMetadata(
@@ -102,33 +83,19 @@ export function readCodeReviewMetadata(
   if (value === undefined) return undefined;
   try {
     const review = decodeSentCodeReview(value);
-    return { ...review, instruction: normalizeInstruction(review.instruction) };
+    return { ...review, instruction: review.instruction.trim() };
   } catch {
     return undefined;
   }
 }
 
-function toSentReviewComment(comment: SentReviewComment): SentReviewComment {
-  return {
+export function reviewCommentsToJson(comments: readonly SentReviewComment[]): JsonValue {
+  return comments.map((comment) => ({
     path: comment.path,
-    selection: cloneSelection(comment.selection),
+    selection: toJsonSelection(comment.selection),
     selectedCode: comment.selectedCode,
     body: comment.body,
-  };
-}
-
-function toJsonReview(review: SentCodeReview): JsonValue {
-  return {
-    kind: review.kind,
-    version: review.version,
-    instruction: review.instruction,
-    comments: review.comments.map((comment) => ({
-      path: comment.path,
-      selection: toJsonSelection(comment.selection),
-      selectedCode: comment.selectedCode,
-      body: comment.body,
-    })),
-  };
+  }));
 }
 
 function toJsonSelection(selection: SelectedLineRange): JsonValue {
@@ -136,10 +103,6 @@ function toJsonSelection(selection: SelectedLineRange): JsonValue {
   if (selection.side !== undefined) value.side = selection.side;
   if (selection.endSide !== undefined) value.endSide = selection.endSide;
   return value;
-}
-
-function normalizeInstruction(instruction: string): string {
-  return instruction.trim();
 }
 
 export function formatReviewSelection(selection: SelectedLineRange): string {
@@ -151,18 +114,4 @@ export function formatReviewSelection(selection: SelectedLineRange): string {
 
 function formatPoint(line: number, side: SelectedLineRange["side"]): string {
   return `${side === "deletions" ? "old" : side === "additions" ? "new" : "line"} ${line}`;
-}
-
-function renderFence(content: string): string {
-  const longestRun =
-    content.match(/`+/g)?.reduce((longest, run) => Math.max(longest, run.length), 0) ?? 0;
-  const fence = "`".repeat(Math.max(3, longestRun + 1));
-  return `${fence}\n${content}${content.endsWith("\n") ? "" : "\n"}${fence}`;
-}
-
-function cloneSelection(selection: SelectedLineRange): SelectedLineRange {
-  const clone: MutableSelection = { start: selection.start, end: selection.end };
-  if (selection.side !== undefined) clone.side = selection.side;
-  if (selection.endSide !== undefined) clone.endSide = selection.endSide;
-  return clone;
 }

@@ -4,6 +4,7 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { Show, type JSX } from "solid-js";
 
 export type ReasoningBlockProps = {
+  readonly annotationBlock?: string;
   readonly reasoning: SessionMessageAssistantReasoning;
 };
 
@@ -25,7 +26,9 @@ export function ReasoningBlock(props: ReasoningBlockProps): JSX.Element {
         <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content>
-        <p class="transcript-reasoning-summary">{props.reasoning.text}</p>
+        <p data-annotation-block={props.annotationBlock} class="transcript-reasoning-summary">
+          {props.reasoning.text}
+        </p>
       </Collapsible.Content>
     </Collapsible>
   );

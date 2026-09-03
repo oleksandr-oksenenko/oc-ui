@@ -1,0 +1,108 @@
+.annotation-selection-action {
+  position: fixed;
+  z-index: 20;
+}
+
+.annotation-popover[data-component="popover-content"] {
+  --v2-border-border-focus: var(--oc-border-emphasis);
+
+  width: min(390px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--oc-text-contrast);
+}
+
+.annotation-popover [data-slot="popover-header"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.annotation-popover [data-slot="popover-close-button"] {
+  display: none;
+}
+
+.annotation-popover [data-slot="popover-body"] {
+  padding: 0;
+}
+
+.annotation-popover [data-component="line-comment-v2"] {
+  width: 100%;
+  max-width: none;
+}
+
+.annotation-popover-anchor {
+  position: fixed;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.annotation-popup-comments {
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
+  padding: 0;
+}
+
+.annotation-editable-comment {
+  display: block;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.annotation-editable-comment:focus-visible {
+  outline: 1px solid var(--oc-border-emphasis);
+}
+
+.annotation-editable-comment:disabled {
+  cursor: default;
+}
+
+.annotation-popup-comments
+  > [data-component="line-comment-v2"]
+  + [data-component="line-comment-v2"] {
+  margin-top: 6px;
+}
+
+.annotation-remove-comment[data-component="icon-button-v2"] {
+  color: var(--oc-status-danger);
+}
+
+.annotation-inline-editor[data-component="textarea-v2"] {
+  width: 100%;
+  min-height: 0;
+  padding: 4px 6px;
+  outline: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.annotation-inline-editor[data-component="textarea-v2"]:focus-within {
+  outline-color: var(--oc-border-emphasis);
+}
+
+.annotation-inline-editor [data-slot="textarea-v2-textarea"] {
+  field-sizing: content;
+  height: auto;
+  min-height: 1lh;
+  padding: 0;
+  resize: none;
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: inherit;
+}

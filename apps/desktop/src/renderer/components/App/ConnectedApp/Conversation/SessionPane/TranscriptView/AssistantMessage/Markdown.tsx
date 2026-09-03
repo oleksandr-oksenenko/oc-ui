@@ -3,6 +3,7 @@ import { marked } from "marked";
 import type { JSX } from "solid-js";
 
 export type MarkdownProps = {
+  readonly annotationBlock?: string;
   readonly text: string;
 };
 
@@ -36,7 +37,13 @@ const markdownTags = [
 ];
 
 export function Markdown(props: MarkdownProps): JSX.Element {
-  return <div class="transcript-markdown" innerHTML={renderMarkdown(props.text)} />;
+  return (
+    <div
+      data-annotation-block={props.annotationBlock}
+      class="transcript-markdown"
+      innerHTML={renderMarkdown(props.text)}
+    />
+  );
 }
 
 function renderMarkdown(source: string): string {

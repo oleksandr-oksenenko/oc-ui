@@ -9,6 +9,7 @@ catalog:
   "@kobalte/core": 0.13.11
   "@opencode-ai/cli": 0.0.0-beta-18155
   "@opencode-ai/client": 0.0.0-beta-18155
+  "@opencode-ai/schema": 0.0.0-beta-18155
   "@opencode-ai/ui": 0.0.0-beta-18155
   "@oxlint/plugins": 1.79.0
   "@pierre/diffs": 1.2.10

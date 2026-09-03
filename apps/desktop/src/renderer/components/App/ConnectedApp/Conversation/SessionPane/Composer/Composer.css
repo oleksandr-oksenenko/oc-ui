@@ -29,7 +29,8 @@
   min-height: 40px;
 }
 
-.composer-v2-review-row {
+.composer-v2-review-row,
+.composer-v2-annotation-row {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -41,14 +42,28 @@
   line-height: var(--oc-type-caption-line-height);
 }
 
-.composer-v2-review-label {
+.composer-v2-review-label,
+.composer-v2-annotation-count {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.composer-v2-review-discard[data-component="icon-button-v2"] {
+.composer-v2-annotation-count[data-component="button-v2"] {
+  justify-content: flex-start;
+  max-width: 100%;
+  padding: 0;
+  color: var(--oc-text-muted);
+  font: inherit;
+  font-size: var(--oc-type-caption-size);
+  font-weight: inherit;
+  line-height: var(--oc-type-caption-line-height);
+  text-align: left;
+}
+
+.composer-v2-review-discard[data-component="icon-button-v2"],
+.composer-v2-annotation-discard[data-component="icon-button-v2"] {
   flex: 0 0 20px;
   margin-left: auto;
   color: var(--oc-text-muted);
@@ -77,6 +92,10 @@
 .composer-v2-input:focus {
   outline: none !important;
   box-shadow: none !important;
+}
+
+.composer-v2:has(.composer-v2-annotation-row) {
+  --oc-focus-ring: var(--oc-border-emphasis);
 }
 
 .composer-v2:focus-within {

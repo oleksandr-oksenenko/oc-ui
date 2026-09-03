@@ -1,5 +1,6 @@
 import { createSignal, Show } from "solid-js";
 
+import { createAnnotationDraftStore } from "../../domain/annotation-drafts.ts";
 import { createReviewDraftStore } from "../../domain/index.ts";
 import {
   createModelSelection,
@@ -43,6 +44,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
   });
   const [bootstrapped, setBootstrapped] = createSignal(false);
   const reviewDrafts = createReviewDraftStore();
+  const annotationDrafts = createAnnotationDraftStore();
   const reviewFlow = createReviewFlow();
 
   const sessions = createSessionWorkspace({
@@ -104,6 +106,8 @@ export function ConnectedApp(props: ConnectedAppProps) {
     selectedID: sessions.selectedID,
     running: sessions.running,
     transcriptLoading: sessions.transcriptLoading,
+    transcriptError: sessions.transcriptError,
+    annotations: annotationDrafts,
     connected,
     selectionSwitching: () => modelSelection.switching() || agentSelection.switching(),
     review: {
@@ -124,10 +128,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
     runtime,
     connected,
     workspace: sessions,
-    clearDraft: (sessionID) => {
-      composer.clear(sessionID);
-      reviewDrafts.clearSession(sessionID);
-    },
+    clearDraft: composer.clear,
   });
 
   const closeLeftSidebarOnMobile = (): void => {
@@ -159,6 +160,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
           <ConversationRegion
             workspace={sessions}
             composer={composer}
+            annotationDrafts={annotationDrafts}
             modelSelection={modelSelection}
             agentSelection={agentSelection}
             forms={forms}

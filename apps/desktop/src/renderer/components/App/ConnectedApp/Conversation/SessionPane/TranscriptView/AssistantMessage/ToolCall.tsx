@@ -10,6 +10,8 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { For, Show, type JSX } from "solid-js";
 
+import { annotationBlock } from "../../../annotation-source.ts";
+
 export type ToolCallProps = {
   readonly tool: SessionMessageAssistantTool;
 };
@@ -55,7 +57,12 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
       </Collapsible.Trigger>
       <Collapsible.Content>
         <Show when={expandable()}>
-          <div class="transcript-tool-details">
+          <div
+            class="transcript-tool-details"
+            data-annotation-disabled={
+              status() === "streaming" || status() === "running" ? "true" : undefined
+            }
+          >
             <For each={details()}>{(detail) => detail}</For>
           </div>
         </Show>
@@ -69,16 +76,20 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
     case "streaming":
       return [<pre class="transcript-tool-output">{tool.state.input}</pre>];
     case "running":
-      return [<pre class="transcript-tool-output">{formatObject(tool.state)}</pre>];
     case "completed":
-      return [
-        <pre class="transcript-tool-output">{formatObject(tool.state)}</pre>,
-        ...tool.state.content.map((content) => renderToolContent(content)),
-      ];
     case "error":
       return [
-        <pre class="transcript-tool-output">{formatObject(tool.state)}</pre>,
-        ...(tool.state.content?.map((content) => renderToolContent(content)) ?? []),
+        <pre
+          class="transcript-tool-output"
+          data-annotation-block={annotationBlock("tool", tool.id, "input")}
+        >
+          {formatObject(tool.state)}
+        </pre>,
+        ...(tool.state.status === "running"
+          ? []
+          : (tool.state.content ?? []).map((content, index) =>
+              renderToolContent(content, tool.id, index),
+            )),
       ];
     default: {
       const unreachable: never = tool.state;
@@ -87,16 +98,33 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
   }
 }
 
-function renderToolContent(content: ToolContent): JSX.Element {
+function renderToolContent(content: ToolContent, toolID: string, index: number): JSX.Element {
   return content.type === "text" ? (
-    <pre class="transcript-tool-output">{content.text}</pre>
+    <pre
+      class="transcript-tool-output"
+      data-annotation-block={annotationBlock("tool", toolID, "output", index, "text")}
+    >
+      {content.text}
+    </pre>
   ) : (
     <div class="transcript-tool-file">
       <Icon name="file-tree" size="small" aria-hidden="true" />
-      <span>{content.name ?? content.uri}</span>
-      <span class="transcript-tool-file-mime">{content.mime}</span>
+      <span data-annotation-block={annotationBlock("tool", toolID, "output", index, "name")}>
+        {content.name ?? content.uri}
+      </span>
+      <span
+        data-annotation-block={annotationBlock("tool", toolID, "output", index, "mime")}
+        class="transcript-tool-file-mime"
+      >
+        {content.mime}
+      </span>
       <Show when={content.name}>
-        <span class="transcript-tool-file-uri">{content.uri}</span>
+        <span
+          data-annotation-block={annotationBlock("tool", toolID, "output", index, "uri")}
+          class="transcript-tool-file-uri"
+        >
+          {content.uri}
+        </span>
       </Show>
     </div>
   );

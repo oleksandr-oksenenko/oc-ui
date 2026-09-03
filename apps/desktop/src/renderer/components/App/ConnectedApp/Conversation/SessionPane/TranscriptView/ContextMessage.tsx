@@ -2,6 +2,8 @@ import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Show, type JSX } from "solid-js";
 
+import { annotationBlock } from "../../annotation-source.ts";
+
 export function ContextMessage(props: {
   readonly id: string;
   readonly label: string;
@@ -23,7 +25,9 @@ export function ContextMessage(props: {
         <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content>
-        <pre class="transcript-context-text">{props.text}</pre>
+        <pre data-annotation-block={annotationBlock("body")} class="transcript-context-text">
+          {props.text}
+        </pre>
       </Collapsible.Content>
     </Collapsible>
   );

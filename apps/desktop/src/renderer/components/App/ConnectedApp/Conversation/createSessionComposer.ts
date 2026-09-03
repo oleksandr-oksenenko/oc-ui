@@ -1,22 +1,43 @@
+import { SessionMessage } from "@opencode-ai/schema";
 import { createSessionDraftStore } from "../../../../domain/index.ts";
-import type { ReviewDraftKey, ReviewDraftStore } from "../../../../domain/index.ts";
-import { createCodeReviewPrompt } from "../../../../opencode/code-review.ts";
+import type {
+  AnnotationDraftSnapshot,
+  AnnotationDraftStore,
+  ReviewDraftKey,
+  ReviewDraftStore,
+} from "../../../../domain/index.ts";
+import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
-import { createEffect, createMemo, createSignal, type Accessor } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js";
 
 import type { ComposerReview } from "./SessionPane/Composer.tsx";
 
-const PROMPT_FAILURE_MESSAGE = "The prompt was not admitted. Your draft has been kept.";
+const PROMPT_FAILURE_MESSAGE =
+  "Couldn't confirm the message was sent. Your draft has been restored.";
+
+type SessionPrompt = ReturnType<typeof createSessionPrompt>;
+
+type SubmissionRequest = {
+  readonly sessionID: string;
+  readonly id: string;
+  readonly prompt: SessionPrompt;
+  readonly text: string;
+  readonly reviewSnapshot: ReturnType<ReviewDraftStore["capture"]> | undefined;
+  readonly annotations: AnnotationDraftSnapshot;
+};
 
 type SessionComposerOptions = {
   readonly runtime: {
     readonly data: {
-      readonly session: Pick<ConnectedRuntime["data"]["session"], "prompt">;
+      readonly session: Pick<ConnectedRuntime["data"]["session"], "prompt"> & {
+        readonly message: Pick<ConnectedRuntime["data"]["session"]["message"], "get">;
+      };
     };
   };
   readonly selectedID: Accessor<string | undefined>;
   readonly running: Accessor<boolean>;
   readonly transcriptLoading: Accessor<boolean>;
+  readonly transcriptError: Accessor<string | undefined>;
   readonly connected: Accessor<boolean>;
   readonly selectionSwitching: Accessor<boolean>;
   readonly review: {
@@ -28,6 +49,7 @@ type SessionComposerOptions = {
       opener: HTMLButtonElement,
     ) => void;
   };
+  readonly annotations: AnnotationDraftStore;
 };
 
 export type SessionComposerController = {
@@ -44,12 +66,14 @@ export type SessionComposerController = {
 /** Owns session drafts and prompt admission for the selected conversation. */
 export function createSessionComposer(options: SessionComposerOptions): SessionComposerController {
   const drafts = createSessionDraftStore();
-  const [submittingID, setSubmittingID] = createSignal<string>();
-  const [promptError, setPromptError] = createSignal<string>();
+  const [activeRequest, setActiveRequest] = createSignal<SubmissionRequest>();
+  const [errorRequest, setErrorRequest] = createSignal<SubmissionRequest>();
+  const failedRequests = new Map<string, SubmissionRequest>();
+  let disposed = false;
 
   createEffect(() => {
     options.selectedID();
-    setPromptError(undefined);
+    setErrorRequest(undefined);
   });
 
   const value = createMemo(() => {
@@ -61,14 +85,15 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     () =>
       !options.connected() ||
       options.transcriptLoading() ||
-      submittingID() !== undefined ||
+      options.transcriptError() !== undefined ||
+      activeRequest() !== undefined ||
       options.running() ||
       options.selectionSwitching(),
   );
 
   const submitting = createMemo(() => {
     const sessionID = options.selectedID();
-    return sessionID !== undefined && submittingID() === sessionID;
+    return sessionID !== undefined && activeRequest()?.sessionID === sessionID;
   });
 
   const activeReviewKey = (): ReviewDraftKey | undefined => {
@@ -91,55 +116,164 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
   const input = (nextValue: string): void => {
     const sessionID = options.selectedID();
-    if (sessionID !== undefined) drafts.set(sessionID, nextValue);
+    if (sessionID === undefined) return;
+    drafts.set(sessionID, nextValue);
+  };
+
+  const isSubmissionAllowed = (sessionID: string | undefined): sessionID is string =>
+    sessionID !== undefined && !disabled();
+
+  const captureDraft = (sessionID: string) => {
+    const text = drafts.get(sessionID);
+    const key = activeReviewKey();
+    const reviewCapture = key === undefined ? undefined : options.review.drafts.capture(key);
+    const reviewComments = reviewCapture?.comments ?? [];
+    const reviewSnapshot = reviewComments.length > 0 ? reviewCapture : undefined;
+    const annotationComments = options.annotations
+      .get(sessionID)
+      .filter((comment) => comment.body.trim() !== "");
+    if (text.trim() === "" && reviewComments.length === 0 && annotationComments.length === 0) {
+      return undefined;
+    }
+    return { text, reviewSnapshot, reviewComments, annotationComments };
   };
 
   const submit = async (): Promise<void> => {
     const sessionID = options.selectedID();
-    if (
-      sessionID === undefined ||
-      submittingID() !== undefined ||
-      options.running() ||
-      !options.connected() ||
-      options.selectionSwitching()
-    ) {
-      return;
-    }
+    if (!isSubmissionAllowed(sessionID)) return;
+    const captured = captureDraft(sessionID);
+    if (captured === undefined) return;
+    const { text, reviewSnapshot, reviewComments, annotationComments } = captured;
 
-    const text = drafts.get(sessionID);
-    const key = activeReviewKey();
-    const reviewSnapshot = key === undefined ? undefined : options.review.drafts.capture(key);
-    const reviewComments = reviewSnapshot?.comments ?? [];
-    if (text.trim() === "" && reviewComments.length === 0) return;
+    const retry = failedRequests.get(sessionID);
+    const candidatePrompt = createSessionPrompt({
+      instruction: text,
+      reviewComments,
+      annotations: annotationComments,
+    });
+    const retrying = retry !== undefined && samePrompt(candidatePrompt, retry.prompt);
+    if (retry !== undefined && !retrying) forgetFailedRequest(retry);
+    const annotationSnapshot = options.annotations.take(sessionID);
 
-    const prompt =
-      reviewSnapshot && reviewComments.length > 0
-        ? createCodeReviewPrompt({ instruction: text, comments: reviewComments })
-        : { text };
+    const request: SubmissionRequest = {
+      sessionID,
+      id: retrying ? retry.id : SessionMessage.ID.create(),
+      prompt: retrying ? retry.prompt : candidatePrompt,
+      text,
+      reviewSnapshot,
+      annotations: annotationSnapshot,
+    };
 
-    setPromptError(undefined);
-    setSubmittingID(sessionID);
+    setErrorRequest(undefined);
+    failedRequests.delete(sessionID);
+    setActiveRequest(request);
     try {
-      await options.runtime.data.session.prompt({ sessionID, ...prompt });
-      drafts.clearIfUnchanged(sessionID, text);
-      if (reviewSnapshot !== undefined && reviewComments.length > 0) {
-        options.review.drafts.clearIfUnchanged(reviewSnapshot);
-      }
+      await options.runtime.data.session.prompt({ sessionID, id: request.id, ...request.prompt });
+      completeSubmission(request);
     } catch {
-      if (options.selectedID() === sessionID) setPromptError(PROMPT_FAILURE_MESSAGE);
+      if (disposed || activeRequest() !== request) return;
+
+      // The SDK has completed its rollback before its prompt promise rejects.
+      // A retained matching row means a durable echo won the response race.
+      if (matchingMessage(request)) {
+        completeSubmission(request);
+        return;
+      }
+      restoreFailed(request);
     } finally {
-      setSubmittingID(undefined);
+      if (activeRequest() === request) {
+        setActiveRequest(undefined);
+      }
     }
   };
+
+  // A durable echo may arrive after the SDK restored our draft. The row itself
+  // is the authority; the failed request only supplies the exact identity and
+  // payload to match. A retry is excluded while it has an active owner.
+  createEffect(() => {
+    const active = activeRequest();
+    for (const request of failedRequests.values()) {
+      if (request === active || !matchingMessage(request)) continue;
+      completeSubmission(request);
+    }
+  });
+
+  const clear = (sessionID: string): void => {
+    drafts.clear(sessionID);
+    options.annotations.clear(sessionID);
+    options.review.drafts.clearSession(sessionID);
+    const failed = failedRequests.get(sessionID);
+    if (failed !== undefined) forgetFailedRequest(failed);
+    if (activeRequest()?.sessionID === sessionID) {
+      setActiveRequest(undefined);
+    }
+  };
+
+  onCleanup(() => {
+    disposed = true;
+    setActiveRequest(undefined);
+    failedRequests.clear();
+  });
 
   return {
     value,
     disabled,
     submitting,
-    error: promptError,
+    error: () => (errorRequest() === undefined ? undefined : PROMPT_FAILURE_MESSAGE),
     review,
     input,
     submit,
-    clear: drafts.clear,
+    clear,
   };
+
+  function completeSubmission(request: SubmissionRequest): void {
+    if (disposed) return;
+    if (activeRequest() !== request && failedRequests.get(request.sessionID) !== request) {
+      return;
+    }
+    if (failedRequests.get(request.sessionID) === request) {
+      options.annotations.clearIfUnchanged(request.annotations);
+    }
+    drafts.clearIfUnchanged(request.sessionID, request.text);
+    if (request.reviewSnapshot !== undefined) {
+      options.review.drafts.clearIfUnchanged(request.reviewSnapshot);
+    }
+    if (failedRequests.get(request.sessionID) === request) {
+      failedRequests.delete(request.sessionID);
+    }
+    if (errorRequest() === request) setErrorRequest(undefined);
+    if (activeRequest() === request) {
+      setActiveRequest(undefined);
+    }
+  }
+
+  function matchingMessage(request: SubmissionRequest): boolean {
+    const message = options.runtime.data.session.message.get(request.sessionID, request.id);
+    return (
+      message?.type === "user" &&
+      message.text === request.prompt.text &&
+      sameValue(message.metadata, request.prompt.metadata)
+    );
+  }
+
+  function forgetFailedRequest(request: SubmissionRequest): void {
+    if (failedRequests.get(request.sessionID) !== request) return;
+    failedRequests.delete(request.sessionID);
+    if (errorRequest() === request) setErrorRequest(undefined);
+  }
+
+  function restoreFailed(request: SubmissionRequest): void {
+    options.annotations.restore(request.annotations);
+    failedRequests.set(request.sessionID, request);
+    if (options.selectedID() === request.sessionID) setErrorRequest(request);
+    setActiveRequest(undefined);
+  }
+}
+
+function samePrompt(left: SessionPrompt, right: SessionPrompt): boolean {
+  return left.text === right.text && sameValue(left.metadata, right.metadata);
+}
+
+function sameValue<T>(left: T, right: T): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }

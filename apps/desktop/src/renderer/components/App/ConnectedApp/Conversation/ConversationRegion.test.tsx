@@ -3,6 +3,7 @@ import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { createAnnotationDraftStore } from "../../../../domain/annotation-drafts.ts";
 import { ConversationRegion } from "./ConversationRegion.tsx";
 import type { SessionFormsController } from "./createSessionForms.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
@@ -111,6 +112,7 @@ function setup(initialForms: readonly FormInfo[] = []) {
   const dispose = render(
     () => (
       <ConversationRegion
+        annotationDrafts={createAnnotationDraftStore()}
         workspace={workspace}
         composer={composer}
         modelSelection={modelSelection}
