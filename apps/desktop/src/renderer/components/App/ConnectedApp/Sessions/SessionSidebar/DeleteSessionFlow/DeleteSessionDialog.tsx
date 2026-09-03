@@ -16,9 +16,7 @@ import "./DeleteSessionDialog.css";
 export type DeleteSessionDialogProps = {
   readonly title: string;
   readonly descendantCount: number;
-  readonly worktreeDirectory?: string;
   readonly deleting: boolean;
-  readonly sessionRemoved: boolean;
   readonly error?: string;
   readonly onDelete: () => void;
 };
@@ -53,14 +51,10 @@ export function DeleteSessionDialog(props: DeleteSessionDialogProps) {
               {props.descendantCount === 1 ? "session" : "sessions"}.
             </p>
           </Show>
-          <Show when={props.worktreeDirectory}>
-            {(directory) => (
-              <p>
-                The worktree at <code>{directory()}</code>, including uncommitted changes and its
-                branch, will also be permanently deleted.
-              </p>
-            )}
-          </Show>
+          <p>
+            Unused registered Git worktrees may also be permanently removed, including uncommitted
+            changes.
+          </p>
           <Show when={props.error}>
             {(error) => (
               <div class="delete-session-error" role="alert" tabIndex={-1}>
@@ -92,11 +86,7 @@ export function DeleteSessionDialog(props: DeleteSessionDialogProps) {
             <Show when={props.deleting}>
               <Loader width={16} height={16} />
             </Show>
-            {props.deleting
-              ? "Deleting"
-              : props.sessionRemoved
-                ? "Finish deletion"
-                : "Delete session"}
+            {props.deleting ? "Deleting" : "Delete session"}
           </Button>
         </DialogFooter>
       </form>

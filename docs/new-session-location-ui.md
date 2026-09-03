@@ -43,16 +43,26 @@ session directly in its canonical directory. A Git project offers:
 
 - **Use the project directory**: commands and changes happen directly in the
   project directory on the connected server.
-- **Create a worktree**: choose a server parent directory and required folder
-  name, then create an isolated detached Git worktree.
+- **Create a worktree**: prepare an isolated detached Git worktree automatically.
+  There are no directory or name fields.
 
-The worktree request uses the pinned client contract with strategy `git`, the
-project directory as `from`, and the chosen parent and name. Session creation uses
-the directory returned by the server, not the path preview.
+`createSessionWorktree` reads the connected server's XDG data location and cached
+origin-default commit through the shell API, then discovers and fetches origin's
+default branch. A confirmed fetch failure shows a persistent error and uses the
+previously cached commit; without a cache, creation stops.
+
+The helper calls `worktree.create` with strategy `git`, the registered source
+root as `from`, the automatic XDG parent, and the captured commit ID as `branch`.
+OpenCode generates the name and creates a detached checkout; this parameter does
+not create a Git branch. Session creation waits for native creation and any
+configured startup command, then uses the resolved server-returned location.
+Logical workspace routing and unsupported shells produce an error before creation;
+the direct-directory option remains available.
 
 Mutation phases are `creating-worktree` and `creating-session`. During either
 phase, dismissal and repeat submission are blocked. If worktree creation fails,
-the inputs remain available for retry. If session creation fails after the
+the flow reports the error. A failed or uncertain creation may leave a worktree;
+it is not automatically removed or recreated. If session creation fails after the
 worktree exists, its returned path is retained and retry creates only the session;
 the renderer does not delete the worktree.
 
@@ -69,5 +79,5 @@ flow does not create a second mutable session-location model.
 
 Stories cover server browsing, loading and listing/add-project failures; project
 loading, failure and empty states; Git and non-Git direct choices; the worktree
-form and path preview; both mutation phases; validation; worktree failure; direct
+choice without directory or name inputs; both mutation phases; validation; worktree failure; direct
 session failure; and session failure after a worktree exists.

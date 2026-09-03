@@ -9,9 +9,9 @@ import type { SessionWorkspace } from "./createSessionWorkspace.ts";
 type SessionDeletion = {
   readonly session: SessionInfo;
   readonly subtreeIDs: readonly string[];
+  readonly subtreeSessions: readonly SessionInfo[];
   readonly opener: HTMLButtonElement;
   readonly focusFallback?: SessionFocusResolver;
-  readonly worktree?: { readonly projectID: string; readonly directory: string };
 };
 
 type SessionFocusResolver = () => HTMLElement | undefined;
@@ -19,25 +19,25 @@ type SessionFocusResolver = () => HTMLElement | undefined;
 export type SessionDeletionStatus = "ready" | "running" | "removed";
 
 export type SessionFlowsRuntime = {
+  readonly sessions: {
+    readonly ids: () => readonly string[];
+  };
   readonly data: {
     readonly session: {
       readonly status: (sessionID: string) => DataSessionStatus;
     };
-    readonly project: {
-      readonly list: () => readonly {
-        readonly id: string;
-        readonly sandboxes: readonly string[];
-      }[];
-    };
   };
 };
 
-export type SessionFlowsWorkspace = Pick<SessionWorkspace, "sessions" | "remove">;
+export type SessionFlowsWorkspace = Pick<SessionWorkspace, "sessions" | "syncCatalog" | "remove">;
 
 export type SessionFlows = {
   readonly expandedIDs: Accessor<readonly string[]>;
   readonly newSessionOpen: Accessor<boolean>;
   readonly deletion: Accessor<SessionDeletion | undefined>;
+  readonly sessions: Accessor<readonly SessionInfo[]>;
+  readonly sessionIDs: () => readonly string[];
+  readonly syncCatalog: () => Promise<void>;
   readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
   readonly openNewSession: () => void;
   readonly dismissNewSession: () => void;
@@ -108,20 +108,13 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
     if (!input.connected()) return;
     const target = inspectDeletion(sessionID);
     if (target.status !== "ready") return;
-    const project = input.runtime.data.project
-      .list()
-      .find((candidate) => candidate.id === target.session.projectID);
-    const worktreeDirectory = project?.sandboxes.find((directory) =>
-      sameDirectory(directory, target.session.location.directory),
-    );
+    const sessions = input.workspace.sessions();
     setDeletion({
       session: target.session,
       subtreeIDs: target.subtreeIDs,
+      subtreeSessions: sessions.filter((candidate) => target.subtreeIDs.includes(candidate.id)),
       opener,
       focusFallback,
-      worktree: worktreeDirectory
-        ? { projectID: target.session.projectID, directory: worktreeDirectory }
-        : undefined,
     });
   };
 
@@ -154,6 +147,9 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
     expandedIDs,
     newSessionOpen,
     deletion,
+    sessions: input.workspace.sessions,
+    sessionIDs: input.runtime.sessions.ids,
+    syncCatalog: input.workspace.syncCatalog,
     deletionStatusForSession,
     openNewSession,
     dismissNewSession,
@@ -163,10 +159,3 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
     toggleExpanded,
   };
 }
-
-function sameDirectory(left: string, right: string): boolean {
-  return normalizeDirectory(left) === normalizeDirectory(right);
-}
-
-const normalizeDirectory = (value: string): string =>
-  value.replaceAll("\\", "/").replace(/\/+$/, "");

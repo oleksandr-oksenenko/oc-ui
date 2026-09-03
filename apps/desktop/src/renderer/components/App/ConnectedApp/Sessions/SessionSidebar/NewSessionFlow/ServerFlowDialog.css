@@ -58,8 +58,7 @@
 }
 
 .new-session-project-picker,
-.new-session-location-choice,
-.new-session-worktree-form {
+.new-session-location-choice {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -235,26 +234,22 @@
   line-height: var(--oc-type-body-line-height);
 }
 
-.new-session-source,
-.new-session-path-preview,
 .new-session-existing-worktree {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--oc-status-danger-border);
 }
 
-.new-session-source span,
-.new-session-path-preview span,
 .new-session-existing-worktree span {
   font-size: var(--oc-type-caption-size);
   line-height: 14px;
   color: var(--v2-text-text-muted);
 }
 
-.new-session-source strong,
-.new-session-source code,
-.new-session-path-preview strong,
 .new-session-existing-worktree code {
   overflow-wrap: anywhere;
   font-family: var(--oc-font-mono);
@@ -264,8 +259,7 @@
   color: var(--v2-text-text-base);
 }
 
-.new-session-source,
-.new-session-path-preview {
+.new-session-guidance {
   padding: 12px;
   border-radius: var(--oc-radius);
   background: var(--oc-surface-canvas);
@@ -303,12 +297,6 @@
 
 .server-flow-operation-error p {
   margin-top: 2px;
-}
-
-.new-session-existing-worktree {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--oc-status-danger-border);
 }
 
 .server-flow-operation-error .new-session-existing-worktree span {

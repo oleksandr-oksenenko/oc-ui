@@ -31,10 +31,13 @@ export type ModelSelection = {
 
 type ModelSelectionInput = {
   readonly api: {
-    readonly model: Pick<OpenCodeClient["model"], "list" | "default">;
+    readonly model: Pick<OpenCodeClient["model"], "default">;
     readonly session: Pick<OpenCodeClient["session"], "switchModel">;
   };
   readonly data: {
+    readonly location: {
+      readonly model: Pick<Data["location"]["model"], "list" | "sync" | "invalidate">;
+    };
     readonly session: Pick<Data["session"], "sync">;
   };
   readonly defaultLocation: LocationRef;
@@ -43,7 +46,6 @@ type ModelSelectionInput = {
 
 /** Owns the server-backed model and variant selection policy for the selected session. */
 export function createModelSelection(input: ModelSelectionInput): ModelSelection {
-  const [catalog, setCatalog] = createSignal<readonly ModelInfo[]>([]);
   const [serverDefault, setServerDefault] = createSignal<ModelInfo>();
   const [state, setState] = createSignal<ModelSelectionState>("loading");
   const [loadError, setLoadError] = createSignal<string>();
@@ -54,7 +56,9 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
   const [switchingIDs, setSwitchingIDs] = createSignal<ReadonlySet<string>>(new Set());
   let inFlight: Promise<void> | undefined;
 
-  const models = createMemo(() => catalog().filter((model) => model.enabled));
+  const models = createMemo(() =>
+    (input.data.location.model.list(input.defaultLocation) ?? []).filter((model) => model.enabled),
+  );
   const choices = createMemo<readonly ModelSelectionChoice[]>(() =>
     models().map((model) => ({
       id: modelChoiceID(model),
@@ -101,15 +105,14 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
       setLoadError(undefined);
       try {
         const location = input.defaultLocation;
-        const [listed, fallback] = await Promise.all([
-          input.api.model.list({ location }),
+        input.data.location.model.invalidate(location);
+        const [, fallback] = await Promise.all([
+          input.data.location.model.sync(location),
           input.api.model.default({ location }),
         ]);
-        setCatalog(listed.data);
         setServerDefault(fallback.data ?? undefined);
         setState("ready");
       } catch (cause) {
-        setCatalog([]);
         setServerDefault(undefined);
         setState("failed");
         setLoadError("Models could not be loaded. Check the connection and try again.");

@@ -32,7 +32,11 @@ export function SessionFlowsRegion(props: SessionFlowsRegionProps) {
           <DeleteSessionFlow
             session={current().session}
             subtreeIDs={current().subtreeIDs}
-            worktree={current().worktree}
+            subtreeSessions={current().subtreeSessions}
+            sessions={props.flows.sessions}
+            sessionIDs={props.flows.sessionIDs}
+            syncCatalog={props.flows.syncCatalog}
+            listWorktrees={props.runtime.api.worktree.list}
             removeSession={props.runtime.api.session.remove}
             removeWorktree={props.runtime.api.worktree.remove}
             deletionStatusForSession={props.flows.deletionStatusForSession}
