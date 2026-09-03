@@ -1,9 +1,15 @@
 import type { LocationRef, OpenCodeClient, Project, SessionInfo } from "@opencode-ai/client";
 import type { Data } from "@opencode-ai/client/solid";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
+import { showToast, toaster } from "@opencode-ai/ui/toast";
 import { createMemo, createSignal, onCleanup, onMount } from "solid-js";
 
 import type { SessionCatalog } from "../../../../../opencode/session-catalog.ts";
+import {
+  createSessionWorktree,
+  SessionWorktreeError,
+  type SessionWorktreeInput,
+} from "../../../../../opencode/create-session-worktree.ts";
 import {
   AddProjectDialog,
   type AddProjectDialogError,
@@ -17,14 +23,15 @@ import {
 } from "./NewSessionFlow/NewSessionDialog.tsx";
 import { restoreDialogFocusAfterClose } from "../../../../../ui/restoreDialogFocusAfterClose.ts";
 import { useServerFlowDismissBlock } from "../../../../../ui/ServerFlowDialogProvider.tsx";
-import { serverPathChild } from "../../../../../ui/serverPath.ts";
+
+type NewSessionFlowApi = SessionWorktreeInput["api"] & {
+  readonly file: Pick<OpenCodeClient["file"], "list">;
+  readonly project: Pick<OpenCodeClient["project"], "current">;
+};
 
 export type NewSessionFlowRuntime = {
-  readonly api: {
-    readonly file: { readonly list: OpenCodeClient["file"]["list"] };
-    readonly project: { readonly current: OpenCodeClient["project"]["current"] };
-    readonly worktree: { readonly create: OpenCodeClient["worktree"]["create"] };
-  };
+  readonly api: NewSessionFlowApi;
+  readonly onShellExited: SessionWorktreeInput["onShellExited"];
   readonly data: {
     readonly project: {
       readonly list: Data["project"]["list"];
@@ -54,18 +61,18 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   const setDismissBlocked = useServerFlowDismissBlock();
   let activeDialog = dialog.active;
   let closingFlow = false;
-  const [step, setStep] = createSignal<"select-project" | "worktree">("select-project");
   const [selectedProjectID, setSelectedProjectID] = createSignal<string>();
   const [mode, setMode] = createSignal<NewSessionLocationMode>("direct");
-  const [parentLocation, setParentLocation] = createSignal<LocationRef>();
   const [selectedLocation, setSelectedLocation] = createSignal<LocationRef>();
-  const [folderName, setFolderName] = createSignal("");
   const [projectsLoading, setProjectsLoading] = createSignal(true);
   const [projectsError, setProjectsError] = createSignal<string>();
   const [error, setError] = createSignal<NewSessionDialogError>();
   const [mutation, setMutation] = createSignal<"creating-worktree" | "creating-session">();
   const [addingProject, setAddingProject] = createSignal(false);
   const [addProjectError, setAddProjectError] = createSignal<AddProjectDialogError>();
+  let retainedToast:
+    | { readonly id: ReturnType<typeof showToast>; readonly location?: LocationRef }
+    | undefined;
 
   const showOwnedDialog = (
     element: Parameters<typeof dialog.show>[0],
@@ -96,38 +103,14 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
     return project && location ? { ...project, location } : project;
   };
 
-  const worktreeProject = () => {
-    const selected = selectedProject();
-    return selected?.vcs === "git" ? selected : undefined;
-  };
-
-  const finalDirectory = () =>
-    folderName().trim() === ""
-      ? (parentLocation()?.directory ?? "")
-      : serverPathChild(parentLocation()?.directory ?? "", folderName().trim());
-
-  const state = createMemo<NewSessionDialogState>(() => {
-    const project = worktreeProject();
-    if (step() === "worktree" && project) {
-      return {
-        view: "worktree",
-        project,
-        parentLocation: parentLocation(),
-        folderName: folderName(),
-        finalDirectory: finalDirectory(),
-        error: error(),
-      };
-    }
-    return {
-      view: "select-project",
-      projects: projects(),
-      selectedProjectID: selectedProjectID(),
-      mode: mode(),
-      projectsLoading: projectsLoading(),
-      projectsError: projectsError(),
-      error: error(),
-    };
-  });
+  const state = createMemo<NewSessionDialogState>(() => ({
+    projects: projects(),
+    selectedProjectID: selectedProjectID(),
+    mode: mode(),
+    projectsLoading: projectsLoading(),
+    projectsError: projectsError(),
+    error: error(),
+  }));
 
   const syncProjects = async (): Promise<void> => {
     setProjectsLoading(true);
@@ -156,17 +139,34 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
     setError(undefined);
   };
 
-  const openWorktreeForm = (projectID: string): void => {
-    const project = projects().find((candidate) => candidate.id === projectID);
-    if (!project || project.vcs !== "git") {
-      setMode("direct");
+  const showRetainedWorktreeToast = (location: LocationRef | undefined): void => {
+    const id = showToast({
+      title: "Worktree retained",
+      description: location
+        ? `The worktree remains at ${location.directory}.`
+        : "A worktree may remain on the server. Inspect it manually before trying again.",
+      persistent: true,
+    });
+    retainedToast = { id, location };
+  };
+
+  const showUncertainWorktreeToast = (location: LocationRef | undefined): void => {
+    const id = showToast({
+      title: "Worktree status uncertain",
+      description: location
+        ? `The operation could not be confirmed. Inspect ${location.directory} manually before trying again.`
+        : "The operation could not be confirmed. Inspect the server manually before trying again.",
+      persistent: true,
+    });
+    retainedToast = { id, location };
+  };
+
+  const dismissRetainedWorktreeToast = (location: LocationRef | undefined): void => {
+    if (retainedToast === undefined || !sameLocation(retainedToast.location, location)) {
       return;
     }
-    setSelectedProjectID(projectID);
-    setParentLocation(undefined);
-    setFolderName("");
-    setError(undefined);
-    setStep("worktree");
+    toaster.dismiss(retainedToast.id);
+    retainedToast = undefined;
   };
 
   const createSessionAt = async (
@@ -181,25 +181,29 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       location,
     });
     props.runtime.sessions.admit(created.id);
+    const finishSession = (sessionID: string): void => {
+      if (closingFlow) return;
+      props.onSessionCreated(sessionID);
+      dismissRetainedWorktreeToast(worktreeLocation);
+      if (dialog.active === activeDialog) dialog.close();
+    };
     try {
       const session = await created.request;
-      if (closingFlow) return;
-      props.onSessionCreated(session.id);
-      if (dialog.active === activeDialog) dialog.close();
+      finishSession(session.id);
     } catch {
       // A session.created event can arrive before its SessionInfo hydration
-      // finishes. Wait for that authoritative refresh before rolling back the
-      // optimistic catalog admission.
+      // finishes. Wait for that authoritative refresh before rolling back.
       await props.runtime.data.session.sync(created.id).catch(() => undefined);
       const accepted = props.runtime.data.session.get(created.id);
       if (accepted?.id === created.id) {
-        if (closingFlow) return;
-        props.onSessionCreated(created.id);
-        if (dialog.active === activeDialog) dialog.close();
+        finishSession(created.id);
         return;
       }
       props.runtime.sessions.remove(created.id);
-      if (closingFlow) return;
+      if (worktreeLocation) showRetainedWorktreeToast(worktreeLocation);
+      if (closingFlow) {
+        return;
+      }
       setError({
         kind: "session",
         message: worktreeLocation
@@ -213,71 +217,76 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
   };
 
   const useProject = (projectID: string): void => {
+    if (closingFlow || mutation() !== undefined) return;
     const project =
       projectID === selectedProjectID()
         ? selectedProject()
         : projects().find((candidate) => candidate.id === projectID);
     if (!project) {
-      setError({ kind: "validation", field: "project", message: "Choose a project." });
+      setError({ kind: "validation", message: "Choose a project." });
       return;
     }
     void createSessionAt(project, project.location);
   };
 
   const createWorktree = async (): Promise<void> => {
-    const project = worktreeProject();
-    if (!project) {
-      setStep("select-project");
-      setError({ kind: "validation", field: "project", message: "Choose a Git project." });
-      return;
-    }
-    const parent = parentLocation();
-    if (!parent || parent.directory.trim() === "") {
-      setError({
-        kind: "validation",
-        field: "parent-directory",
-        message: "Choose a parent directory.",
-      });
-      return;
-    }
-    const name = folderName().trim();
-    if (name === "" || name === "." || name === ".." || name.includes("/") || name.includes("\\")) {
-      setError({
-        kind: "validation",
-        field: "folder-name",
-        message: "Use one folder name without slashes.",
-      });
+    if (closingFlow || mutation() !== undefined) return;
+    const project = selectedProject();
+    if (!project || project.vcs !== "git") {
+      setError({ kind: "validation", message: "Choose a Git project." });
       return;
     }
 
     setMutation("creating-worktree");
     setError(undefined);
     try {
-      const created = await props.runtime.api.worktree.create({
-        projectID: project.id,
-        strategy: "git",
-        from: project.location.directory,
-        directory: parent.directory,
-        name,
+      const created = await createSessionWorktree(
+        {
+          api: props.runtime.api,
+          onShellExited: props.runtime.onShellExited,
+          isCurrent: () => !closingFlow,
+        },
+        project.location,
+      );
+      if (created.fetchError) {
+        showToast({
+          title: "Could not update from origin.",
+          description: "Using the last fetched default branch.",
+          persistent: true,
+        });
+      }
+      if (closingFlow) {
+        showRetainedWorktreeToast(created.location);
+        return;
+      }
+      await createSessionAt(project, created.location, created.location);
+    } catch (cause) {
+      const worktreeError = cause instanceof SessionWorktreeError ? cause : undefined;
+      const details = worktreeError?.message ?? "The worktree could not be created.";
+      const retainedLocation = worktreeError?.location;
+      if (worktreeError?.uncertain) showUncertainWorktreeToast(retainedLocation);
+      else if (retainedLocation) showRetainedWorktreeToast(retainedLocation);
+      if (closingFlow) {
+        return;
+      }
+      setError({
+        kind: "worktree",
+        message: details,
+        worktreeLocation: retainedLocation,
       });
-      const worktreeLocation = { ...parent, directory: created.directory };
-      await createSessionAt(project, worktreeLocation, worktreeLocation);
-    } catch {
-      setError({ kind: "worktree", message: "The worktree could not be created." });
+    } finally {
       setMutation(undefined);
     }
   };
 
-  const retry = (target: "worktree" | "session"): void => {
-    const project = worktreeProject();
+  const retry = (): void => {
+    if (closingFlow || mutation() !== undefined) return;
+    const project = selectedProject();
     if (!project) return;
-    if (target === "worktree") {
-      void createWorktree();
-      return;
-    }
     const current = error();
-    if (current?.kind === "session" && current.worktreeLocation) {
-      void createSessionAt(project, current.worktreeLocation, current.worktreeLocation);
+    if (current?.kind === "session") {
+      const location = current.worktreeLocation ?? project.location;
+      void createSessionAt(project, location, current.worktreeLocation);
     }
   };
 
@@ -296,12 +305,10 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
       setSelectedProjectID(current.id);
       setSelectedLocation(location);
       if (projects().find((project) => project.id === current.id)?.vcs !== "git") setMode("direct");
+      setError(undefined);
       added = true;
     } catch {
-      setAddProjectError({
-        kind: "add-project",
-        message: "The project could not be added.",
-      });
+      setAddProjectError({ kind: "add-project", message: "The project could not be added." });
     } finally {
       setAddingProject(false);
     }
@@ -313,7 +320,6 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
     showOwnedDialog(
       () => (
         <NewSessionDialog
-          listDirectory={props.runtime.api.file.list}
           state={state()}
           mutation={mutation()}
           onDismissBlockedChange={setDismissBlocked}
@@ -324,22 +330,9 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
             setMode(next);
             setError(undefined);
           }}
-          onOpenWorktreeForm={openWorktreeForm}
-          onWorktreeParentChange={(location) => {
-            setParentLocation(location);
-            setError((current) => (current?.kind === "session" ? current : undefined));
-          }}
-          onWorktreeNameChange={(name) => {
-            setFolderName(name);
-            setError(undefined);
-          }}
           onRetryProjects={() => void syncProjects()}
           onUseProject={useProject}
           onCreateWorktree={() => void createWorktree()}
-          onBack={() => {
-            setStep("select-project");
-            setError(undefined);
-          }}
           onRetry={retry}
         />
       ),
@@ -392,4 +385,13 @@ function projectOption(project: Project, workspaceID?: string): NewSessionProjec
       : { directory: project.canonical },
     vcs: project.vcs,
   };
+}
+
+function sameLocation(left: LocationRef | undefined, right: LocationRef | undefined): boolean {
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.directory === right.directory &&
+    left.workspaceID === right.workspaceID
+  );
 }

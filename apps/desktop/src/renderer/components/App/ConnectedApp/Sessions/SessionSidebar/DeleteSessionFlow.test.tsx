@@ -4,17 +4,119 @@ import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ServerFlowDialogProvider } from "../../../../../ui/ServerFlowDialogProvider.tsx";
-import { DeleteSessionFlow } from "./DeleteSessionFlow.tsx";
+import { DeleteSessionFlow, type DeleteSessionFlowProps } from "./DeleteSessionFlow.tsx";
 
-const session: SessionInfo = {
-  id: "root",
-  title: "Remove old experiment",
-  projectID: "project",
+const session = (
+  id: string,
+  directory = "/worktree/src",
+  parentID?: string,
+  options: { projectID?: string; workspaceID?: string } = {},
+): SessionInfo => ({
+  id,
+  parentID,
+  title: id,
+  projectID: options.projectID ?? "project",
   cost: 0,
   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   time: { created: 1, updated: 1 },
-  location: { directory: "/project" },
-};
+  location: {
+    directory,
+    workspaceID: options.workspaceID,
+  },
+});
+
+const root = session("root");
+
+function setup(
+  currentSessions: readonly SessionInfo[] = [root],
+  overrides: Partial<DeleteSessionFlowProps> = {},
+) {
+  const capturedSession = currentSessions[0] ?? root;
+  const [sessions, setSessions] = createSignal<readonly SessionInfo[]>(currentSessions);
+  const [catalogIDs, setCatalogIDs] = createSignal<readonly string[]>(
+    currentSessions.map(({ id }) => id),
+  );
+  const syncCatalog = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  const listWorktrees = vi
+    .fn<OpenCodeClient["worktree"]["list"]>()
+    .mockResolvedValue([{ directory: "/worktree", strategy: "git" }]);
+  const removeSession = vi.fn<OpenCodeClient["session"]["remove"]>().mockResolvedValue(undefined);
+  const removeWorktree = vi.fn<OpenCodeClient["worktree"]["remove"]>().mockResolvedValue(undefined);
+  const onDeleted = vi.fn<(sessionIDs: readonly string[]) => void>().mockImplementation((ids) => {
+    setSessions((current) => current.filter(({ id }) => !ids.includes(id)));
+    setCatalogIDs((current) => current.filter((id) => !ids.includes(id)));
+  });
+  const props: DeleteSessionFlowProps = {
+    session: capturedSession,
+    subtreeIDs: [capturedSession.id],
+    subtreeSessions: [capturedSession],
+    sessions,
+    sessionIDs: catalogIDs,
+    syncCatalog,
+    listWorktrees,
+    removeSession,
+    removeWorktree,
+    deletionStatusForSession: () => "ready",
+    onDeleted,
+    onDismiss: () => undefined,
+    ...overrides,
+  };
+  return {
+    props,
+    sessions,
+    syncCatalog,
+    listWorktrees: props.listWorktrees,
+    removeSession,
+    removeWorktree,
+    onDeleted,
+  };
+}
+
+function findDeleteButton(): HTMLButtonElement {
+  const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+    (item) => item.textContent?.trim() === "Delete session",
+  );
+  if (candidate === undefined) throw new Error("Delete session button was not rendered");
+  return candidate;
+}
+
+function mount(fixture: ReturnType<typeof setup>) {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const [visible, setVisible] = createSignal(true);
+  const onDismiss = vi.fn<() => void>(() => setVisible(false));
+  const rootDispose = render(
+    () => (
+      <ServerFlowDialogProvider>
+        <Show when={visible()}>
+          <DeleteSessionFlow {...fixture.props} onDismiss={onDismiss} />
+        </Show>
+      </ServerFlowDialogProvider>
+    ),
+    host,
+  );
+  return {
+    get root() {
+      return [...document.querySelectorAll<HTMLElement>("[data-dialog-layer]")].at(-1)!;
+    },
+    get deleteButton() {
+      return findDeleteButton();
+    },
+    onDismiss,
+    dispose: () => {
+      rootDispose();
+      host.remove();
+    },
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -22,313 +124,439 @@ afterEach(() => {
 
 describe("DeleteSessionFlow", () => {
   it("closes cleanly when its owner unmounts during dismissal", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const removeSession = vi.fn<OpenCodeClient["session"]["remove"]>().mockResolvedValue(undefined);
-    const removeWorktree = vi
-      .fn<OpenCodeClient["worktree"]["remove"]>()
-      .mockResolvedValue(undefined);
-    const dispose = render(() => {
-      const [open, setOpen] = createSignal(true);
-      return (
-        <ServerFlowDialogProvider>
-          <Show when={open()}>
-            <DeleteSessionFlow
-              session={session}
-              subtreeIDs={["root"]}
-              removeSession={removeSession}
-              removeWorktree={removeWorktree}
-              deletionStatusForSession={() => "ready"}
-              onDeleted={() => undefined}
-              onDismiss={() => setOpen(false)}
-            />
-          </Show>
-        </ServerFlowDialogProvider>
-      );
-    }, host);
-
+    const fixture = setup();
+    const mounted = mount(fixture);
     const cancelButton = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+      const candidate = [...mounted.root.querySelectorAll<HTMLButtonElement>("button")].find(
         (item) => item.textContent?.trim() === "Cancel",
       );
       if (candidate === undefined) throw new Error("Cancel button was not rendered");
       return candidate;
     });
     cancelButton.click();
-
-    await vi.waitFor(() => {
-      expect(document.body.textContent).not.toContain("Delete session?");
-    });
-
-    dispose();
+    await vi.waitFor(() => expect(document.body.textContent).not.toContain("Delete session?"));
+    mounted.dispose();
   });
 
-  it("deletes the session subtree and its worktree from one confirmation", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const removeSession = vi.fn<OpenCodeClient["session"]["remove"]>().mockResolvedValue(undefined);
-    const removeWorktree = vi
-      .fn<OpenCodeClient["worktree"]["remove"]>()
-      .mockResolvedValue(undefined);
-    const onDeleted = vi.fn<(sessionIDs: readonly string[]) => void>();
-    const dispose = render(
-      () => (
-        <ServerFlowDialogProvider>
-          <DeleteSessionFlow
-            session={session}
-            subtreeIDs={["root", "child", "grandchild"]}
-            worktree={{ projectID: "project", directory: "/worktrees/experiment" }}
-            removeSession={removeSession}
-            removeWorktree={removeWorktree}
-            deletionStatusForSession={() => "ready"}
-            onDeleted={onDeleted}
-            onDismiss={() => undefined}
-          />
-        </ServerFlowDialogProvider>
-      ),
-      host,
-    );
-
+  it("refreshes before deleting and removes each unused registered Git worktree", async () => {
+    const fixture = setup();
+    const mounted = mount(fixture);
     const button = await vi.waitFor(() => {
-      expect(document.body.textContent).toContain("This will also delete 2 child sessions.");
       expect(document.body.textContent).toContain(
-        "The worktree at /worktrees/experiment, including uncommitted changes and its branch, will also be permanently deleted.",
+        "Unused registered Git worktrees may also be permanently removed, including uncommitted changes.",
       );
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
-      expect(candidate).not.toBeUndefined();
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
-      return candidate;
+      return mounted.deleteButton;
     });
     button.click();
-
     await vi.waitFor(() => {
-      expect(removeSession).toHaveBeenCalledWith({ sessionID: "root" });
-      expect(removeWorktree).toHaveBeenCalledWith({
+      expect(fixture.removeSession).toHaveBeenCalledWith({ sessionID: "root" });
+      expect(fixture.removeWorktree).toHaveBeenCalledWith({
         projectID: "project",
-        directory: "/worktrees/experiment",
+        directory: "/worktree",
         force: true,
       });
-      expect(onDeleted).toHaveBeenCalledWith(["root", "child", "grandchild"]);
+      expect(fixture.onDeleted).toHaveBeenCalledWith(["root"]);
+      expect(fixture.syncCatalog).toHaveBeenCalledTimes(2);
     });
-    expect(removeSession.mock.invocationCallOrder[0]).toBeLessThan(
-      removeWorktree.mock.invocationCallOrder[0] ?? 0,
+    expect(fixture.listWorktrees).toHaveBeenCalledOnce();
+    expect(fixture.removeSession.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.removeWorktree.mock.invocationCallOrder[0] ?? 0,
     );
-
-    dispose();
+    mounted.dispose();
   });
 
-  it("rechecks running state when the user confirms", async () => {
+  it("deduplicates roots and caches one worktree listing per project", async () => {
+    const duplicate = session("duplicate", "/worktree/src/deep", "root");
+    const second = session("second", "/other/src", "root", { projectID: "other-project" });
+    const fixture = setup([root, duplicate, second], {
+      subtreeIDs: ["root", "duplicate", "second"],
+      subtreeSessions: [root, duplicate, second],
+      listWorktrees: vi
+        .fn<OpenCodeClient["worktree"]["list"]>()
+        .mockImplementation(async ({ projectID }) =>
+          projectID === "other-project"
+            ? [{ directory: "/other", strategy: "git" }]
+            : [{ directory: "/worktree", strategy: "git" }],
+        ),
+    });
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledTimes(2));
+    expect(fixture.removeWorktree).toHaveBeenNthCalledWith(1, {
+      projectID: "project",
+      directory: "/worktree",
+      force: true,
+    });
+    expect(fixture.removeWorktree).toHaveBeenNthCalledWith(2, {
+      projectID: "other-project",
+      directory: "/other",
+      force: true,
+    });
+    expect(fixture.listWorktrees).toHaveBeenNthCalledWith(1, { projectID: "project" });
+    expect(fixture.listWorktrees).toHaveBeenNthCalledWith(2, { projectID: "other-project" });
+    expect(fixture.listWorktrees).toHaveBeenCalledTimes(2);
+    mounted.dispose();
+  });
+
+  it("does not start another worktree removal after its owner closes", async () => {
+    const second = session("second", "/other/src", "root");
+    const fixture = setup([root, second], {
+      subtreeIDs: ["root", "second"],
+      subtreeSessions: [root, second],
+      listWorktrees: vi.fn<OpenCodeClient["worktree"]["list"]>().mockResolvedValue([
+        { directory: "/worktree", strategy: "git" },
+        { directory: "/other", strategy: "git" },
+      ]),
+    });
+    const firstRemoval = deferred<void>();
+    fixture.removeWorktree.mockImplementationOnce(() => firstRemoval.promise);
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledOnce());
+    mounted.dispose();
+    firstRemoval.resolve();
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+    expect(fixture.removeWorktree).toHaveBeenCalledOnce();
+  });
+
+  it("does not let stale cleanup close or unblock a replacement flow", async () => {
+    const oldFixture = setup();
+    const oldRemoval = deferred<void>();
+    oldFixture.removeWorktree.mockImplementationOnce(() => oldRemoval.promise);
+
+    const replacementSession = session("replacement");
+    const replacementFixture = setup([replacementSession], {
+      session: replacementSession,
+      subtreeIDs: [replacementSession.id],
+      subtreeSessions: [replacementSession],
+    });
+    const replacementRemoval = deferred<void>();
+    replacementFixture.removeWorktree.mockImplementationOnce(() => replacementRemoval.promise);
+
     const host = document.createElement("div");
     document.body.append(host);
-    const removeSession = vi.fn<OpenCodeClient["session"]["remove"]>().mockResolvedValue(undefined);
-    const removeWorktree = vi
-      .fn<OpenCodeClient["worktree"]["remove"]>()
-      .mockResolvedValue(undefined);
-    const dispose = render(
+    const [flow, setFlow] = createSignal<"old" | "replacement">("old");
+    const rootDispose = render(
       () => (
         <ServerFlowDialogProvider>
-          <DeleteSessionFlow
-            session={session}
-            subtreeIDs={["root", "child"]}
-            removeSession={removeSession}
-            removeWorktree={removeWorktree}
-            deletionStatusForSession={() => "running"}
-            onDeleted={() => undefined}
-            onDismiss={() => undefined}
-          />
+          <Show when={flow() === "old"}>
+            <DeleteSessionFlow {...oldFixture.props} />
+          </Show>
+          <Show when={flow() === "replacement"}>
+            <DeleteSessionFlow {...replacementFixture.props} />
+          </Show>
         </ServerFlowDialogProvider>
       ),
       host,
     );
 
-    const button = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
-      expect(candidate).not.toBeUndefined();
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
-      return candidate;
-    });
-    button.click();
+    (await vi.waitFor(findDeleteButton)).click();
+    await vi.waitFor(() => expect(oldFixture.removeWorktree).toHaveBeenCalledOnce());
 
-    await vi.waitFor(() => {
-      expect(document.body.textContent).toContain(
-        "Wait for this session and its child sessions to finish before deleting.",
-      );
-    });
-    expect(removeSession).not.toHaveBeenCalled();
-    expect(removeWorktree).not.toHaveBeenCalled();
+    setFlow("replacement");
+    await vi.waitFor(() => expect(document.body.textContent).toContain("replacement"));
+    (await vi.waitFor(findDeleteButton)).click();
+    await vi.waitFor(() => expect(replacementFixture.removeWorktree).toHaveBeenCalledOnce());
 
-    dispose();
+    oldRemoval.resolve();
+    await Promise.resolve();
+    const escape = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Escape",
+    });
+    window.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+
+    replacementRemoval.resolve();
+    rootDispose();
+    host.remove();
   });
 
-  it("finishes worktree cleanup when the session was removed externally", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const removeSession = vi.fn<OpenCodeClient["session"]["remove"]>().mockResolvedValue(undefined);
-    const removeWorktree = vi
-      .fn<OpenCodeClient["worktree"]["remove"]>()
-      .mockResolvedValue(undefined);
-    const onDeleted = vi.fn<(sessionIDs: readonly string[]) => void>();
-    const dispose = render(
-      () => (
-        <ServerFlowDialogProvider>
-          <DeleteSessionFlow
-            session={session}
-            subtreeIDs={["root", "child"]}
-            worktree={{ projectID: "project", directory: "/worktrees/experiment" }}
-            removeSession={removeSession}
-            removeWorktree={removeWorktree}
-            deletionStatusForSession={() => "removed"}
-            onDeleted={onDeleted}
-            onDismiss={() => undefined}
-          />
-        </ServerFlowDialogProvider>
-      ),
-      host,
-    );
+  it.each(["/worktree", "/worktree/src/deep", "/worktree/missing/src"])(
+    "retains a candidate used by a surviving stored path: %s",
+    async (directory) => {
+      const survivor = session("survivor", directory, undefined, { projectID: "nested-project" });
+      const fixture = setup([root, survivor]);
+      const mounted = mount(fixture);
+      (await vi.waitFor(() => mounted.deleteButton)).click();
+      await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
+      expect(fixture.removeWorktree).not.toHaveBeenCalled();
+      mounted.dispose();
+    },
+  );
 
-    const button = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
-      return candidate;
+  it.each([
+    { directory: "/old-worktree", removed: true },
+    { directory: "/worktree-old/src", removed: true },
+    { directory: "/worktree\\old", removed: true },
+    { directory: "/worktree/", removed: false },
+    { directory: "/worktree/missing/src", removed: false },
+  ])(
+    "uses the stored path boundary when deciding whether a missing path blocks cleanup: $directory",
+    async ({ directory, removed }) => {
+      const survivor = session("survivor", directory);
+      const fixture = setup([root, survivor]);
+      const mounted = mount(fixture);
+      (await vi.waitFor(() => mounted.deleteButton)).click();
+      await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
+      expect(fixture.removeWorktree).toHaveBeenCalledTimes(removed ? 1 : 0);
+      expect(fixture.sessions()).toEqual([survivor]);
+      mounted.dispose();
+    },
+  );
+
+  it("skips a primary worktree with omitted strategy and an unregistered path", async () => {
+    const primary = session("primary", "/project/src");
+    const unregistered = session("unregistered", "/unregistered/src", "primary");
+    const fixture = setup([primary, unregistered], {
+      session: primary,
+      subtreeIDs: ["primary", "unregistered"],
+      subtreeSessions: [primary, unregistered],
+      listWorktrees: vi
+        .fn<OpenCodeClient["worktree"]["list"]>()
+        .mockResolvedValue([{ directory: "/project" }, { directory: "/other", strategy: "git" }]),
     });
-    button.click();
-
-    await vi.waitFor(() => {
-      expect(removeWorktree).toHaveBeenCalledWith({
-        projectID: "project",
-        directory: "/worktrees/experiment",
-        force: true,
-      });
-      expect(onDeleted).toHaveBeenCalledWith(["root", "child"]);
-    });
-    expect(removeSession).not.toHaveBeenCalled();
-
-    dispose();
-  });
-
-  it("retries only worktree cleanup after session deletion succeeds", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const removeSession = vi.fn<OpenCodeClient["session"]["remove"]>().mockResolvedValue(undefined);
-    const removeWorktree = vi
-      .fn<OpenCodeClient["worktree"]["remove"]>()
-      .mockRejectedValueOnce(new Error("busy"))
-      .mockResolvedValue(undefined);
-    const deletionStatusForSession = vi
-      .fn<(sessionID: string) => "ready" | "running" | "removed">()
-      .mockReturnValueOnce("ready")
-      .mockReturnValue("removed");
-    const onDeleted = vi.fn<(sessionIDs: readonly string[]) => void>();
-    const dispose = render(
-      () => (
-        <ServerFlowDialogProvider>
-          <DeleteSessionFlow
-            session={session}
-            subtreeIDs={["root"]}
-            worktree={{ projectID: "project", directory: "/worktrees/experiment" }}
-            removeSession={removeSession}
-            removeWorktree={removeWorktree}
-            deletionStatusForSession={deletionStatusForSession}
-            onDeleted={onDeleted}
-            onDismiss={() => undefined}
-          />
-        </ServerFlowDialogProvider>
-      ),
-      host,
-    );
-
-    const deleteButton = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
-      return candidate;
-    });
-    deleteButton.click();
-
-    const finishButton = await vi.waitFor(() => {
-      expect(document.body.textContent).toContain(
-        "The session was deleted, but its worktree could not be removed.",
-      );
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Finish deletion",
-      );
-      if (candidate === undefined) throw new Error("Finish deletion button was not rendered");
-      return candidate;
-    });
-    finishButton.click();
-
-    await vi.waitFor(() => {
-      expect(removeSession).toHaveBeenCalledTimes(1);
-      expect(removeWorktree).toHaveBeenCalledTimes(2);
-      expect(deletionStatusForSession).toHaveBeenCalledTimes(1);
-      expect(onDeleted).toHaveBeenCalledWith(["root"]);
-    });
-
-    dispose();
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
+    expect(fixture.listWorktrees).toHaveBeenCalledOnce();
+    expect(fixture.removeWorktree).not.toHaveBeenCalled();
+    mounted.dispose();
   });
 
   it.each([
-    ["Cancel", (button: HTMLButtonElement) => button.textContent?.trim() === "Cancel"],
-    [
-      "the close button",
-      (button: HTMLButtonElement) =>
-        button.getAttribute("aria-label") === "Close delete session dialog",
-    ],
-  ])("can dismiss with %s after deletion fails", async (_label, matchesButton) => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const removeSession = vi
-      .fn<OpenCodeClient["session"]["remove"]>()
-      .mockRejectedValue(new Error("offline"));
-    const removeWorktree = vi
-      .fn<OpenCodeClient["worktree"]["remove"]>()
-      .mockResolvedValue(undefined);
-    const onDismiss = vi.fn<() => void>();
-    const dispose = render(
-      () => (
-        <ServerFlowDialogProvider>
-          <DeleteSessionFlow
-            session={session}
-            subtreeIDs={["root"]}
-            removeSession={removeSession}
-            removeWorktree={removeWorktree}
-            deletionStatusForSession={() => "ready"}
-            onDeleted={() => undefined}
-            onDismiss={onDismiss}
-          />
-        </ServerFlowDialogProvider>
+    { strategy: "git", removed: "/trees/nested" },
+    { strategy: "none", removed: undefined },
+    { strategy: undefined, removed: undefined },
+  ])(
+    "selects the closest registered root before applying its strategy ($strategy)",
+    async ({ strategy, removed }) => {
+      const deleted = session("deleted", "/trees/nested/src");
+      const fixture = setup([deleted], {
+        session: deleted,
+        subtreeIDs: ["deleted"],
+        subtreeSessions: [deleted],
+        listWorktrees: vi.fn<OpenCodeClient["worktree"]["list"]>().mockResolvedValue([
+          { directory: "/trees", strategy: "git" },
+          { directory: "/trees/nested", strategy },
+        ]),
+      });
+      const mounted = mount(fixture);
+      (await vi.waitFor(() => mounted.deleteButton)).click();
+      await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
+      expect(vi.mocked(fixture.removeWorktree).mock.calls).toEqual(
+        removed === undefined ? [] : [[{ projectID: "project", directory: removed, force: true }]],
+      );
+      mounted.dispose();
+    },
+  );
+
+  it("retains a candidate used by a nested repository in another project", async () => {
+    const survivor = session("survivor", "/worktree/nested-repo/src", undefined, {
+      projectID: "nested-project",
+    });
+    const fixture = setup([root, survivor]);
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
+    expect(fixture.removeWorktree).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
+  it("continues session deletion when worktree discovery fails and retains its path", async () => {
+    const listWorktrees = vi
+      .fn<OpenCodeClient["worktree"]["list"]>()
+      .mockRejectedValueOnce(new Error("offline"));
+    const fixture = setup([root], { listWorktrees });
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
+    expect(fixture.removeSession).toHaveBeenCalledWith({ sessionID: "root" });
+    expect(fixture.removeWorktree).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
+  it("requires the refreshed catalog to contain every session before deleting", async () => {
+    let hydrated = false;
+    const fixture = setup([root], {
+      sessionIDs: () => (hydrated ? ["root"] : ["root", "still-loading"]),
+    });
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(
+        "The session records could not be fully loaded. Retry before deleting.",
       ),
-      host,
     );
+    expect(fixture.removeSession).not.toHaveBeenCalled();
 
-    const deleteButton = await vi.waitFor(() => {
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        (item) => item.textContent?.trim() === "Delete session",
-      );
-      if (candidate === undefined) throw new Error("Delete session button was not rendered");
-      return candidate;
+    hydrated = true;
+    mounted.deleteButton.click();
+    await vi.waitFor(() => expect(fixture.removeSession).toHaveBeenCalledOnce());
+    mounted.dispose();
+  });
+
+  it("continues cleanup after one worktree removal fails", async () => {
+    const second = session("second", "/other/src", "root");
+    const fixture = setup([root, second], {
+      subtreeIDs: ["root", "second"],
+      subtreeSessions: [root, second],
+      listWorktrees: vi.fn<OpenCodeClient["worktree"]["list"]>().mockResolvedValue([
+        { directory: "/worktree", strategy: "git" },
+        { directory: "/other", strategy: "git" },
+      ]),
     });
-    deleteButton.click();
+    fixture.removeWorktree
+      .mockRejectedValueOnce(new Error("busy"))
+      .mockResolvedValueOnce(undefined);
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledTimes(2));
+    expect(fixture.removeSession).toHaveBeenCalledWith({ sessionID: "root" });
+    expect(fixture.onDeleted).toHaveBeenCalledWith(["root", "second"]);
+    mounted.dispose();
+  });
 
-    const dismissButton = await vi.waitFor(() => {
-      expect(document.body.textContent).toContain("The session could not be deleted.");
-      const candidate = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-        matchesButton,
-      );
-      if (candidate === undefined) throw new Error("Dismiss button was not rendered");
-      return candidate;
+  it("keeps the session and worktree when session deletion fails, then allows retry", async () => {
+    const fixture = setup();
+    fixture.removeSession.mockRejectedValueOnce(new Error("offline"));
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain("The session could not be deleted."),
+    );
+    expect(fixture.onDeleted).not.toHaveBeenCalled();
+    expect(fixture.removeWorktree).not.toHaveBeenCalled();
+    mounted.deleteButton.click();
+    await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledOnce());
+    expect(fixture.removeSession).toHaveBeenCalledTimes(2);
+    mounted.dispose();
+  });
+
+  it.each(["refresh failure", "incomplete records"])(
+    "retains the worktree after deletion when the final catalog has %s",
+    async (failure) => {
+      let refreshed = false;
+      const fixture = setup([root], {
+        sessionIDs: () => (refreshed ? ["unloaded"] : [root.id]),
+      });
+      fixture.syncCatalog.mockResolvedValueOnce(undefined).mockImplementationOnce(async () => {
+        if (failure === "refresh failure") throw new Error("offline");
+        refreshed = true;
+      });
+      const mounted = mount(fixture);
+      (await vi.waitFor(() => mounted.deleteButton)).click();
+      await vi.waitFor(() => expect(document.body.textContent).not.toContain("Delete session?"));
+      expect(fixture.removeSession).toHaveBeenCalledOnce();
+      expect(fixture.onDeleted).toHaveBeenCalledOnce();
+      expect(fixture.removeWorktree).not.toHaveBeenCalled();
+      mounted.dispose();
+    },
+  );
+
+  it("rechecks running state when the user confirms", async () => {
+    const fixture = setup([root], {
+      deletionStatusForSession: () => "running",
     });
-    dismissButton.click();
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(
+        "Wait for this session and its child sessions to finish before deleting.",
+      ),
+    );
+    expect(fixture.removeSession).not.toHaveBeenCalled();
+    expect(fixture.removeWorktree).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
 
-    await vi.waitFor(() => expect(onDismiss).toHaveBeenCalledOnce());
+  it("rechecks running state after cleanup discovery", async () => {
+    const fixture = setup([root], {
+      deletionStatusForSession: vi
+        .fn<(sessionID: string) => "ready" | "running" | "removed">()
+        .mockReturnValueOnce("ready")
+        .mockReturnValue("running"),
+    });
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(
+        "Wait for this session and its child sessions to finish before deleting.",
+      ),
+    );
+    expect(fixture.removeSession).not.toHaveBeenCalled();
+    expect(fixture.onDeleted).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
 
-    dispose();
+  it("keeps a worktree used by an archived nested child session", async () => {
+    const archived = {
+      ...session("archived", "/worktree/src/deep", "surviving-parent"),
+      time: { created: 1, updated: 1, archived: 1 },
+    };
+    const fixture = setup([root], {
+      sessions: () => [archived],
+      sessionIDs: () => ["archived"],
+    });
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
+    expect(fixture.removeWorktree).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
+  it("finishes cleanup when the session was removed externally", async () => {
+    const fixture = setup([], {
+      session: root,
+      subtreeIDs: ["root"],
+      subtreeSessions: [root],
+      sessions: () => [],
+      sessionIDs: () => [],
+      deletionStatusForSession: () => "removed",
+    });
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledOnce());
+    expect(fixture.removeSession).not.toHaveBeenCalled();
+    expect(fixture.removeWorktree).toHaveBeenCalledWith({
+      projectID: "project",
+      directory: "/worktree",
+      force: true,
+    });
+    mounted.dispose();
+  });
+
+  it("deletes a session in a workspace context without removing its worktree", async () => {
+    const workspaceSession = session("workspace-root", "/worktree/src", undefined, {
+      workspaceID: "remote",
+    });
+    const fixture = setup([workspaceSession], {
+      session: workspaceSession,
+      subtreeIDs: ["workspace-root"],
+      subtreeSessions: [workspaceSession],
+    });
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
+    expect(fixture.removeWorktree).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
+  it("requires a successful catalog refresh before deleting", async () => {
+    const fixture = setup();
+    fixture.syncCatalog.mockRejectedValueOnce(new Error("offline"));
+    const mounted = mount(fixture);
+    const button = await vi.waitFor(() => mounted.deleteButton);
+    button.click();
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(
+        "The session catalog could not be refreshed. Retry before deleting.",
+      ),
+    );
+    expect(fixture.removeSession).not.toHaveBeenCalled();
+    button.click();
+    await vi.waitFor(() => expect(fixture.removeSession).toHaveBeenCalledOnce());
+    mounted.dispose();
   });
 });

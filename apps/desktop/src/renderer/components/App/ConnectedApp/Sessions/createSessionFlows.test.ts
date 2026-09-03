@@ -24,14 +24,16 @@ function setup() {
   const records = [session("root"), session("child", "root")];
   const status = new Map<string, "idle" | "running">(records.map((item) => [item.id, "idle"]));
   const remove = vi.fn<SessionFlowsWorkspace["remove"]>();
+  const syncCatalog = vi.fn<SessionFlowsWorkspace["syncCatalog"]>().mockResolvedValue(undefined);
   const workspace: SessionFlowsWorkspace = {
     sessions: () => records,
+    syncCatalog,
     remove,
   };
   const runtime: SessionFlowsRuntime = {
+    sessions: { ids: () => records.map((item) => item.id) },
     data: {
       session: { status: (id: string) => status.get(id) ?? "idle" },
-      project: { list: () => [{ id: "project", sandboxes: ["/srv/worktree/"] }] },
     },
   };
   return {
@@ -42,6 +44,7 @@ function setup() {
     status,
     setStreamStatus,
     remove,
+    syncCatalog,
   };
 }
 
@@ -71,7 +74,7 @@ describe("createSessionFlows", () => {
     dispose();
   });
 
-  it("rejects running deletion and keeps the server-provided worktree path", () => {
+  it("rejects running deletion and exposes the current catalog refresh", () => {
     const fixture = setup();
     fixture.status.set("child", "running");
     let flows!: ReturnType<typeof createSessionFlows>;
@@ -95,10 +98,8 @@ describe("createSessionFlows", () => {
     expect(flows.deletionStatusForSession("root")).toBe("ready");
     expect(flows.deletionStatusForSession("missing")).toBe("removed");
     flows.openSessionDeletion("root", opener);
-    expect(flows.deletion()?.worktree).toEqual({
-      projectID: "project",
-      directory: "/srv/worktree/",
-    });
+    expect(flows.sessions()).toBe(fixture.records);
+    expect(flows.syncCatalog).toBe(fixture.workspace.syncCatalog);
     fixture.setStreamStatus("reconnecting");
     flows.dismissDeletion();
     flows.openSessionDeletion("root", opener);
