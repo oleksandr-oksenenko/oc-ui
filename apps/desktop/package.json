@@ -24,10 +24,11 @@
   },
   "dependencies": {
     "@kobalte/core": "catalog:",
-    "@opencode-ai/cli": "catalog:",
     "@opencode-ai/client": "catalog:",
     "@opencode-ai/schema": "catalog:",
+    "@opencode-ai/server": "catalog:",
     "@opencode-ai/ui": "catalog:",
+    "@opencode-ai/util": "catalog:",
     "@pierre/diffs": "catalog:",
     "@solidjs/meta": "catalog:",
     "dompurify": "catalog:",
@@ -36,6 +37,7 @@
     "solid-js": "catalog:"
   },
   "devDependencies": {
+    "@opencode-ai/cli": "catalog:",
     "@storybook/addon-a11y": "catalog:",
     "@storybook/addon-vitest": "catalog:",
     "@testing-library/jest-dom": "catalog:",
@@ -51,6 +53,7 @@
     "electron": "catalog:",
     "electron-builder": "26.15.3",
     "electron-vite": "catalog:",
+    "esbuild": "0.28.2",
     "jsdom": "catalog:",
     "playwright": "catalog:",
     "storybook": "catalog:",
