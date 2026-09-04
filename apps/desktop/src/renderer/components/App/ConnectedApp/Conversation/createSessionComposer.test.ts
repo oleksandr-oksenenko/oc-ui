@@ -213,6 +213,11 @@ describe("createSessionComposer", () => {
     await root.composer.submit();
     expect(prompt).not.toHaveBeenCalled();
 
+    root.annotationDrafts.add("session", { ...annotationInput, body: "  " });
+    await root.composer.submit();
+    expect(prompt).not.toHaveBeenCalled();
+    expect(root.annotationDrafts.get("session")).toHaveLength(1);
+
     root.composer.input("message");
     root.setConnected(false);
     expect(root.composer.disabled()).toBe(true);
@@ -304,6 +309,23 @@ describe("createSessionComposer", () => {
     });
     expect(root.composer.value()).toBe("");
     expect(root.reviewDrafts.get(key).comments).toEqual([]);
+    root.dispose();
+  });
+
+  it("omits blank annotation drafts from a valid submission", async () => {
+    const prompt = vi.fn<Prompt>((input) => Promise.resolve(promptResult(input)));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    const validID = root.annotationDrafts.add("session", annotationInput);
+    root.annotationDrafts.add("session", { ...annotationInput, body: "  " });
+
+    await root.composer.submit();
+
+    expect(prompt).toHaveBeenCalledTimes(1);
+    expect(prompt.mock.calls[0]?.[0].metadata?.[SESSION_PROMPT_METADATA_KEY]).toMatchObject({
+      annotations: [{ id: validID, body: annotationInput.body }],
+    });
+    expect(root.annotationDrafts.get("session")).toEqual([]);
     root.dispose();
   });
 
