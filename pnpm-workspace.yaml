@@ -10,7 +10,9 @@ catalog:
   "@opencode-ai/cli": 0.0.0-beta-18866
   "@opencode-ai/client": 0.0.0-beta-18866
   "@opencode-ai/schema": 0.0.0-beta-18866
+  "@opencode-ai/server": 0.0.0-beta-18866
   "@opencode-ai/ui": 0.0.0-beta-18866
+  "@opencode-ai/util": 0.0.0-beta-18866
   "@oxlint/plugins": 1.79.0
   "@pierre/diffs": 1.2.10
   "@solidjs/meta": ^0.29.4
@@ -53,12 +55,19 @@ peerDependencyRules:
 
 allowBuilds:
   "@opencode-ai/cli": true
+  "@ff-labs/fff-node": false
+  "@lydell/node-pty": false
+  "@parcel/watcher": false
+  bun-pty: false
+  tree-sitter-bash: false
+  tree-sitter-powershell: false
   edgedriver: false
   electron: true
   electron-winstaller: false
   esbuild: true
   geckodriver: false
   msgpackr-extract: false
+  protobufjs: false
 
 minimumReleaseAgeExclude:
   - "@voidzero-dev/vite-plus-core@0.3.0"
@@ -85,6 +94,8 @@ minimumReleaseAgeExclude:
   - "@opencode-ai/cli-windows-x64@0.0.0-beta-18866"
   - "@opencode-ai/cli@0.0.0-beta-18866"
   - "@opencode-ai/client@0.0.0-beta-18866"
+  - "@opencode-ai/server@0.0.0-beta-18866"
+  - "@opencode-ai/util@0.0.0-beta-18866"
   - "@opencode-ai/protocol@0.0.0-beta-18866"
   - "@opencode-ai/schema@0.0.0-beta-18866"
   - "@opencode-ai/ui@0.0.0-beta-18866"

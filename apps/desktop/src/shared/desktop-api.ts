@@ -23,6 +23,7 @@ const LocalOpenCodeConnectionSchema = Schema.Struct({
   serverUrl: Schema.String,
   password: Schema.String,
 });
+export type LocalOpenCodeConnection = typeof LocalOpenCodeConnectionSchema.Type;
 
 const LocalOpenCodeConnectResultSchema = Schema.Union([
   Schema.Struct({ status: Schema.Literal("connected"), connection: LocalOpenCodeConnectionSchema }),
@@ -39,7 +40,6 @@ export type DesktopApi = {
   };
   readonly localOpenCode: {
     readonly connect: () => Promise<LocalOpenCodeConnectResult>;
-    readonly disconnect: () => Promise<void>;
     readonly onUnavailable: (listener: () => void) => () => void;
   };
 };
@@ -49,7 +49,6 @@ export const IPC_CHANNELS = {
   targetSave: "desktop:target:save",
   targetClear: "desktop:target:clear",
   localOpenCodeConnect: "desktop:local-opencode:connect",
-  localOpenCodeDisconnect: "desktop:local-opencode:disconnect",
   localOpenCodeUnavailable: "desktop:local-opencode:unavailable",
 } as const;
 

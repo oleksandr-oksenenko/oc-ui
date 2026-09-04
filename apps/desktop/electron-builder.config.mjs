@@ -7,19 +7,29 @@ export default {
   directories: {
     output: "dist",
   },
-  files: ["out/**/*"],
+  files: ["out/main/**/*", "out/preload/**/*", "out/renderer/**/*", "!node_modules/**/*"],
   asar: true,
   extraResources: [
     {
-      from: ".packaging/opencode/opencode2",
-      to: "opencode/opencode2",
+      from: "out/opencode-runtime/opencode-worker.mjs",
+      to: "opencode-runtime/opencode-worker.mjs",
+    },
+    {
+      // electron-builder skips a source root's node_modules directory; map the
+      // package tree explicitly so native/WASM files and nested versions survive.
+      from: "out/opencode-runtime/node_modules",
+      to: "opencode-runtime/node_modules",
+      filter: ["**/*"],
     },
   ],
   dmg: {
     writeUpdateInfo: false,
   },
   mac: {
-    binaries: ["Contents/Resources/opencode/opencode2"],
+    binaries: [
+      "Contents/Resources/opencode-runtime/node_modules/@opencode-ai/pty-darwin-arm64/bin/opencode-pty",
+      "Contents/Resources/opencode-runtime/node_modules/@lydell/node-pty-darwin-arm64/prebuilds/darwin-arm64/spawn-helper",
+    ],
     category: "public.app-category.developer-tools",
     hardenedRuntime: false,
     identity: configuredIdentity ?? "-",

@@ -26,8 +26,6 @@ const desktopApi: DesktopApi = {
   localOpenCode: {
     connect: () =>
       ipcRenderer.invoke(IPC_CHANNELS.localOpenCodeConnect).then(parseLocalOpenCodeConnectResult),
-    disconnect: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.localOpenCodeDisconnect).then(parseVoidResult),
     onUnavailable: (listener) => {
       const handler = (): void => listener();
       ipcRenderer.on(IPC_CHANNELS.localOpenCodeUnavailable, handler);

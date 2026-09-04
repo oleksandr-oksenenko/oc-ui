@@ -1,223 +1,340 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import type { EnsureOptions } from "@opencode-ai/client/service";
+// @vitest-environment node
+import { EventEmitter } from "node:events";
 
-import {
-  createLocalOpenCodeService,
-  LocalOpenCodeUnavailableError,
-  LOCAL_OPENCODE_VERSION,
-  packagedOpenCodeBinaryPath,
-} from "./local-opencode.ts";
+import type { utilityProcess } from "electron";
+import type { UtilityProcess } from "electron";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const endpoint = {
-  url: "http://127.0.0.1:4096",
-  auth: { type: "basic" as const, username: "opencode", password: "test-secret" },
+import type { OpenCodeWorkerCommand } from "../shared/opencode-worker-contract.ts";
+import { createLocalOpenCodeService, LOCAL_OPENCODE_VERSION } from "./local-opencode.ts";
+
+const { fork } = vi.hoisted(() => ({ fork: vi.fn<typeof utilityProcess.fork>() }));
+const killProcess = vi.fn<typeof process.kill>();
+const fetchMock = vi.fn<typeof fetch>();
+vi.mock("electron", () => ({ utilityProcess: { fork } }));
+
+class Child extends EventEmitter implements UtilityProcess {
+  pid: number | undefined = 4242;
+  stdout = null;
+  stderr = null;
+  exitsOnStop = true;
+  kill = vi.fn<() => boolean>(() => true);
+  postMessage = vi.fn<(message: OpenCodeWorkerCommand) => void>((message) => {
+    if (message.type === "stop" && this.exitsOnStop) queueMicrotask(() => this.exit());
+  });
+
+  exit(): void {
+    this.emit("exit", 0);
+    this.pid = undefined;
+  }
+
+  listen(url = "http://127.0.0.1:4096"): void {
+    this.emit("spawn");
+    this.emit("message", { type: "listening", url });
+  }
+}
+
+const children: Child[] = [];
+const healthy = (pid = 4242, version = LOCAL_OPENCODE_VERSION): Response =>
+  Response.json({ healthy: true, version, pid });
+const create = () =>
+  createLocalOpenCodeService({
+    userDataPath: "/private/test-ocui",
+    workerPath: "/private/runtime/opencode-worker.mjs",
+  });
+const child = (): Child => {
+  const value = children.at(-1);
+  if (value === undefined) throw new Error("No worker was forked");
+  return value;
 };
 
-const healthy = (): Response =>
-  Response.json({ healthy: true, version: LOCAL_OPENCODE_VERSION, pid: 1 });
+beforeEach(() => {
+  fork.mockImplementation(() => {
+    const value = new Child();
+    children.push(value);
+    return value;
+  });
+  fetchMock.mockReset().mockImplementation(() => Promise.resolve(healthy()));
+  vi.stubGlobal("fetch", fetchMock);
+  killProcess.mockReturnValue(true);
+  vi.spyOn(process, "kill").mockImplementation(killProcess);
+});
 
 afterEach(() => {
+  for (const value of children) if (value.pid !== undefined) value.exit();
+  children.length = 0;
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
-describe("local OpenCode sidecar", () => {
-  it("starts an explicitly selected packaged binary with app-private registration state", async () => {
-    const ensure = vi.fn<(_options?: EnsureOptions) => Promise<typeof endpoint>>(() =>
-      Promise.resolve(endpoint),
-    );
-    const stop = vi.fn<() => Promise<void>>(() => Promise.resolve());
-    const service = createLocalOpenCodeService({
-      userDataPath: "/private/app-data",
-      service: { ensure, stop },
-      binaryPath: packagedOpenCodeBinaryPath("/private/app-resources"),
-      fetch: vi.fn<() => Promise<Response>>(() => Promise.resolve(healthy())),
-    });
-
-    const connected = await service.connect();
-
-    expect(connected).toEqual({ serverUrl: endpoint.url, password: endpoint.auth.password });
-    expect(ensure).toHaveBeenCalledWith({
-      file: "/private/app-data/opencode/service.json",
-      command: ["/private/app-resources/opencode/opencode2", "serve", "--service", "--port", "0"],
-      version: LOCAL_OPENCODE_VERSION,
-      env: { XDG_STATE_HOME: "/private/app-data", OPENCODE_CLIENT: "oc-ui" },
-    });
-    await service.disconnect();
-  });
-
-  it("deduplicates concurrent connects and repeated disconnects", async () => {
-    let resolveEnsure: ((value: typeof endpoint) => void) | undefined;
-    const ensure = vi.fn<() => Promise<typeof endpoint>>(
-      () =>
-        new Promise<typeof endpoint>((resolve) => {
-          resolveEnsure = resolve;
-        }),
-    );
-    const stop = vi.fn<() => Promise<void>>(() => Promise.resolve());
-    const service = createLocalOpenCodeService({
-      registrationFile: "/private/app-data/service.json",
-      service: { ensure, stop },
-      resolveCliBinary: () => "/private/opencode2.exe",
-    });
-
+describe("owned OpenCode worker", () => {
+  it("starts lazily, shares concurrent starts, and reuses the same authenticated endpoint", async () => {
+    const service = create();
+    expect(service.needsQuitConfirmation()).toBe(false);
+    expect(fork).not.toHaveBeenCalled();
     const first = service.connect();
-    const second = service.connect();
-    expect(first).toBe(second);
-    const disconnecting = service.disconnect();
-    expect(stop).not.toHaveBeenCalled();
-    resolveEnsure?.(endpoint);
-    await expect(first).rejects.toBeInstanceOf(LocalOpenCodeUnavailableError);
-    await Promise.all([disconnecting, service.disconnect()]);
-    expect(ensure).toHaveBeenCalledTimes(1);
-    expect(stop).toHaveBeenCalledTimes(1);
-  });
-
-  it("waits for an in-flight stop before reconnecting", async () => {
-    let finishFirstStop: (() => void) | undefined;
-    const ensure = vi.fn<() => Promise<typeof endpoint>>(() => Promise.resolve(endpoint));
-    const stop = vi
-      .fn<() => Promise<void>>()
-      .mockResolvedValue(undefined)
-      .mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            finishFirstStop = resolve;
-          }),
-      );
-    const service = createLocalOpenCodeService({
-      registrationFile: "/private/app-data/service.json",
-      service: { ensure, stop },
-      resolveCliBinary: () => "/private/opencode2.exe",
+    expect(service.connect()).toBe(first);
+    expect(service.needsQuitConfirmation()).toBe(true);
+    expect(fork).toHaveBeenCalledExactlyOnceWith("/private/runtime/opencode-worker.mjs", [], {
+      serviceName: "Ocui built-in OpenCode",
+      stdio: "pipe",
     });
-
-    await service.connect();
-    const disconnecting = service.disconnect();
-    const reconnecting = service.connect();
-    expect(ensure).toHaveBeenCalledTimes(1);
-
-    finishFirstStop?.();
-    await disconnecting;
-    await reconnecting;
-    expect(ensure).toHaveBeenCalledTimes(2);
-    await service.disconnect();
+    child().listen();
+    const endpoint = await first;
+    expect(endpoint.serverUrl).toBe("http://127.0.0.1:4096");
+    expect(endpoint.password.length).toBeGreaterThan(32);
+    expect(child().postMessage).toHaveBeenCalledWith({
+      type: "start",
+      userDataPath: "/private/test-ocui",
+      password: endpoint.password,
+    });
+    const request = fetchMock.mock.calls[0];
+    expect(request?.[0]).toEqual(new URL("http://127.0.0.1:4096/api/health"));
+    expect(new Headers(request?.[1]?.headers).get("authorization")).toBe(
+      `Basic ${Buffer.from(`opencode:${endpoint.password}`).toString("base64")}`,
+    );
+    expect(request?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(await service.connect()).toBe(endpoint);
+    expect(fork).toHaveBeenCalledTimes(1);
+    const shutdown = service.shutdown();
+    expect(service.shutdown()).toBe(shutdown);
+    await shutdown;
+    expect(service.needsQuitConfirmation()).toBe(false);
+    await expect(service.connect()).rejects.toMatchObject({ reason: "start-failed" });
   });
 
-  it("keeps a timed-out start owned until disconnect can stop it", async () => {
-    let finishEnsure: ((value: typeof endpoint) => void) | undefined;
-    const ensure = vi.fn<() => Promise<typeof endpoint>>(
+  it("does not treat listening or HTTP 503 as readiness", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 503 }));
+    const service = create();
+    const connected = service.connect();
+    const resolved = vi.fn<() => void>();
+    void connected.then(resolved);
+    child().listen();
+    await Promise.resolve();
+    expect(resolved).not.toHaveBeenCalled();
+    await connected;
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await service.shutdown();
+  });
+
+  it.each([
+    [
+      "HTTP 500 even with healthy true",
       () =>
-        new Promise<typeof endpoint>((resolve) => {
-          finishEnsure = resolve;
+        Response.json(
+          { healthy: true, version: LOCAL_OPENCODE_VERSION, pid: 4242 },
+          { status: 500 },
+        ),
+    ],
+    ["another process PID", () => healthy(9999)],
+    ["another version", () => Response.json({ healthy: true, version: "wrong", pid: 4242 })],
+    ["unauthenticated health", () => new Response(null, { status: 401 })],
+  ])("rejects %s and waits for the owned child to exit", async (_name, response) => {
+    vi.mocked(fetch).mockResolvedValue(response());
+    const service = create();
+    const connected = service.connect();
+    const rejected = (async () => {
+      await expect(connected).rejects.toMatchObject({ reason: "start-failed" });
+    })();
+    child().listen();
+    await rejected;
+    expect(child().postMessage).toHaveBeenCalledWith({ type: "stop" });
+    expect(service.needsQuitConfirmation()).toBe(false);
+  });
+
+  it("rejects a non-loopback or malformed private message without probing it", async () => {
+    const service = create();
+    const connected = service.connect();
+    const rejected = (async () => {
+      await expect(connected).rejects.toMatchObject({ reason: "invalid-endpoint" });
+    })();
+    child().listen("http://example.test:4096");
+    await rejected;
+    expect(fetch).not.toHaveBeenCalled();
+    expect(service.needsQuitConfirmation()).toBe(false);
+  });
+
+  it("cancels an in-flight readiness fetch immediately when quitting", async () => {
+    let signal: AbortSignal | null | undefined;
+    vi.mocked(fetch).mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          signal = init?.signal;
+          signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
         }),
     );
-    const stop = vi.fn<() => Promise<void>>(() => Promise.resolve());
-    const service = createLocalOpenCodeService({
-      registrationFile: "/private/app-data/service.json",
-      service: { ensure, stop },
-      resolveCliBinary: () => "/private/opencode2.exe",
-      connectTimeoutMs: 5,
-    });
-
-    await expect(service.connect()).rejects.toMatchObject({
-      reason: "timed-out",
-      message: "The built-in OpenCode server did not start before the startup timeout.",
-    });
-    const disconnecting = service.disconnect();
-    expect(stop).not.toHaveBeenCalled();
-
-    finishEnsure?.(endpoint);
-    await disconnecting;
-    expect(stop).toHaveBeenCalledOnce();
+    const service = create();
+    const connected = service.connect();
+    const rejected = (async () => {
+      await expect(connected).rejects.toMatchObject({ reason: "start-failed" });
+    })();
+    child().listen();
+    expect(signal?.aborted).toBe(false);
+    const quitting = service.shutdown();
+    expect(signal?.aborted).toBe(true);
+    expect(child().postMessage).toHaveBeenCalledWith({ type: "stop" });
+    await Promise.all([quitting, rejected]);
+    expect(child().kill).not.toHaveBeenCalled();
   });
 
-  it("retries and reports a sidecar that cannot be stopped", async () => {
-    const secret = "stop-secret";
-    const stop = vi.fn<() => Promise<void>>(() =>
-      Promise.reject(new Error(`could not stop ${secret}`)),
-    );
-    const service = createLocalOpenCodeService({
-      registrationFile: "/private/app-data/service.json",
-      service: {
-        ensure: vi.fn<() => Promise<typeof endpoint>>(() => Promise.resolve(endpoint)),
-        stop,
-      },
-      resolveCliBinary: () => "/private/opencode2.exe",
-    });
-
-    await service.connect();
-    await expect(service.disconnect()).rejects.toBeInstanceOf(LocalOpenCodeUnavailableError);
-    await expect(service.disconnect()).rejects.not.toThrow(secret);
-    expect(stop).toHaveBeenCalledTimes(4);
+  it("preempts startup before the child spawn notification", async () => {
+    const service = create();
+    const connected = service.connect();
+    const rejected = (async () => {
+      await expect(connected).rejects.toMatchObject({ reason: "start-failed" });
+    })();
+    const quitting = service.shutdown();
+    child().emit("spawn");
+    await Promise.all([quitting, rejected]);
+    expect(child().postMessage).toHaveBeenCalledExactlyOnceWith({ type: "stop" });
   });
 
-  it("reports an unavailable sidecar after a bounded health probe", async () => {
+  it("caps an individual health request at two seconds", async () => {
     vi.useFakeTimers();
-    const statuses: string[] = [];
-    const fetch = vi.fn<() => Promise<Response>>(() =>
-      Promise.resolve(new Response(null, { status: 503 })),
+    let signal: AbortSignal | null | undefined;
+    vi.mocked(fetch).mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          signal = init?.signal;
+          signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        }),
     );
-    const service = createLocalOpenCodeService({
-      registrationFile: "/private/app-data/service.json",
-      service: {
-        ensure: vi.fn<() => Promise<typeof endpoint>>(() => Promise.resolve(endpoint)),
-        stop: vi.fn<() => Promise<void>>(),
-      },
-      resolveCliBinary: () => "/private/opencode2.exe",
-      fetch,
-      monitorIntervalMs: 20,
-      healthTimeoutMs: 10,
-    });
-    service.onUnavailable(() => statuses.push("unavailable"));
-
-    await service.connect();
-    await vi.advanceTimersByTimeAsync(60);
-
-    expect(fetch).toHaveBeenCalledWith(
-      new URL("/api/health", endpoint.url),
-      expect.objectContaining({
-        headers: { authorization: `Basic ${btoa("opencode:test-secret")}` },
-      }),
-    );
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(statuses).toEqual(["unavailable"]);
-    await service.disconnect();
+    const service = create();
+    const connected = service.connect();
+    const rejected = (async () => {
+      await expect(connected).rejects.toMatchObject({ reason: "start-failed" });
+    })();
+    child().listen();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(signal?.aborted).toBe(true);
+    expect(service.needsQuitConfirmation()).toBe(true);
+    await Promise.all([service.shutdown(), rejected]);
   });
 
-  it("rejects non-loopback or unauthenticated endpoints without leaking secrets", async () => {
-    const secret = "do-not-leak";
-    const service = createLocalOpenCodeService({
-      registrationFile: "/private/app-data/service.json",
-      service: {
-        ensure: vi.fn<() => Promise<never>>(() =>
-          Promise.reject(new Error(`spawn failed with password ${secret}`)),
-        ),
-        stop: vi.fn<() => Promise<void>>(),
-      },
-      resolveCliBinary: () => "/private/opencode2.exe",
-    });
+  it("times out an unresponsive import and cancels the current health request at the overall deadline", async () => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    vi.mocked(fetch).mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          if (init?.signal === undefined || init.signal === null) throw new Error("Missing signal");
+          signals.push(init.signal);
+          init.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        }),
+    );
+    const service = create();
+    const connected = service.connect();
+    const rejected = (async () => {
+      await expect(connected).rejects.toMatchObject({ reason: "timed-out" });
+    })();
+    await vi.advanceTimersByTimeAsync(29_000);
+    child().listen();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await rejected;
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(service.needsQuitConfirmation()).toBe(false);
+  });
 
-    await expect(service.connect()).rejects.toMatchObject({
-      reason: "start-failed",
-      message: "The built-in OpenCode server failed to start.",
-    });
-    await expect(service.connect()).rejects.not.toThrow(secret);
+  it("does not automatically restart a crash and ignores late events from the previous worker", async () => {
+    const service = create();
+    const unavailable = vi.fn<() => void>();
+    service.onUnavailable(unavailable);
+    const initial = service.connect();
+    const previous = child();
+    const oldMessage = previous.listeners("message")[0];
+    const oldExit = previous.listeners("exit")[0];
+    previous.listen();
+    await initial;
+    previous.exit();
+    expect(unavailable).toHaveBeenCalledTimes(1);
+    expect(fork).toHaveBeenCalledTimes(1);
+    const restarted = service.connect();
+    oldMessage?.({ type: "fatal", message: "Built-in OpenCode failed." });
+    oldExit?.(1);
+    child().listen();
+    await restarted;
+    expect(service.needsQuitConfirmation()).toBe(true);
+    expect(unavailable).toHaveBeenCalledTimes(1);
+    expect(fork).toHaveBeenCalledTimes(2);
+    await service.shutdown();
+  });
 
-    const invalidEndpoint = createLocalOpenCodeService({
-      registrationFile: "/private/app-data/service.json",
-      service: {
-        ensure: vi.fn<() => Promise<{ url: string; auth: typeof endpoint.auth }>>(() =>
-          Promise.resolve({
-            url: "http://example.test:4096",
-            auth: { type: "basic" as const, username: "opencode", password: secret },
-          }),
-        ),
-        stop: vi.fn<() => Promise<void>>(),
-      },
-      resolveCliBinary: () => "/private/opencode2.exe",
+  it("rejects an early exit and permits only a fresh manual start afterward", async () => {
+    const service = create();
+    const initial = service.connect();
+    const rejected = (async () => {
+      await expect(initial).rejects.toMatchObject({ reason: "start-failed" });
+    })();
+    child().exit();
+    await rejected;
+    expect(fork).toHaveBeenCalledTimes(1);
+    const restarted = service.connect();
+    child().listen();
+    await restarted;
+    await service.shutdown();
+  });
+
+  it("retains a child after failed termination and retries that same child on the next quit", async () => {
+    vi.useFakeTimers();
+    const service = create();
+    const connected = service.connect();
+    child().listen();
+    await connected;
+    child().exitsOnStop = false;
+    const quitting = service.shutdown();
+    const rejected = (async () => {
+      await expect(quitting).rejects.toMatchObject({ reason: "stop-failed" });
+    })();
+    await vi.advanceTimersByTimeAsync(14_000);
+    await rejected;
+    expect(child().kill).toHaveBeenCalledTimes(1);
+    expect(killProcess).toHaveBeenCalledExactlyOnceWith(4242, "SIGKILL");
+    expect(service.needsQuitConfirmation()).toBe(true);
+    await expect(service.connect()).rejects.toMatchObject({ reason: "start-failed" });
+    expect(fork).toHaveBeenCalledTimes(1);
+    child().exitsOnStop = true;
+    await service.shutdown();
+    expect(service.needsQuitConfirmation()).toBe(false);
+  });
+
+  it("keeps a failed startup owned when its cleanup fails", async () => {
+    vi.useFakeTimers();
+    const service = create();
+    const connected = service.connect();
+    child().exitsOnStop = false;
+    const rejected = (async () => {
+      await expect(connected).rejects.toMatchObject({ reason: "stop-failed" });
+    })();
+    child().emit("message", { type: "fatal", message: "Built-in OpenCode failed." });
+    await vi.advanceTimersByTimeAsync(14_000);
+    await rejected;
+    await expect(service.connect()).rejects.toMatchObject({ reason: "stop-failed" });
+    expect(fork).toHaveBeenCalledTimes(1);
+    expect(service.needsQuitConfirmation()).toBe(true);
+    child().exitsOnStop = true;
+    await service.shutdown();
+  });
+
+  it("cancels force-kill escalation once Electron confirms exit after TERM", async () => {
+    vi.useFakeTimers();
+    const service = create();
+    const connected = service.connect();
+    child().listen();
+    await connected;
+    child().exitsOnStop = false;
+    child().kill.mockImplementation(() => {
+      child().exit();
+      return true;
     });
-    await expect(invalidEndpoint.connect()).rejects.toMatchObject({
-      reason: "invalid-endpoint",
-      message: "The built-in OpenCode server returned invalid connection details.",
-    });
+    const quitting = service.shutdown();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await quitting;
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(child().kill).toHaveBeenCalledTimes(1);
+    expect(killProcess).not.toHaveBeenCalled();
+    expect(service.needsQuitConfirmation()).toBe(false);
   });
 });

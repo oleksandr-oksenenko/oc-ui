@@ -23,6 +23,7 @@ const capabilities: Capabilities.TestrunnerCapabilities = [
     "wdio:electronServiceOptions": {
       appBinaryPath,
       appArgs: [
+        "--use-mock-keychain",
         `${USER_DATA_PATH_ARGUMENT_PREFIX}${userDataPath}`,
         `--user-data-dir=${resolveSessionDataPath(userDataPath)}`,
       ],

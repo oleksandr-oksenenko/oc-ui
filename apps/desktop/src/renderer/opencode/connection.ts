@@ -132,14 +132,23 @@ class HttpStatusError extends Error {
 }
 
 /** Verify health, exact protocol version, and the server's default location. */
-export async function verifyServer(input: VerifyServerInput): Promise<VerifiedServer> {
+export async function verifyServer(
+  input: VerifyServerInput,
+  signal?: AbortSignal,
+): Promise<VerifiedServer> {
+  signal?.throwIfAborted();
   const serverUrl = normalizeServerUrl(input.serverUrl);
   const api = createAuthenticatedClient(serverUrl, input.password);
 
   let health;
   try {
-    health = await withTimeout(api.health.get(), HEALTH_TIMEOUT_MS, "health");
+    health = await withTimeout(
+      (requestSignal) => api.health.get({ signal: requestSignal }),
+      "health",
+      signal,
+    );
   } catch (cause) {
+    signal?.throwIfAborted();
     throw mapConnectionFailure(cause, "health");
   }
 
@@ -153,8 +162,13 @@ export async function verifyServer(input: VerifyServerInput): Promise<VerifiedSe
 
   let location: LocationGetOutput;
   try {
-    location = await withTimeout(api.location.get(), HEALTH_TIMEOUT_MS, "location");
+    location = await withTimeout(
+      (requestSignal) => api.location.get(undefined, { signal: requestSignal }),
+      "location",
+      signal,
+    );
   } catch (cause) {
+    signal?.throwIfAborted();
     throw mapConnectionFailure(cause, "location");
   }
 
@@ -208,21 +222,31 @@ export function mapConnectionFailure(
 }
 
 async function withTimeout<T>(
-  promise: Promise<T>,
-  timeout: number,
+  operation: (signal: AbortSignal) => Promise<T>,
   phase: Exclude<ConnectionFailurePhase, "url" | "stream">,
+  parent?: AbortSignal,
 ): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new OpenCodeConnectionError("unreachable", `Timed out during ${phase}.`, phase)),
-      timeout,
-    );
-  });
+  parent?.throwIfAborted();
+  const controller = new AbortController();
+  const cancel = (): void => controller.abort(parent?.reason);
+  parent?.addEventListener("abort", cancel, { once: true });
+  const timer = setTimeout(
+    () =>
+      controller.abort(
+        new OpenCodeConnectionError("unreachable", `Timed out during ${phase}.`, phase),
+      ),
+    HEALTH_TIMEOUT_MS,
+  );
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    // Keep ownership until the actual request settles; a rejected timer alone
+    // would leave the fetch (or its response body) running after disconnection.
+    return await operation(controller.signal);
+  } catch (cause) {
+    if (controller.signal.aborted) throw controller.signal.reason;
+    throw cause;
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
+    clearTimeout(timer);
+    parent?.removeEventListener("abort", cancel);
   }
 }
 

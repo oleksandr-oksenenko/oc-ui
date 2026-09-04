@@ -13,6 +13,7 @@ export type ConnectionFormProps = {
   readonly password: string;
   readonly busy: boolean;
   readonly error?: string;
+  readonly restartBuiltIn?: boolean;
   readonly savedTarget?:
     | { readonly kind: "local" }
     | { readonly kind: "remote"; readonly serverUrl: string };
@@ -159,11 +160,13 @@ export function ConnectionForm(props: ConnectionFormProps) {
                 ? props.mode === "local"
                   ? "Starting"
                   : "Connecting"
-                : props.error
-                  ? "Retry"
-                  : props.mode === "local"
-                    ? "Start built-in server"
-                    : "Connect to remote"}
+                : props.mode === "local" && props.restartBuiltIn
+                  ? "Restart"
+                  : props.error
+                    ? "Retry"
+                    : props.mode === "local"
+                      ? "Start built-in server"
+                      : "Connect to remote"}
             </Button>
             <Show when={props.savedTarget}>
               <Button
