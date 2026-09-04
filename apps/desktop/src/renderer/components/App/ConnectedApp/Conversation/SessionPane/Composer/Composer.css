@@ -171,7 +171,6 @@
 .composer-picker--unavailable {
   height: 22px;
   padding: 0 7px;
-  opacity: 0.45;
 }
 
 .composer-model-trigger {
