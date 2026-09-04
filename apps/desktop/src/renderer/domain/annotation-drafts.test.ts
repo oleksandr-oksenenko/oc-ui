@@ -1,6 +1,11 @@
+import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createAnnotationDraftStore, type TranscriptAnnotation } from "./annotation-drafts.ts";
+import {
+  createAnnotationDraftStore,
+  TranscriptAnnotationSchema,
+  type TranscriptAnnotation,
+} from "./annotation-drafts.ts";
 
 const annotation = (id: string, body = "Fix this"): TranscriptAnnotation => ({
   id,
@@ -76,11 +81,17 @@ describe("createAnnotationDraftStore", () => {
     expect(drafts.get("session-1")[0]?.body).toBe("");
   });
 
-  it("rejects empty comments and invalid source bounds", () => {
+  it("accepts empty drafts while keeping complete annotations strict", () => {
     const drafts = createAnnotationDraftStore();
-    expect(() => drafts.add("session-1", annotation("id", "  "))).toThrow(
-      "Invalid transcript annotation",
-    );
+    const emptyID = drafts.add("session-1", annotation("ignored", "  "));
+    const empty = drafts.get("session-1").find((comment) => comment.id === emptyID);
+    expect(empty).toBeDefined();
+    expect(empty?.body).toBe("  ");
+    expect(Schema.is(TranscriptAnnotationSchema)(empty!)).toBe(false);
+  });
+
+  it("still rejects invalid source bounds", () => {
+    const drafts = createAnnotationDraftStore();
     expect(() =>
       drafts.add("session-1", {
         ...annotation("ignored"),

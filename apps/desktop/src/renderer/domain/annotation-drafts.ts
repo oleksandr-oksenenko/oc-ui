@@ -21,7 +21,12 @@ export const TranscriptAnnotationSchema = Schema.Struct({
 
 export type TranscriptAnnotation = typeof TranscriptAnnotationSchema.Type;
 
-const isValidAnnotation = Schema.is(TranscriptAnnotationSchema);
+const isValidDraft = Schema.is(
+  Schema.Struct({
+    ...TranscriptAnnotationSchema.fields,
+    body: Schema.String,
+  }),
+);
 
 export type AnnotationDraftSnapshot = {
   readonly sessionID: string;
@@ -69,7 +74,7 @@ export function createAnnotationDraftStore(): AnnotationDraftStore {
       // oxlint-disable-next-line effecttsgo/crypto-random-uuid -- IDs must stay unique alongside annotations in persisted messages.
       const id = globalThis.crypto.randomUUID();
       const annotation = freezeAnnotation({ ...input, id });
-      if (!isValidAnnotation(annotation)) throw new Error("Invalid transcript annotation");
+      if (!isValidDraft(annotation)) throw new Error("Invalid transcript annotation");
       write(sessionID, [...existing, annotation]);
       return id;
     },
