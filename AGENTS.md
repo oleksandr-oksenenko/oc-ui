@@ -3,6 +3,17 @@
 - After implementation, run `pnpm check` and `pnpm test` from the repository root.
 - Fix every finding before calling the work complete. Do not substitute package-scoped or focused checks.
 
+# Code size and complexity
+
+- Treat production line count as a strong proxy for complexity. Prefer the least code that meets the requirement clearly and correctly. Expect refactors that preserve behavior to reduce code; use net growth as a signal to review the changes for simplification opportunities.
+- Before coding a feature or refactor, identify its owner, the abstractions it needs, and any existing code it replaces. Additional services, types, helpers, or adapters need a concrete purpose.
+- Replace old ownership completely. Remove superseded coordinators, flags, queues, and state mirrors instead of adding another layer around them.
+- Review for deletion before completion: inline unnecessary helpers, remove redundant types, combine unnecessary layers, and reuse existing operations. Callers should become simpler and ownership easier to follow.
+- For each feature or refactor, report production lines added, removed, and the net change, along with new abstractions and old machinery removed. Count tests, documentation, and generated code separately.
+- Size checks and growth budgets are advisory. Exceeding an expected size should produce an informational report and prompt a focused review for unnecessary code, duplication, and avoidable abstractions. Apply useful simplifications and briefly explain remaining growth; size alone must not fail verification or block completion. Existing correctness and quality checks remain mandatory.
+- Justify temporary growth by naming exactly what later disappears and in which follow-up step. Do not let temporary duplication become the default architecture.
+- Do not reduce line count through dense formatting, hidden complexity, or removal of useful checks. Optimize for less code to understand while preserving required behavior and readability.
+
 # OpenCode integration
 
 - Inspect the pinned OpenCode SDK, UI package, and existing oc-ui code before adding a local type, projection, helper, control, icon, or behavior. Reuse upstream types and primitives when they already express the requirement.
