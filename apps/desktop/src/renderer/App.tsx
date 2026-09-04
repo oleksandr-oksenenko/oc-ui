@@ -20,9 +20,6 @@ type SavedTarget =
   | { readonly kind: "local" }
   | { readonly kind: "remote"; readonly serverUrl: string };
 
-const LOCAL_CLEANUP_MESSAGE =
-  "The built-in OpenCode server could not be stopped. Retry before connecting to another server.";
-
 /** Owns saved-target setup and the connected/disconnected boundary. */
 export function App() {
   const desktop = window.desktop;
@@ -33,42 +30,45 @@ export function App() {
   const [owner, setOwner] = createSignal<ConnectionOwner>("none");
   const [candidate, setCandidate] = createSignal<VerifiedServer>();
   const [connection, setConnection] = createSignal<ConnectionState>({ status: "disconnected" });
+  const [localUnavailable, setLocalUnavailable] = createSignal(false);
   let attempt = 0;
+  let attemptAbort: AbortController | undefined;
   let pendingPassword = "";
   let savedRemotePassword = "";
 
   const connecting = () => connection().status === "connecting";
   const connectionError = () => {
     const state = connection();
-    return state.status === "failed" ? state.message : undefined;
+    if (state.status === "failed") return state.message;
+    return mode() === "local" && localUnavailable()
+      ? "The built-in OpenCode server stopped. Restart it, or connect to a remote server."
+      : undefined;
   };
 
-  const disconnectLocal = async (): Promise<void> => {
-    if (owner() !== "local") return;
-    await desktop.localOpenCode.disconnect();
-    if (owner() === "local") setOwner("none");
+  const invalidateAttempt = (): number => {
+    attemptAbort?.abort();
+    attemptAbort = undefined;
+    attempt += 1;
+    return attempt;
   };
+  onCleanup(() => {
+    invalidateAttempt();
+    pendingPassword = "";
+    savedRemotePassword = "";
+  });
 
   const connectRemote = async (
     input = { serverUrl: serverUrl(), password: password() || savedRemotePassword },
   ): Promise<void> => {
-    const currentAttempt = ++attempt;
-    if (owner() === "local") {
-      setConnection({ status: "connecting" });
-      try {
-        await disconnectLocal();
-      } catch {
-        if (currentAttempt !== attempt) return;
-        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
-        return;
-      }
-      if (currentAttempt !== attempt) return;
-    }
+    const currentAttempt = invalidateAttempt();
+    attemptAbort = new AbortController();
+    const signal = attemptAbort.signal;
     setOwner("remote");
     setMode("remote");
+    setCandidate(undefined);
     setConnection({ status: "connecting" });
     try {
-      const verified = await verifyServer(input);
+      const verified = await verifyServer(input, signal);
       if (currentAttempt !== attempt) return;
       setServerUrl(verified.serverUrl);
       pendingPassword = input.password;
@@ -81,9 +81,12 @@ export function App() {
   };
 
   const connectLocal = async (): Promise<void> => {
-    const currentAttempt = ++attempt;
+    const currentAttempt = invalidateAttempt();
+    attemptAbort = new AbortController();
+    const signal = attemptAbort.signal;
     setOwner("local");
     setMode("local");
+    setLocalUnavailable(false);
     setCandidate(undefined);
     setConnection({ status: "connecting" });
     try {
@@ -91,18 +94,9 @@ export function App() {
       if (currentAttempt !== attempt) return;
       if (local.status === "failed") {
         setConnection({ status: "failed", message: local.message });
-        try {
-          await disconnectLocal();
-        } catch {
-          if (currentAttempt !== attempt) return;
-          setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
-        }
         return;
       }
-      const verified = await verifyServer({
-        serverUrl: local.connection.serverUrl,
-        password: local.connection.password,
-      });
+      const verified = await verifyServer(local.connection, signal);
       if (currentAttempt !== attempt) return;
       setServerUrl(verified.serverUrl);
       // This password belongs only to the running local process. It is never
@@ -111,14 +105,7 @@ export function App() {
       setCandidate(verified);
     } catch (cause) {
       if (currentAttempt !== attempt) return;
-      try {
-        await disconnectLocal();
-        if (currentAttempt !== attempt) return;
-        setConnection({ status: "failed", message: localConnectionMessage(cause) });
-      } catch {
-        if (currentAttempt !== attempt) return;
-        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
-      }
+      setConnection({ status: "failed", message: localConnectionMessage(cause) });
     }
   };
 
@@ -162,30 +149,14 @@ export function App() {
 
   const initialStreamFailed = (server: VerifiedServer, cause: unknown): void => {
     if (candidate() !== server) return;
-    const currentAttempt = ++attempt;
+    invalidateAttempt();
     setCandidate(undefined);
-    if (owner() !== "local") {
-      setOwner("none");
-      setConnection({ status: "failed", message: connectionMessage(cause) });
-      return;
-    }
-    setConnection({ status: "connecting" });
-    void disconnectLocal().then(
-      () => {
-        if (currentAttempt !== attempt) return undefined;
-        setConnection({ status: "failed", message: connectionMessage(cause) });
-        return undefined;
-      },
-      () => {
-        if (currentAttempt !== attempt) return undefined;
-        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
-        return undefined;
-      },
-    );
+    setOwner("none");
+    setConnection({ status: "failed", message: connectionMessage(cause) });
   };
 
-  const changeServer = async (): Promise<void> => {
-    const currentAttempt = ++attempt;
+  const changeServer = (): void => {
+    invalidateAttempt();
     const previousOwner = owner();
     pendingPassword = "";
     setCandidate(undefined);
@@ -199,38 +170,21 @@ export function App() {
     } else {
       restoreSavedTarget(savedTarget(), setMode, setServerUrl);
     }
-    if (previousOwner === "local") {
-      setConnection({ status: "connecting" });
-      try {
-        await disconnectLocal();
-      } catch {
-        if (currentAttempt !== attempt) return;
-        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
-        return;
-      }
-      if (currentAttempt !== attempt) return;
-    }
     setOwner("none");
     setConnection({ status: "disconnected" });
   };
 
   const forget = async (): Promise<void> => {
-    attempt += 1;
+    const currentAttempt = invalidateAttempt();
     pendingPassword = "";
     savedRemotePassword = "";
     setCandidate(undefined);
-    if (owner() === "local") {
-      try {
-        await disconnectLocal();
-      } catch {
-        setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
-        return;
-      }
-    }
     setOwner("none");
     try {
       await desktop.target.clear();
+      if (currentAttempt !== attempt) return;
     } catch {
+      if (currentAttempt !== attempt) return;
       setConnection({
         status: "failed",
         message: "The saved connection could not be forgotten. Retry before continuing.",
@@ -246,27 +200,13 @@ export function App() {
 
   onMount(() => {
     const unsubscribe = desktop.localOpenCode.onUnavailable(() => {
+      setLocalUnavailable(true);
       if (owner() !== "local") return;
-      const currentAttempt = ++attempt;
+      invalidateAttempt();
       pendingPassword = "";
       setCandidate(undefined);
-      setConnection({ status: "connecting" });
-      void disconnectLocal().then(
-        () => {
-          if (currentAttempt !== attempt) return undefined;
-          setConnection({
-            status: "failed",
-            message:
-              "The built-in OpenCode server stopped. Retry to start it again, or connect to a remote server.",
-          });
-          return undefined;
-        },
-        () => {
-          if (currentAttempt !== attempt) return undefined;
-          setConnection({ status: "failed", message: LOCAL_CLEANUP_MESSAGE });
-          return undefined;
-        },
-      );
+      setOwner("none");
+      setConnection({ status: "disconnected" });
     });
     onCleanup(unsubscribe);
 
@@ -279,10 +219,7 @@ export function App() {
 
         setSavedTarget(publicSavedTarget(loaded));
         setMode(loaded.kind);
-        if (loaded.kind === "local") {
-          await connectLocal();
-          return;
-        }
+        if (loaded.kind === "local") return;
 
         setServerUrl(loaded.serverUrl);
         if (loaded.password === undefined) return;
@@ -310,7 +247,7 @@ export function App() {
                 server={server}
                 onConnected={() => connected(server)}
                 onInitialFailure={(cause) => initialStreamFailed(server, cause)}
-                onChangeServer={() => void changeServer()}
+                onChangeServer={changeServer}
               />
             </ServerProvider>
           </div>
@@ -324,8 +261,11 @@ export function App() {
           mode={mode()}
           busy={connecting()}
           error={connectionError()}
+          restartBuiltIn={localUnavailable()}
           savedTarget={savedTarget()}
           onModeChange={(nextMode) => {
+            invalidateAttempt();
+            setOwner("none");
             setMode(nextMode);
             setConnection({ status: "disconnected" });
             if (nextMode === "remote" && serverUrl().length === 0) {

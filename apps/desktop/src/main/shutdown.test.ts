@@ -1,12 +1,129 @@
+import type { MessageBoxOptions, MessageBoxReturnValue } from "electron";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { disconnectSidecarForQuit } from "./shutdown.ts";
+import { createAppQuitHandler } from "./shutdown.ts";
 
-describe("disconnectSidecarForQuit", () => {
-  it("settles when sidecar cleanup fails so app quit can continue", async () => {
-    const disconnect = vi.fn<() => Promise<void>>().mockRejectedValue(new Error("stop failed"));
+const deferred = <A>() => {
+  let resolve!: (value: A) => void;
+  const promise = new Promise<A>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+};
 
-    await expect(disconnectSidecarForQuit({ disconnect })).resolves.toBeUndefined();
-    expect(disconnect).toHaveBeenCalledOnce();
+const flush = async () => {
+  for (let index = 0; index < 8; index += 1) await Promise.resolve();
+};
+
+const setup = (needsConfirmation = true) => {
+  const local = {
+    needsQuitConfirmation: vi.fn<() => boolean>(() => needsConfirmation),
+    shutdown: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  };
+  const showMessageBox = vi
+    .fn<(options: MessageBoxOptions) => Promise<MessageBoxReturnValue>>()
+    .mockResolvedValue({ response: 1, checkboxChecked: false });
+  const cleanup = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  const quit = vi.fn<() => void>();
+  const handler = createAppQuitHandler({
+    localOpenCode: () => local,
+    showMessageBox,
+    cleanup,
+    quit,
+  });
+  const event = { preventDefault: vi.fn<() => void>() };
+  return { local, showMessageBox, cleanup, quit, handler, event };
+};
+
+describe("app quit", () => {
+  it("asks immediately for an owned starting runtime and Cancel leaves it intact", async () => {
+    const { handler, event, local, showMessageBox, cleanup, quit } = setup();
+    showMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false });
+    handler.beforeQuit(event);
+
+    expect(handler.isQuitting()).toBe(true);
+    expect(showMessageBox).toHaveBeenCalledWith({
+      type: "warning",
+      message: "Quit Ocui and stop built-in OpenCode?",
+      detail: "Any work it is doing will be interrupted.",
+      buttons: ["Cancel", "Quit"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    expect(local.shutdown).not.toHaveBeenCalled();
+    await flush();
+    expect(handler.isQuitting()).toBe(false);
+    expect(local.shutdown).not.toHaveBeenCalled();
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+  });
+
+  it("coalesces repeated Quit and waits for child shutdown before tearing down IPC", async () => {
+    const { handler, event, local, showMessageBox, cleanup, quit } = setup();
+    const stopped = deferred<void>();
+    local.shutdown.mockReturnValue(stopped.promise);
+    handler.beforeQuit(event);
+    handler.beforeQuit(event);
+    await flush();
+    handler.beforeQuit(event);
+    expect(showMessageBox).toHaveBeenCalledOnce();
+    expect(local.shutdown).toHaveBeenCalledOnce();
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+
+    stopped.resolve();
+    await flush();
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(quit).toHaveBeenCalledOnce();
+    const finalEvent = { preventDefault: vi.fn<() => void>() };
+    handler.beforeQuit(finalEvent);
+    expect(finalEvent.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("skips confirmation when no runtime has started but still closes the service", async () => {
+    const { handler, event, local, showMessageBox, cleanup, quit } = setup(false);
+    handler.beforeQuit(event);
+    await flush();
+    expect(showMessageBox).not.toHaveBeenCalled();
+    expect(local.shutdown).toHaveBeenCalledOnce();
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("preserves app services on stop failure and lets a later Quit retry the same child", async () => {
+    const { handler, event, local, showMessageBox, cleanup, quit } = setup();
+    local.shutdown.mockRejectedValueOnce(new Error("stop failed"));
+    handler.beforeQuit(event);
+    await flush();
+
+    expect(showMessageBox).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: "error",
+        message: "Built-in OpenCode could not be stopped.",
+        detail: "Ocui is still open; try Quit again.",
+      }),
+    );
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+    expect(handler.isQuitting()).toBe(false);
+
+    handler.beforeQuit(event);
+    await flush();
+    expect(local.shutdown).toHaveBeenCalledTimes(2);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("does not re-enter app.quit until final cleanup has settled", async () => {
+    const { handler, event, cleanup, quit } = setup(false);
+    const cleaned = deferred<void>();
+    cleanup.mockReturnValue(cleaned.promise);
+    handler.beforeQuit(event);
+    await flush();
+    expect(quit).not.toHaveBeenCalled();
+    cleaned.resolve();
+    await flush();
+    expect(quit).toHaveBeenCalledOnce();
   });
 });

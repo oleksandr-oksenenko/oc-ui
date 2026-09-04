@@ -7,8 +7,12 @@ import {
   normalizeServerUrl,
   verifyServer,
 } from "./connection.ts";
+import { OPENCODE_VERSION } from "../../shared/desktop-api.ts";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("OpenCode connection input", () => {
   it("normalizes a plain HTTP origin", () => {
@@ -68,5 +72,60 @@ describe("OpenCode connection input", () => {
       phase: "health",
       message: "The server rejected the password.",
     });
+  });
+
+  it.each(["health", "location"] as const)(
+    "aborts the actual %s request at its deadline",
+    async (phase) => {
+      vi.useFakeTimers();
+      let requestSignal: AbortSignal | undefined;
+      const fetcher = vi.fn<typeof fetch>((_input, init) => {
+        requestSignal = init?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason), {
+            once: true,
+          });
+        });
+      });
+      if (phase === "location") {
+        fetcher.mockResolvedValueOnce(
+          Response.json({ healthy: true, version: OPENCODE_VERSION, pid: 1 }),
+        );
+      }
+      vi.stubGlobal("fetch", fetcher);
+      const verification = verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "secret" });
+      const settled = verification.catch((cause: unknown) => cause);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await settled).toMatchObject({ reason: "unreachable", phase });
+      expect(requestSignal?.aborted).toBe(true);
+      expect(fetcher).toHaveBeenCalledTimes(phase === "health" ? 1 : 2);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it("cancels superseded verification and does not begin another request", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    const fetcher = vi.fn<typeof fetch>((_input, init) => {
+      requestSignal = init?.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason), {
+          once: true,
+        });
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const input = { serverUrl: "http://127.0.0.1:4096", password: "secret" };
+    const verification = verifyServer(input, controller.signal);
+    const settled = verification.catch((cause: unknown) => cause);
+    controller.abort();
+    expect(await settled).toMatchObject({ name: "AbortError" });
+    expect(requestSignal?.aborted).toBe(true);
+    await expect(verifyServer(input, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

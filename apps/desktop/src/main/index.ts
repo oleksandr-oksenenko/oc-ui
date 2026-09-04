@@ -1,9 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { join, normalize, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session } from "electron";
 import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electron";
 import { Effect, ManagedRuntime, Schema } from "effect";
 
@@ -12,13 +12,12 @@ import { IPC_CHANNELS, parseSaveTargetInput } from "../shared/desktop-api.ts";
 import {
   createLocalOpenCodeService,
   LocalOpenCodeUnavailableError,
-  packagedOpenCodeBinaryPath,
   type LocalOpenCodeService,
 } from "./local-opencode.ts";
 import type { SettingsService } from "./settings.ts";
 import type { SettingsError } from "./settings.ts";
 import { normalizeServerUrl, settingsLayer, Settings, validatePassword } from "./settings.ts";
-import { disconnectSidecarForQuit } from "./shutdown.ts";
+import { createAppQuitHandler } from "./shutdown.ts";
 import { resolveSessionDataPath, resolveUserDataPath } from "./user-data-path.ts";
 
 const RENDERER_SCHEME = "oc";
@@ -55,26 +54,45 @@ let localOpenCode: LocalOpenCodeService | undefined;
 let removeIpcHandlers: (() => void) | undefined;
 let removeLocalOpenCodeUnavailableListener: (() => void) | undefined;
 let rendererProtocolInstalled = false;
-let quitting = false;
-let quitCleanupComplete = false;
-let localOpenCodeWasConnected = false;
 let settingsMutation: Promise<void> = Promise.resolve();
+const pendingIpc = new Set<Promise<unknown>>();
+
+const quitHandler = createAppQuitHandler({
+  localOpenCode: () => localOpenCode,
+  // Omitting a BrowserWindow makes this an app-modal native dialog.
+  showMessageBox: (options) => dialog.showMessageBox(options),
+  cleanup: async () => {
+    // Keep handlers and settings alive until the renderer can no longer make
+    // requests and every already accepted request has settled.
+    mainWindow?.destroy();
+    mainWindow = undefined;
+    await Promise.allSettled(pendingIpc);
+    removeIpcHandlers?.();
+    removeLocalOpenCodeUnavailableListener?.();
+    removeLocalOpenCodeUnavailableListener = undefined;
+    localOpenCode = undefined;
+    const runtime = desktopRuntime;
+    desktopRuntime = undefined;
+    await runtime?.dispose();
+  },
+  quit: () => app.quit(),
+});
 
 type DesktopRuntimeEnvironment = {
   readonly rendererUrl: string | undefined;
-  readonly localOpenCodeBinary: string | undefined;
+  readonly workerPath: string;
 };
 
 const resolveDesktopRuntimeEnvironment = (): DesktopRuntimeEnvironment => {
   if (app.isPackaged) {
     return {
       rendererUrl: undefined,
-      localOpenCodeBinary: packagedOpenCodeBinaryPath(process.resourcesPath),
+      workerPath: join(process.resourcesPath, "opencode-runtime/opencode-worker.mjs"),
     };
   }
   return {
     rendererUrl: process.env.ELECTRON_RENDERER_URL,
-    localOpenCodeBinary: undefined,
+    workerPath: fileURLToPath(new URL("../opencode-runtime/opencode-worker.mjs", import.meta.url)),
   };
 };
 
@@ -87,13 +105,14 @@ const runSettings = <A>(
   return desktopRuntime.runPromise(Effect.flatMap(Settings, operation));
 };
 
-const runLocalOpenCode = <A>(
-  operation: (service: LocalOpenCodeService) => Promise<A>,
-): Promise<A> => {
-  if (quitting || localOpenCode === undefined) {
-    return Promise.reject(new Error("Desktop services are not ready"));
-  }
-  return operation(localOpenCode);
+const trackIpc = <A>(operation: () => Promise<A>): Promise<A> => {
+  const result = operation();
+  pendingIpc.add(result);
+  void result.then(
+    () => pendingIpc.delete(result),
+    () => pendingIpc.delete(result),
+  );
+  return result;
 };
 
 const queueSettingsMutation = <A>(operation: () => Promise<A>): Promise<A> => {
@@ -106,7 +125,6 @@ const queueSettingsMutation = <A>(operation: () => Promise<A>): Promise<A> => {
 };
 
 const assertTrustedIpcSender = (event: IpcMainInvokeEvent): void => {
-  if (quitting) throw new Error("Desktop services are not ready");
   if (
     mainWindow === undefined ||
     mainWindow.isDestroyed() ||
@@ -123,7 +141,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("target.load does not accept arguments"));
     }
-    return settingsMutation.then(() => runSettings((service) => service.load));
+    return trackIpc(() => settingsMutation.then(() => runSettings((service) => service.load)));
   });
 
   ipcMain.handle(IPC_CHANNELS.targetSave, (event, rawInput) => {
@@ -145,7 +163,9 @@ const installIpcHandlers = (): void => {
               serverUrl: normalizeServerUrl(input.serverUrl),
               password: validatePassword(input.password),
             };
-    return queueSettingsMutation(() => runSettings((service) => service.save(validated)));
+    return trackIpc(() =>
+      queueSettingsMutation(() => runSettings((service) => service.save(validated))),
+    );
   });
 
   ipcMain.handle(IPC_CHANNELS.targetClear, (event, ...args: unknown[]) => {
@@ -153,7 +173,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("target.clear does not accept arguments"));
     }
-    return queueSettingsMutation(() => runSettings((service) => service.clear));
+    return trackIpc(() => queueSettingsMutation(() => runSettings((service) => service.clear)));
   });
 
   ipcMain.handle(IPC_CHANNELS.localOpenCodeConnect, (event, ...args: unknown[]) => {
@@ -161,10 +181,16 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("localOpenCode.connect does not accept arguments"));
     }
-    return runLocalOpenCode(async (service) => {
+    if (quitHandler.isQuitting()) {
+      return { status: "failed" as const, message: "Ocui is closing. Cancel Quit to connect." };
+    }
+    const service = localOpenCode;
+    if (service === undefined) {
+      return { status: "failed" as const, message: "Desktop services are not ready." };
+    }
+    return trackIpc(async () => {
       try {
         const connection = await service.connect();
-        localOpenCodeWasConnected = true;
         return { status: "connected" as const, connection };
       } catch (cause) {
         const error = Schema.is(LocalOpenCodeUnavailableError)(cause)
@@ -173,15 +199,6 @@ const installIpcHandlers = (): void => {
         return { status: "failed" as const, message: error.message };
       }
     });
-  });
-
-  ipcMain.handle(IPC_CHANNELS.localOpenCodeDisconnect, (event, ...args: unknown[]) => {
-    assertTrustedIpcSender(event);
-    if (args.length !== 0) {
-      return Promise.reject(new TypeError("localOpenCode.disconnect does not accept arguments"));
-    }
-    localOpenCodeWasConnected = false;
-    return runLocalOpenCode((service) => service.disconnect());
   });
 
   removeIpcHandlers = () => {
@@ -193,8 +210,7 @@ const installIpcHandlers = (): void => {
 };
 
 const forwardLocalOpenCodeUnavailable = (): void => {
-  if (!localOpenCodeWasConnected || mainWindow === undefined || mainWindow.isDestroyed()) return;
-  localOpenCodeWasConnected = false;
+  if (mainWindow === undefined || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send(IPC_CHANNELS.localOpenCodeUnavailable);
 };
 
@@ -281,7 +297,7 @@ const createMainWindow = async (): Promise<void> => {
     minWidth: 360,
     minHeight: 480,
     webPreferences: {
-      preload: join(__dirname, "../preload/index.cjs"),
+      preload: fileURLToPath(new URL("../preload/index.cjs", import.meta.url)),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -309,7 +325,7 @@ const createMainWindow = async (): Promise<void> => {
     return;
   }
 
-  const rendererRoot = join(__dirname, "../renderer");
+  const rendererRoot = fileURLToPath(new URL("../renderer", import.meta.url));
   if (!rendererProtocolInstalled) {
     await installRendererProtocol(rendererRoot);
     rendererProtocolInstalled = true;
@@ -319,11 +335,12 @@ const createMainWindow = async (): Promise<void> => {
 
 const start = async (): Promise<void> => {
   await app.whenReady();
+  if (quitHandler.isQuitting()) return;
   configurePermissions();
   desktopRuntime = ManagedRuntime.make(settingsLayer(app.getPath("userData"), safeStorage));
   localOpenCode = createLocalOpenCodeService({
     userDataPath: app.getPath("userData"),
-    binaryPath: resolveDesktopRuntimeEnvironment().localOpenCodeBinary,
+    workerPath: resolveDesktopRuntimeEnvironment().workerPath,
   });
   removeLocalOpenCodeUnavailableListener = localOpenCode.onUnavailable(
     forwardLocalOpenCodeUnavailable,
@@ -332,7 +349,7 @@ const start = async (): Promise<void> => {
   await createMainWindow();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (!quitHandler.isQuitting() && BrowserWindow.getAllWindows().length === 0) {
       void createMainWindow();
     }
   });
@@ -344,26 +361,7 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", (event) => {
-  if (quitCleanupComplete) return;
-  event.preventDefault();
-  if (quitting) return;
-  quitting = true;
-  const sidecar = localOpenCode;
-  void (async () => {
-    await disconnectSidecarForQuit(sidecar);
-    await settingsMutation;
-    removeIpcHandlers?.();
-    removeLocalOpenCodeUnavailableListener?.();
-    removeLocalOpenCodeUnavailableListener = undefined;
-    localOpenCode = undefined;
-    const runtime = desktopRuntime;
-    desktopRuntime = undefined;
-    await runtime?.dispose();
-    quitCleanupComplete = true;
-    app.quit();
-  })();
-});
+app.on("before-quit", quitHandler.beforeQuit);
 
 void start().catch(() => {
   app.quit();

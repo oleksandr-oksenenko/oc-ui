@@ -1,11 +1,11 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignore": ["tools/oxlint/anti-slop/**"],
-  "ignoreBinaries": ["lipo"],
   "ignoreDependencies": ["oxlint", "oxlint-tsgolint"],
   "workspaces": {
     "apps/desktop": {
       "entry": [
+        "src/main/opencode-worker.ts",
         "stories/**/*.stories.{ts,tsx}",
         "test/e2e/**/*.e2e.ts",
         "electron-builder.config.mjs"

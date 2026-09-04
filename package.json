@@ -7,7 +7,7 @@
     "build": "vp run desktop#build",
     "check": "vp check && tsc -p apps/desktop/tsconfig.wdio.json --noEmit && pnpm lint:styles && pnpm check:components && knip",
     "check:components": "node tools/check-component-layout.mjs",
-    "dev": "vp run desktop#dev",
+    "dev": "vp run --no-cache desktop#dev",
     "format": "vp fmt",
     "knip": "knip",
     "lint": "vp lint && pnpm lint:styles",
