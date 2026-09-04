@@ -23,6 +23,7 @@
     "test": "vp test run --passWithNoTests"
   },
   "dependencies": {
+    "@effect/platform-node": "catalog:",
     "@kobalte/core": "catalog:",
     "@opencode-ai/client": "catalog:",
     "@opencode-ai/schema": "catalog:",
@@ -37,6 +38,7 @@
     "solid-js": "catalog:"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:",
     "@opencode-ai/cli": "catalog:",
     "@storybook/addon-a11y": "catalog:",
     "@storybook/addon-vitest": "catalog:",

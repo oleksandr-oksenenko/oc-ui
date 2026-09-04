@@ -1,7 +1,7 @@
 import type { MessageBoxOptions, MessageBoxReturnValue } from "electron";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createAppQuitHandler } from "./shutdown.ts";
+import { createAppQuitHandler, settleSettingsIpc } from "./shutdown.ts";
 
 const deferred = <A>() => {
   let resolve!: (value: A) => void;
@@ -36,6 +36,46 @@ const setup = (needsConfirmation = true) => {
 };
 
 describe("app quit", () => {
+  it("shuts Settings down before waiting for accepted IPC and waits for both", async () => {
+    const stopped = deferred<void>();
+    const request = deferred<void>();
+    let collectedIpc = false;
+    let finished = false;
+    const pendingIpc = {
+      *[Symbol.iterator]() {
+        collectedIpc = true;
+        yield request.promise;
+      },
+    };
+    const cleanup = settleSettingsIpc(() => stopped.promise, pendingIpc).then(() => {
+      finished = true;
+      return undefined;
+    });
+    await flush();
+    expect(collectedIpc).toBe(false);
+    stopped.resolve();
+    await flush();
+    expect(collectedIpc).toBe(true);
+    expect(finished).toBe(false);
+    request.resolve();
+    await cleanup;
+    expect(finished).toBe(true);
+  });
+
+  it("reports cleanup failure separately from failure to stop the server", async () => {
+    const { handler, event, cleanup, showMessageBox, quit } = setup(false);
+    cleanup.mockRejectedValueOnce(new Error("cleanup failed"));
+    handler.beforeQuit(event);
+    await flush();
+    expect(showMessageBox).toHaveBeenLastCalledWith(
+      expect.objectContaining({ message: "Ocui could not finish closing." }),
+    );
+    expect(quit).not.toHaveBeenCalled();
+    handler.beforeQuit(event);
+    await flush();
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
   it("asks immediately for an owned starting runtime and Cancel leaves it intact", async () => {
     const { handler, event, local, showMessageBox, cleanup, quit } = setup();
     showMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false });

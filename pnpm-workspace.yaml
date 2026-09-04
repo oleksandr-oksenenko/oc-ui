@@ -5,7 +5,9 @@ packages:
 catalogMode: prefer
 
 catalog:
+  "@effect/platform-node": 4.0.0-rc.112
   "@effect/tsgo": 0.38.0
+  "@effect/vitest": 4.0.0-rc.112
   "@kobalte/core": 0.13.13
   "@opencode-ai/cli": 0.0.0-beta-18866
   "@opencode-ai/client": 0.0.0-beta-18866

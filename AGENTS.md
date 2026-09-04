@@ -16,7 +16,13 @@
 
 # Effect architecture
 
-Use Effect to make ownership and failure behavior explicit, not merely to rewrite successful async operations. This repository uses Effect v4 RC; read the installed guidance and source before using unfamiliar APIs.
+Use Effect to make ownership and failure behavior explicit, not merely to rewrite successful async operations. This repository uses Effect v4 RC.
+
+## Learning more about Effect
+
+Before writing any Effect code, first read `apps/desktop/node_modules/effect/AGENTS.md` completely and follow its links when required.
+
+If its guidance does not cover a particular Effect API or concept, search the installed source in `apps/desktop/node_modules/effect/src`. Use documentation from the exact installed version when consulting online references.
 
 1. **Start with ownership.** Use Effect for server communication, persistence, connections, and feature workflows. Give each operation an owner and a lifetime. Create services for real resources, shared state, or external dependencies; keep pure calculations and rendering as ordinary code.
 2. **Make lifetimes structural.** Compose one application runtime in Electron main and one in the renderer. Use scopes to own resources, child fibers, and cleanup on success, failure, or interruption. Define what happens when a caller, component, or owner goes away; losing a subscriber must not accidentally abandon work owned by the application.

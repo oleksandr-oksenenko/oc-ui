@@ -1,8 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 
-import { Context, Effect, Layer, Schema } from "effect";
+import {
+  Config,
+  ConfigProvider,
+  Context,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  Path,
+  Queue,
+  Schema,
+  Scope,
+} from "effect";
+import type { PlatformError } from "effect";
+import type { SafeStorage } from "electron";
 
 import type { OpenCodeTarget, SaveTargetResult } from "../shared/desktop-api.ts";
 
@@ -10,122 +24,119 @@ const SETTINGS_FILE_NAME = "connection-settings.json";
 const MAX_URL_LENGTH = 2_048;
 const MAX_PASSWORD_LENGTH = 16_384;
 
-export interface SecureStorage {
-  readonly isEncryptionAvailable: () => boolean;
-  readonly encryptString: (value: string) => Buffer;
-  readonly decryptString: (value: Buffer) => string;
-}
+const ServerUrlSchema = Schema.Trim.check(Schema.isLengthBetween(1, MAX_URL_LENGTH)).pipe(
+  Schema.decodeTo(
+    Schema.URLFromString.check(
+      Schema.makeFilter((url) => url.protocol === "http:" && url.href === `${url.origin}/`, {
+        message: "serverUrl must be a plain HTTP origin",
+      }),
+    ),
+  ),
+);
+const parseSaveTarget = Schema.decodeEffect(
+  Schema.Union([
+    Schema.Struct({ kind: Schema.Literal("local") }),
+    Schema.Struct({
+      kind: Schema.Literal("remote"),
+      serverUrl: ServerUrlSchema,
+      password: Schema.optionalKey(
+        Schema.NonEmptyString.check(Schema.isMaxLength(MAX_PASSWORD_LENGTH)),
+      ),
+    }),
+  ]),
+  { onExcessProperty: "error" },
+);
 
-export interface SettingsService {
-  readonly load: Effect.Effect<OpenCodeTarget | undefined, SettingsError>;
-  readonly save: (target: OpenCodeTarget) => Effect.Effect<SaveTargetResult, SettingsError>;
-  readonly clear: Effect.Effect<void, SettingsError>;
-}
+export type SecureStorage = Pick<
+  SafeStorage,
+  "isEncryptionAvailable" | "encryptString" | "decryptString"
+>;
 
-export const Settings = Context.Service<SettingsService>("ocui/Settings");
+export class Settings extends Context.Service<
+  Settings,
+  {
+    readonly load: Effect.Effect<OpenCodeTarget | undefined, SettingsError>;
+    readonly save: (target: OpenCodeTarget) => Effect.Effect<SaveTargetResult, SettingsError>;
+    readonly clear: Effect.Effect<void, SettingsError>;
+    readonly shutdown: Effect.Effect<void>;
+  }
+>()("ocui/Settings") {}
 
 export class SettingsError extends Schema.TaggedError<SettingsError>()("SettingsError", {
   cause: Schema.Defect(),
 }) {}
 
-const StoredLocalTargetSchema = Schema.Struct({ kind: Schema.Literal("local") });
-const StoredRemoteTargetSchema = Schema.Struct({
-  kind: Schema.Literal("remote"),
-  serverUrl: Schema.String,
-  encryptedPassword: Schema.optionalKey(Schema.NonEmptyString),
-});
-const LegacyRemoteTargetSchema = Schema.Struct({
-  serverUrl: Schema.String,
-  encryptedPassword: Schema.optionalKey(Schema.NonEmptyString),
-});
-const WritableStoredTargetSchema = Schema.Union([
-  StoredLocalTargetSchema,
-  StoredRemoteTargetSchema,
-]);
-const StoredTargetSchema = Schema.Union([WritableStoredTargetSchema, LegacyRemoteTargetSchema]);
-type WritableStoredTarget = typeof WritableStoredTargetSchema.Type;
-type StoredTarget = typeof StoredTargetSchema.Type;
-const StoredTargetJsonSchema = Schema.fromJsonString(StoredTargetSchema);
-const WritableStoredTargetJsonSchema = Schema.fromJsonString(WritableStoredTargetSchema);
-const parseStoredTarget = Schema.decodeUnknownSync(StoredTargetJsonSchema, {
+const StoredTargetSchema = Schema.fromJsonString(
+  Schema.Union([
+    Schema.Struct({ kind: Schema.Literal("local") }),
+    Schema.Struct({
+      kind: Schema.Literal("remote"),
+      serverUrl: ServerUrlSchema,
+      encryptedPassword: Schema.optionalKey(Schema.NonEmptyString),
+    }),
+  ]),
+);
+type StoredTarget = typeof StoredTargetSchema.to.Encoded;
+const parseStoredTarget = Schema.decodeEffect(StoredTargetSchema, {
   onExcessProperty: "error",
 });
-const encodeStoredTarget = Schema.encodeSync(WritableStoredTargetJsonSchema);
+const encodeStoredTarget = Schema.encodeEffect(
+  Schema.fromJsonString(Schema.toEncoded(StoredTargetSchema.to)),
+);
 
-const readSettings = (filePath: string): Effect.Effect<StoredTarget | undefined> =>
-  Effect.promise(async () => {
-    try {
-      return parseStoredTarget(await readFile(filePath, "utf8"));
-    } catch {
-      return undefined;
-    }
-  });
-
-const writeSettings = (
-  filePath: string,
-  target: WritableStoredTarget,
-): Effect.Effect<void, SettingsError> =>
-  Effect.tryPromise({
-    try: async () => {
-      const directory = dirname(filePath);
-      await mkdir(directory, { recursive: true });
-
-      const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
-      const contents = `${encodeStoredTarget(target)}\n`;
-
-      try {
-        await writeFile(temporaryPath, contents, { encoding: "utf8", mode: 0o600 });
-        try {
-          await chmod(temporaryPath, 0o600);
-        } catch {
-          // Windows and some filesystems do not support POSIX permissions.
-        }
-        await rename(temporaryPath, filePath);
-      } catch (cause) {
-        try {
-          await unlink(temporaryPath);
-        } catch {
-          // The original write error is the useful failure for the caller.
-        }
-        throw cause;
-      }
-    },
-    catch: (cause) => new SettingsError({ cause }),
-  });
-
-const makeSettingsService = (
+const makeSettingsService = Effect.fn("Settings.make")(function* (
   userDataPath: string,
   secureStorage: SecureStorage,
-): SettingsService => {
-  const filePath = join(userDataPath, SETTINGS_FILE_NAME);
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const filePath = path.join(userDataPath, SETTINGS_FILE_NAME);
+  const provider = yield* ConfigProvider.fromDir({ rootPath: userDataPath });
+  const readSettings = Config.string(SETTINGS_FILE_NAME)
+    .pipe(Config.withDefault(""))
+    .parse(provider)
+    .pipe(
+      Effect.flatMap((contents) =>
+        parseStoredTarget(contents).pipe(Effect.orElseSucceed(() => undefined)),
+      ),
+    );
+  const writeSettings = Effect.fn("Settings.write")(function* (target: StoredTarget) {
+    yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
+    const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+    const contents = `${yield* encodeStoredTarget(target)}\n`;
+    const cleanup = fs.remove(temporaryPath, { force: true }).pipe(Effect.ignore);
+    yield* fs.writeFileString(temporaryPath, contents, { flag: "wx", mode: 0o600 }).pipe(
+      Effect.tapError((error) => (error.reason._tag === "AlreadyExists" ? Effect.void : cleanup)),
+      Effect.andThen(fs.rename(temporaryPath, filePath).pipe(Effect.onError(() => cleanup))),
+      Effect.onInterrupt(() => cleanup),
+    );
+  });
 
   const load = Effect.gen(function* () {
-    const stored = yield* readSettings(filePath);
+    const stored = yield* readSettings;
     if (stored === undefined) return undefined;
-    if ("kind" in stored && stored.kind === "local") return stored;
+    if (stored.kind === "local") return stored;
 
-    const serverUrl = normalizeStoredServerUrl(stored.serverUrl);
-    if (serverUrl === undefined) return undefined;
-
+    const serverUrl = stored.serverUrl.origin;
     const password = decryptStoredPassword(stored, secureStorage);
     return password === undefined
       ? { kind: "remote" as const, serverUrl }
       : { kind: "remote" as const, serverUrl, password };
   });
 
-  const save = Effect.fn("Settings.save")(function* (target: OpenCodeTarget) {
+  const save = Effect.fn("Settings.save")(function* (input: OpenCodeTarget) {
+    const target = yield* parseSaveTarget(input);
     if (target.kind === "local") {
-      yield* writeSettings(filePath, target);
+      yield* writeSettings(target);
       return { passwordSaved: false };
     }
 
-    const serverUrl = normalizeServerUrl(target.serverUrl);
-    const password = target.password === undefined ? undefined : validatePassword(target.password);
+    const serverUrl = target.serverUrl.origin;
+    const { password } = target;
     const encryptedPassword =
       password === undefined ? undefined : encryptPassword(password, secureStorage);
 
     yield* writeSettings(
-      filePath,
       encryptedPassword === undefined
         ? { kind: "remote", serverUrl }
         : { kind: "remote", serverUrl, encryptedPassword },
@@ -133,27 +144,70 @@ const makeSettingsService = (
     return { passwordSaved: encryptedPassword !== undefined };
   });
 
-  const clear = Effect.tryPromise({
-    try: async () => {
-      try {
-        await unlink(filePath);
-      } catch (cause) {
-        if (!isNodeError(cause) || cause.code !== "ENOENT") throw cause;
-      }
-    },
-    catch: (cause) => new SettingsError({ cause }),
+  const clear = fs.remove(filePath, { force: true });
+
+  const queue = yield* Queue.make<Effect.Effect<void>>();
+  const requestScope = yield* Scope.make("parallel");
+  let closing = false;
+  const close = yield* Effect.gen(function* () {
+    closing = true;
+    yield* Queue.shutdown(queue);
+    yield* Scope.close(requestScope, Exit.void);
+  }).pipe(Effect.uninterruptible, Effect.cached);
+
+  const worker = yield* Queue.take(queue).pipe(
+    Effect.flatten,
+    Effect.forever,
+    Effect.ensuring(close),
+    Effect.forkIn(yield* Effect.scope),
+  );
+  const shutdown = Effect.gen(function* () {
+    yield* close;
+    yield* Fiber.interrupt(worker);
+  }).pipe(Effect.uninterruptible);
+  yield* Effect.addFinalizer(() => shutdown);
+
+  const submit = <A>(
+    operation: Effect.Effect<
+      A,
+      Config.ConfigError | PlatformError.PlatformError | Schema.SchemaError
+    >,
+  ) =>
+    Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        if (closing) return yield* Effect.interrupt;
+        const start = yield* Deferred.make<void>();
+        const request = yield* Effect.gen(function* () {
+          yield* Deferred.await(start);
+          if (closing) return yield* Effect.interrupt;
+          return yield* operation;
+        }).pipe(
+          Effect.mapError((cause) => new SettingsError({ cause })),
+          Effect.forkIn(requestScope),
+        );
+        // Scope owns the request before the queue can release it. Discarding
+        // an entry is safe: scope closure interrupts even requests not started.
+        const offered = yield* Queue.offer(
+          queue,
+          Effect.gen(function* () {
+            yield* Deferred.succeed(start, undefined);
+            yield* Fiber.await(request);
+          }),
+        );
+        if (!offered) yield* Fiber.interrupt(request);
+        return yield* restore(Fiber.join(request)).pipe(
+          Effect.onInterrupt(() => Fiber.interrupt(request)),
+        );
+      }),
+    );
+
+  return Settings.of({
+    load: submit(load),
+    save: (target: OpenCodeTarget) => submit(save(target)),
+    clear: submit(clear),
+    shutdown,
   });
-
-  return { load, save, clear };
-};
-
-const normalizeStoredServerUrl = (value: string): string | undefined => {
-  try {
-    return normalizeServerUrl(value);
-  } catch {
-    return undefined;
-  }
-};
+}, Effect.uninterruptible);
 
 const decryptStoredPassword = (
   stored: { readonly encryptedPassword?: string },
@@ -186,46 +240,8 @@ const encryptPassword = (password: string, secureStorage: SecureStorage): string
   }
 };
 
-const isNodeError = (cause: unknown): cause is NodeJS.ErrnoException =>
-  cause instanceof Error && "code" in cause;
-
 export const settingsLayer = (
   userDataPath: string,
   secureStorage: SecureStorage,
-): Layer.Layer<SettingsService> =>
-  Layer.succeed(Settings, makeSettingsService(userDataPath, secureStorage));
-
-export const normalizeServerUrl = (value: string): string => {
-  const input = value.trim();
-  if (input.length === 0 || input.length > MAX_URL_LENGTH) {
-    throw new TypeError("serverUrl is invalid");
-  }
-
-  let url: URL;
-  try {
-    url = new URL(input);
-  } catch {
-    throw new TypeError("serverUrl is invalid");
-  }
-
-  if (
-    url.protocol !== "http:" ||
-    url.hostname.length === 0 ||
-    url.username.length > 0 ||
-    url.password.length > 0 ||
-    (url.pathname !== "" && url.pathname !== "/") ||
-    url.search.length > 0 ||
-    url.hash.length > 0
-  ) {
-    throw new TypeError("serverUrl must be a plain HTTP origin");
-  }
-
-  return `${url.protocol}//${url.host}`;
-};
-
-export const validatePassword = (value: string): string => {
-  if (value.length === 0 || value.length > MAX_PASSWORD_LENGTH) {
-    throw new TypeError("password is invalid");
-  }
-  return value;
-};
+): Layer.Layer<Settings, never, FileSystem.FileSystem | Path.Path> =>
+  Layer.effect(Settings, makeSettingsService(userDataPath, secureStorage));

@@ -3,9 +3,10 @@ import { realpath } from "node:fs/promises";
 import { join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { NodePath } from "@effect/platform-node";
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session } from "electron";
 import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electron";
-import { Effect, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 
 import type { SaveTargetInput } from "../shared/desktop-api.ts";
 import { IPC_CHANNELS, parseSaveTargetInput } from "../shared/desktop-api.ts";
@@ -14,10 +15,10 @@ import {
   LocalOpenCodeUnavailableError,
   type LocalOpenCodeService,
 } from "./local-opencode.ts";
-import type { SettingsService } from "./settings.ts";
 import type { SettingsError } from "./settings.ts";
-import { normalizeServerUrl, settingsLayer, Settings, validatePassword } from "./settings.ts";
-import { createAppQuitHandler } from "./shutdown.ts";
+import { settingsLayer, Settings } from "./settings.ts";
+import { settingsFileSystemLayer } from "./settings-file-system.ts";
+import { createAppQuitHandler, settleSettingsIpc } from "./shutdown.ts";
 import { resolveSessionDataPath, resolveUserDataPath } from "./user-data-path.ts";
 
 const RENDERER_SCHEME = "oc";
@@ -46,7 +47,7 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-type DesktopRuntime = ManagedRuntime.ManagedRuntime<SettingsService, never>;
+type DesktopRuntime = ManagedRuntime.ManagedRuntime<Settings, never>;
 
 let mainWindow: BrowserWindow | undefined;
 let desktopRuntime: DesktopRuntime | undefined;
@@ -54,7 +55,6 @@ let localOpenCode: LocalOpenCodeService | undefined;
 let removeIpcHandlers: (() => void) | undefined;
 let removeLocalOpenCodeUnavailableListener: (() => void) | undefined;
 let rendererProtocolInstalled = false;
-let settingsMutation: Promise<void> = Promise.resolve();
 const pendingIpc = new Set<Promise<unknown>>();
 
 const quitHandler = createAppQuitHandler({
@@ -66,7 +66,12 @@ const quitHandler = createAppQuitHandler({
     // requests and every already accepted request has settled.
     mainWindow?.destroy();
     mainWindow = undefined;
-    await Promise.allSettled(pendingIpc);
+    await settleSettingsIpc(
+      () =>
+        desktopRuntime?.runPromise(Effect.flatMap(Settings, (service) => service.shutdown)) ??
+        Promise.resolve(),
+      pendingIpc,
+    );
     removeIpcHandlers?.();
     removeLocalOpenCodeUnavailableListener?.();
     removeLocalOpenCodeUnavailableListener = undefined;
@@ -97,7 +102,7 @@ const resolveDesktopRuntimeEnvironment = (): DesktopRuntimeEnvironment => {
 };
 
 const runSettings = <A>(
-  operation: (service: SettingsService) => Effect.Effect<A, SettingsError>,
+  operation: (service: Settings["Service"]) => Effect.Effect<A, SettingsError>,
 ): Promise<A> => {
   if (desktopRuntime === undefined) {
     return Promise.reject(new Error("Desktop services are not ready"));
@@ -111,15 +116,6 @@ const trackIpc = <A>(operation: () => Promise<A>): Promise<A> => {
   void result.then(
     () => pendingIpc.delete(result),
     () => pendingIpc.delete(result),
-  );
-  return result;
-};
-
-const queueSettingsMutation = <A>(operation: () => Promise<A>): Promise<A> => {
-  const result = settingsMutation.then(operation);
-  settingsMutation = result.then(
-    () => undefined,
-    () => undefined,
   );
   return result;
 };
@@ -141,7 +137,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("target.load does not accept arguments"));
     }
-    return trackIpc(() => settingsMutation.then(() => runSettings((service) => service.load)));
+    return trackIpc(() => runSettings((service) => service.load));
   });
 
   ipcMain.handle(IPC_CHANNELS.targetSave, (event, rawInput) => {
@@ -153,19 +149,7 @@ const installIpcHandlers = (): void => {
       return Promise.reject(new TypeError("invalid OpenCode target"));
     }
 
-    const validated: SaveTargetInput =
-      input.kind === "local"
-        ? input
-        : input.password === undefined
-          ? { kind: "remote", serverUrl: normalizeServerUrl(input.serverUrl) }
-          : {
-              kind: "remote",
-              serverUrl: normalizeServerUrl(input.serverUrl),
-              password: validatePassword(input.password),
-            };
-    return trackIpc(() =>
-      queueSettingsMutation(() => runSettings((service) => service.save(validated))),
-    );
+    return trackIpc(() => runSettings((service) => service.save(input)));
   });
 
   ipcMain.handle(IPC_CHANNELS.targetClear, (event, ...args: unknown[]) => {
@@ -173,7 +157,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("target.clear does not accept arguments"));
     }
-    return trackIpc(() => queueSettingsMutation(() => runSettings((service) => service.clear)));
+    return trackIpc(() => runSettings((service) => service.clear));
   });
 
   ipcMain.handle(IPC_CHANNELS.localOpenCodeConnect, (event, ...args: unknown[]) => {
@@ -337,7 +321,11 @@ const start = async (): Promise<void> => {
   await app.whenReady();
   if (quitHandler.isQuitting()) return;
   configurePermissions();
-  desktopRuntime = ManagedRuntime.make(settingsLayer(app.getPath("userData"), safeStorage));
+  desktopRuntime = ManagedRuntime.make(
+    settingsLayer(app.getPath("userData"), safeStorage).pipe(
+      Layer.provide(Layer.mergeAll(NodePath.layer, settingsFileSystemLayer())),
+    ),
+  );
   localOpenCode = createLocalOpenCodeService({
     userDataPath: app.getPath("userData"),
     workerPath: resolveDesktopRuntimeEnvironment().workerPath,
