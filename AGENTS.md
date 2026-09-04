@@ -14,6 +14,21 @@
 - Justify temporary growth by naming exactly what later disappears and in which follow-up step. Do not let temporary duplication become the default architecture.
 - Do not reduce line count through dense formatting, hidden complexity, or removal of useful checks. Optimize for less code to understand while preserving required behavior and readability.
 
+# Effect architecture
+
+Use Effect to make ownership and failure behavior explicit, not merely to rewrite successful async operations. This repository uses Effect v4 RC; read the installed guidance and source before using unfamiliar APIs.
+
+1. **Start with ownership.** Use Effect for server communication, persistence, connections, and feature workflows. Give each operation an owner and a lifetime. Create services for real resources, shared state, or external dependencies; keep pure calculations and rendering as ordinary code.
+2. **Make lifetimes structural.** Compose one application runtime in Electron main and one in the renderer. Use scopes to own resources, child fibers, and cleanup on success, failure, or interruption. Define what happens when a caller, component, or owner goes away; losing a subscriber must not accidentally abandon work owned by the application.
+3. **Prefer built-in mechanisms.** Use Effect scopes, fibers, queues, synchronization primitives, finalizers, and retry schedules before creating custom coordination. A custom mechanism needs a concrete requirement that the existing abstractions do not satisfy.
+4. **Design failure paths alongside success.** Specify cancellation, partial completion, recovery, and shutdown before implementation. Decide whether caller cancellation propagates and whether shutdown finishes or discards pending work. The application chooses the policy; Effect implements it. Settle affected callers and wait for owned cleanup before disposal.
+5. **Connect interruption to real work.** Forward Effect's AbortSignal to external APIs where supported. Stopping a caller's wait is not proof that I/O has stopped. Retain ownership until uncancellable work and cleanup settle. Keep uninterruptible regions limited to work that must finish for correctness; do not disable cancellation across a whole workflow by default.
+6. **Handle concurrency and retries deliberately.** Cancel obsolete reads and serialize conflicting mutations in the required order. A timeout must cancel work or leave it owned until settlement. Retry only when repeating the operation is safe; cancellation or a missing response does not prove that a mutation was never applied.
+7. **Give state one owner.** Use Effect services and atoms for application state, with `@effect/atom-solid` connecting it to the UI. Keep focus, layout, and DOM behavior in Solid. Never mirror authoritative state across stores.
+8. **Keep external boundaries narrow.** Prefer native Effect APIs and adapt Electron or necessary Promise APIs at their boundaries. During migration, the existing OpenCode SDK data store remains application code inside Workspace and stays authoritative until caching, optimistic updates, rollback, and event behavior have a verified Effect replacement. Do not copy that store into atoms.
+9. **Make failures clear.** Use typed errors for expected failures and schemas for untrusted input. Recover where an owner can act or present a useful message; keep unexpected defects visible. Use logging and tracing where they help explain lifecycle and failure behavior.
+10. **Replace machinery and verify difficult cases.** Remove the manual coordination each migration replaces. Add platform and testing integrations where they replace required local machinery. Use existing verification gates and focused tests for ordering, cancellation, partial failure, retries, cleanup, and shutdown, alongside successful results.
+
 # OpenCode integration
 
 - Inspect the pinned OpenCode SDK, UI package, and existing oc-ui code before adding a local type, projection, helper, control, icon, or behavior. Reuse upstream types and primitives when they already express the requirement.
