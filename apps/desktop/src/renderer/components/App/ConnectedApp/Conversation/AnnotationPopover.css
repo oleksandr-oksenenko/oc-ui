@@ -1,6 +1,16 @@
 .annotation-selection-action {
   position: fixed;
   z-index: 20;
+  border-radius: var(--radius-md);
+  background: var(--oc-surface-raised);
+}
+
+.annotation-selection-error {
+  width: min(260px, calc(100vw - 24px));
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--oc-status-danger);
+  font-size: var(--oc-type-caption-size);
 }
 
 .annotation-popover[data-component="popover-content"] {
@@ -9,7 +19,7 @@
   width: min(390px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   border: 0;
-  background: transparent;
+  background: var(--oc-surface-raised);
   box-shadow: none;
   color: var(--oc-text-contrast);
 }
@@ -33,6 +43,7 @@
 .annotation-popover [data-component="line-comment-v2"] {
   width: 100%;
   max-width: none;
+  overflow-wrap: anywhere;
 }
 
 .annotation-popover-anchor {

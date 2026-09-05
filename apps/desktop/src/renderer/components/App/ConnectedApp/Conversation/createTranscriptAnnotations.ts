@@ -20,8 +20,17 @@ type Comment = {
 };
 type Interaction =
   | { readonly kind: "closed" }
-  | { readonly kind: "selected" | "new"; readonly selection: AnnotationSelection }
-  | { readonly kind: "comments"; readonly keys: readonly string[]; readonly anchor: DOMRect };
+  | {
+      readonly kind: "selected" | "opening";
+      readonly selection: AnnotationSelection;
+      readonly error?: string;
+    }
+  | {
+      readonly kind: "comments";
+      readonly keys: readonly string[];
+      readonly anchor: DOMRect;
+      readonly editingID?: string;
+    };
 
 export type AnnotationPopoverController = ReturnType<typeof createTranscriptAnnotations>;
 
@@ -61,16 +70,11 @@ export function createTranscriptAnnotations(input: {
   const state = createMemo(() => {
     const current = interaction();
     switch (current.kind) {
-      case "new":
-        return {
-          kind: "new" as const,
-          quote: current.selection.quote,
-          anchor: current.selection.anchor,
-        };
       case "comments":
         return {
           kind: "comments" as const,
           anchor: current.anchor,
+          editingID: current.editingID,
           comments: comments().filter((item) => current.keys.includes(item.key)),
         };
       default:
@@ -110,37 +114,69 @@ export function createTranscriptAnnotations(input: {
     onDismiss: close,
   });
 
-  function openCandidate() {
-    const current = interaction();
-    if (
-      current.kind !== "selected" ||
-      !input.enabled() ||
-      !highlights.validSelection(current.selection)
-    )
-      return;
-    opener = current.selection.block;
-    focusSource = current.selection.source;
-    setInteraction({ kind: "new", selection: current.selection });
-  }
-  async function addCandidate(body: string) {
+  async function openCandidate() {
     const current = interaction();
     const id = input.sessionID();
-    if (current.kind !== "new" || !id || !body.trim() || !input.enabled()) return;
-    const textDigest = await digestAnnotationText(current.selection.text);
     if (
-      interaction() !== current ||
-      input.sessionID() !== id ||
+      current.kind !== "selected" ||
+      !id ||
       !input.enabled() ||
       !highlights.validSelection(current.selection)
     )
       return;
-    input.drafts.add(id, {
-      source: { ...current.selection.source, textDigest },
-      quote: current.selection.quote,
-      body: body.trim(),
+    const opening = { ...current, kind: "opening" as const, error: undefined };
+    setInteraction(opening);
+    try {
+      const textDigest = await digestAnnotationText(current.selection.text);
+      if (interaction() !== opening) return;
+      if (
+        input.sessionID() !== id ||
+        !input.enabled() ||
+        !highlights.validSelection(current.selection)
+      ) {
+        close();
+        return;
+      }
+      batch(() => {
+        const key = input.drafts.add(id, {
+          source: { ...current.selection.source, textDigest },
+          quote: current.selection.quote,
+          body: "",
+        });
+        opener = current.selection.block;
+        focusSource = current.selection.source;
+        window.getSelection()?.removeAllRanges();
+        setInteraction({
+          kind: "comments",
+          keys: [key],
+          anchor: current.selection.anchor,
+          editingID: key,
+        });
+      });
+    } catch {
+      if (interaction() === opening)
+        setInteraction({ ...current, error: "Could not prepare this annotation. Try again." });
+    }
+  }
+
+  function edit(key: string) {
+    const current = interaction();
+    if (current.kind !== "comments" || !input.enabled()) return;
+    if (
+      !current.keys.includes(key) ||
+      !comments().some((item) => item.key === key && !item.readonly)
+    )
+      return;
+    setInteraction({ ...current, editingID: key });
+  }
+
+  function finishEditing(key: string) {
+    const current = interaction();
+    if (current.kind !== "comments" || current.editingID !== key) return;
+    batch(() => {
+      setInteraction({ ...current, editingID: undefined });
+      removeEmpty(key);
     });
-    window.getSelection()?.removeAllRanges();
-    close();
   }
 
   createEffect(() => {
@@ -160,7 +196,13 @@ export function createTranscriptAnnotations(input: {
     state,
     selection: () => {
       const current = interaction();
-      return current.kind === "selected" ? { anchor: current.selection.anchor } : undefined;
+      return current.kind === "selected" || current.kind === "opening"
+        ? {
+            anchor: current.selection.anchor,
+            pending: current.kind === "opening",
+            error: current.error,
+          }
+        : undefined;
     },
     disabled: () => !input.enabled(),
     focusTarget: () =>
@@ -179,14 +221,14 @@ export function createTranscriptAnnotations(input: {
     close,
     attach: highlights.attach,
     openCandidate,
-    addCandidate,
+    edit,
+    finishEditing,
     updateBody: (id: string, body: string) => {
       if (sessionID && input.enabled()) input.drafts.updateBody(sessionID, id, body);
     },
     remove: (id: string) => {
       if (sessionID && input.enabled()) input.drafts.remove(sessionID, id);
     },
-    removeEmpty,
     discard: () => {
       const id = sessionID;
       if (!id || !input.enabled()) return;

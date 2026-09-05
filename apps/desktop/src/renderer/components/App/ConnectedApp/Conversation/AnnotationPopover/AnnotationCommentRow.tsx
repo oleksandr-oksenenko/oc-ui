@@ -48,6 +48,8 @@ export function AnnotationCommentRow(props: {
               class="annotation-inline-editor"
               aria-label="Annotation comment"
               rows={1}
+              disabled={props.disabled}
+              placeholder="Write a question or note…"
               value={untrack(() => props.annotation.body)}
               ref={(element) => requestAnimationFrame(() => element.focus())}
               onInput={(event) => props.onInput(event.currentTarget.value)}

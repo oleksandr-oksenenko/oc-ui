@@ -47,32 +47,72 @@ afterEach(() => {
 });
 
 describe("createTranscriptAnnotations", () => {
-  it("hashes only on Add and keeps DOM selection details out of the popup state", async () => {
+  it("prepares the source once and opens an ordinary draft already editing", async () => {
     const digest = vi.fn<SubtleCrypto["digest"]>(() => Promise.resolve(new Uint8Array(32).buffer));
     vi.stubGlobal("crypto", { randomUUID: crypto.randomUUID.bind(crypto), subtle: { digest } });
     const root = setup();
     try {
       root.select();
-      expect(root.controller.selection()).toBeDefined();
       expect(digest).not.toHaveBeenCalled();
-      root.controller.openCandidate();
+      await root.controller.openCandidate();
+      const draft = root.drafts.get("first")[0]!;
+      expect(digest).toHaveBeenCalledTimes(1);
+      expect(draft.body).toBe("");
       expect(root.controller.selection()).toBeUndefined();
       expect(root.controller.state()).toEqual({
-        kind: "new",
-        quote: "A useful passage.",
+        kind: "comments",
         anchor: expect.any(DOMRect),
+        editingID: draft.id,
+        comments: [{ key: draft.id, annotation: draft, readonly: false }],
       });
-      expect(digest).not.toHaveBeenCalled();
-      await root.controller.addCandidate("Explain this.");
+      root.controller.updateBody(draft.id, "Explain this.");
+      root.controller.finishEditing(draft.id);
+      root.controller.edit(draft.id);
+      root.controller.updateBody(draft.id, "Explain this clearly.");
+      root.controller.close();
+      expect(root.drafts.get("first")[0]?.body).toBe("Explain this clearly.");
       expect(digest).toHaveBeenCalledTimes(1);
-      expect(root.drafts.get("first")).toHaveLength(1);
-      expect(root.controller.state().kind).toBe("closed");
     } finally {
       root.dispose();
     }
   });
 
-  it("does not add a pending annotation after switching conversations", async () => {
+  it.each(["resize", "scroll"])(
+    "keeps typed new comments when %s dismisses the popup",
+    async (event) => {
+      const root = setup();
+      try {
+        root.select();
+        await root.controller.openCandidate();
+        const draft = root.drafts.get("first")[0]!;
+        root.controller.updateBody(draft.id, "Keep this note.");
+        window.dispatchEvent(new Event(event));
+        expect(root.controller.state().kind).toBe("closed");
+        expect(root.drafts.get("first")[0]?.body).toBe("Keep this note.");
+      } finally {
+        root.dispose();
+      }
+    },
+  );
+
+  it("removes empty drafts when editing finishes or the popup closes", async () => {
+    const root = setup();
+    try {
+      root.select();
+      await root.controller.openCandidate();
+      root.controller.finishEditing(root.drafts.get("first")[0]!.id);
+      expect(root.drafts.get("first")).toHaveLength(0);
+      expect(root.controller.state().kind).toBe("closed");
+      root.select();
+      await root.controller.openCandidate();
+      root.controller.close();
+      expect(root.drafts.get("first")).toHaveLength(0);
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it("does not open a pending annotation after switching conversations", async () => {
     let finish!: (value: ArrayBuffer) => void;
     const digest = vi.fn<SubtleCrypto["digest"]>(
       () =>
@@ -84,14 +124,67 @@ describe("createTranscriptAnnotations", () => {
     const root = setup();
     try {
       root.select();
-      root.controller.openCandidate();
-      const adding = root.controller.addCandidate("Explain this.");
+      const opening = root.controller.openCandidate();
+      expect(root.controller.selection()?.pending).toBe(true);
+      await root.controller.openCandidate();
+      expect(digest).toHaveBeenCalledTimes(1);
       root.setSessionID("second");
       finish(new Uint8Array(32).buffer);
-      await adding;
+      await opening;
       expect(root.drafts.get("first")).toHaveLength(0);
       expect(root.drafts.get("second")).toHaveLength(0);
       expect(root.controller.state().kind).toBe("closed");
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it("does not let a canceled opening replace or block a later annotation", async () => {
+    const finishes: ((value: ArrayBuffer) => void)[] = [];
+    const digest = vi.fn<SubtleCrypto["digest"]>(
+      () =>
+        new Promise<ArrayBuffer>((resolve) => {
+          finishes.push(resolve);
+        }),
+    );
+    vi.stubGlobal("crypto", { randomUUID: crypto.randomUUID.bind(crypto), subtle: { digest } });
+    const root = setup();
+    try {
+      root.select();
+      const first = root.controller.openCandidate();
+      window.dispatchEvent(new Event("resize"));
+      root.select();
+      const second = root.controller.openCandidate();
+      finishes[1]!(new Uint8Array(32).buffer);
+      await second;
+      const state = root.controller.state();
+      finishes[0]!(new Uint8Array(32).buffer);
+      await first;
+      expect(root.controller.state()).toBe(state);
+      expect(root.drafts.get("first")).toHaveLength(1);
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it("allows retry after source preparation fails", async () => {
+    const digest = vi
+      .fn<SubtleCrypto["digest"]>()
+      .mockRejectedValueOnce(new Error("Digest failed"))
+      .mockResolvedValue(new Uint8Array(32).buffer);
+    vi.stubGlobal("crypto", { randomUUID: crypto.randomUUID.bind(crypto), subtle: { digest } });
+    const root = setup();
+    try {
+      root.select();
+      await root.controller.openCandidate();
+      expect(root.controller.selection()).toMatchObject({
+        pending: false,
+        error: expect.any(String),
+      });
+      expect(root.drafts.get("first")).toHaveLength(0);
+      await root.controller.openCandidate();
+      expect(root.controller.selection()).toBeUndefined();
+      expect(root.drafts.get("first")).toHaveLength(1);
     } finally {
       root.dispose();
     }

@@ -1,6 +1,6 @@
 # Effect migration functional verification
 
-Scope: the current production diff against `HEAD`, including the new renderer Connection, Workspace owner and Workspace model. On 2026-09-05, root `pnpm check` passed, root `pnpm test` passed **648 tests across 82 files**, and the packaged Electron suite passed **all 5 scenarios**. The app was freshly packaged with `pnpm test:acceptance:mac`; after test-only corrections, the passing run used `node test/e2e/run-packaged.mjs` from `apps/desktop` against that unchanged production bundle. The runner verified its signature and architecture, then verified worker and PTY shutdown and removed the successful disposable profile.
+Scope: the Effect migration, including the new renderer Connection, Workspace owner and Workspace model, integrated with main commit `a232233`. On 2026-09-05, root `pnpm check` passed, root `pnpm test` passed **655 tests across 82 files**, and a fresh `pnpm test:acceptance:mac` passed **all 5 packaged Electron scenarios**. The runner verified the bundle signature and architecture, worker and PTY shutdown, and removed the successful disposable profile. The annotation acceptance flow uses the newer inline editor from main.
 
 Controlled tests run oc-ui controllers, Effect scopes and Solid components against injected SDK/native boundaries. Packaged acceptance uses the actual Electron renderer and pinned OpenCode server, an isolated profile/database/Git fixture, and a scripted local model provider. Native Quit confirmation is mocked.
 
@@ -37,6 +37,6 @@ The acceptance entrypoint is [packaged-startup.e2e.ts](../apps/desktop/test/e2e/
 - The pinned OpenCode location watcher watches Git HEAD, not arbitrary workspace edits. Acceptance proves that an externally edited file appears in the server diff, then observes a real HEAD event and verifies renderer refresh. There is no normal-state Refresh control.
 - Coverage presence is not proof that every possible execution path was tested.
 
-## Verification change size
+## Original verification change size (before main integration)
 
 This testing task changed no production code: **+0 / −0, net 0**. Tests and fixtures: **+876 / −4, net +872**. Documentation: **+42 / −0, net +42**. Generated code: **+0 / −0**. The additions are the connection, provider, transport and Git acceptance scenarios, a local scripted provider and a socket-dropping HTTP proxy. They exercise real boundaries without external accounts or model charges; no production abstraction or coordinator was added.
