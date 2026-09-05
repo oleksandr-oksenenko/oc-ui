@@ -25,6 +25,8 @@
   --oc-focus-ring: #74a7ff;
   --oc-focus-ring-width: 2px;
   --oc-focus-ring-offset: 2px;
+  --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
+  --oc-focus-ring-inset-offset: calc(-1 * var(--oc-focus-ring-width));
   --oc-status-info: #5598f6;
   --oc-status-success: #7ee787;
   --oc-status-warning: #f5b942;

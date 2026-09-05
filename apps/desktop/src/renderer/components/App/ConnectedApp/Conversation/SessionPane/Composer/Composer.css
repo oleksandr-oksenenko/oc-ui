@@ -80,25 +80,10 @@
   resize: none;
   overflow-y: hidden;
   color: var(--composer-text);
-  outline: none !important;
   background: transparent !important;
-  box-shadow: none !important;
   font-family: inherit;
   font-size: var(--oc-type-body-size);
   line-height: var(--oc-type-body-line-height);
-}
-
-.composer-v2:has(.composer-v2-annotation-row) {
-  --oc-focus-ring: var(--oc-border-emphasis);
-}
-
-.composer-v2:focus-within {
-  border-color: var(--oc-focus-ring);
-}
-
-.composer-v2:has(.composer-v2-input:focus-visible) {
-  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  outline-offset: 1px;
 }
 
 .composer-v2-input::placeholder {
@@ -397,7 +382,6 @@
   background: transparent;
   font: inherit;
   line-height: 1;
-  outline: none;
 }
 
 .composer-picker-control[data-component="select-v2"]

@@ -27,6 +27,17 @@ export default {
       },
     },
     {
+      files: ["apps/desktop/src/renderer/components/**/*.css"],
+      rules: {
+        // Focus selectors may express local state, but ring geometry belongs to
+        // renderer/styles/focus.css so every control follows the same roles.
+        "property-disallowed-list": ["/^outline(?:-.+)?$/"],
+        "rule-selector-property-disallowed-list": {
+          "/:(?:focus|focus-visible|focus-within)\\b/": ["box-shadow"],
+        },
+      },
+    },
+    {
       files: ["apps/desktop/src/renderer/styles/foundations.css"],
       rules: {
         "color-no-hex": null,

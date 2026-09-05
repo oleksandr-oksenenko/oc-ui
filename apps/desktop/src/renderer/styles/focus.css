@@ -1,0 +1,34 @@
+/* Focus geometry belongs here. Components may opt into an explicit placement
+ * role, but must not recreate rings in feature styles. */
+:where(button, a, input, textarea, select, [tabindex]):focus-visible,
+:where(.oc-focus-container):has(.oc-focus-delegate:focus-visible) {
+  outline: var(--oc-focus-ring-outline);
+  outline-offset: var(--oc-focus-ring-offset);
+}
+
+/* The focused child delegates its visible ring to a compound control frame. */
+:where(.oc-focus-delegate):focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Keep the ring inside controls that touch an overflow or window edge. */
+:where(.oc-focus-inset):is(:focus-visible, [data-state="focus"]) {
+  outline-offset: var(--oc-focus-ring-inset-offset) !important;
+}
+
+/* The pinned upstream controls suppress their browser ring in these states. */
+:root
+  [data-component="select-v2"]:where(:focus-within):not(
+    [data-disabled],
+    [data-invalid],
+    [data-expanded]
+  ) {
+  outline: var(--oc-focus-ring-outline);
+  outline-offset: var(--oc-focus-ring-offset);
+}
+
+:root :where([data-slot="collapsible-trigger"], [data-slot="tabs-trigger"]):focus-visible {
+  outline: var(--oc-focus-ring-outline);
+  outline-offset: var(--oc-focus-ring-offset);
+}

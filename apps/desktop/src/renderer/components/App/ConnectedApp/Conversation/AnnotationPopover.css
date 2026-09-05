@@ -14,8 +14,6 @@
 }
 
 .annotation-popover[data-component="popover-content"] {
-  --v2-border-border-focus: var(--oc-border-emphasis);
-
   width: min(390px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   border: 0;
@@ -74,10 +72,6 @@
   cursor: text;
 }
 
-.annotation-editable-comment:focus-visible {
-  outline: 1px solid var(--oc-border-emphasis);
-}
-
 .annotation-editable-comment:disabled {
   cursor: default;
 }
@@ -96,13 +90,7 @@
   width: 100%;
   min-height: 0;
   padding: 4px 6px;
-  outline: 1px solid transparent;
   background: transparent;
-  box-shadow: none;
-}
-
-.annotation-inline-editor[data-component="textarea-v2"]:focus-within {
-  outline-color: var(--oc-border-emphasis);
 }
 
 .annotation-inline-editor [data-slot="textarea-v2-textarea"] {

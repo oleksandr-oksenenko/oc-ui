@@ -31,7 +31,7 @@ export function DiffFile(props: DiffFileProps) {
       >
         <header class="diff-file-header">
           <Collapsible.Trigger
-            class="diff-file-toggle"
+            class="diff-file-toggle oc-focus-inset"
             aria-label={`${expanded() ? "Collapse" : "Expand"} ${props.file.file}`}
           >
             <span class="diff-file-name">

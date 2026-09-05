@@ -41,11 +41,6 @@
   color: var(--oc-text-contrast);
 }
 
-.transcript-annotation-quote:focus-visible {
-  outline: 1px solid var(--oc-border-emphasis);
-  outline-offset: 3px;
-}
-
 .transcript-annotation-trigger [data-slot="collapsible-arrow"] {
   margin-left: auto;
 }

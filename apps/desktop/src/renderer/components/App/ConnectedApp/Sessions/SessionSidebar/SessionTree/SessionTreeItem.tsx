@@ -53,7 +53,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
           <span class="shell-session-disclosure-slot">
             {props.hasChildren ? (
               <Collapsible.Trigger
-                class="shell-session-disclosure"
+                class="shell-session-disclosure oc-focus-inset"
                 type="button"
                 aria-label={props.expanded ? `Collapse ${title()}` : `Expand ${title()}`}
               >
@@ -62,7 +62,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             ) : null}
           </span>
           <Button
-            class="shell-session-main"
+            class="shell-session-main oc-focus-inset"
             type="button"
             size="small"
             variant="ghost-muted"

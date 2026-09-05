@@ -80,7 +80,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
               <p>{error()}</p>
             </div>
             <Button
-              class="shell-sidebar-action"
+              class="shell-sidebar-action oc-focus-inset"
               type="button"
               size="normal"
               variant="outline"
@@ -124,7 +124,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
 
       <div class="shell-sidebar-footer">
         <Button
-          class="shell-server-selector"
+          class="shell-server-selector oc-focus-inset"
           type="button"
           size="small"
           variant="ghost-muted"

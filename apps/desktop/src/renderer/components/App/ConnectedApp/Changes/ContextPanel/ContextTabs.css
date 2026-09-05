@@ -75,19 +75,12 @@
   height: 24px;
 }
 
-[data-component="icon-button-v2"].context-panel-close:is(:focus-visible, [data-state="focus"]):not(
-    :disabled
-  ) {
-  outline-offset: -2px;
-}
-
 .context-tab:hover {
   color: var(--oc-text-base);
 }
 
 .context-tab-trigger:focus-visible {
   color: var(--oc-text-base);
-  outline-offset: -2px;
 }
 
 .context-tab:has([data-selected]) {

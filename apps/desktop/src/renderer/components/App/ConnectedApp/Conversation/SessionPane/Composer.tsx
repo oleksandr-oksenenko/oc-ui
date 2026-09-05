@@ -213,7 +213,7 @@ export function Composer(props: ComposerProps) {
   };
 
   return (
-    <form class="composer-v2" aria-label="Message composer" onSubmit={submit}>
+    <form class="composer-v2 oc-focus-container" aria-label="Message composer" onSubmit={submit}>
       {review() ? (
         <div class="composer-v2-review-row">
           <span class="composer-v2-review-label">
@@ -269,7 +269,7 @@ export function Composer(props: ComposerProps) {
           ref={(element) => {
             textarea = element;
           }}
-          class="composer-v2-input"
+          class="composer-v2-input oc-focus-delegate"
           aria-label="Prompt"
           disabled={false}
           placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}

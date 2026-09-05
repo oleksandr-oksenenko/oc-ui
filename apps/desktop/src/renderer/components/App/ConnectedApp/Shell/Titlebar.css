@@ -44,12 +44,6 @@
   flex: none;
 }
 
-[data-component="icon-button-v2"].titlebar-icon-button:is(:focus-visible, [data-state="focus"]):not(
-    :disabled
-  ) {
-  outline-offset: -2px;
-}
-
 .titlebar-center-region {
   position: relative;
   display: flex;

@@ -180,7 +180,7 @@ export function Workspace(props: WorkspaceProps) {
           </div>
           {props.mobile ? null : (
             <div
-              class="shell-resize-handle shell-left-resize-handle"
+              class="shell-resize-handle shell-left-resize-handle oc-focus-inset"
               role="separator"
               aria-label="Resize sessions sidebar"
               aria-orientation="vertical"
@@ -205,7 +205,7 @@ export function Workspace(props: WorkspaceProps) {
         <>
           {props.mobile ? null : (
             <div
-              class="shell-resize-handle shell-right-resize-handle"
+              class="shell-resize-handle shell-right-resize-handle oc-focus-inset"
               role="separator"
               aria-label="Resize context sidebar"
               aria-orientation="vertical"

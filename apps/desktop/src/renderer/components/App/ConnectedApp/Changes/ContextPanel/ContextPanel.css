@@ -195,10 +195,6 @@
   height: 30px;
 }
 
-.diff-file-toggle:focus-visible {
-  outline-offset: -2px;
-}
-
 .diff-file-name {
   display: flex;
   align-items: center;

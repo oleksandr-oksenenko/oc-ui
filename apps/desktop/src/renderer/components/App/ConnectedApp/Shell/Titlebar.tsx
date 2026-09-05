@@ -55,7 +55,7 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
           ref={(element) => {
             leftToggle = element;
           }}
-          class="titlebar-icon-button"
+          class="titlebar-icon-button oc-focus-inset"
           type="button"
           size="normal"
           variant="ghost-muted"
@@ -85,7 +85,7 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
                 ref={(element) => {
                   rightToggle = element;
                 }}
-                class="titlebar-icon-button"
+                class="titlebar-icon-button oc-focus-inset"
                 type="button"
                 size="normal"
                 variant="ghost-muted"

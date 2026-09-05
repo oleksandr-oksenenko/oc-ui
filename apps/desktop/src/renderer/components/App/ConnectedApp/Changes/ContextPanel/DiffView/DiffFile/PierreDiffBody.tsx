@@ -186,9 +186,9 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
         --diffs-bg-selection-override: var(--oc-surface-selected);
       }
 
-      code[data-code]:focus-visible {
-        outline: 2px solid #74a7ff;
-        outline-offset: -2px;
+      :is(code[data-code], [data-expand-button]):focus-visible {
+        outline: var(--oc-focus-ring-outline);
+        outline-offset: var(--oc-focus-ring-inset-offset);
       }
 
       [data-gutter-buffer="annotation"] {

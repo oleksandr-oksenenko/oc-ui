@@ -63,10 +63,6 @@
   color: inherit;
 }
 
-.shell-session-main:focus-visible {
-  outline-offset: -2px;
-}
-
 .shell-session-row.selected .shell-session-main {
   color: var(--oc-text-contrast);
 }
@@ -128,7 +124,6 @@
 .shell-session-disclosure:focus-visible {
   color: var(--oc-text-contrast);
   background: var(--oc-surface-hover);
-  outline-offset: -2px;
 }
 
 .shell-session-title {

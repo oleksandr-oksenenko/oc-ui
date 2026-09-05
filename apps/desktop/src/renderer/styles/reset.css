@@ -23,11 +23,6 @@ select {
   font: inherit;
 }
 
-:where(button, a, input, textarea, select, [tabindex]):focus-visible {
-  outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  outline-offset: var(--oc-focus-ring-offset);
-}
-
 button {
   -webkit-app-region: no-drag;
 }

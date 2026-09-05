@@ -28,7 +28,6 @@
 .shell-server-selector:focus-visible {
   color: var(--oc-text-contrast);
   background: var(--oc-surface-hover);
-  outline-offset: -2px;
 }
 
 .shell-sidebar-message {
