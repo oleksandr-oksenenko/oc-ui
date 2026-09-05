@@ -1,64 +1,43 @@
-# Completion checks
+# oc-ui repository guidance
 
-- After implementation, run `pnpm check` and `pnpm test` from the repository root.
-- Fix every finding before calling the work complete. Do not substitute package-scoped or focused checks.
+## Effect and state ownership
 
-# Code size and complexity
+This repository uses Effect v4 RC for server communication, persistence, connections, and feature workflows. Keep pure calculations and rendering as ordinary code.
 
-- Treat production line count as a strong proxy for complexity. Prefer the least code that meets the requirement clearly and correctly. Expect refactors that preserve behavior to reduce code; use net growth as a signal to review the changes for simplification opportunities.
-- Before coding a feature or refactor, identify its owner, the abstractions it needs, and any existing code it replaces. Additional services, types, helpers, or adapters need a concrete purpose.
-- Replace old ownership completely. Remove superseded coordinators, flags, queues, and state mirrors instead of adding another layer around them.
-- Review for deletion before completion: inline unnecessary helpers, remove redundant types, combine unnecessary layers, and reuse existing operations. Callers should become simpler and ownership easier to follow.
-- For each feature or refactor, report production lines added, removed, and the net change, along with new abstractions and old machinery removed. Count tests, documentation, and generated code separately.
-- Size checks and growth budgets are advisory. Exceeding an expected size should produce an informational report and prompt a focused review for unnecessary code, duplication, and avoidable abstractions. Apply useful simplifications and briefly explain remaining growth; size alone must not fail verification or block completion. Existing correctness and quality checks remain mandatory.
-- Justify temporary growth by naming exactly what later disappears and in which follow-up step. Do not let temporary duplication become the default architecture.
-- Do not reduce line count through dense formatting, hidden complexity, or removal of useful checks. Optimize for less code to understand while preserving required behavior and readability.
+- Before writing Effect code, read `apps/desktop/node_modules/effect/AGENTS.md` completely once per session and installed version, following its links where required. If dependencies are absent, install from the existing lockfile before consulting this guide. Resolve unfamiliar APIs against `apps/desktop/node_modules/effect/src`; online references must match the installed version.
+- Compose one application runtime in Electron main and one in the renderer. Use services for resources, shared state, and external dependencies; use scopes to own resources, child fibers, and cleanup.
+- Keep oc-ui application state in Effect services and atoms, connected through `@effect/atom-solid`. Keep focus, layout, and DOM behavior in Solid. The OpenCode SDK helpers and Solid store inside Workspace own SDK caching, optimistic updates, rollback, and events. Do not mirror their state in atoms or reimplement their behavior. Adopting future upstream Effect helpers requires verified behavior parity.
+- Before changing an async workflow, define its owner, lifetime, cancellation, partial-failure recovery, and shutdown policy. Component disposal or loss of a subscriber must not abandon application-owned work. Settle affected callers and await owned cleanup before disposing the owner.
+- Forward Effect's AbortSignal to external APIs where supported. Interruption and timeouts must cancel the underlying work or leave it owned until settlement. Limit uninterruptible regions to work that must finish for correctness.
+- Cancel obsolete reads and serialize conflicting mutations and connection transitions. Retry only when repetition is safe; cancellation or a missing response does not prove a mutation was unapplied.
+- Prefer native Effect APIs, scopes, fibers, queues, synchronization, finalizers, and retry schedules. Adapt Electron and necessary Promise APIs at their boundaries; custom coordination needs a requirement the built-ins cannot satisfy.
+- Use typed errors for expected failures and schemas for untrusted input. Recover where the owner can act or present a useful message; keep unexpected defects visible. Add logging or tracing where it explains lifecycle and failure behavior.
 
-# Effect architecture
+## OpenCode integration
 
-Use Effect to make ownership and failure behavior explicit, not merely to rewrite successful async operations. This repository uses Effect v4 RC.
+- Inspect the relevant pinned SDK, UI package, and existing oc-ui implementation before adding types, helpers, controls, icons, or behavior. Reuse upstream primitives when they meet the requirement; local components should own behavior upstream does not provide.
+- When replacing a component, preserve events, accessibility, CSS selectors, mount and remount behavior, and pointer and keyboard interaction, as well as appearance.
+- Use existing runtime contracts for OpenCode APIs, persistence, IPC, and server data. Where a contract is absent, keep the UI controlled through data and callback props with an empty or disabled state.
+- The connected server owns its filesystem. Preserve its complete location context and validate navigation by listing each new absolute location. Keep POSIX, Windows-drive, and UNC child/parent operations in shared `serverPath`; do not apply the Electron host's path rules.
 
-## Learning more about Effect
+## Changes and complexity
 
-Before writing any Effect code, first read `apps/desktop/node_modules/effect/AGENTS.md` completely and follow its links when required.
+- For a feature or refactor, identify the owner, required abstractions, and code being replaced before coding. Remove superseded coordinators, flags, queues, and state mirrors. Review the final change for unnecessary helpers, types, layers, and duplication.
+- Report production lines added, removed, and net change, plus new abstractions and old machinery removed. Count tests, documentation, and generated code separately. Treat growth as an advisory signal to review complexity, never as a failing gate or a reason to compress formatting or remove useful checks.
+- Explain remaining growth. If duplication is temporary, name what will disappear and the follow-up step that removes it.
 
-If its guidance does not cover a particular Effect API or concept, search the installed source in `apps/desktop/node_modules/effect/src`. Use documentation from the exact installed version when consulting online references.
+## UI and desktop runtime
 
-1. **Start with ownership.** Use Effect for server communication, persistence, connections, and feature workflows. Give each operation an owner and a lifetime. Create services for real resources, shared state, or external dependencies; keep pure calculations and rendering as ordinary code.
-2. **Make lifetimes structural.** Compose one application runtime in Electron main and one in the renderer. Use scopes to own resources, child fibers, and cleanup on success, failure, or interruption. Define what happens when a caller, component, or owner goes away; losing a subscriber must not accidentally abandon work owned by the application.
-3. **Prefer built-in mechanisms.** Use Effect scopes, fibers, queues, synchronization primitives, finalizers, and retry schedules before creating custom coordination. A custom mechanism needs a concrete requirement that the existing abstractions do not satisfy.
-4. **Design failure paths alongside success.** Specify cancellation, partial completion, recovery, and shutdown before implementation. Decide whether caller cancellation propagates and whether shutdown finishes or discards pending work. The application chooses the policy; Effect implements it. Settle affected callers and wait for owned cleanup before disposal.
-5. **Connect interruption to real work.** Forward Effect's AbortSignal to external APIs where supported. Stopping a caller's wait is not proof that I/O has stopped. Retain ownership until uncancellable work and cleanup settle. Keep uninterruptible regions limited to work that must finish for correctness; do not disable cancellation across a whole workflow by default.
-6. **Handle concurrency and retries deliberately.** Cancel obsolete reads and serialize conflicting mutations in the required order. A timeout must cancel work or leave it owned until settlement. Retry only when repeating the operation is safe; cancellation or a missing response does not prove that a mutation was never applied.
-7. **Give state one owner.** Use Effect services and atoms for oc-ui-owned application state, with `@effect/atom-solid` connecting it to the UI. Keep SDK-managed state in the OpenCode store. Keep focus, layout, and DOM behavior in Solid. Never mirror authoritative state across stores.
-8. **Keep external boundaries narrow.** Prefer native Effect APIs and adapt Electron or necessary Promise APIs at their boundaries. Keep the OpenCode SDK helpers and Solid data store inside Workspace as the authoritative owner of their caching, optimistic updates, rollback, and event behavior. Do not reimplement them or copy their state into atoms. Revisit this boundary only if OpenCode ships suitable Effect-based helpers and stores; adopting them requires verified behavior parity.
-9. **Make failures clear.** Use typed errors for expected failures and schemas for untrusted input. Recover where an owner can act or present a useful message; keep unexpected defects visible. Use logging and tracing where they help explain lifecycle and failure behavior.
-10. **Replace machinery and verify difficult cases.** Remove the manual coordination each migration replaces. Add platform and testing integrations where they replace required local machinery. Use existing verification gates and focused tests for ordering, cancellation, partial failure, retries, cleanup, and shutdown, alongside successful results.
+- Follow the approved Storybook story, mockup, and latest browser annotations for structure, controls, spacing, density, and placement.
+- Use the Codex in-app browser for standalone pages and Storybook when it supports the required check. Verify Electron and embedded views in the running app; they are not reachable through that browser.
+- Launch through the repository entrypoint, normally `pnpm dev` from the root. Identify processes by their repository and entrypoint, never just the name `Electron`. Use the pinned OpenCode executable when testing this integration.
+- Verify the Electron app, renderer, and server separately before reporting them as running: check the expected processes and app window, and verify the server endpoint with the required credentials.
+- Use isolated app or server state for onboarding, connection, and empty-state tests so saved settings and sessions do not affect the result.
 
-# OpenCode integration
+## Verification and completion
 
-- Inspect the pinned OpenCode SDK, UI package, and existing oc-ui code before adding a local type, projection, helper, control, icon, or behavior. Reuse upstream types and primitives when they already express the requirement.
-- Reuse must preserve behavior, not just appearance. Check events, accessibility, CSS selectors, mount and remount behavior, and pointer and keyboard interaction before replacing local code with a package primitive.
-- Do not invent OpenCode APIs, server behavior, persistence, IPC, or runtime data. If a runtime contract does not exist, keep the UI controlled through honest data and callback props and show an empty or disabled state where needed.
-- Treat the connected OpenCode server as the authority for its filesystem. Preserve the complete server-provided location context and validate each navigation by listing the new absolute location. Do not use the Electron host's path rules; keep the minimal POSIX, Windows-drive, and UNC child/parent operations in the shared `serverPath` module.
-
-# UI implementation and verification
-
-- Treat the approved Storybook story, mockup, and latest browser annotations as the visual contract. Match their structure, controls, spacing, density, and placement instead of creating a new interpretation.
-- Use the Codex in-app browser for standalone local web pages and Storybook whenever it can perform the required verification. Use an external browser only when the in-app browser cannot perform the check. This guidance does not cover embedded webviews: the Electron renderer and any view embedded in the app window are not reachable from the in-app browser, so verify them in the running app instead.
-- Prefer installed OpenCode UI controls and icons over custom approximations. Keep a local component only when it owns real oc-ui behavior that the package does not provide.
-- Complete the following verification checklist as one unit before calling UI work done:
-  - Inspect the actual Electron app after the final change. Do not call UI work complete from tests, types, or a browser preview alone.
-  - For affected UI, verify the first open as well as reopen, resize and narrow layouts, scrolling, empty and error states, loading and disabled states, keyboard and Escape behavior, focus restoration, and collapse or remount behavior where applicable.
-  - Keep regression tests lean: add one focused test for each real failure mode. Avoid large full-app fixtures and repeated setup for a small policy or component behavior.
-
-# Desktop and server runtime
-
-- Launch oc-ui through the exact repository entrypoint, normally `pnpm dev` from the repository root. Never select a process by the generic name `Electron`, and never use a global OpenCode binary when the task requires the pinned dependency.
-- Report the Electron app, renderer, and OpenCode server as separate runtime states. Before saying they are running, verify the expected process and window; for a server, also verify the requested endpoint and credentials.
-- Use isolated app or server state when testing onboarding, connection, or empty-state behavior so saved sessions and settings do not change the result.
-- Give each async start, connect, disconnect, retry, and shutdown flow one owner. Serialize conflicting transitions; a timeout must cancel the underlying work or retain ownership until it settles.
-
-# Integration hygiene
-
-- Before integrating delegated or worktree commits, inspect status and ancestry against the current target branch. Preserve newer and unrelated changes, and verify the combined state rather than only the feature worktree.
+- After code or configuration implementation, run `pnpm check` and `pnpm test` from the repository root. Focused checks may support development but do not replace these gates. For prose-only changes, check the diff and any affected references.
+- Fix findings introduced by the change. Report unrelated failures separately; do not expand into unrelated repairs or describe failing checks as passing. If a required check cannot run, state the blocker and what remains unverified.
+- After the final UI change, inspect the affected behavior in the actual Electron app. Tests and Storybook alone do not establish UI completion. Cover the states and regression risks affected by the change: first open and reopen, resize and narrow layouts, scrolling, empty/error/loading/disabled states, keyboard and Escape, focus restoration, and collapse or remount where relevant.
+- Keep regression tests focused on real failure modes. For workflow changes, cover the relevant ordering, cancellation, partial failure, retry, cleanup, and shutdown behavior alongside success. Avoid large full-app fixtures for small component or policy changes.
+- Before integrating delegated or worktree commits, inspect status and ancestry against the current target branch. Preserve newer and unrelated changes, and verify the combined result.
