@@ -15,7 +15,14 @@ import {
 const desktopRoot = fileURLToPath(new URL(".", import.meta.url));
 const appBinaryPath = globalThis.process.env.OCUI_E2E_APP_BINARY_PATH ?? "";
 const userDataPath = globalThis.process.env.OCUI_E2E_USER_DATA_PATH ?? "";
-const artifactDirectory = join(desktopRoot, "dist", "wdio-artifacts");
+const artifactDirectory =
+  globalThis.process.env.OCUI_E2E_ARTIFACT_DIRECTORY ?? join(desktopRoot, "dist", "wdio-artifacts");
+const artifactName = globalThis.process.env.OCUI_E2E_ARTIFACT_NAME ?? "packaged-startup-failure";
+const configuredMochaTimeout = Number(globalThis.process.env.OCUI_E2E_MOCHA_TIMEOUT_MS);
+const mochaTimeout =
+  Number.isFinite(configuredMochaTimeout) && configuredMochaTimeout > 0
+    ? configuredMochaTimeout
+    : 120_000;
 
 const capabilities: Capabilities.TestrunnerCapabilities = [
   {
@@ -36,20 +43,21 @@ const capabilities: Capabilities.TestrunnerCapabilities = [
 export const config: WebdriverIO.Config = {
   runner: "local",
   rootDir: desktopRoot,
-  specs: [join(desktopRoot, "test", "e2e", "**", "*.e2e.ts")],
+  specs: [join(desktopRoot, "test", "e2e", "packaged-startup.e2e.ts")],
   maxInstances: 1,
   capabilities,
   services: ["electron"],
   framework: "mocha",
   reporters: ["spec"],
-  logLevel: "info",
-  outputDir: join(desktopRoot, "dist", "wdio-logs"),
+  // execute results can include the local server credential during API verification.
+  logLevel: "warn",
+  outputDir: join(artifactDirectory, "logs"),
   connectionRetryTimeout: 120_000,
   connectionRetryCount: 0,
   specFileRetries: 0,
   mochaOpts: {
     ui: "bdd",
-    timeout: 120_000,
+    timeout: mochaTimeout,
     retries: 0,
   },
   onPrepare: () => {
@@ -64,7 +72,7 @@ export const config: WebdriverIO.Config = {
     if (result.passed) return;
     try {
       await mkdir(artifactDirectory, { recursive: true });
-      await browser.saveScreenshot(join(artifactDirectory, "packaged-startup-failure.png"));
+      await browser.saveScreenshot(join(artifactDirectory, `${artifactName}.png`));
     } catch {
       // Preserve the original test failure when screenshot capture is unavailable.
     }

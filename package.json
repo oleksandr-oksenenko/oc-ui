@@ -25,6 +25,7 @@
     "package:mac": "pnpm --filter desktop package:mac",
     "make:mac": "pnpm --filter desktop make:mac",
     "test:acceptance:mac": "pnpm --filter desktop test:acceptance:mac",
+    "test:acceptance:chat:mac": "pnpm --filter desktop test:acceptance:chat:mac",
     "test": "vp run desktop#test"
   },
   "devDependencies": {
