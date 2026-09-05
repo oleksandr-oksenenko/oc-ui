@@ -1,5 +1,7 @@
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import type { SessionInboxUser, SessionMessageInfo } from "@opencode-ai/client";
-import { createRoot, createSignal } from "solid-js";
+import { createRoot, createSignal, onCleanup } from "solid-js";
+import { Effect, Exit, Scope } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -39,7 +41,7 @@ const annotationInput = {
 };
 
 function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptResult(input)))) {
-  return createRoot((dispose) => {
+  return withTestWorkspace((effects, dispose) => {
     const [selectedID, setSelectedID] = createSignal<string>();
     const [running, setRunning] = createSignal(false);
     const [transcriptLoading, setTranscriptLoading] = createSignal(false);
@@ -47,8 +49,8 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
     const [connected, setConnected] = createSignal(true);
     const [selectionSwitching, setSelectionSwitching] = createSignal(false);
     const [reviewKey, setReviewKey] = createSignal<ReviewDraftKey>();
-    const reviewDrafts = createReviewDraftStore();
-    const annotationDrafts = createAnnotationDraftStore();
+    const reviewDrafts = createReviewDraftStore(effects);
+    const annotationDrafts = createAnnotationDraftStore(effects);
     const messages = new Map<string, SessionMessageInfo>();
     const [messageRevision, setMessageRevision] = createSignal(0);
     const setMessage = (sessionID: string, message: SessionMessageInfo): void => {
@@ -57,31 +59,39 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
     };
     const requestDiscard =
       vi.fn<(key: ReviewDraftKey, count: number, opener: HTMLButtonElement) => void>();
-    const composer = createSessionComposer({
-      runtime: {
-        data: {
-          session: {
-            prompt,
-            message: {
-              get: (sessionID, messageID) => {
-                messageRevision();
-                return messages.get(`${sessionID}:${messageID}`);
+    let unmountComposer!: () => void;
+    const composer = createRoot((disposeComposer) => {
+      unmountComposer = disposeComposer;
+      return createSessionComposer({
+        effects,
+        runtime: {
+          data: {
+            session: {
+              prompt,
+              message: {
+                get: (sessionID, messageID) => {
+                  messageRevision();
+                  return messages.get(`${sessionID}:${messageID}`);
+                },
               },
             },
           },
         },
-      },
-      selectedID,
-      running,
-      transcriptLoading,
-      transcriptError,
-      annotations: annotationDrafts,
-      connected,
-      selectionSwitching,
-      review: { drafts: reviewDrafts, key: reviewKey, requestDiscard },
+        selectedID,
+        running,
+        transcriptLoading,
+        transcriptError,
+        annotations: annotationDrafts,
+        connected,
+        selectionSwitching,
+        review: { drafts: reviewDrafts, key: reviewKey, requestDiscard },
+      });
     });
+    onCleanup(unmountComposer);
     return {
       dispose,
+      unmountComposer,
+      effects,
       composer,
       setSelectedID,
       setRunning,
@@ -114,6 +124,56 @@ function seedReview(
 }
 
 describe("createSessionComposer", () => {
+  it("settles admission and restores annotations after its UI subscriber unmounts", async () => {
+    let rejectPrompt!: (error: Error) => void;
+    const prompt = vi.fn<Prompt>(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectPrompt = reject;
+        }),
+    );
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.annotationDrafts.add("session", annotationInput);
+    const submitted = root.annotationDrafts.get("session");
+    const admission = root.composer.submit();
+    root.unmountComposer();
+    rejectPrompt(new Error("offline"));
+    await admission;
+
+    expect(root.annotationDrafts.get("session")).toEqual(submitted);
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for an uncancellable SDK admission during workspace shutdown", async () => {
+    let rejectPrompt!: (error: Error) => void;
+    const prompt = vi.fn<Prompt>(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectPrompt = reject;
+        }),
+    );
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.annotationDrafts.add("session", annotationInput);
+    const submitted = root.annotationDrafts.get("session");
+    const admission = root.composer.submit().catch(() => undefined);
+    let closed = false;
+    const closing = Effect.runPromise(Scope.close(root.effects.scope, Exit.void)).then(() => {
+      closed = true;
+      return undefined;
+    });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+    rejectPrompt(new Error("offline"));
+    await closing;
+    await admission;
+
+    expect(closed).toBe(true);
+    expect(root.annotationDrafts.get("session")).toEqual(submitted);
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps drafts per session and clears only the submitted draft", async () => {
     const prompt = vi.fn<Prompt>((input) => Promise.resolve(promptResult(input)));
     const root = setup(prompt);

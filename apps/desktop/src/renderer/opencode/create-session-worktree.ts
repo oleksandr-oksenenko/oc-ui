@@ -1,3 +1,5 @@
+import { Deferred, Effect, Result, Schema } from "effect";
+import type { WorkspaceOwner } from "../workspace-owner.ts";
 import { isWorktreeError } from "@opencode-ai/client";
 import type { LocationRef, OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client";
 
@@ -8,104 +10,108 @@ const COMPLETION_WAIT_MS = SHELL_TIMEOUT_MS + 10_000;
 const OUTPUT_PAGE_SIZE = 64 * 1024;
 const MAX_OUTPUT_PAGES = 1024;
 type ShellExitedEvent = Extract<OpenCodeEvent, { type: "shell.exited" }>;
-type SessionWorktreeClient = {
-  readonly location: OpenCodeClient["location"];
-  readonly shell: OpenCodeClient["shell"];
-  readonly worktree: OpenCodeClient["worktree"];
-};
+type SessionWorktreeClient = Pick<OpenCodeClient, "location" | "shell" | "worktree">;
 
 export type SessionWorktreeInput = {
+  readonly effects: WorkspaceOwner;
   readonly api: SessionWorktreeClient;
   readonly onShellExited: (handler: (event: ShellExitedEvent) => void) => () => void;
   readonly isCurrent: () => boolean;
 };
 
-export class SessionWorktreeError extends Error {
-  readonly location?: LocationRef;
-  readonly uncertain: boolean;
-  constructor(
-    message: string,
-    options?: { readonly location?: LocationRef; readonly uncertain?: boolean },
-  ) {
-    super(message);
-    this.name = "SessionWorktreeError";
-    this.location = options?.location;
-    this.uncertain = options?.uncertain ?? false;
-  }
-}
+export class SessionWorktreeError extends Schema.TaggedError<SessionWorktreeError>()(
+  "SessionWorktreeError",
+  {
+    message: Schema.String,
+    location: Schema.optional(
+      Schema.Struct({ directory: Schema.String, workspaceID: Schema.optional(Schema.String) }),
+    ),
+    uncertain: Schema.Boolean.pipe(Schema.withConstructorDefault(Effect.succeed(false))),
+  },
+) {}
 
 export type CreatedSessionWorktree = {
   readonly location: LocationRef;
   readonly fetchError?: string;
 };
 
-export async function createSessionWorktree(
+export const createSessionWorktree = Effect.fn("createSessionWorktree")(function* (
   input: SessionWorktreeInput,
   location: LocationRef,
-): Promise<CreatedSessionWorktree> {
+): Effect.fn.Return<CreatedSessionWorktree, SessionWorktreeError> {
   if (location.workspaceID) {
-    throw new SessionWorktreeError("Automatic worktrees are unavailable for logical workspaces.");
+    return yield* new SessionWorktreeError({
+      message: "Automatic worktrees are unavailable for logical workspaces.",
+    });
   }
-  ensureCurrent(input);
-  const project = await resolveProject(input, location);
+  yield* ensureCurrent(input);
+  const project = yield* resolveProject(input, location);
   if (!project.directory.startsWith("/") || project.directory.startsWith("//")) {
-    throw new SessionWorktreeError("Automatic worktrees require a POSIX server location.");
+    return yield* new SessionWorktreeError({
+      message: "Automatic worktrees require a POSIX server location.",
+    });
   }
   const shellLocation = { directory: project.directory } satisfies LocationRef;
-  ensureCurrent(input);
-  const { parent, commit, fetchError } = await prepareWorktree(input, shellLocation);
-  ensureCurrent(input);
-  const retained = await createNativeWorktree(input, project, parent, commit);
-  ensureCurrent(input, retained);
-  const finalLocation = await resolveCreatedLocation(input, retained);
+  yield* ensureCurrent(input);
+  const { parent, commit, fetchError } = yield* prepareWorktree(input, shellLocation);
+  yield* ensureCurrent(input);
+  const retained = yield* createNativeWorktree(input, project, parent, commit);
+  yield* ensureCurrent(input, retained);
+  const finalLocation = yield* resolveCreatedLocation(input, retained);
   return { location: finalLocation, fetchError };
-}
+});
 
-const ensureCurrent = (input: SessionWorktreeInput, location?: LocationRef): void => {
-  if (!input.isCurrent())
-    throw new SessionWorktreeError(
-      "Worktree creation was cancelled.",
-      location ? { location } : undefined,
-    );
-};
+const ensureCurrent = (input: SessionWorktreeInput, location?: LocationRef) =>
+  input.isCurrent()
+    ? Effect.void
+    : new SessionWorktreeError({
+        message: "Worktree creation was cancelled.",
+        ...(location ? { location } : undefined),
+      });
 
 type ResolvedProject = { readonly id: string; readonly directory: string };
 
-const resolveProject = async (
+const resolveProject = Effect.fn("createSessionWorktree.resolveProject")(function* (
   input: SessionWorktreeInput,
   location: LocationRef,
-): Promise<ResolvedProject> => {
-  try {
-    const resolved = await input.api.location.get({ location: requestLocation(location) });
-    if (resolved.workspaceID) {
-      throw new SessionWorktreeError("Automatic worktrees are unavailable for logical workspaces.");
-    }
-    if (resolved.project.directory.trim() === "" || resolved.project.id.trim() === "") {
-      throw new SessionWorktreeError("The server returned an invalid project location.");
-    }
-    return { id: resolved.project.id, directory: resolved.project.directory };
-  } catch (cause) {
-    if (cause instanceof SessionWorktreeError) throw cause;
-    throw new SessionWorktreeError("The project location could not be resolved.");
+) {
+  const resolved = yield* input.effects
+    .request((signal) =>
+      input.api.location.get({ location: requestLocation(location) }, { signal }),
+    )
+    .pipe(
+      Effect.mapError(
+        () => new SessionWorktreeError({ message: "The project location could not be resolved." }),
+      ),
+    );
+  if (resolved.workspaceID)
+    return yield* new SessionWorktreeError({
+      message: "Automatic worktrees are unavailable for logical workspaces.",
+    });
+  if (resolved.project.directory.trim() === "" || resolved.project.id.trim() === "") {
+    return yield* new SessionWorktreeError({
+      message: "The server returned an invalid project location.",
+    });
   }
-};
+  return { id: resolved.project.id, directory: resolved.project.directory };
+});
 
-const prepareWorktree = async (
+const prepareWorktree = Effect.fn("createSessionWorktree.prepareWorktree")(function* (
   input: SessionWorktreeInput,
   location: LocationRef,
-): Promise<{ readonly parent: string; readonly commit: string; readonly fetchError?: string }> => {
-  const probe = await runShell(input, location, "printf 'OCUI-SHELL-PROBE\\n'");
+) {
+  const probe = yield* runShell(input, location, "printf 'OCUI-SHELL-PROBE\\n'");
   const shell = basename(probe.shell);
   if (!POSIX_SHELLS.has(shell)) {
-    throw new SessionWorktreeError(
-      "The connected server shell (" + (shell || "unknown") + ") is unsupported.",
-    );
+    return yield* new SessionWorktreeError({
+      message: "The connected server shell (" + (shell || "unknown") + ") is unsupported.",
+    });
   }
   if (probe.event.data.status !== "exited" || probe.event.data.exit !== 0) {
-    throw new SessionWorktreeError("The server shell probe failed.");
+    return yield* new SessionWorktreeError({ message: "The server shell probe failed." });
   }
-  ensureCurrent(input);
-  const run = await runShell(input, location, prepareScript);
+  yield* ensureCurrent(input);
+  const run = yield* runShell(input, location, prepareScript);
   const records = run.output.split(/\r?\n/).filter((line) => line.startsWith("OCUI1\t"));
   const completed = run.event.data.status === "exited" && run.event.data.exit === 0;
   // The first record is the pre-fetch snapshot; only a completed command may use the final one.
@@ -114,7 +120,7 @@ const prepareWorktree = async (
     run.event.data.status === "timeout"
       ? "Origin discovery or fetch timed out."
       : "Worktree preparation did not complete.";
-  if (record === undefined) throw new SessionWorktreeError(failure);
+  if (record === undefined) return yield* new SessionWorktreeError({ message: failure });
   const fields = record.split("\t");
   const [, encodedParent, commit, encodedDiagnostic] = fields;
   if (
@@ -123,69 +129,84 @@ const prepareWorktree = async (
     commit === undefined ||
     encodedDiagnostic === undefined
   ) {
-    throw new SessionWorktreeError("The server returned malformed worktree preparation output.");
+    return yield* new SessionWorktreeError({
+      message: "The server returned malformed worktree preparation output.",
+    });
   }
-  const parent = decodeHex(encodedParent);
-  const diagnostic = decodeHex(encodedDiagnostic);
+  const [parent, diagnostic] = yield* Effect.try({
+    try: () => [decodeHex(encodedParent), decodeHex(encodedDiagnostic)] as const,
+    catch: () =>
+      new SessionWorktreeError({ message: "The server returned malformed shell output." }),
+  });
   const fetchError = diagnostic || (!completed || records.length !== 2 ? failure : undefined);
   if (!parent.startsWith("/") || !isCommit(commit)) {
-    throw new SessionWorktreeError(
-      fetchError ?? "The server returned no valid worktree destination or commit.",
-    );
+    return yield* new SessionWorktreeError({
+      message: fetchError ?? "The server returned no valid worktree destination or commit.",
+    });
   }
   return { parent, commit, fetchError };
-};
+});
 
-const createNativeWorktree = async (
+const createNativeWorktree = Effect.fn("createSessionWorktree.createNativeWorktree")(function* (
   input: SessionWorktreeInput,
   project: ResolvedProject,
   parent: string,
   commit: string,
-): Promise<LocationRef> => {
-  try {
-    const created = await input.api.worktree.create({
-      projectID: project.id,
-      strategy: "git",
-      from: project.directory,
-      directory: parent,
-      branch: commit,
-    });
-    if (created.directory.trim() === "") {
-      throw new SessionWorktreeError("The worktree was created without a directory.", {
-        uncertain: true,
-      });
-    }
-    return { directory: created.directory };
-  } catch (cause) {
-    if (cause instanceof SessionWorktreeError) throw cause;
-    const message = isWorktreeError(cause)
-      ? cause.data.message
-      : cause instanceof Error
-        ? cause.message
-        : "The worktree could not be created.";
-    throw new SessionWorktreeError(
-      message + " A worktree may remain registered; inspect it before retrying.",
-      { uncertain: true },
+) {
+  const created = yield* input.effects
+    .request((signal) =>
+      input.api.worktree.create(
+        {
+          projectID: project.id,
+          strategy: "git",
+          from: project.directory,
+          directory: parent,
+          branch: commit,
+        },
+        { signal },
+      ),
+    )
+    .pipe(
+      Effect.mapError(({ cause }) => {
+        const message = isWorktreeError(cause)
+          ? cause.data.message
+          : cause instanceof Error
+            ? cause.message
+            : "The worktree could not be created.";
+        return new SessionWorktreeError({
+          message: message + " A worktree may remain registered; inspect it before retrying.",
+          uncertain: true,
+        });
+      }),
     );
-  }
-};
+  if (created.directory.trim() === "")
+    return yield* new SessionWorktreeError({
+      message: "The worktree was created without a directory.",
+      uncertain: true,
+    });
+  return { directory: created.directory };
+});
 
-const resolveCreatedLocation = async (
+const resolveCreatedLocation = Effect.fn("createSessionWorktree.resolveCreatedLocation")(function* (
   input: SessionWorktreeInput,
   retained: LocationRef,
-): Promise<LocationRef> => {
-  try {
-    const final = await input.api.location.get({ location: requestLocation(retained) });
-    if (final.directory.trim() === "") throw new Error("The server returned an empty location.");
-    const finalLocation: LocationRef = { directory: final.directory };
-    if (final.workspaceID !== undefined) finalLocation.workspaceID = final.workspaceID;
-    return finalLocation;
-  } catch {
-    throw new SessionWorktreeError("The worktree location could not be resolved.", {
+) {
+  const resolved = yield* input.effects
+    .request((signal) =>
+      input.api.location.get({ location: requestLocation(retained) }, { signal }),
+    )
+    .pipe(Effect.result);
+  if (Result.isFailure(resolved) || resolved.success.directory.trim() === "") {
+    return yield* new SessionWorktreeError({
+      message: "The worktree location could not be resolved.",
       location: retained,
     });
   }
-};
+  const finalLocation: LocationRef = { directory: resolved.success.directory };
+  if (resolved.success.workspaceID !== undefined)
+    finalLocation.workspaceID = resolved.success.workspaceID;
+  return finalLocation;
+});
 
 type ShellRun = {
   readonly event: ShellExitedEvent;
@@ -202,7 +223,7 @@ const basename = (shell: string): string => shell.replaceAll("\\", "/").split("/
 
 const decodeHex = (hex: string): string => {
   if (!/^(?:[0-9a-f]{2})*$/i.test(hex))
-    throw new SessionWorktreeError("The server returned malformed shell output.");
+    throw new SessionWorktreeError({ message: "The server returned malformed shell output." });
   const bytes = new Uint8Array(hex.length / 2);
   for (let index = 0; index < bytes.length; index += 1)
     bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
@@ -210,115 +231,106 @@ const decodeHex = (hex: string): string => {
 };
 const isCommit = (value: string): boolean => /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value);
 
-const readOutput = async (
-  api: SessionWorktreeClient["shell"],
+const readOutput = Effect.fn("createSessionWorktree.readOutput")(function* (
+  input: SessionWorktreeInput,
   shellID: string,
   location: LocationRef,
-  signal: AbortSignal,
-): Promise<string> => {
+) {
   let cursor = 0;
   let output = "";
   for (let pageNumber = 0; pageNumber < MAX_OUTPUT_PAGES; pageNumber += 1) {
-    const page = await api.output(
-      { id: shellID, location: requestLocation(location), cursor, limit: OUTPUT_PAGE_SIZE },
-      { signal },
-    );
-    if (page.data.truncated) throw new Error("The server truncated shell output.");
+    const page = yield* input.effects
+      .request((signal) =>
+        input.api.shell.output(
+          { id: shellID, location: requestLocation(location), cursor, limit: OUTPUT_PAGE_SIZE },
+          { signal },
+        ),
+      )
+      .pipe(
+        Effect.mapError(({ cause }) =>
+          shellFailure("The server shell output could not be collected.", cause),
+        ),
+      );
+    if (page.data.truncated) return yield* shellFailure("The server truncated shell output.");
     output += page.data.output;
     if (page.data.cursor < cursor || page.data.cursor > page.data.size)
-      throw new Error("The server returned an invalid shell output cursor.");
+      return yield* shellFailure("The server returned an invalid shell output cursor.");
     if (page.data.cursor >= page.data.size) return output;
     if (page.data.cursor === cursor)
-      throw new Error("The server returned shell output without progress.");
+      return yield* shellFailure("The server returned shell output without progress.");
     cursor = page.data.cursor;
   }
-  throw new Error("The server returned too many shell output pages.");
-};
+  return yield* shellFailure("The server returned too many shell output pages.");
+});
 
-const runShell = async (
+const shellFailure = (message: string, cause?: unknown) =>
+  new SessionWorktreeError({
+    message: cause instanceof Error ? cause.message : message,
+    uncertain: true,
+  });
+
+const runShell = Effect.fn("createSessionWorktree.runShell")(function* (
   input: SessionWorktreeInput,
   location: LocationRef,
   command: string,
-): Promise<ShellRun> => {
+) {
   let shellID: string | undefined;
-  let exit: ShellExitedEvent | undefined;
-  let outputCollected = false;
+  let completed: ShellRun | undefined;
+  const completion = yield* Deferred.make<ShellExitedEvent>();
   // Completion can arrive before shell.create returns the shell ID.
   const earlyExits = new Map<string, ShellExitedEvent>();
-  const controller = new AbortController();
-  const { signal } = controller;
-  const timeoutID = setTimeout(
-    () =>
-      controller.abort(
-        new SessionWorktreeError(
-          "The server did not confirm shell completion before the request timed out.",
-          { uncertain: true },
-        ),
-      ),
-    COMPLETION_WAIT_MS,
+  yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      input.onShellExited((event) => {
+        if (shellID === event.data.id) Deferred.doneUnsafe(completion, Effect.succeed(event));
+        else if (shellID === undefined) earlyExits.set(event.data.id, event);
+      }),
+    ),
+    (unsubscribe) => Effect.sync(unsubscribe),
   );
-  let resolveExit!: () => void;
-  const completion = new Promise<void>((resolve) => {
-    resolveExit = resolve;
-  });
-  signal.addEventListener("abort", resolveExit, { once: true });
-  const unsubscribe = input.onShellExited((event) => {
-    if (shellID === event.data.id) {
-      exit = event;
-      resolveExit();
-    } else if (shellID === undefined) {
-      earlyExits.set(event.data.id, event);
-    }
-  });
-  try {
-    let created: Awaited<ReturnType<SessionWorktreeClient["shell"]["create"]>>;
-    try {
-      created = await input.api.shell.create(
-        {
-          location: requestLocation(location),
-          command,
-          cwd: location.directory,
-          timeout: SHELL_TIMEOUT_MS,
-        },
-        { signal },
+  const run = Effect.gen(function* () {
+    const created = yield* input.effects
+      .request((signal) =>
+        input.api.shell.create(
+          {
+            location: requestLocation(location),
+            command,
+            cwd: location.directory,
+            timeout: SHELL_TIMEOUT_MS,
+          },
+          { signal },
+        ),
+      )
+      .pipe(
+        Effect.mapError(({ cause }) =>
+          shellFailure("The server shell creation could not be confirmed.", cause),
+        ),
       );
-    } catch (cause) {
-      signal.throwIfAborted();
-      const message =
-        cause instanceof Error
-          ? cause.message
-          : "The server shell creation could not be confirmed.";
-      throw new SessionWorktreeError(message, { uncertain: true });
-    }
-    shellID = created.data.id;
-    exit = earlyExits.get(shellID);
-    if (!exit) await completion;
-    signal.throwIfAborted();
-    if (!exit || exit.data.status === "running")
-      throw new SessionWorktreeError("The server did not confirm shell completion.", {
-        uncertain: true,
-      });
-    let output: string;
-    try {
-      output = await readOutput(input.api.shell, shellID, location, signal);
-    } catch (cause) {
-      signal.throwIfAborted();
-      const message =
-        cause instanceof Error ? cause.message : "The server shell output could not be collected.";
-      throw new SessionWorktreeError(message, { uncertain: true });
-    }
-    outputCollected = true;
-    return { event: exit, output, shell: created.data.shell };
-  } finally {
-    unsubscribe();
-    signal.removeEventListener("abort", resolveExit);
-    try {
-      if (shellID && outputCollected)
-        await input.api.shell
-          .remove({ id: shellID, location: requestLocation(location) }, { signal })
-          .catch(() => undefined);
-    } finally {
-      clearTimeout(timeoutID);
-    }
-  }
-};
+    const id = created.data.id;
+    shellID = id;
+    const exit = earlyExits.get(id) ?? (yield* Deferred.await(completion));
+    earlyExits.clear();
+    if (exit.data.status === "running")
+      return yield* shellFailure("The server did not confirm shell completion.");
+    const output = yield* readOutput(input, id, location);
+    completed = { event: exit, output, shell: created.data.shell };
+    // Removing a completed shell record is best effort and uses the same request deadline.
+    yield* input.effects
+      .request((signal) =>
+        input.api.shell.remove({ id, location: requestLocation(location) }, { signal }),
+      )
+      .pipe(Effect.ignore);
+    return completed;
+  });
+  return yield* run.pipe(
+    Effect.timeoutOrElse({
+      duration: COMPLETION_WAIT_MS,
+      orElse: () =>
+        completed
+          ? Effect.succeed(completed)
+          : shellFailure(
+              "The server did not confirm shell completion before the request timed out.",
+            ),
+    }),
+  );
+}, Effect.scoped);

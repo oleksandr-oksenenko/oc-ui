@@ -1,7 +1,10 @@
+import { useAtomValue } from "@effect/atom-solid";
 import type { FileDiffInfo, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { locationKey } from "@opencode-ai/client/solid";
-import { createSignal, onCleanup } from "solid-js";
+import { Cause, Effect, Fiber, FiberMap, Option } from "effect";
+import { Atom } from "effect/unstable/reactivity";
 
+import type { WorkspaceOwner } from "../workspace-owner.ts";
 import type { OpenCodeEventSource } from "./event-source";
 
 export type VcsDiffMode = "working" | "branch";
@@ -16,160 +19,119 @@ type VcsDiffSnapshot = {
 
 export type VcsDiffStore = {
   readonly state: (location: LocationRef, mode: VcsDiffMode) => VcsDiffSnapshot;
-  readonly sync: (location: LocationRef, mode: VcsDiffMode) => Promise<void>;
-  readonly refresh: (location: LocationRef, mode: VcsDiffMode) => Promise<void>;
-};
-
-type DiffEntry = {
-  readonly location: LocationRef;
-  readonly read: () => VcsDiffSnapshot;
-  readonly write: (snapshot: VcsDiffSnapshot) => void;
-};
-
-type InFlight = {
-  readonly controller: AbortController;
-  readonly request: Promise<void>;
+  readonly sync: (location: LocationRef, mode: VcsDiffMode) => Effect.Effect<void>;
+  readonly refresh: (location: LocationRef, mode: VcsDiffMode) => Effect.Effect<void>;
 };
 
 type VcsDiffStoreInput = {
   readonly diff: OpenCodeClient["vcs"]["diff"];
   readonly events: Pick<OpenCodeEventSource, "on">;
+  readonly effects: WorkspaceOwner;
 };
 
-const EMPTY: VcsDiffSnapshot = {
-  files: [],
-  status: "idle",
-  stale: false,
-};
-
+const EMPTY: VcsDiffSnapshot = { files: [], status: "idle", stale: false };
 const keyOf = (location: LocationRef, mode: VcsDiffMode): string =>
   `${locationKey(location)}:${mode}`;
 
 export function createVcsDiffStore(input: VcsDiffStoreInput): VcsDiffStore {
-  const entries = new Map<string, DiffEntry>();
-  const inFlight = new Map<string, InFlight>();
-  const revisions = new Map<string, number>();
+  const { effects } = input;
+  const cache = Atom.make<Readonly<Record<string, VcsDiffSnapshot>>>({});
+  effects.mount(cache);
+  const snapshots = useAtomValue(() => cache);
+  const requests = effects.runSync(FiberMap.make<string, void, never>());
+  const write = (key: string, snapshot: VcsDiffSnapshot): void =>
+    effects.registry.update(cache, (current) => ({ ...current, [key]: snapshot }));
 
-  const entryFor = (location: LocationRef, mode: VcsDiffMode): DiffEntry => {
-    const key = keyOf(location, mode);
-    const existing = entries.get(key);
-    if (existing) return existing;
-
-    const [read, write] = createSignal<VcsDiffSnapshot>(EMPTY);
-    const entry = { location, read, write };
-    entries.set(key, entry);
-    return entry;
-  };
-
-  const invalidateEntry = (key: string, entry: DiffEntry): void => {
-    revisions.set(key, (revisions.get(key) ?? 0) + 1);
-    inFlight.get(key)?.controller.abort();
-    inFlight.delete(key);
-    const current = entry.read();
-    entry.write({
-      files: current.files,
-      status: current.files.length > 0 ? "ready" : "idle",
-      stale: true,
-    });
+  const invalidateEntry = (key: string): void => {
+    Option.getOrUndefined(FiberMap.getUnsafe(requests, key))?.interruptUnsafe();
+    const current = effects.registry.get(cache)[key];
+    if (current) {
+      write(key, {
+        files: current.files,
+        status: current.files.length > 0 ? "ready" : "idle",
+        stale: true,
+      });
+    }
   };
 
   const invalidate = (location?: LocationRef): void => {
-    const target = location && locationKey(location);
-    for (const [key, entry] of entries) {
-      if (target !== undefined && locationKey(entry.location) !== target) continue;
-      invalidateEntry(key, entry);
-    }
+    const keys = location
+      ? [keyOf(location, "working"), keyOf(location, "branch")]
+      : Object.keys(effects.registry.get(cache));
+    keys.forEach(invalidateEntry);
   };
 
-  const start = (location: LocationRef, mode: VcsDiffMode, force: boolean): Promise<void> => {
+  const load = Effect.fn("VcsDiffStore.load")(function* (location: LocationRef, mode: VcsDiffMode) {
     const key = keyOf(location, mode);
-    const entry = entryFor(location, mode);
-    const current = entry.read();
-
-    if (!force) {
-      const pending = inFlight.get(key);
-      if (pending) return pending.request;
-      if (current.status === "ready" && !current.stale) return Promise.resolve();
-    } else {
-      invalidateEntry(key, entry);
-    }
-
-    const revision = revisions.get(key) ?? 0;
-    const controller = new AbortController();
-    const before = entry.read();
-    entry.write({
-      files: before.files,
-      status: "loading",
-      stale: before.stale,
-    });
-
-    const requestLocation = location.workspaceID
-      ? { directory: location.directory, workspace: location.workspaceID }
-      : { directory: location.directory };
-
-    const request = input
-      .diff(
-        {
-          location: requestLocation,
-          mode,
-          // An omitted context asks OpenCode for the full-context patch. The
-          // renderer only treats it as complete after validating every hunk.
-        },
-        { signal: controller.signal },
+    const before = effects.registry.get(cache)[key] ?? EMPTY;
+    write(key, { ...before, status: "loading", error: undefined });
+    yield* effects
+      .request((signal) =>
+        input.diff(
+          {
+            location: location.workspaceID
+              ? { directory: location.directory, workspace: location.workspaceID }
+              : { directory: location.directory },
+            mode,
+            // Omitted context requests a full-context patch, validated by the renderer.
+          },
+          { signal },
+        ),
       )
-      .then((response) => {
-        if ((revisions.get(key) ?? 0) !== revision) return undefined;
-        entry.write({ files: response.data, status: "ready", stale: false });
-        return undefined;
-      })
-      .catch((cause: unknown) => {
-        if ((revisions.get(key) ?? 0) !== revision || isAbort(cause)) return;
-        entry.write({
-          files: before.files,
-          status: "failed",
-          stale: before.files.length > 0 || before.stale,
-          error: errorMessage(cause),
-        });
-      })
-      .finally(() => {
-        if (inFlight.get(key)?.request === request) inFlight.delete(key);
-      });
-
-    inFlight.set(key, { controller, request });
-    return request;
-  };
-
-  const stops = [
-    input.events.on("filesystem.changed", (event) => invalidate(event.location)),
-    input.events.on("vcs.branch.updated", (event) => invalidate(event.location)),
-    input.events.on("server.connected", () => invalidate()),
-  ];
-
-  onCleanup(() => {
-    stops.forEach((stop) => stop());
-    for (const request of inFlight.values()) request.controller.abort();
-    inFlight.clear();
+      .pipe(
+        Effect.tap((response) =>
+          Effect.sync(() => write(key, { files: response.data, status: "ready", stale: false })),
+        ),
+        Effect.catchTag("WorkspaceRequestError", ({ cause }) =>
+          Effect.sync(() => {
+            if (cause instanceof DOMException && cause.name === "AbortError") return;
+            write(key, {
+              files: before.files,
+              status: "failed",
+              stale: before.files.length > 0 || before.stale,
+              error:
+                cause instanceof Error && cause.message
+                  ? cause.message
+                  : "The diff could not be loaded. Check the connection and try again.",
+            });
+          }),
+        ),
+      );
   });
 
+  const start = Effect.fn("VcsDiffStore.start")(function* (
+    location: LocationRef,
+    mode: VcsDiffMode,
+    force: boolean,
+  ) {
+    const key = keyOf(location, mode);
+    if (force) invalidateEntry(key);
+    const current = effects.registry.get(cache)[key] ?? EMPTY;
+    let request = Option.getOrUndefined(FiberMap.getUnsafe(requests, key));
+    if (!request || current.status !== "loading") {
+      if (!force && current.status === "ready" && !current.stale) return;
+      request = effects.runFork(load(location, mode));
+      FiberMap.setUnsafe(requests, key, request);
+    }
+    yield* Fiber.join(request).pipe(
+      Effect.catchCauseIf(Cause.hasInterruptsOnly, () => Effect.void),
+    );
+  });
+
+  effects.runSync(
+    Effect.acquireRelease(
+      Effect.sync(() => [
+        input.events.on("filesystem.changed", (event) => invalidate(event.location)),
+        input.events.on("vcs.branch.updated", (event) => invalidate(event.location)),
+        input.events.on("server.connected", () => invalidate()),
+      ]),
+      (stops) => Effect.sync(() => stops.forEach((stop) => stop())),
+    ),
+  );
+
   return {
-    state(location, mode) {
-      return entryFor(location, mode).read();
-    },
-    sync(location, mode) {
-      return start(location, mode, false);
-    },
-    refresh(location, mode) {
-      return start(location, mode, true);
-    },
+    state: (location, mode) => snapshots()[keyOf(location, mode)] ?? EMPTY,
+    sync: (location, mode) => start(location, mode, false),
+    refresh: (location, mode) => start(location, mode, true),
   };
-}
-
-function isAbort(cause: unknown): boolean {
-  return cause instanceof DOMException && cause.name === "AbortError";
-}
-
-function errorMessage(cause: unknown): string {
-  return cause instanceof Error && cause.message
-    ? cause.message
-    : "The diff could not be loaded. Check the connection and try again.";
 }

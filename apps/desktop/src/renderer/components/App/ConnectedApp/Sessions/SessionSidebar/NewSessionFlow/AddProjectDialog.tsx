@@ -12,6 +12,7 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Show, createEffect, createSignal, on } from "solid-js";
 
+import type { WorkspaceOwner } from "../../../../../../workspace-owner.ts";
 import { ServerDirectoryBrowser } from "../../../../../../ui/ServerDirectoryBrowser.tsx";
 import "./ServerFlowDialog.css";
 
@@ -20,6 +21,7 @@ export type AddProjectDialogError =
   | { readonly kind: "add-project"; readonly message: string };
 
 export type AddProjectDialogProps = {
+  readonly effects: WorkspaceOwner;
   readonly listDirectory: OpenCodeClient["file"]["list"];
   readonly initialLocation: LocationRef;
   readonly error?: AddProjectDialogError;
@@ -91,6 +93,7 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
 
         <DialogBody class="server-flow-dialog-body">
           <ServerDirectoryBrowser
+            effects={props.effects}
             listDirectory={props.listDirectory}
             label="Project directory"
             initialLocation={props.initialLocation}

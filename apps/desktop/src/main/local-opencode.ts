@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { utilityProcess } from "electron";
 import type { UtilityProcess } from "electron";
-import { Deferred, Effect, Schema } from "effect";
+import { Context, Deferred, Effect, Fiber, Layer, Option, Schema, Scope } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 import { OPENCODE_VERSION } from "../shared/desktop-api.ts";
@@ -40,245 +40,235 @@ export class LocalOpenCodeUnavailableError extends Schema.TaggedError<LocalOpenC
   }
 }
 
-export type LocalOpenCodeService = {
-  readonly connect: () => Promise<LocalOpenCodeConnection>;
-  readonly needsQuitConfirmation: () => boolean;
-  readonly shutdown: () => Promise<void>;
-  readonly onUnavailable: (listener: () => void) => () => void;
-};
+export class LocalOpenCode extends Context.Service<
+  LocalOpenCode,
+  {
+    readonly connect: Effect.Effect<LocalOpenCodeConnection, LocalOpenCodeUnavailableError>;
+    readonly needsQuitConfirmation: Effect.Effect<boolean>;
+    readonly shutdown: Effect.Effect<void, LocalOpenCodeUnavailableError>;
+    readonly onUnavailable: (listener: () => void) => () => void;
+  }
+>()("desktop/main/LocalOpenCode") {
+  static layer(options: { readonly userDataPath: string; readonly workerPath: string }) {
+    return Layer.effect(
+      LocalOpenCode,
+      Effect.gen(function* () {
+        const client = yield* HttpClient.HttpClient;
+        // Shutdown runs before this scope closes, so it can still observe and stop its child.
+        const scope = yield* Scope.fork(yield* Effect.scope);
+        const listeners = new Set<() => void>();
+        let current: Run | undefined;
+        let closed = false;
+        const notifyUnavailable = (): void => {
+          for (const listener of listeners) {
+            try {
+              listener();
+            } catch {
+              /* Observers cannot take ownership of process cleanup. */
+            }
+          }
+        };
+
+        const stop = Effect.fn("LocalOpenCode.stop")(function* (run: Run) {
+          if (run.exited) return;
+          if (run.stopping === undefined || run.stopping.pollUnsafe() !== undefined) {
+            run.stopping = yield* Effect.forkIn(
+              Effect.gen(function* (): Effect.fn.Return<void, LocalOpenCodeUnavailableError> {
+                run.endpoint = undefined;
+                yield* Deferred.fail(
+                  run.failure,
+                  LocalOpenCodeUnavailableError.fromReason("start-failed"),
+                );
+                // A broken message port still leaves a child to terminate and reap.
+                yield* Effect.ignore(
+                  Effect.try(() => {
+                    // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Electron IPC, not a browser Window.
+                    run.child.postMessage({ type: "stop" } satisfies OpenCodeWorkerCommand);
+                  }),
+                );
+                if (yield* waitForExit(run, STOP_TIMEOUT_MS)) return yield* Effect.void;
+                yield* Effect.ignore(Effect.try(() => run.child.kill()));
+                if (yield* waitForExit(run, KILL_TIMEOUT_MS)) return yield* Effect.void;
+                const pid = run.child.pid;
+                if (process.platform !== "win32" && pid !== undefined && pid > 0) {
+                  // Even ESRCH is not a substitute for Electron's exit notification.
+                  yield* Effect.ignore(Effect.try(() => process.kill(pid, "SIGKILL")));
+                }
+                if (yield* waitForExit(run, KILL_TIMEOUT_MS)) return yield* Effect.void;
+                return yield* LocalOpenCodeUnavailableError.fromReason("stop-failed");
+              }),
+              scope,
+            );
+          }
+          yield* Fiber.join(run.stopping);
+        });
+
+        const connect = Effect.uninterruptibleMask((restore) =>
+          Effect.gen(function* () {
+            if (closed) return yield* LocalOpenCodeUnavailableError.fromReason("start-failed");
+            if (current !== undefined) {
+              if (current.unavailable !== undefined) {
+                const failure = current.unavailable;
+                if (current.stopping !== undefined) yield* restore(Fiber.join(current.stopping));
+                return yield* failure;
+              }
+              return yield* restore(Deferred.await(current.ready));
+            }
+            const child = yield* Effect.try({
+              try: () =>
+                utilityProcess.fork(options.workerPath, [], {
+                  serviceName: "Ocui built-in OpenCode",
+                  stdio: "pipe",
+                }),
+              catch: () => LocalOpenCodeUnavailableError.fromReason("start-failed"),
+            });
+            const password = randomBytes(32).toString("base64url");
+            const listening = Deferred.makeUnsafe<
+              LocalOpenCodeConnection,
+              LocalOpenCodeUnavailableError
+            >();
+            const run: Run = {
+              child,
+              ready: Deferred.makeUnsafe(),
+              failure: Deferred.makeUnsafe(),
+              exit: Deferred.makeUnsafe(),
+              exited: false,
+            };
+            current = run;
+            const fail = (reason: FailureReason): void => {
+              if (current !== run || run.exited) return;
+              Deferred.doneUnsafe(
+                run.failure,
+                Effect.fail(LocalOpenCodeUnavailableError.fromReason(reason)),
+              );
+            };
+            const onSpawn = (): void => {
+              if (current !== run || run.exited || closed || run.stopping !== undefined) return;
+              try {
+                const command: OpenCodeWorkerCommand = {
+                  type: "start",
+                  userDataPath: options.userDataPath,
+                  password,
+                };
+                // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Electron IPC, not a browser Window.
+                child.postMessage(command);
+              } catch {
+                fail("start-failed");
+              }
+            };
+            let receivedListening = false;
+            const onMessage = (input: Parameters<typeof parseWorkerMessage>[0]): void => {
+              if (current !== run || run.exited || closed || run.stopping !== undefined) return;
+              try {
+                const message = parseWorkerMessage(input);
+                if (message.type === "fatal") return fail("start-failed");
+                if (receivedListening) return fail("invalid-endpoint");
+                const endpoint = { serverUrl: validateEndpoint(message.url), password };
+                receivedListening = true;
+                Deferred.doneUnsafe(listening, Effect.succeed(endpoint));
+              } catch {
+                fail("invalid-endpoint");
+              }
+            };
+            const onError = (): void => fail("start-failed");
+            const onExit = (): void => {
+              if (run.exited) return;
+              run.exited = true;
+              const wasRunning = run.endpoint !== undefined;
+              run.endpoint = undefined;
+              Deferred.doneUnsafe(run.exit, Effect.void);
+              Deferred.doneUnsafe(
+                run.failure,
+                Effect.fail(LocalOpenCodeUnavailableError.fromReason("start-failed")),
+              );
+              child.off("spawn", onSpawn);
+              child.off("message", onMessage);
+              child.off("error", onError);
+              child.off("exit", onExit);
+              if (current === run) current = undefined;
+              if (wasRunning && !closed) notifyUnavailable();
+            };
+            child.on("spawn", onSpawn);
+            child.on("message", onMessage);
+            child.on("error", onError);
+            child.on("exit", onExit);
+            // Drain library output without copying provider or plugin secrets into main logs.
+            child.stdout?.resume();
+            child.stderr?.resume();
+            run.monitor = yield* Effect.forkIn(
+              Effect.gen(function* () {
+                const endpoint = yield* Effect.gen(function* () {
+                  const announced = yield* Deferred.await(listening);
+                  yield* waitUntilReady(client, run, announced);
+                  return announced;
+                }).pipe(
+                  Effect.timeoutOrElse({
+                    duration: START_TIMEOUT_MS,
+                    orElse: () => LocalOpenCodeUnavailableError.fromReason("timed-out"),
+                  }),
+                  Effect.raceFirst(Deferred.await(run.failure)),
+                );
+                if (yield* Deferred.isDone(run.failure)) return yield* Deferred.await(run.failure);
+                run.endpoint = endpoint;
+                yield* Deferred.succeed(run.ready, endpoint);
+                return yield* Deferred.await(run.failure);
+              }).pipe(
+                Effect.catch((failure) =>
+                  Effect.gen(function* () {
+                    const wasRunning = run.endpoint !== undefined;
+                    run.unavailable = failure;
+                    run.endpoint = undefined;
+                    if (wasRunning && !closed) notifyUnavailable();
+                    const result = yield* Effect.exit(stop(run));
+                    yield* Deferred.complete(
+                      run.ready,
+                      Effect.andThen(result, Effect.fail(failure)),
+                    );
+                  }),
+                ),
+              ),
+              scope,
+              { uninterruptible: false },
+            );
+            return yield* restore(Deferred.await(run.ready));
+          }),
+        );
+
+        const shutdown = Effect.gen(function* () {
+          closed = true;
+          const run = current;
+          if (run === undefined) return;
+          yield* stop(run);
+          if (run.monitor !== undefined) yield* Fiber.join(run.monitor);
+        });
+        yield* Effect.addFinalizer(() => shutdown.pipe(Effect.orDie));
+        return LocalOpenCode.of({
+          connect,
+          shutdown,
+          needsQuitConfirmation: Effect.sync(() => current !== undefined),
+          onUnavailable: (listener) => {
+            listeners.add(listener);
+            return () => {
+              listeners.delete(listener);
+            };
+          },
+        });
+      }),
+    ).pipe(Layer.provide(FetchHttpClient.layer));
+  }
+}
 
 type Run = {
   readonly child: UtilityProcess;
-  readonly abort: AbortController;
-  readonly exit: Promise<void>;
-  readonly start: Promise<LocalOpenCodeConnection>;
+  readonly ready: Deferred.Deferred<LocalOpenCodeConnection, LocalOpenCodeUnavailableError>;
+  readonly failure: Deferred.Deferred<never, LocalOpenCodeUnavailableError>;
+  readonly exit: Deferred.Deferred<void>;
   exited: boolean;
-  started: boolean;
   endpoint?: LocalOpenCodeConnection;
-  failure?: LocalOpenCodeUnavailableError;
-  stopping?: Promise<void>;
+  unavailable?: LocalOpenCodeUnavailableError;
+  monitor?: Fiber.Fiber<void>;
+  stopping?: Fiber.Fiber<void, LocalOpenCodeUnavailableError>;
 };
-
-/** One lazy, app-owned process. Only confirmed exit releases its ownership. */
-export function createLocalOpenCodeService(options: {
-  readonly userDataPath: string;
-  readonly workerPath: string;
-}): LocalOpenCodeService {
-  const listeners = new Set<() => void>();
-  let current: Run | undefined;
-  let closed = false;
-  let shutdownPromise: Promise<void> | undefined;
-
-  const notifyUnavailable = (): void => {
-    for (const listener of listeners) {
-      try {
-        listener();
-      } catch {
-        // Observers cannot take ownership of process cleanup.
-      }
-    }
-  };
-
-  const stop = (run: Run): Promise<void> => {
-    if (run.stopping !== undefined) return run.stopping;
-    if (run.exited) return Promise.resolve();
-    run.abort.abort();
-    run.endpoint = undefined;
-    run.stopping = (async () => {
-      try {
-        // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Electron IPC, not a browser Window.
-        run.child.postMessage({ type: "stop" } satisfies OpenCodeWorkerCommand);
-      } catch {
-        // A broken message port still leaves a child to terminate and reap.
-      }
-      if (await waitForExit(run, STOP_TIMEOUT_MS)) return;
-      if (current !== run || run.exited) return;
-      try {
-        run.child.kill();
-      } catch {
-        // Continue to the bounded child-only fallback.
-      }
-      if (await waitForExit(run, KILL_TIMEOUT_MS)) return;
-      if (current !== run || run.exited) return;
-      const pid = run.child.pid;
-      if (process.platform !== "win32" && pid !== undefined && pid > 0) {
-        try {
-          // Never a process group, name lookup, or remembered PID from an old run.
-          process.kill(pid, "SIGKILL");
-        } catch {
-          // Even ESRCH is not a substitute for Electron's exit notification.
-        }
-      }
-      if (await waitForExit(run, KILL_TIMEOUT_MS)) return;
-      run.failure = LocalOpenCodeUnavailableError.fromReason("stop-failed");
-      throw run.failure;
-    })().finally(() => {
-      run.stopping = undefined;
-    });
-    return run.stopping;
-  };
-
-  const connect = (): Promise<LocalOpenCodeConnection> => {
-    if (closed) return Promise.reject(LocalOpenCodeUnavailableError.fromReason("start-failed"));
-    if (current !== undefined) {
-      // Startup callers share cleanup as well as boot; no early timeout rejection.
-      if (!current.started) return current.start;
-      if (current.failure !== undefined) {
-        const failure = current.failure;
-        return (current.stopping ?? Promise.resolve()).then(() => Promise.reject(failure));
-      }
-      if (current.endpoint !== undefined) return Promise.resolve(current.endpoint);
-      return current.start;
-    }
-
-    let child: UtilityProcess;
-    try {
-      child = utilityProcess.fork(options.workerPath, [], {
-        serviceName: "Ocui built-in OpenCode",
-        stdio: "pipe",
-      });
-    } catch {
-      return Promise.reject(LocalOpenCodeUnavailableError.fromReason("start-failed"));
-    }
-    const password = randomBytes(32).toString("base64url");
-    const abort = new AbortController();
-    const exited = Deferred.makeUnsafe<void>();
-    const ready = Deferred.makeUnsafe<LocalOpenCodeConnection, LocalOpenCodeUnavailableError>();
-    const run: Run = {
-      child,
-      abort,
-      exit: Effect.runPromise(Deferred.await(exited)),
-      exited: false,
-      started: false,
-      start: Effect.runPromise(Deferred.await(ready)).catch(async (cause: unknown) => {
-        await stop(run);
-        throw cause;
-      }),
-    };
-    current = run;
-
-    const fail = (reason: FailureReason): void => {
-      if (current !== run || run.exited || run.failure !== undefined) return;
-      const wasRunning = run.endpoint !== undefined;
-      run.failure = LocalOpenCodeUnavailableError.fromReason(reason);
-      run.endpoint = undefined;
-      deadline.abort();
-      Effect.runSync(Deferred.fail(ready, run.failure));
-      abort.abort();
-      if (wasRunning) {
-        void stop(run).catch(() => undefined);
-        notifyUnavailable();
-      }
-    };
-    const deadline = new AbortController();
-    void Effect.runPromise(Effect.sleep(START_TIMEOUT_MS), { signal: deadline.signal }).then(
-      () => fail("timed-out"),
-      () => undefined,
-    );
-    const onAbort = (): void => {
-      deadline.abort();
-      Effect.runSync(
-        Deferred.fail(
-          ready,
-          run.failure ?? LocalOpenCodeUnavailableError.fromReason("start-failed"),
-        ),
-      );
-    };
-    abort.signal.addEventListener("abort", onAbort, { once: true });
-    const onSpawn = (): void => {
-      if (current !== run || run.exited || abort.signal.aborted) return;
-      try {
-        const command: OpenCodeWorkerCommand = {
-          type: "start",
-          userDataPath: options.userDataPath,
-          password,
-        };
-        // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Electron IPC, not a browser Window.
-        child.postMessage(command);
-      } catch {
-        fail("start-failed");
-      }
-    };
-    let listening = false;
-    const onMessage = (input: Parameters<typeof parseWorkerMessage>[0]): void => {
-      if (current !== run || run.exited || abort.signal.aborted) return;
-      try {
-        const message = parseWorkerMessage(input);
-        if (message.type === "fatal") {
-          fail("start-failed");
-          return;
-        }
-        if (listening) {
-          fail("invalid-endpoint");
-          return;
-        }
-        const endpoint = { serverUrl: validateEndpoint(message.url), password };
-        listening = true;
-        void waitUntilReady(run, endpoint).then(
-          () => {
-            if (current !== run || abort.signal.aborted || run.exited) return;
-            deadline.abort();
-            run.started = true;
-            run.endpoint = endpoint;
-            Effect.runSync(Deferred.succeed(ready, endpoint));
-            return;
-          },
-          () => fail("start-failed"),
-        );
-      } catch {
-        fail("invalid-endpoint");
-      }
-    };
-    const onError = (): void => fail("start-failed");
-    const onExit = (): void => {
-      if (run.exited) return;
-      const wasRunning = run.endpoint !== undefined;
-      run.exited = true;
-      run.endpoint = undefined;
-      deadline.abort();
-      abort.abort();
-      Effect.runSync(Deferred.succeed(exited, undefined));
-      child.off("spawn", onSpawn);
-      child.off("message", onMessage);
-      child.off("error", onError);
-      child.off("exit", onExit);
-      abort.signal.removeEventListener("abort", onAbort);
-      if (current !== run) return;
-      current = undefined;
-      if (!closed && wasRunning) notifyUnavailable();
-    };
-    child.on("spawn", onSpawn);
-    child.on("message", onMessage);
-    child.on("error", onError);
-    child.on("exit", onExit);
-    // Drain library output without copying provider or plugin secrets into main logs.
-    child.stdout?.resume();
-    child.stderr?.resume();
-    return run.start;
-  };
-
-  return {
-    connect,
-    needsQuitConfirmation: () => current !== undefined,
-    shutdown: () => {
-      if (shutdownPromise !== undefined) return shutdownPromise;
-      closed = true;
-      const run = current;
-      shutdownPromise = (async () => {
-        if (run === undefined) return;
-        await stop(run);
-        await run.start.catch(() => undefined);
-      })().finally(() => {
-        shutdownPromise = undefined;
-      });
-      return shutdownPromise;
-    },
-    onUnavailable: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-  };
-}
 
 function validateEndpoint(value: string): string {
   const url = new URL(value);
@@ -296,61 +286,38 @@ function validateEndpoint(value: string): string {
   return url.origin;
 }
 
-async function waitUntilReady(run: Run, endpoint: LocalOpenCodeConnection): Promise<void> {
-  while (!run.abort.signal.aborted) {
-    const probe = new AbortController();
-    const cancel = (): void => probe.abort();
-    run.abort.signal.addEventListener("abort", cancel, { once: true });
-    const timeout = new AbortController();
-    void Effect.runPromise(Effect.sleep(HEALTH_TIMEOUT_MS), { signal: timeout.signal }).then(
-      cancel,
-      () => undefined,
+const waitUntilReady = Effect.fn("LocalOpenCode.waitUntilReady")(function* (
+  client: HttpClient.HttpClient,
+  run: Run,
+  endpoint: LocalOpenCodeConnection,
+) {
+  while (true) {
+    const ready = yield* Effect.gen(function* () {
+      const response = yield* client.get(new URL("/api/health", endpoint.serverUrl), {
+        headers: {
+          authorization: `Basic ${Buffer.from(`opencode:${endpoint.password}`).toString("base64")}`,
+        },
+      });
+      if (response.status === 503) return false;
+      if (response.status !== 200)
+        return yield* LocalOpenCodeUnavailableError.fromReason("start-failed");
+      const body = yield* HttpClientResponse.schemaBodyJson(HealthResponseSchema)(response);
+      if (
+        body.version !== LOCAL_OPENCODE_VERSION ||
+        body.pid !== run.child.pid ||
+        run.child.pid === undefined
+      ) {
+        return yield* LocalOpenCodeUnavailableError.fromReason("start-failed");
+      }
+      return true;
+    }).pipe(
+      Effect.timeoutOption(HEALTH_TIMEOUT_MS),
+      Effect.mapError(() => LocalOpenCodeUnavailableError.fromReason("start-failed")),
     );
-    try {
-      const ready = await Effect.runPromise(
-        Effect.gen(function* () {
-          const response = yield* HttpClient.get(new URL("/api/health", endpoint.serverUrl), {
-            headers: {
-              authorization: `Basic ${Buffer.from(`opencode:${endpoint.password}`).toString("base64")}`,
-            },
-          });
-          if (response.status === 503) return false;
-          if (response.status !== 200)
-            return yield* LocalOpenCodeUnavailableError.fromReason("start-failed");
-          const body = yield* HttpClientResponse.schemaBodyJson(HealthResponseSchema)(response);
-          if (
-            body.version !== LOCAL_OPENCODE_VERSION ||
-            body.pid !== run.child.pid ||
-            run.child.pid === undefined
-          ) {
-            return yield* LocalOpenCodeUnavailableError.fromReason("start-failed");
-          }
-          return true;
-          // oxlint-disable-next-line effecttsgo/strict-effect-provide -- This bounded health request is a host entry point; no scoped client escapes.
-        }).pipe(Effect.provide(FetchHttpClient.layer)),
-        { signal: probe.signal },
-      );
-      if (ready) return;
-    } catch (cause) {
-      if (!probe.signal.aborted) throw cause;
-    } finally {
-      timeout.abort();
-      run.abort.signal.removeEventListener("abort", cancel);
-    }
-    await Effect.runPromise(Effect.sleep(100), { signal: run.abort.signal });
+    if (Option.getOrElse(ready, () => false)) return;
+    yield* Effect.sleep(100);
   }
-  throw new Error("Startup canceled");
-}
+});
 
-async function waitForExit(run: Run, milliseconds: number): Promise<boolean> {
-  if (run.exited) return true;
-  const timer = new AbortController();
-  try {
-    return await Promise.race([
-      run.exit.then(() => true),
-      Effect.runPromise(Effect.sleep(milliseconds), { signal: timer.signal }).then(() => false),
-    ]);
-  } finally {
-    timer.abort();
-  }
-}
+const waitForExit = (run: Run, milliseconds: number) =>
+  Deferred.await(run.exit).pipe(Effect.timeoutOption(milliseconds), Effect.map(Option.isSome));

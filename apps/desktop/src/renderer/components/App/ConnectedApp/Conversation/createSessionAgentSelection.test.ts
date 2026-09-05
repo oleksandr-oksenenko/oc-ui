@@ -1,7 +1,10 @@
+import { Effect, Exit, Scope } from "effect";
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import type { AgentInfo, LocationRef, SessionInfo } from "@opencode-ai/client";
-import { createRoot, createSignal } from "solid-js";
+import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../../../../test/deferred.ts";
 import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { createSessionAgentSelection } from "./createSessionAgentSelection.ts";
 
@@ -46,7 +49,7 @@ function setup(
     readonly syncSession?: SelectionData["session"]["sync"];
   } = {},
 ) {
-  return createRoot((dispose) => {
+  return withTestWorkspace((effects, dispose) => {
     const [selectedSession, setSelectedSession] = createSignal<SessionInfo | undefined>(
       options.selected,
     );
@@ -64,6 +67,7 @@ function setup(
     );
     const invalidateSession = vi.fn<SelectionData["session"]["invalidate"]>();
     const selection = createSessionAgentSelection({
+      effects,
       api: { session: { switchAgent } },
       data: {
         location: { agent: { list: listAgents, sync: syncAgents } },
@@ -73,6 +77,7 @@ function setup(
       connected,
     });
     return {
+      effects,
       dispose,
       selection,
       setSelectedSession,
@@ -173,12 +178,39 @@ describe("createSessionAgentSelection", () => {
     });
     await fixture.selection.selectAgent("all");
 
-    expect(fixture.switchAgent).toHaveBeenCalledWith({ sessionID: "one", agent: "all" });
+    expect(fixture.switchAgent).toHaveBeenCalledWith(
+      { sessionID: "one", agent: "all" },
+      { signal: expect.any(AbortSignal) },
+    );
     expect(fixture.invalidateSession).toHaveBeenCalledWith("one");
     expect(fixture.syncSession).toHaveBeenCalledWith("one");
     expect(fixture.selection.selectedAgentID()).toBe("all");
     expect(fixture.selection.switching()).toBe(false);
     fixture.dispose();
+  });
+
+  it("finishes an accepted switch and refresh after its view is disposed", async () => {
+    const switched = deferred();
+    const refreshed = deferred();
+    let requestSignal: AbortSignal | undefined;
+    const fixture = setup({
+      selected: session("one"),
+      listed: [agent("primary")],
+      switchAgent: (_, options) => {
+        requestSignal = options?.signal;
+        return switched.promise;
+      },
+      syncSession: () => refreshed.promise,
+    });
+    await vi.waitFor(() => expect(fixture.selection.state()).toBe("ready"));
+    const mutation = fixture.selection.selectAgent("primary");
+    fixture.dispose();
+    expect(requestSignal?.aborted).toBe(false);
+    switched.resolve();
+    await vi.waitFor(() => expect(fixture.syncSession).toHaveBeenCalledWith("one"));
+    refreshed.resolve();
+    await mutation;
+    expect(fixture.switchAgent).toHaveBeenCalledOnce();
   });
 
   it("ignores IDs that are not visible server choices", async () => {
@@ -254,6 +286,49 @@ describe("createSessionAgentSelection", () => {
     rejectFirst(new Error("old location failed"));
     await Promise.resolve();
     expect(fixture.selection.error()).toBeUndefined();
+    fixture.dispose();
+  });
+
+  it("retains replaced loads through disconnect and workspace shutdown", async () => {
+    const oldRead = deferred();
+    const currentRead = deferred();
+    const syncAgents = vi
+      .fn<SelectionData["location"]["agent"]["sync"]>()
+      .mockReturnValueOnce(oldRead.promise)
+      .mockReturnValueOnce(currentRead.promise);
+    const fixture = setup({ selected: session("one"), syncAgents });
+    await vi.waitFor(() => expect(syncAgents).toHaveBeenCalledOnce());
+
+    fixture.setSelectedSession(session("two", otherLocation));
+    await vi.waitFor(() => expect(syncAgents).toHaveBeenCalledTimes(2));
+    fixture.setConnected(false);
+    const closed = vi.fn<() => void>();
+    const shutdown = Effect.runPromise(Scope.close(fixture.effects.scope, Exit.void)).then(closed);
+    currentRead.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(closed).not.toHaveBeenCalled();
+
+    oldRead.resolve();
+    await shutdown;
+    fixture.dispose();
+  });
+
+  it("discards switch errors from a previous visit to the same selection", async () => {
+    const switched = deferred();
+    const fixture = setup({
+      selected: session("one"),
+      listed: [agent("primary")],
+      switchAgent: () => switched.promise,
+    });
+    await vi.waitFor(() => expect(fixture.selection.state()).toBe("ready"));
+
+    const mutation = fixture.selection.selectAgent("primary");
+    fixture.setSelectedSession(session("two"));
+    fixture.setSelectedSession(session("one"));
+    switched.reject(new Error("previous selection failed"));
+    await mutation;
+    expect(fixture.selection.error()).toBeUndefined();
+    expect(fixture.selection.switching()).toBe(false);
     fixture.dispose();
   });
 

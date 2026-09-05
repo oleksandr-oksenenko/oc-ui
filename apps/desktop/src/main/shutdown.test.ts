@@ -1,4 +1,5 @@
 import type { MessageBoxOptions, MessageBoxReturnValue } from "electron";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createAppQuitHandler, settleSettingsIpc } from "./shutdown.ts";
@@ -26,9 +27,12 @@ const setup = (needsConfirmation = true) => {
   const cleanup = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const quit = vi.fn<() => void>();
   const handler = createAppQuitHandler({
-    localOpenCode: () => local,
+    localOpenCode: Effect.succeed({
+      needsQuitConfirmation: Effect.sync(local.needsQuitConfirmation),
+      shutdown: Effect.promise(local.shutdown),
+    }),
     showMessageBox,
-    cleanup,
+    cleanup: Effect.promise(cleanup),
     quit,
   });
   const event = { preventDefault: vi.fn<() => void>() };
@@ -36,6 +40,51 @@ const setup = (needsConfirmation = true) => {
 };
 
 describe("app quit", () => {
+  it("can quit before services exist and releases the runtime from outside its scope", async () => {
+    const disposed = vi.fn<() => void>();
+    const runtime = ManagedRuntime.make(
+      Layer.effectDiscard(Effect.addFinalizer(() => Effect.sync(disposed))),
+    );
+    await runtime.runPromise(Effect.void);
+    const quit = vi.fn<() => void>();
+    const handler = createAppQuitHandler({
+      localOpenCode: Effect.void,
+      showMessageBox: vi.fn<(options: MessageBoxOptions) => Promise<MessageBoxReturnValue>>(),
+      cleanup: runtime.disposeEffect,
+      quit,
+    });
+    handler.beforeQuit({ preventDefault: vi.fn<() => void>() });
+    await flush();
+    expect(disposed).toHaveBeenCalledOnce();
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("keeps admission closed until the native dialog settles and permits retry if it fails", async () => {
+    const { handler, event, local, showMessageBox, cleanup, quit } = setup();
+    const answer = deferred<MessageBoxReturnValue>();
+    showMessageBox.mockReturnValueOnce(answer.promise);
+    handler.beforeQuit(event);
+    await flush();
+    handler.beforeQuit(event);
+    expect(handler.isQuitting()).toBe(true);
+    expect(showMessageBox).toHaveBeenCalledOnce();
+    expect(local.shutdown).not.toHaveBeenCalled();
+    answer.resolve({ response: 0, checkboxChecked: false });
+    await flush();
+    expect(handler.isQuitting()).toBe(false);
+
+    showMessageBox.mockRejectedValue(new Error("dialog unavailable"));
+    handler.beforeQuit(event);
+    await flush();
+    expect(handler.isQuitting()).toBe(false);
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+    showMessageBox.mockResolvedValue({ response: 1, checkboxChecked: false });
+    handler.beforeQuit(event);
+    await flush();
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
   it("shuts Settings down before waiting for accepted IPC and waits for both", async () => {
     const stopped = deferred<void>();
     const request = deferred<void>();
@@ -47,7 +96,12 @@ describe("app quit", () => {
         yield request.promise;
       },
     };
-    const cleanup = settleSettingsIpc(() => stopped.promise, pendingIpc).then(() => {
+    const cleanup = Effect.runPromise(
+      settleSettingsIpc(
+        Effect.promise(() => stopped.promise),
+        pendingIpc,
+      ),
+    ).then(() => {
       finished = true;
       return undefined;
     });

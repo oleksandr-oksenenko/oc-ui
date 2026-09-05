@@ -102,13 +102,16 @@ const makeSettingsService = Effect.fn("Settings.make")(function* (
     );
   const writeSettings = Effect.fn("Settings.write")(function* (target: StoredTarget) {
     yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
-    const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+    const temporaryDirectory = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+    const temporaryPath = path.join(temporaryDirectory, SETTINGS_FILE_NAME);
     const contents = `${yield* encodeStoredTarget(target)}\n`;
-    const cleanup = fs.remove(temporaryPath, { force: true }).pipe(Effect.ignore);
-    yield* fs.writeFileString(temporaryPath, contents, { flag: "wx", mode: 0o600 }).pipe(
-      Effect.tapError((error) => (error.reason._tag === "AlreadyExists" ? Effect.void : cleanup)),
-      Effect.andThen(fs.rename(temporaryPath, filePath).pipe(Effect.onError(() => cleanup))),
-      Effect.onInterrupt(() => cleanup),
+    yield* Effect.acquireUseRelease(
+      fs.makeDirectory(temporaryDirectory, { mode: 0o700 }),
+      () =>
+        fs
+          .writeFileString(temporaryPath, contents, { flag: "wx", mode: 0o600 })
+          .pipe(Effect.andThen(fs.rename(temporaryPath, filePath))),
+      () => fs.remove(temporaryDirectory, { recursive: true, force: true }).pipe(Effect.ignore),
     );
   });
 
@@ -159,7 +162,7 @@ const makeSettingsService = Effect.fn("Settings.make")(function* (
     Effect.flatten,
     Effect.forever,
     Effect.ensuring(close),
-    Effect.forkIn(yield* Effect.scope),
+    Effect.forkScoped,
   );
   const shutdown = Effect.gen(function* () {
     yield* close;

@@ -1,12 +1,12 @@
-import { createRoot } from "solid-js";
+import { withTestWorkspace } from "../test/workspace.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createSessionDraftStore } from "./drafts.ts";
 
 describe("createSessionDraftStore", () => {
   it("keeps independent drafts for each session", () => {
-    createRoot((dispose) => {
-      const drafts = createSessionDraftStore();
+    withTestWorkspace((effects, dispose) => {
+      const drafts = createSessionDraftStore(effects);
       drafts.set("one", "first");
       drafts.set("two", "second");
 
@@ -17,8 +17,8 @@ describe("createSessionDraftStore", () => {
   });
 
   it("does not erase edits made while a prompt is being admitted", () => {
-    createRoot((dispose) => {
-      const drafts = createSessionDraftStore();
+    withTestWorkspace((effects, dispose) => {
+      const drafts = createSessionDraftStore(effects);
       drafts.set("session", "submitted text");
       drafts.set("session", "new edit");
 

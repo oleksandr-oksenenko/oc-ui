@@ -1,3 +1,6 @@
+import { RegistryContext } from "@effect/atom-solid";
+import { Effect, Exit, Scope } from "effect";
+import { withTestWorkspace } from "../../../../../test/workspace.ts";
 import { deferred } from "../../../../../test/deferred.ts";
 import { sessionFixture } from "../../../../../test/session-fixture.ts";
 import type { FileListOutput, Project, SessionInfo } from "@opencode-ai/client";
@@ -12,7 +15,7 @@ import {
 } from "../../../../../opencode/create-session-worktree.ts";
 import {
   NewSessionFlow,
-  type NewSessionFlowProps,
+  createNewSessionFlow,
   type NewSessionFlowRuntime,
 } from "./NewSessionFlow.tsx";
 import { ServerFlowDialogProvider } from "../../../../../ui/ServerFlowDialogProvider.tsx";
@@ -114,6 +117,7 @@ function fakeRuntime(
   const remove = vi.fn<(sessionID: string) => void>();
 
   const runtime: NewSessionFlowRuntime = {
+    effects: withTestWorkspace((effects) => effects),
     api: {
       file: { list: fileList },
       project: { current: projectCurrent },
@@ -166,20 +170,19 @@ async function flushDialogClose(): Promise<void> {
   await flush();
 }
 
-function mount(runtime: NewSessionFlowProps["runtime"]) {
+function mount(runtime: NewSessionFlowRuntime) {
   const onDismiss = vi.fn<() => void>();
   const onSessionCreated = vi.fn<(sessionID: string) => void>();
   const [visible, setVisible] = createSignal(true);
+  const flow = createNewSessionFlow({ runtime, onDismiss, onSessionCreated });
   const { dispose } = mountView(() => (
-    <ServerFlowDialogProvider>
-      <Show when={visible()}>
-        <NewSessionFlow
-          runtime={runtime}
-          onDismiss={onDismiss}
-          onSessionCreated={onSessionCreated}
-        />
-      </Show>
-    </ServerFlowDialogProvider>
+    <RegistryContext.Provider value={runtime.effects.registry}>
+      <ServerFlowDialogProvider>
+        <Show when={visible()}>
+          <NewSessionFlow flow={flow} />
+        </Show>
+      </ServerFlowDialogProvider>
+    </RegistryContext.Provider>
   ));
   return {
     get root() {
@@ -187,7 +190,9 @@ function mount(runtime: NewSessionFlowProps["runtime"]) {
     },
     onDismiss,
     onSessionCreated,
+    flow,
     unmountFlow: () => setVisible(false),
+    remountFlow: () => setVisible(true),
     dispose,
   };
 }
@@ -216,6 +221,77 @@ async function chooseProject(host: HTMLElement, name: string): Promise<void> {
 }
 
 describe("NewSessionFlow", () => {
+  it("reconnects a remounted view to the pending creation without admitting a duplicate", async () => {
+    const pending = deferred<SessionInfo>();
+    const fake = fakeRuntime([pending.promise]);
+    const mounted = mount(fake.runtime);
+    await flush();
+    submit(mounted.root);
+    await flush();
+    mounted.unmountFlow();
+    mounted.remountFlow();
+    await flushDialogClose();
+    expect(mounted.root.textContent).toContain("Creating session");
+    mounted.flow.useProject(project.id);
+    submit(mounted.root);
+    expect(fake.sessionCreate).toHaveBeenCalledOnce();
+    pending.reject(new Error("offline"));
+    await flush();
+    expect(mounted.root.textContent).toContain("The session could not be created.");
+    mounted.dispose();
+  });
+
+  it.each([
+    {
+      outcome: "failed",
+      admitted: [],
+      removed: [["session-1"]],
+      notices: [
+        {
+          title: "Worktree retained",
+          description: "The worktree remains at /srv/worktrees/interrupted.",
+        },
+      ],
+    },
+    { outcome: "acknowledged", admitted: [["session-1"]], removed: [], notices: [] },
+  ])(
+    "reconciles $outcome session creation after workspace interruption retains its worktree",
+    async ({ outcome, admitted, removed, notices }) => {
+      const location = { directory: "/srv/worktrees/interrupted" };
+      vi.mocked(createSessionWorktree).mockReturnValueOnce(Effect.succeed({ location }));
+      const pending = deferred<SessionInfo>();
+      const fake = fakeRuntime([pending.promise], {
+        syncAcknowledgement:
+          outcome === "acknowledged" ? session("session-1", location.directory) : undefined,
+      });
+      const onSessionCreated = vi.fn<(sessionID: string) => void>();
+      const flow = createNewSessionFlow({
+        runtime: fake.runtime,
+        onDismiss: vi.fn<() => void>(),
+        onSessionCreated,
+      });
+      await flush();
+      flow.createWorktree();
+      await vi.waitFor(() => expect(fake.sessionCreate).toHaveBeenCalledOnce());
+      let closed = false;
+      const closing = Effect.runPromise(Scope.close(fake.runtime.effects.scope, Exit.void)).then(
+        () => {
+          closed = true;
+          return undefined;
+        },
+      );
+      await flush();
+      expect(closed).toBe(false);
+      pending.reject(new Error("response lost"));
+      await closing;
+      expect(fake.sessionSync).toHaveBeenCalledWith("session-1");
+      expect(onSessionCreated).not.toHaveBeenCalled();
+      expect(fake.remove.mock.calls).toEqual(removed);
+      expect(fake.admit.mock.calls).toEqual(admitted);
+      expect(showToast.mock.calls.map(([notice]) => notice)).toMatchObject(notices);
+    },
+  );
+
   it("creates a direct session in the selected project", async () => {
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
     const mounted = mount(fake.runtime);
@@ -267,7 +343,7 @@ describe("NewSessionFlow", () => {
     mounted.dispose();
   });
 
-  it("ignores a pending session creation after the flow unmounts", async () => {
+  it("completes session creation after the view unmounts", async () => {
     const pendingSession = deferred<SessionInfo>();
     const fake = fakeRuntime([pendingSession.promise]);
     const mounted = mount(fake.runtime);
@@ -275,12 +351,14 @@ describe("NewSessionFlow", () => {
 
     submit(mounted.root);
     await flush();
+    expect(fake.admit).not.toHaveBeenCalled();
     mounted.unmountFlow();
     pendingSession.resolve(session("session-1", project.canonical));
     await flushDialogClose();
 
-    expect(mounted.onSessionCreated).not.toHaveBeenCalled();
-    expect(mounted.onDismiss).not.toHaveBeenCalled();
+    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
+    expect(fake.admit).toHaveBeenCalledWith("session-1");
+    expect(mounted.onDismiss).toHaveBeenCalledOnce();
     mounted.dispose();
   });
 
@@ -290,10 +368,13 @@ describe("NewSessionFlow", () => {
     await flush();
     clickButton(mounted.root, "Add project");
     await flushDialogClose();
-    expect(fake.fileList).toHaveBeenCalledWith({
-      location: { directory: "/srv/projects" },
-      path: ".",
-    });
+    expect(fake.fileList).toHaveBeenCalledWith(
+      {
+        location: { directory: "/srv/projects" },
+        path: ".",
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     mounted.dispose();
   });
 
@@ -307,16 +388,22 @@ describe("NewSessionFlow", () => {
     clickButton(mounted.root, "Add project");
     await flushDialogClose();
 
-    expect(fake.fileList).toHaveBeenCalledWith({
-      location: { directory: "/srv/projects", workspace: "workspace-a" },
-      path: ".",
-    });
+    expect(fake.fileList).toHaveBeenCalledWith(
+      {
+        location: { directory: "/srv/projects", workspace: "workspace-a" },
+        path: ".",
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     submit(mounted.root);
     await flushDialogClose();
 
-    expect(fake.projectCurrent).toHaveBeenCalledWith({
-      location: { directory: "/srv/projects", workspace: "workspace-a" },
-    });
+    expect(fake.projectCurrent).toHaveBeenCalledWith(
+      {
+        location: { directory: "/srv/projects", workspace: "workspace-a" },
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     submit(mounted.root);
     await flushDialogClose();
 
@@ -339,9 +426,12 @@ describe("NewSessionFlow", () => {
     submit(mounted.root);
     await flushDialogClose();
 
-    expect(fake.projectCurrent).toHaveBeenCalledWith({
-      location: { directory: "/srv/projects/worktrees" },
-    });
+    expect(fake.projectCurrent).toHaveBeenCalledWith(
+      {
+        location: { directory: "/srv/projects/worktrees" },
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(fake.projectSync).toHaveBeenCalledTimes(2);
     submit(mounted.root);
     await flushDialogClose();
@@ -353,9 +443,11 @@ describe("NewSessionFlow", () => {
   });
 
   it("clears the failed session error after adding a project", async () => {
-    vi.mocked(createSessionWorktree).mockResolvedValueOnce({
-      location: { directory: "/srv/worktrees/feature-one" },
-    });
+    vi.mocked(createSessionWorktree).mockReturnValueOnce(
+      Effect.succeed({
+        location: { directory: "/srv/worktrees/feature-one" },
+      }),
+    );
     const fake = fakeRuntime(
       [
         Promise.reject(new Error("session failed")),
@@ -394,9 +486,11 @@ describe("NewSessionFlow", () => {
   });
 
   it("keeps an abandoned worktree notice after an unrelated session succeeds", async () => {
-    vi.mocked(createSessionWorktree).mockResolvedValueOnce({
-      location: { directory: "/srv/worktrees/feature-one" },
-    });
+    vi.mocked(createSessionWorktree).mockReturnValueOnce(
+      Effect.succeed({
+        location: { directory: "/srv/worktrees/feature-one" },
+      }),
+    );
     const fake = fakeRuntime(
       [
         Promise.reject(new Error("session failed")),
@@ -424,8 +518,12 @@ describe("NewSessionFlow", () => {
 
   it("shows a second retained notice when a later worktree also fails", async () => {
     vi.mocked(createSessionWorktree)
-      .mockResolvedValueOnce({ location: { directory: "/srv/worktrees/feature-one" } })
-      .mockResolvedValueOnce({ location: { directory: "/srv/worktrees/feature-two" } });
+      .mockReturnValueOnce(
+        Effect.succeed({ location: { directory: "/srv/worktrees/feature-one" } }),
+      )
+      .mockReturnValueOnce(
+        Effect.succeed({ location: { directory: "/srv/worktrees/feature-two" } }),
+      );
     const fake = fakeRuntime([
       Promise.reject(new Error("first session failed")),
       Promise.reject(new Error("second session failed")),
@@ -473,10 +571,13 @@ describe("NewSessionFlow", () => {
       clickButton(mounted.root, "Add project");
       await flush();
 
-      expect(fake.fileList).toHaveBeenCalledWith({
-        location: { directory: location },
-        path: ".",
-      });
+      expect(fake.fileList).toHaveBeenCalledWith(
+        {
+          location: { directory: location },
+          path: ".",
+        },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
       mounted.dispose();
     },
   );
@@ -485,7 +586,7 @@ describe("NewSessionFlow", () => {
     const worktree = {
       location: { directory: "/srv/worktrees/feature-one" },
     } satisfies CreatedSessionWorktree;
-    vi.mocked(createSessionWorktree).mockResolvedValueOnce(worktree);
+    vi.mocked(createSessionWorktree).mockReturnValueOnce(Effect.succeed(worktree));
     const fake = fakeRuntime([Promise.resolve(session("session-1", worktree.location.directory))]);
     const mounted = mount(fake.runtime);
     await flush();
@@ -504,9 +605,11 @@ describe("NewSessionFlow", () => {
   });
 
   it("shows a new retained warning when a retry fails after dismissal", async () => {
-    vi.mocked(createSessionWorktree).mockResolvedValueOnce({
-      location: { directory: "/srv/worktrees/feature-one" },
-    });
+    vi.mocked(createSessionWorktree).mockReturnValueOnce(
+      Effect.succeed({
+        location: { directory: "/srv/worktrees/feature-one" },
+      }),
+    );
     const retry = deferred<SessionInfo>();
     const fake = fakeRuntime([Promise.reject(new Error("session failed")), retry.promise]);
     const mounted = mount(fake.runtime);
@@ -525,9 +628,11 @@ describe("NewSessionFlow", () => {
   });
 
   it("retries only session creation for a ready retained worktree", async () => {
-    vi.mocked(createSessionWorktree).mockResolvedValueOnce({
-      location: { directory: "/srv/worktrees/feature-one" },
-    });
+    vi.mocked(createSessionWorktree).mockReturnValueOnce(
+      Effect.succeed({
+        location: { directory: "/srv/worktrees/feature-one" },
+      }),
+    );
     const fake = fakeRuntime([
       Promise.reject(new Error("session failed")),
       Promise.resolve(session("session-2", "/srv/worktrees/feature-one")),
@@ -596,9 +701,9 @@ describe("NewSessionFlow", () => {
     mounted.dispose();
   });
 
-  it("does not start worktree or session creation after teardown", async () => {
+  it("finishes worktree and session creation after view teardown", async () => {
     const pending = deferred<CreatedSessionWorktree>();
-    vi.mocked(createSessionWorktree).mockReturnValueOnce(pending.promise);
+    vi.mocked(createSessionWorktree).mockReturnValueOnce(Effect.promise(() => pending.promise));
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
     const mounted = mount(fake.runtime);
     await flush();
@@ -607,7 +712,8 @@ describe("NewSessionFlow", () => {
     mounted.unmountFlow();
     pending.resolve({ location: { directory: "/srv/worktrees/late" } });
     await flushDialogClose();
-    expect(fake.sessionCreate).not.toHaveBeenCalled();
+    expect(fake.sessionCreate).toHaveBeenCalledOnce();
+    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
     mounted.dispose();
   });
 });

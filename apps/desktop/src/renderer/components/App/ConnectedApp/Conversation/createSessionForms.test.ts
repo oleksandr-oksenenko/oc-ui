@@ -1,5 +1,7 @@
+import { Effect, Exit, Scope } from "effect";
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import type { FormAnswer, FormInfo, OpenCodeEvent } from "@opencode-ai/client";
-import { createRoot, createSignal } from "solid-js";
+import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { deferred } from "../../../../test/deferred.ts";
@@ -26,7 +28,7 @@ function setup(
     readonly sync?: FormData["sync"];
   } = {},
 ) {
-  return createRoot((dispose) => {
+  return withTestWorkspace((effects, dispose) => {
     const [selectedID, setSelectedID] = createSignal(options.selectedID);
     const [connected, setConnected] = createSignal(true);
     const [listed, setListed] = createSignal<ReturnType<FormData["list"]>>(options.listed ?? []);
@@ -37,6 +39,7 @@ function setup(
     const events = createOpenCodeEventSource();
     const list = vi.fn<FormData["list"]>(() => listed());
     const forms = createSessionForms({
+      effects,
       data: {
         on: events.on,
         session: { form: { list, sync, invalidate, reply, cancel } },
@@ -46,6 +49,7 @@ function setup(
     });
 
     return {
+      effects,
       dispose,
       forms,
       setSelectedID,
@@ -119,6 +123,30 @@ describe("createSessionForms", () => {
     secondRead.resolve();
     await Promise.resolve();
     fixture.dispose();
+  });
+
+  it("retains replaced reads until they settle during workspace shutdown", async () => {
+    const oldRead = deferred();
+    const currentRead = deferred();
+    const sync = vi
+      .fn<FormData["sync"]>()
+      .mockReturnValueOnce(oldRead.promise)
+      .mockReturnValueOnce(currentRead.promise);
+    const fixture = setup({ selectedID: "one", sync });
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledOnce());
+
+    fixture.setSelectedID("two");
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(2));
+    fixture.dispose();
+    const closed = vi.fn<() => void>();
+    const shutdown = Effect.runPromise(Scope.close(fixture.effects.scope, Exit.void)).then(closed);
+    currentRead.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(closed).not.toHaveBeenCalled();
+
+    oldRead.resolve();
+    await shutdown;
+    expect(closed).toHaveBeenCalledOnce();
   });
 
   it("invalidates every local form event immediately and ignores global forms", async () => {
@@ -310,6 +338,7 @@ describe("createSessionForms", () => {
     fixture.reply.mockReturnValueOnce(replyRequest.promise);
     const reply = fixture.forms.reply("one-form", { answer: "yes" });
     fixture.setSelectedID("two");
+    fixture.setSelectedID("one");
     replyRequest.reject(new Error("late"));
     await expect(reply).resolves.toBeUndefined();
     expect(fixture.forms.errorFor("one-form")).toBeUndefined();

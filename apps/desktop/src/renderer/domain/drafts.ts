@@ -1,4 +1,6 @@
-import { createStore } from "solid-js/store";
+import { useAtomValue } from "@effect/atom-solid";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../workspace-owner.ts";
 
 type SessionDraftStore = {
   /** Returns the current draft, or an empty string when none exists. */
@@ -13,20 +15,25 @@ type SessionDraftStore = {
 };
 
 /** Creates an in-memory, reactive draft store keyed by session ID. */
-export function createSessionDraftStore(): SessionDraftStore {
-  const [drafts, setDrafts] = createStore<Record<string, string | undefined>>({});
+export function createSessionDraftStore(effects: WorkspaceOwner): SessionDraftStore {
+  const state = Atom.make<Record<string, string | undefined>>({});
+  effects.mount(state);
+  const drafts = useAtomValue(() => state);
+  const setDraft = (sessionID: string, text: string | undefined): void => {
+    effects.registry.set(state, { ...effects.registry.get(state), [sessionID]: text });
+  };
 
   const clear = (sessionID: string): void => {
-    setDrafts(sessionID, undefined);
+    setDraft(sessionID, undefined);
   };
 
   return {
-    get: (sessionID) => drafts[sessionID] ?? "",
+    get: (sessionID) => drafts()[sessionID] ?? "",
     set: (sessionID, text) => {
-      setDrafts(sessionID, text);
+      setDraft(sessionID, text);
     },
     clearIfUnchanged: (sessionID, submittedText) => {
-      if (drafts[sessionID] !== submittedText) {
+      if (effects.registry.get(state)[sessionID] !== submittedText) {
         return false;
       }
 

@@ -1,12 +1,16 @@
 import type { SessionInfo } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js";
+import { useAtomValue } from "@effect/atom-solid";
+import { Effect, Fiber, Semaphore } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import { createEffect, createMemo, on, type Accessor } from "solid-js";
+
+import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import type { SessionCatalog } from "../../../../opencode/session-catalog.ts";
 import { syncActiveStatuses } from "../../../../opencode/session-catalog.ts";
 import { chooseSessionFallback, sessionAncestorIDs } from "./session-selection.ts";
-import { retryCatalogAndTranscript } from "./sessionRecovery.ts";
 
 type SessionMessage = ReturnType<ConnectedRuntime["data"]["session"]["message"]["list"]>[number];
 
@@ -52,6 +56,7 @@ export type SessionWorkspace = {
 };
 
 export type CreateSessionWorkspaceInput = {
+  readonly effects: WorkspaceOwner;
   readonly runtime: SessionWorkspaceRuntime;
   readonly connected: Accessor<boolean>;
   readonly bootstrapped: Accessor<boolean>;
@@ -59,19 +64,23 @@ export type CreateSessionWorkspaceInput = {
 
 /** Owns the selected session and its server-backed transcript lifecycle. */
 export function createSessionWorkspace(input: CreateSessionWorkspaceInput): SessionWorkspace {
-  const [selectedID, setSelectedID] = createSignal<string>();
-  const [transcriptState, setTranscriptState] = createSignal<TranscriptState>({ status: "idle" });
-  const [stopError, setStopError] = createSignal<string>();
-  let stoppingID: string | undefined;
-  let alive = true;
-  let hydration = 0;
-  let selectedAncestorIDs: readonly string[] = [];
-  let recoveryPreviousID: string | undefined;
-
-  onCleanup(() => {
-    alive = false;
-    hydration += 1;
-  });
+  const { effects } = input;
+  const selectionAtom = Atom.make<{ id?: string; ancestors: readonly string[] }>({ ancestors: [] });
+  const transcriptAtom = Atom.make<TranscriptState>({ status: "idle" });
+  const stopErrorAtom = Atom.make<string | undefined>(undefined);
+  const recoveryAtom = Atom.make<string | undefined>(undefined);
+  effects.mount(selectionAtom);
+  effects.mount(transcriptAtom);
+  effects.mount(stopErrorAtom);
+  effects.mount(recoveryAtom);
+  const selection = useAtomValue(() => selectionAtom);
+  const selectedID = createMemo(() => selection().id);
+  const transcriptState = useAtomValue(() => transcriptAtom);
+  const stopError = useAtomValue(() => stopErrorAtom);
+  const setTranscriptState = (state: TranscriptState) =>
+    effects.registry.set(transcriptAtom, state);
+  const stopping = Semaphore.makeUnsafe(1);
+  const hydration = effects.latest();
 
   const sessions = createMemo<readonly SessionInfo[]>(() => {
     const ids = new Set(input.runtime.sessions.ids());
@@ -95,57 +104,74 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
 
   const running = createMemo(() => transcriptStatus() === "running");
 
-  const stop = async (): Promise<void> => {
-    const sessionID = selectedID();
-    if (
-      sessionID === undefined ||
-      !input.connected() ||
-      input.runtime.data.session.status(sessionID) !== "running" ||
-      stoppingID !== undefined
-    ) {
-      return;
-    }
-
-    setStopError(undefined);
-    stoppingID = sessionID;
-    try {
-      await input.runtime.api.session.interrupt({ sessionID });
-    } catch {
-      if (selectedID() === sessionID) {
-        setStopError("The session could not be stopped. Try again.");
-      }
-    } finally {
-      stoppingID = undefined;
-    }
-  };
+  const stop = (): Promise<void> =>
+    effects.runPromise(
+      Effect.gen(function* () {
+        const sessionID = selectedID();
+        if (
+          sessionID === undefined ||
+          !input.connected() ||
+          input.runtime.data.session.status(sessionID) !== "running"
+        )
+          return;
+        yield* Effect.gen(function* () {
+          effects.registry.set(stopErrorAtom, undefined);
+          yield* effects.request((signal) =>
+            input.runtime.api.session.interrupt({ sessionID }, { signal }),
+          );
+        }).pipe(
+          Effect.catch(() =>
+            Effect.sync(() => {
+              if (selectedID() === sessionID)
+                effects.registry.set(stopErrorAtom, "The session could not be stopped. Try again.");
+            }),
+          ),
+          stopping.withPermitsIfAvailable(1),
+        );
+      }),
+    );
 
   const transcript = createMemo<readonly SessionMessage[]>(() => {
     const id = selectedID();
     return id === undefined ? [] : input.runtime.data.session.message.list(id);
   });
 
-  const hydrate = async (sessionID: string): Promise<void> => {
-    const currentHydration = ++hydration;
-    const isCurrent = () => alive && currentHydration === hydration && selectedID() === sessionID;
+  const hydrate = (sessionID: string): Promise<void> => {
     setTranscriptState({ sessionID, status: "loading" });
-    try {
-      await input.runtime.syncTranscript(sessionID, { isCurrent });
-      if (!isCurrent()) return;
-      setTranscriptState({ sessionID, status: "ready" });
-    } catch {
-      if (!isCurrent()) return;
-      setTranscriptState({
-        sessionID,
-        status: "failed",
-        error: "This transcript could not be loaded. Check the connection and try again.",
-      });
-    }
+    const fiber = hydration.run(
+      Effect.gen(function* () {
+        yield* Effect.tryPromise((signal) =>
+          input.runtime.syncTranscript(sessionID, {
+            isCurrent: () => !signal.aborted && selectedID() === sessionID,
+          }),
+        );
+        if (selectedID() === sessionID) setTranscriptState({ sessionID, status: "ready" });
+      }).pipe(
+        Effect.catch(() =>
+          Effect.sync(() => {
+            if (selectedID() === sessionID)
+              setTranscriptState({
+                sessionID,
+                status: "failed",
+                error: "This transcript could not be loaded. Check the connection and try again.",
+              });
+          }),
+        ),
+      ),
+    );
+    // UI cancellation settles the wait; the transcript worker still owns SDK cleanup.
+    return effects.runPromise(Fiber.await(fiber)).then(
+      () => undefined,
+      () => undefined,
+    );
   };
 
   const selectSession = (sessionID: string): void => {
     if (selectedID() === sessionID) return;
-    selectedAncestorIDs = sessionAncestorIDs(sessionID, sessions());
-    setSelectedID(sessionID);
+    effects.registry.set(selectionAtom, {
+      id: sessionID,
+      ancestors: sessionAncestorIDs(sessionID, sessions()),
+    });
     setTranscriptState({ status: "idle" });
     void hydrate(sessionID);
   };
@@ -155,57 +181,57 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     selectSession(sessionID);
   };
 
-  const syncCatalog = async (): Promise<void> => {
-    await input.runtime.sessions.sync();
-    await syncActiveStatuses({
+  const syncCatalog = Effect.gen(function* () {
+    yield* Effect.tryPromise(input.runtime.sessions.sync);
+    yield* syncActiveStatuses({
+      effects,
       api: input.runtime.api,
       data: input.runtime.data,
       sessionIDs: input.runtime.sessions.ids(),
     });
-  };
+  });
 
-  const retryCatalog = async (): Promise<void> => {
-    await retryCatalogAndTranscript(
-      syncCatalog,
-      () => {
-        if (!alive) return undefined;
+  const retryCatalog = (): Promise<void> =>
+    effects.runPromise(
+      Effect.gen(function* () {
+        yield* syncCatalog;
         const current = selectedID();
-        return current !== undefined && input.runtime.sessions.ids().includes(current)
-          ? current
-          : undefined;
-      },
-      hydrate,
+        if (current !== undefined && input.runtime.sessions.ids().includes(current)) {
+          yield* Effect.tryPromise(() => hydrate(current));
+        }
+      }),
     );
-  };
 
   const beginRecovery = (): void => {
     const current = selectedID();
-    recoveryPreviousID = current;
+    hydration.cancel();
+    effects.registry.set(recoveryAtom, current);
     if (current !== undefined) setTranscriptState({ sessionID: current, status: "loading" });
   };
 
-  const refreshAfterReconnect = async (): Promise<void> => {
-    await syncCatalog();
-    if (!alive) return;
-    const current = selectedID();
-    if (current === undefined) {
-      recoveryPreviousID = undefined;
-      setTranscriptState({ status: "idle" });
-      return;
-    }
-    if (current !== recoveryPreviousID) {
-      recoveryPreviousID = undefined;
-      return;
-    }
-    if (!input.runtime.sessions.ids().includes(current)) return;
-    recoveryPreviousID = undefined;
-    await hydrate(current);
-  };
+  const refreshAfterReconnect = (): Promise<void> =>
+    effects.runPromise(
+      Effect.gen(function* () {
+        yield* syncCatalog;
+        const current = selectedID();
+        if (current === undefined) {
+          effects.registry.set(recoveryAtom, undefined);
+          setTranscriptState({ status: "idle" });
+          return;
+        }
+        if (current !== effects.registry.get(recoveryAtom)) {
+          effects.registry.set(recoveryAtom, undefined);
+          return;
+        }
+        if (!input.runtime.sessions.ids().includes(current)) return;
+        effects.registry.set(recoveryAtom, undefined);
+        yield* Effect.tryPromise(() => hydrate(current));
+      }),
+    );
 
   const failRecovery = (): void => {
-    if (!alive) return;
-    const recoveredID = recoveryPreviousID;
-    recoveryPreviousID = undefined;
+    const recoveredID = effects.registry.get(recoveryAtom);
+    effects.registry.set(recoveryAtom, undefined);
     if (recoveredID === undefined || selectedID() !== recoveredID) return;
     setTranscriptState({
       sessionID: recoveredID,
@@ -215,8 +241,11 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   };
 
   const markCreated = (sessionID: string): void => {
-    selectedAncestorIDs = sessionAncestorIDs(sessionID, sessions());
-    setSelectedID(sessionID);
+    hydration.cancel();
+    effects.registry.set(selectionAtom, {
+      id: sessionID,
+      ancestors: sessionAncestorIDs(sessionID, sessions()),
+    });
     setTranscriptState({ sessionID, status: "ready" });
   };
 
@@ -226,7 +255,7 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
 
   createEffect(() => {
     selectedID();
-    setStopError(undefined);
+    effects.registry.set(stopErrorAtom, undefined);
   });
 
   createEffect(() => {
@@ -235,38 +264,40 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     if (current && input.runtime.sessions.ids().includes(current)) {
       const currentSessions = sessions();
       if (currentSessions.some((session) => session.id === current)) {
-        selectedAncestorIDs = sessionAncestorIDs(current, currentSessions);
+        effects.registry.set(selectionAtom, {
+          id: current,
+          ancestors: sessionAncestorIDs(current, currentSessions),
+        });
       }
       return;
     }
-    const next = chooseSessionFallback(selectedAncestorIDs, sessions());
+    const next = chooseSessionFallback(effects.registry.get(selectionAtom).ancestors, sessions());
     if (next === undefined) {
-      selectedAncestorIDs = [];
-      setSelectedID(undefined);
+      hydration.cancel();
+      effects.registry.set(selectionAtom, { ancestors: [] });
       setTranscriptState({ status: "idle" });
       return;
     }
     selectSession(next);
   });
 
-  let previousRunning = false;
-  let previousRunningID: string | undefined;
-  createEffect(() => {
-    const id = selectedID();
-    const isRunning = id !== undefined && input.runtime.data.session.status(id) === "running";
-    if (
-      input.bootstrapped() &&
-      input.connected() &&
-      id !== undefined &&
-      id === previousRunningID &&
-      previousRunning &&
-      !isRunning
-    ) {
-      void hydrate(id);
-    }
-    previousRunningID = id;
-    previousRunning = isRunning;
-  });
+  createEffect(
+    on(
+      () => [selectedID(), transcriptStatus()] as const,
+      ([id, status], previous) => {
+        if (
+          input.bootstrapped() &&
+          input.connected() &&
+          id !== undefined &&
+          previous?.[0] === id &&
+          previous[1] === "running" &&
+          status !== "running"
+        ) {
+          void hydrate(id);
+        }
+      },
+    ),
+  );
 
   const transcriptLoading = createMemo(() => {
     const state = transcriptState();
@@ -291,7 +322,7 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     select,
     stop,
     hydrate,
-    syncCatalog,
+    syncCatalog: () => effects.runPromise(syncCatalog),
     retryCatalog,
     beginRecovery,
     refreshAfterReconnect,

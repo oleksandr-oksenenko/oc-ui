@@ -1,10 +1,15 @@
+import { useAtomValue } from "@effect/atom-solid";
+import { Cause, Effect, Fiber } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 import type { FormAnswer, LocationRef } from "@opencode-ai/client";
 import type { Data, FormWithLocation } from "@opencode-ai/client/solid";
-import { createEffect, createMemo, createSignal, on, onCleanup, type Accessor } from "solid-js";
+import { createEffect, createMemo, on, onCleanup, type Accessor } from "solid-js";
 
 type FormControllerState = "loading" | "ready" | "failed";
 
 type FormControllerInput = {
+  readonly effects: WorkspaceOwner;
   readonly connected: Accessor<boolean>;
   readonly sessionID: Accessor<string | undefined>;
   readonly location?: LocationRef;
@@ -20,6 +25,7 @@ type FormController = {
   readonly submitting: (formID: string) => boolean;
   readonly errorFor: (formID: string) => string | undefined;
   readonly sync: () => Promise<void>;
+  readonly startSync: () => void;
   readonly reply: (formID: string, answer: FormAnswer) => Promise<boolean>;
   readonly cancel: (formID: string) => Promise<boolean>;
 };
@@ -30,181 +36,146 @@ const mutationKey = (sessionID: string, formID: string): string => `${sessionID}
 
 /** Shared lifecycle and mutation state for session-scoped and location-scoped forms. */
 export function createFormController(input: FormControllerInput): FormController {
-  const selectedAtStart = input.sessionID();
-  const [state, setState] = createSignal<FormControllerState>(
-    selectedAtStart !== undefined && input.connected() ? "loading" : "ready",
-  );
-  const [error, setError] = createSignal<string>();
-  const [formsVersion, setFormsVersion] = createSignal(0);
-  const [mutationVersion, setMutationVersion] = createSignal(0);
-
-  const pendingMutations = new Set<string>();
-  const mutationErrors = new Map<string, string>();
-  let scopeGeneration = 0;
-  let syncGeneration = 0;
-  let alive = true;
-  let previouslyConnected = input.connected();
+  const { effects } = input;
+  const status = Atom.make<{ state: FormControllerState; error?: string }>({
+    state: input.sessionID() !== undefined && input.connected() ? "loading" : "ready",
+  });
+  const mutations = Atom.make<ReadonlyMap<string, { pending: boolean; error?: string }>>(new Map());
+  effects.mount(status);
+  effects.mount(mutations);
+  const current = useAtomValue(() => status);
+  const mutationState = useAtomValue(() => mutations);
+  const read = effects.latest();
+  let selection: object | undefined = {};
 
   const forms = createMemo<readonly FormWithLocation[]>(() => {
-    formsVersion();
+    current();
     const sessionID = input.sessionID();
     return sessionID === undefined ? [] : (input.form.list(sessionID, input.location) ?? []);
   });
 
-  const isCurrent = (sessionID: string, generation: number, run: number): boolean =>
-    alive &&
-    scopeGeneration === generation &&
-    syncGeneration === run &&
-    input.sessionID() === sessionID;
-
-  const hasForm = (sessionID: string, formID: string): boolean =>
-    input.form.list(sessionID, input.location)?.some((form) => form.id === formID) === true;
-
-  const sync = async (): Promise<void> => {
-    const run = ++syncGeneration;
+  const refresh = Effect.fn("forms.refresh")(function* () {
     const sessionID = input.sessionID();
-    const generation = scopeGeneration;
-
-    if (!alive) return;
     if (sessionID === undefined || !input.connected()) {
-      setError(undefined);
-      setState("ready");
+      effects.registry.set(status, { state: "ready" });
       return;
     }
+    effects.registry.set(status, { state: "loading" });
+    yield* effects
+      .request(() => input.form.sync(sessionID, input.location))
+      .pipe(
+        Effect.match({
+          onSuccess: () => effects.registry.set(status, { state: "ready" }),
+          onFailure: (failure) =>
+            effects.registry.set(status, {
+              state: "failed",
+              error: input.errorMessage("sync", failure.cause),
+            }),
+        }),
+      );
+  });
 
-    setError(undefined);
-    setState("loading");
-    try {
-      await input.form.sync(sessionID, input.location);
-      if (!isCurrent(sessionID, generation, run)) return;
-      setFormsVersion((version) => version + 1);
-      setState("ready");
-    } catch (cause) {
-      if (!isCurrent(sessionID, generation, run)) return;
-      setError(input.errorMessage("sync", cause));
-      setState("failed");
-    }
-  };
+  const startRefresh = () => read.run(selection ? refresh() : Effect.void);
+  const sync = (): Promise<void> =>
+    effects.runPromise(
+      Fiber.join(startRefresh()).pipe(
+        Effect.catchCauseIf(Cause.hasInterruptsOnly, () => Effect.void),
+      ),
+    );
 
-  const clearMutationErrors = (): void => {
-    if (mutationErrors.size === 0) return;
-    mutationErrors.clear();
-    setMutationVersion((version) => version + 1);
-  };
-
-  const submitting = (formID: string): boolean => {
-    mutationVersion();
+  const mutation = (formID: string) => {
     const sessionID = input.sessionID();
-    return sessionID !== undefined && pendingMutations.has(mutationKey(sessionID, formID));
+    return sessionID === undefined
+      ? undefined
+      : mutationState().get(mutationKey(sessionID, formID));
   };
-
   const pending = createMemo(() => {
-    mutationVersion();
     const sessionID = input.sessionID();
     if (sessionID === undefined) return false;
     const prefix = `${sessionID}\u0000`;
-    for (const key of pendingMutations) if (key.startsWith(prefix)) return true;
-    return false;
+    return [...mutationState()].some(([key, value]) => key.startsWith(prefix) && value.pending);
   });
-
-  const errorFor = (formID: string): string | undefined => {
-    mutationVersion();
-    const sessionID = input.sessionID();
-    return sessionID === undefined ? undefined : mutationErrors.get(mutationKey(sessionID, formID));
+  const updateMutation = (key: string, value: { pending: boolean; error?: string }) => {
+    effects.registry.set(mutations, new Map(effects.registry.get(mutations)).set(key, value));
   };
 
-  const mutate = async (
+  const mutate = Effect.fn("forms.mutate")(function* (
     formID: string,
     kind: MutationKind,
     answer?: FormAnswer,
-  ): Promise<boolean> => {
+  ) {
     const sessionID = input.sessionID();
-    if (sessionID === undefined || !input.connected() || !hasForm(sessionID, formID)) return false;
-
+    const initiatingSelection = selection;
+    if (
+      !initiatingSelection ||
+      sessionID === undefined ||
+      !input.connected() ||
+      !input.form.list(sessionID, input.location)?.some((form) => form.id === formID)
+    )
+      return false;
     const key = mutationKey(sessionID, formID);
-    if (pendingMutations.has(key)) return false;
-    pendingMutations.add(key);
-    mutationErrors.delete(key);
-    setMutationVersion((version) => version + 1);
-    const generation = scopeGeneration;
-
-    if (!alive) {
-      pendingMutations.delete(key);
-      return false;
-    }
-    try {
-      if (kind === "reply") {
-        await input.form.reply({ sessionID, formID, answer: answer ?? {} }, input.location);
-      } else {
-        await input.form.cancel({ sessionID, formID }, input.location);
-      }
-      return true;
-    } catch (cause) {
-      if (alive && scopeGeneration === generation && input.sessionID() === sessionID) {
-        const message = input.errorMessage(kind, cause);
-        mutationErrors.set(key, message);
-        setMutationVersion((version) => version + 1);
-      }
-      return false;
-    } finally {
-      pendingMutations.delete(key);
-      setMutationVersion((version) => version + 1);
-    }
-  };
-
-  createEffect(
-    on(
-      input.sessionID,
-      (sessionID) => {
-        scopeGeneration += 1;
-        clearMutationErrors();
-        if (sessionID === undefined) {
-          setError(undefined);
-          setState("ready");
-          return;
-        }
-        void sync();
-      },
-      { defer: false },
-    ),
-  );
+    if (effects.registry.get(mutations).get(key)?.pending) return false;
+    updateMutation(key, { pending: true });
+    return yield* effects
+      .request(() =>
+        kind === "reply"
+          ? input.form.reply({ sessionID, formID, answer: answer ?? {} }, input.location)
+          : input.form.cancel({ sessionID, formID }, input.location),
+      )
+      .pipe(
+        Effect.match({
+          onSuccess: () => true,
+          onFailure: (failure) => {
+            if (selection === initiatingSelection) {
+              updateMutation(key, {
+                pending: true,
+                error: input.errorMessage(kind, failure.cause),
+              });
+            }
+            return false;
+          },
+        }),
+        Effect.ensuring(
+          Effect.sync(() => {
+            const error = effects.registry.get(mutations).get(key)?.error;
+            const next = new Map(effects.registry.get(mutations));
+            if (error) next.set(key, { pending: false, error });
+            else next.delete(key);
+            effects.registry.set(mutations, next);
+          }),
+        ),
+      );
+  });
 
   createEffect(
-    on(
-      input.connected,
-      (connected) => {
-        if (!connected) {
-          if (previouslyConnected) {
-            scopeGeneration += 1;
-            syncGeneration += 1;
-            setError(undefined);
-            setState("ready");
-          }
-          previouslyConnected = false;
-          return;
-        }
-        if (!previouslyConnected) void sync();
-        previouslyConnected = true;
-      },
-      { defer: false },
-    ),
+    on([input.sessionID, input.connected], () => {
+      selection = {};
+      effects.registry.set(
+        mutations,
+        new Map(
+          [...effects.registry.get(mutations)]
+            .filter(([, value]) => value.pending)
+            .map(([key]) => [key, { pending: true }]),
+        ),
+      );
+      startRefresh();
+    }),
   );
-
   onCleanup(() => {
-    alive = false;
-    scopeGeneration += 1;
-    syncGeneration += 1;
+    selection = undefined;
+    read.cancel();
   });
 
   return {
     forms,
-    state,
-    error,
+    state: () => current().state,
+    error: () => current().error,
     pending,
-    submitting,
-    errorFor,
+    submitting: (formID) => mutation(formID)?.pending ?? false,
+    errorFor: (formID) => mutation(formID)?.error,
     sync,
-    reply: (formID, answer) => mutate(formID, "reply", answer),
-    cancel: (formID) => mutate(formID, "cancel"),
+    startSync: startRefresh,
+    reply: (formID, answer) => effects.runPromise(mutate(formID, "reply", answer)),
+    cancel: (formID) => effects.runPromise(mutate(formID, "cancel")),
   };
 }

@@ -1,3 +1,7 @@
+import { useAtomValue } from "@effect/atom-solid";
+import { Effect } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 import { SessionMessage } from "@opencode-ai/schema";
 import { createSessionDraftStore } from "../../../../domain/index.ts";
 import type {
@@ -8,7 +12,7 @@ import type {
 } from "../../../../domain/index.ts";
 import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from "solid-js";
+import { createEffect, createMemo, type Accessor } from "solid-js";
 
 import type { ComposerReview } from "./SessionPane/Composer.tsx";
 
@@ -27,6 +31,7 @@ type SubmissionRequest = {
 };
 
 type SessionComposerOptions = {
+  readonly effects: WorkspaceOwner;
   readonly runtime: {
     readonly data: {
       readonly session: Pick<ConnectedRuntime["data"]["session"], "prompt"> & {
@@ -65,11 +70,30 @@ export type SessionComposerController = {
 
 /** Owns session drafts and prompt admission for the selected conversation. */
 export function createSessionComposer(options: SessionComposerOptions): SessionComposerController {
-  const drafts = createSessionDraftStore();
-  const [activeRequest, setActiveRequest] = createSignal<SubmissionRequest>();
-  const [errorRequest, setErrorRequest] = createSignal<SubmissionRequest>();
-  const failedRequests = new Map<string, SubmissionRequest>();
-  let disposed = false;
+  const { effects } = options;
+  const drafts = createSessionDraftStore(effects);
+  const admission = Atom.make<{
+    active: SubmissionRequest | undefined;
+    error: SubmissionRequest | undefined;
+    failed: Readonly<Record<string, SubmissionRequest | undefined>>;
+  }>({ active: undefined, error: undefined, failed: {} });
+  effects.mount(admission);
+  const state = useAtomValue(() => admission);
+  const activeRequest = () => effects.registry.get(admission).active;
+  const setActiveRequest = (active: SubmissionRequest | undefined): void => {
+    effects.registry.set(admission, { ...effects.registry.get(admission), active });
+  };
+  const setErrorRequest = (error: SubmissionRequest | undefined): void => {
+    effects.registry.set(admission, { ...effects.registry.get(admission), error });
+  };
+  const failedRequest = (sessionID: string) => effects.registry.get(admission).failed[sessionID];
+  const setFailedRequest = (sessionID: string, request: SubmissionRequest | undefined): void => {
+    const current = effects.registry.get(admission);
+    effects.registry.set(admission, {
+      ...current,
+      failed: { ...current.failed, [sessionID]: request },
+    });
+  };
 
   createEffect(() => {
     options.selectedID();
@@ -86,14 +110,14 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       !options.connected() ||
       options.transcriptLoading() ||
       options.transcriptError() !== undefined ||
-      activeRequest() !== undefined ||
+      state().active !== undefined ||
       options.running() ||
       options.selectionSwitching(),
   );
 
   const submitting = createMemo(() => {
     const sessionID = options.selectedID();
-    return sessionID !== undefined && activeRequest()?.sessionID === sessionID;
+    return sessionID !== undefined && state().active?.sessionID === sessionID;
   });
 
   const activeReviewKey = (): ReviewDraftKey | undefined => {
@@ -138,14 +162,14 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     return { text, reviewSnapshot, reviewComments, annotationComments };
   };
 
-  const submit = async (): Promise<void> => {
+  const submit = (): Promise<void> => {
     const sessionID = options.selectedID();
-    if (!isSubmissionAllowed(sessionID)) return;
+    if (!isSubmissionAllowed(sessionID)) return Promise.resolve();
     const captured = captureDraft(sessionID);
-    if (captured === undefined) return;
+    if (captured === undefined) return Promise.resolve();
     const { text, reviewSnapshot, reviewComments, annotationComments } = captured;
 
-    const retry = failedRequests.get(sessionID);
+    const retry = failedRequest(sessionID);
     const candidatePrompt = createSessionPrompt({
       instruction: text,
       reviewComments,
@@ -165,35 +189,46 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     };
 
     setErrorRequest(undefined);
-    failedRequests.delete(sessionID);
+    setFailedRequest(sessionID, undefined);
     setActiveRequest(request);
-    try {
-      await options.runtime.data.session.prompt({ sessionID, id: request.id, ...request.prompt });
-      completeSubmission(request);
-    } catch {
-      if (disposed || activeRequest() !== request) return;
-
-      // The SDK has completed its rollback before its prompt promise rejects.
-      // A retained matching row means a durable echo won the response race.
-      if (matchingMessage(request)) {
-        completeSubmission(request);
-        return;
-      }
-      restoreFailed(request);
-    } finally {
-      if (activeRequest() === request) {
-        setActiveRequest(undefined);
-      }
-    }
+    return effects.runPromise(
+      effects
+        .request(() =>
+          options.runtime.data.session.prompt({ sessionID, id: request.id, ...request.prompt }),
+        )
+        .pipe(
+          Effect.match({
+            onSuccess: () => completeSubmission(request),
+            onFailure: () => {
+              if (activeRequest() !== request) return;
+              // The SDK rolls back before rejecting. A retained row is its durable acknowledgement.
+              if (matchingMessage(request)) completeSubmission(request);
+              else restoreFailed(request);
+            },
+          }),
+          Effect.onInterrupt(() =>
+            Effect.sync(() => {
+              if (activeRequest() !== request) return;
+              if (matchingMessage(request)) completeSubmission(request);
+              else restoreFailed(request);
+            }),
+          ),
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (activeRequest() === request) setActiveRequest(undefined);
+            }),
+          ),
+        ),
+    );
   };
 
   // A durable echo may arrive after the SDK restored our draft. The row itself
   // is the authority; the failed request only supplies the exact identity and
   // payload to match. A retry is excluded while it has an active owner.
   createEffect(() => {
-    const active = activeRequest();
-    for (const request of failedRequests.values()) {
-      if (request === active || !matchingMessage(request)) continue;
+    const { active, failed } = state();
+    for (const request of Object.values(failed)) {
+      if (request === undefined || request === active || !matchingMessage(request)) continue;
       completeSubmission(request);
     }
   });
@@ -202,24 +237,18 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     drafts.clear(sessionID);
     options.annotations.clear(sessionID);
     options.review.drafts.clearSession(sessionID);
-    const failed = failedRequests.get(sessionID);
+    const failed = failedRequest(sessionID);
     if (failed !== undefined) forgetFailedRequest(failed);
     if (activeRequest()?.sessionID === sessionID) {
       setActiveRequest(undefined);
     }
   };
 
-  onCleanup(() => {
-    disposed = true;
-    setActiveRequest(undefined);
-    failedRequests.clear();
-  });
-
   return {
     value,
     disabled,
     submitting,
-    error: () => (errorRequest() === undefined ? undefined : PROMPT_FAILURE_MESSAGE),
+    error: () => (state().error === undefined ? undefined : PROMPT_FAILURE_MESSAGE),
     review,
     input,
     submit,
@@ -227,21 +256,20 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   };
 
   function completeSubmission(request: SubmissionRequest): void {
-    if (disposed) return;
-    if (activeRequest() !== request && failedRequests.get(request.sessionID) !== request) {
+    if (activeRequest() !== request && failedRequest(request.sessionID) !== request) {
       return;
     }
-    if (failedRequests.get(request.sessionID) === request) {
+    if (failedRequest(request.sessionID) === request) {
       options.annotations.clearIfUnchanged(request.annotations);
     }
     drafts.clearIfUnchanged(request.sessionID, request.text);
     if (request.reviewSnapshot !== undefined) {
       options.review.drafts.clearIfUnchanged(request.reviewSnapshot);
     }
-    if (failedRequests.get(request.sessionID) === request) {
-      failedRequests.delete(request.sessionID);
+    if (failedRequest(request.sessionID) === request) {
+      setFailedRequest(request.sessionID, undefined);
     }
-    if (errorRequest() === request) setErrorRequest(undefined);
+    if (effects.registry.get(admission).error === request) setErrorRequest(undefined);
     if (activeRequest() === request) {
       setActiveRequest(undefined);
     }
@@ -257,14 +285,14 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   }
 
   function forgetFailedRequest(request: SubmissionRequest): void {
-    if (failedRequests.get(request.sessionID) !== request) return;
-    failedRequests.delete(request.sessionID);
-    if (errorRequest() === request) setErrorRequest(undefined);
+    if (failedRequest(request.sessionID) !== request) return;
+    setFailedRequest(request.sessionID, undefined);
+    if (effects.registry.get(admission).error === request) setErrorRequest(undefined);
   }
 
   function restoreFailed(request: SubmissionRequest): void {
     options.annotations.restore(request.annotations);
-    failedRequests.set(request.sessionID, request);
+    setFailedRequest(request.sessionID, request);
     if (options.selectedID() === request.sessionID) setErrorRequest(request);
     setActiveRequest(undefined);
   }

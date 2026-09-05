@@ -3,10 +3,11 @@ import { EventEmitter } from "node:events";
 
 import type { utilityProcess } from "electron";
 import type { UtilityProcess } from "electron";
+import { Effect, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { OpenCodeWorkerCommand } from "../shared/opencode-worker-contract.ts";
-import { createLocalOpenCodeService, LOCAL_OPENCODE_VERSION } from "./local-opencode.ts";
+import { LocalOpenCode, LOCAL_OPENCODE_VERSION } from "./local-opencode.ts";
 
 const { fork } = vi.hoisted(() => ({ fork: vi.fn<typeof utilityProcess.fork>() }));
 const killProcess = vi.fn<typeof process.kill>();
@@ -37,11 +38,24 @@ class Child extends EventEmitter implements UtilityProcess {
 const children: Child[] = [];
 const healthy = (pid = 4242, version = LOCAL_OPENCODE_VERSION): Response =>
   Response.json({ healthy: true, version, pid });
-const create = () =>
-  createLocalOpenCodeService({
-    userDataPath: "/private/test-ocui",
-    workerPath: "/private/runtime/opencode-worker.mjs",
-  });
+const runtimes: ManagedRuntime.ManagedRuntime<LocalOpenCode, never>[] = [];
+const create = async () => {
+  const runtime = ManagedRuntime.make(
+    LocalOpenCode.layer({
+      userDataPath: "/private/test-ocui",
+      workerPath: "/private/runtime/opencode-worker.mjs",
+    }),
+  );
+  runtimes.push(runtime);
+  const service = await runtime.runPromise(LocalOpenCode);
+  return {
+    connect: (signal?: AbortSignal) => runtime.runPromise(service.connect, { signal }),
+    needsQuitConfirmation: () => Effect.runSync(service.needsQuitConfirmation),
+    shutdown: () => runtime.runPromise(service.shutdown),
+    onUnavailable: service.onUnavailable,
+    dispose: () => runtime.dispose(),
+  };
+};
 const child = (): Child => {
   const value = children.at(-1);
   if (value === undefined) throw new Error("No worker was forked");
@@ -60,8 +74,10 @@ beforeEach(() => {
   vi.spyOn(process, "kill").mockImplementation(killProcess);
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const value of children) if (value.pid !== undefined) value.exit();
+  for (const runtime of runtimes) await runtime.dispose();
+  runtimes.length = 0;
   children.length = 0;
   vi.restoreAllMocks();
   vi.clearAllMocks();
@@ -71,11 +87,11 @@ afterEach(() => {
 
 describe("owned OpenCode worker", () => {
   it("starts lazily, shares concurrent starts, and reuses the same authenticated endpoint", async () => {
-    const service = create();
+    const service = await create();
     expect(service.needsQuitConfirmation()).toBe(false);
     expect(fork).not.toHaveBeenCalled();
     const first = service.connect();
-    expect(service.connect()).toBe(first);
+    const second = service.connect();
     expect(service.needsQuitConfirmation()).toBe(true);
     expect(fork).toHaveBeenCalledExactlyOnceWith("/private/runtime/opencode-worker.mjs", [], {
       serviceName: "Ocui built-in OpenCode",
@@ -83,6 +99,7 @@ describe("owned OpenCode worker", () => {
     });
     child().listen();
     const endpoint = await first;
+    expect(await second).toBe(endpoint);
     expect(endpoint.serverUrl).toBe("http://127.0.0.1:4096");
     expect(endpoint.password.length).toBeGreaterThan(32);
     expect(child().postMessage).toHaveBeenCalledWith({
@@ -99,15 +116,46 @@ describe("owned OpenCode worker", () => {
     expect(await service.connect()).toBe(endpoint);
     expect(fork).toHaveBeenCalledTimes(1);
     const shutdown = service.shutdown();
-    expect(service.shutdown()).toBe(shutdown);
-    await shutdown;
+    const concurrentShutdown = service.shutdown();
+    await Promise.all([shutdown, concurrentShutdown]);
     expect(service.needsQuitConfirmation()).toBe(false);
     await expect(service.connect()).rejects.toMatchObject({ reason: "start-failed" });
   });
 
+  it("keeps shared startup alive when one caller cancels its wait", async () => {
+    const service = await create();
+    const controller = new AbortController();
+    const canceled = service.connect(controller.signal);
+    const connected = service.connect();
+    controller.abort();
+    await expect(canceled).rejects.toBeDefined();
+    expect(child().postMessage).not.toHaveBeenCalledWith({ type: "stop" });
+    child().listen();
+    await connected;
+    expect(fork).toHaveBeenCalledTimes(1);
+    expect(service.needsQuitConfirmation()).toBe(true);
+    await service.shutdown();
+  });
+
+  it("waits for actual child exit when the application scope is disposed", async () => {
+    const service = await create();
+    const connected = service.connect();
+    child().listen();
+    await connected;
+    child().exitsOnStop = false;
+    const disposed = vi.fn<() => void>();
+    const disposal = service.dispose().then(disposed);
+    await vi.waitFor(() => expect(child().postMessage).toHaveBeenCalledWith({ type: "stop" }));
+    expect(disposed).not.toHaveBeenCalled();
+    expect(service.needsQuitConfirmation()).toBe(true);
+    child().exit();
+    await disposal;
+    expect(service.needsQuitConfirmation()).toBe(false);
+  });
+
   it("does not treat listening or HTTP 503 as readiness", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 503 }));
-    const service = create();
+    const service = await create();
     const connected = service.connect();
     const resolved = vi.fn<() => void>();
     void connected.then(resolved);
@@ -133,7 +181,7 @@ describe("owned OpenCode worker", () => {
     ["unauthenticated health", () => new Response(null, { status: 401 })],
   ])("rejects %s and waits for the owned child to exit", async (_name, response) => {
     vi.mocked(fetch).mockResolvedValue(response());
-    const service = create();
+    const service = await create();
     const connected = service.connect();
     const rejected = (async () => {
       await expect(connected).rejects.toMatchObject({ reason: "start-failed" });
@@ -145,7 +193,7 @@ describe("owned OpenCode worker", () => {
   });
 
   it("rejects a non-loopback or malformed private message without probing it", async () => {
-    const service = create();
+    const service = await create();
     const connected = service.connect();
     const rejected = (async () => {
       await expect(connected).rejects.toMatchObject({ reason: "invalid-endpoint" });
@@ -165,22 +213,22 @@ describe("owned OpenCode worker", () => {
           signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
         }),
     );
-    const service = create();
+    const service = await create();
     const connected = service.connect();
     const rejected = (async () => {
       await expect(connected).rejects.toMatchObject({ reason: "start-failed" });
     })();
     child().listen();
-    expect(signal?.aborted).toBe(false);
+    await vi.waitFor(() => expect(signal?.aborted).toBe(false));
     const quitting = service.shutdown();
-    expect(signal?.aborted).toBe(true);
+    await vi.waitFor(() => expect(signal?.aborted).toBe(true));
     expect(child().postMessage).toHaveBeenCalledWith({ type: "stop" });
     await Promise.all([quitting, rejected]);
     expect(child().kill).not.toHaveBeenCalled();
   });
 
   it("preempts startup before the child spawn notification", async () => {
-    const service = create();
+    const service = await create();
     const connected = service.connect();
     const rejected = (async () => {
       await expect(connected).rejects.toMatchObject({ reason: "start-failed" });
@@ -192,7 +240,6 @@ describe("owned OpenCode worker", () => {
   });
 
   it("caps an individual health request at two seconds", async () => {
-    vi.useFakeTimers();
     let signal: AbortSignal | null | undefined;
     vi.mocked(fetch).mockImplementation(
       (_url, init) =>
@@ -201,7 +248,8 @@ describe("owned OpenCode worker", () => {
           signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
         }),
     );
-    const service = create();
+    const service = await create();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const connected = service.connect();
     const rejected = (async () => {
       await expect(connected).rejects.toMatchObject({ reason: "start-failed" });
@@ -214,7 +262,6 @@ describe("owned OpenCode worker", () => {
   });
 
   it("times out an unresponsive import and cancels the current health request at the overall deadline", async () => {
-    vi.useFakeTimers();
     const signals: AbortSignal[] = [];
     vi.mocked(fetch).mockImplementation(
       (_url, init) =>
@@ -224,7 +271,8 @@ describe("owned OpenCode worker", () => {
           init.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
         }),
     );
-    const service = create();
+    const service = await create();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const connected = service.connect();
     const rejected = (async () => {
       await expect(connected).rejects.toMatchObject({ reason: "timed-out" });
@@ -239,7 +287,7 @@ describe("owned OpenCode worker", () => {
   });
 
   it("does not automatically restart a crash and ignores late events from the previous worker", async () => {
-    const service = create();
+    const service = await create();
     const unavailable = vi.fn<() => void>();
     service.onUnavailable(unavailable);
     const initial = service.connect();
@@ -249,7 +297,7 @@ describe("owned OpenCode worker", () => {
     previous.listen();
     await initial;
     previous.exit();
-    expect(unavailable).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(unavailable).toHaveBeenCalledTimes(1));
     expect(fork).toHaveBeenCalledTimes(1);
     const restarted = service.connect();
     oldMessage?.({ type: "fatal", message: "Built-in OpenCode failed." });
@@ -263,7 +311,7 @@ describe("owned OpenCode worker", () => {
   });
 
   it("rejects an early exit and permits only a fresh manual start afterward", async () => {
-    const service = create();
+    const service = await create();
     const initial = service.connect();
     const rejected = (async () => {
       await expect(initial).rejects.toMatchObject({ reason: "start-failed" });
@@ -278,8 +326,8 @@ describe("owned OpenCode worker", () => {
   });
 
   it("retains a child after failed termination and retries that same child on the next quit", async () => {
-    vi.useFakeTimers();
-    const service = create();
+    const service = await create();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const connected = service.connect();
     child().listen();
     await connected;
@@ -301,14 +349,15 @@ describe("owned OpenCode worker", () => {
   });
 
   it("keeps a failed startup owned when its cleanup fails", async () => {
-    vi.useFakeTimers();
-    const service = create();
+    const service = await create();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const connected = service.connect();
     child().exitsOnStop = false;
     const rejected = (async () => {
       await expect(connected).rejects.toMatchObject({ reason: "stop-failed" });
     })();
     child().emit("message", { type: "fatal", message: "Built-in OpenCode failed." });
+    await vi.waitFor(() => expect(child().postMessage).toHaveBeenCalledWith({ type: "stop" }));
     await vi.advanceTimersByTimeAsync(14_000);
     await rejected;
     await expect(service.connect()).rejects.toMatchObject({ reason: "stop-failed" });
@@ -319,8 +368,8 @@ describe("owned OpenCode worker", () => {
   });
 
   it("cancels force-kill escalation once Electron confirms exit after TERM", async () => {
-    vi.useFakeTimers();
-    const service = create();
+    const service = await create();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const connected = service.connect();
     child().listen();
     await connected;

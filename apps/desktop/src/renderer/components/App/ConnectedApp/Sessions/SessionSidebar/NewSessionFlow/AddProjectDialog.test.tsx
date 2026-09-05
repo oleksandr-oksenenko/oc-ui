@@ -1,3 +1,5 @@
+import { RegistryContext } from "@effect/atom-solid";
+import { withTestWorkspace } from "../../../../../../test/workspace.ts";
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -39,6 +41,7 @@ function mount(
     readonly listDirectory?: OpenCodeClient["file"]["list"];
   } = {},
 ) {
+  const effects = withTestWorkspace((owner) => owner);
   const list = options.listDirectory ?? listDirectory();
   const onClose = vi.fn<() => void>();
   const onAddProject = vi.fn<(location: LocationRef) => void>();
@@ -51,6 +54,7 @@ function mount(
       () => (
         <div ref={(element) => (dialogRoot = element)}>
           <AddProjectDialog
+            effects={effects}
             listDirectory={list}
             initialLocation={{ directory: "/srv/projects" }}
             adding={options.adding}
@@ -66,9 +70,11 @@ function mount(
   }
 
   const { dispose } = mountView(() => (
-    <ServerFlowDialogProvider>
-      <TestDialogHost />
-    </ServerFlowDialogProvider>
+    <RegistryContext.Provider value={effects.registry}>
+      <ServerFlowDialogProvider>
+        <TestDialogHost />
+      </ServerFlowDialogProvider>
+    </RegistryContext.Provider>
   ));
   return {
     get root() {

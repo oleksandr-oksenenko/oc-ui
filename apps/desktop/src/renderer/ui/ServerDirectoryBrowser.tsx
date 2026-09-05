@@ -1,13 +1,19 @@
-import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import { useAtomValue } from "@effect/atom-solid";
+import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
-import { For, Show, createEffect, createMemo, createSignal, createUniqueId } from "solid-js";
+import { Effect } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import { For, Show, createEffect, createMemo, createUniqueId, onCleanup } from "solid-js";
+
+import type { WorkspaceOwner } from "../workspace-owner.ts";
 
 import "./ServerDirectoryBrowser.css";
 import { serverPathChild, serverPathParent } from "./serverPath.ts";
 
 export type ServerDirectoryBrowserProps = {
+  readonly effects: WorkspaceOwner;
   readonly listDirectory: OpenCodeClient["file"]["list"];
   readonly label: string;
   readonly initialLocation: LocationRef;
@@ -18,25 +24,35 @@ export type ServerDirectoryBrowserProps = {
   readonly onDirectoryChange: (location: LocationRef) => void;
 };
 
-type DirectoryListInput = NonNullable<Parameters<OpenCodeClient["file"]["list"]>[0]>;
+type DirectoryState = {
+  readonly location: LocationRef;
+  readonly requestedLocation: LocationRef;
+  readonly directories: readonly string[];
+  readonly loading: boolean;
+  readonly error?: string;
+};
 
 export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
   const validationErrorId = createUniqueId();
   const initialLocation = createMemo(() => props.initialLocation);
-  const [location, setLocation] = createSignal<LocationRef>(props.initialLocation);
-  const [directories, setDirectories] = createSignal<readonly string[]>([]);
-  const [loading, setLoading] = createSignal(true);
-  const [error, setError] = createSignal<string>();
+  const { effects } = props;
+  const state = Atom.make<DirectoryState>({
+    location: props.initialLocation,
+    requestedLocation: props.initialLocation,
+    directories: [],
+    loading: true,
+  });
+  onCleanup(effects.registry.mount(state));
+  const snapshot = useAtomValue(() => state);
+  const location = () => snapshot().location;
+  const directories = () => snapshot().directories;
+  const loading = () => snapshot().loading;
+  const error = () => snapshot().error;
   let browserElement: HTMLElement | undefined;
   let entriesList: HTMLUListElement | undefined;
   let hasResolvedDirectory = false;
-  let requestID = 0;
-  let retryLocation = props.initialLocation;
-
-  const setBrowserLoading = (next: boolean): void => {
-    setLoading(next);
-    props.onLoadingChange?.(next);
-  };
+  const request = effects.latest();
+  onCleanup(request.cancel);
 
   const focusStableControl = (): void => {
     queueMicrotask(() => {
@@ -46,51 +62,70 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
     });
   };
 
-  const loadDirectory = async (requestedLocation: LocationRef): Promise<void> => {
-    const request = ++requestID;
-    retryLocation = requestedLocation;
-    setBrowserLoading(true);
-    setError(undefined);
+  const readDirectory = Effect.fn("ServerDirectoryBrowser.readDirectory")(
+    function* (requestedLocation: LocationRef) {
+      effects.registry.update(state, (current) => ({
+        ...current,
+        requestedLocation,
+        loading: true,
+        error: undefined,
+      }));
+      props.onLoadingChange?.(true);
+      const response = yield* effects.request((signal) =>
+        props.listDirectory(
+          {
+            location:
+              requestedLocation.workspaceID === undefined
+                ? { directory: requestedLocation.directory }
+                : {
+                    directory: requestedLocation.directory,
+                    workspace: requestedLocation.workspaceID,
+                  },
+            path: ".",
+          },
+          { signal },
+        ),
+      );
+      const workspaceID = response.location.workspaceID;
+      const resolvedLocation: LocationRef =
+        workspaceID === undefined
+          ? { directory: response.location.directory }
+          : { directory: response.location.directory, workspaceID };
+      effects.registry.set(state, {
+        location: resolvedLocation,
+        requestedLocation,
+        directories: response.data
+          .filter((entry) => entry.type === "directory")
+          .map((entry) => entry.path),
+        loading: false,
+      });
+      props.onLoadingChange?.(false);
+      if (entriesList) entriesList.scrollTop = 0;
+      props.onDirectoryChange(resolvedLocation);
+      if (hasResolvedDirectory || browserElement?.contains(document.activeElement)) {
+        focusStableControl();
+      }
+      hasResolvedDirectory = true;
+    },
+    Effect.catchTag("WorkspaceRequestError", ({ cause }) =>
+      Effect.sync(() => {
+        effects.registry.update(state, (current) => ({
+          ...current,
+          loading: false,
+          error: errorMessage(cause),
+        }));
+        props.onLoadingChange?.(false);
+        focusStableControl();
+      }),
+    ),
+  );
 
-    let response: FileListOutput;
-    try {
-      const requestLocation: NonNullable<DirectoryListInput["location"]> =
-        requestedLocation.workspaceID === undefined
-          ? { directory: requestedLocation.directory }
-          : { directory: requestedLocation.directory, workspace: requestedLocation.workspaceID };
-      response = await props.listDirectory({ location: requestLocation, path: "." });
-    } catch (cause) {
-      if (request !== requestID) return;
-      setBrowserLoading(false);
-      setError(errorMessage(cause));
-      focusStableControl();
-      return;
-    }
-
-    if (request !== requestID) return;
-    const workspaceID = response.location.workspaceID;
-    const resolvedLocation: LocationRef =
-      workspaceID === undefined
-        ? { directory: response.location.directory }
-        : {
-            directory: response.location.directory,
-            workspaceID,
-          };
-    setLocation(resolvedLocation);
-    setDirectories(
-      response.data.filter((entry) => entry.type === "directory").map((entry) => entry.path),
-    );
-    setBrowserLoading(false);
-    if (entriesList) entriesList.scrollTop = 0;
-    props.onDirectoryChange(resolvedLocation);
-    if (hasResolvedDirectory || browserElement?.contains(document.activeElement)) {
-      focusStableControl();
-    }
-    hasResolvedDirectory = true;
+  const loadDirectory = (requestedLocation: LocationRef): void => {
+    request.run(readDirectory(requestedLocation));
   };
 
   createEffect(() => {
-    void loadDirectory(initialLocation());
+    loadDirectory(initialLocation());
   });
 
   const navigationDisabled = () => props.disabled === true || loading();
@@ -137,7 +172,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
                 size="normal"
                 variant="outline"
                 disabled={navigationDisabled()}
-                onClick={() => void loadDirectory(retryLocation)}
+                onClick={() => loadDirectory(snapshot().requestedLocation)}
               >
                 Retry
               </Button>
@@ -161,7 +196,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
                 disabled={navigationDisabled() || parentDirectory() === location().directory}
                 aria-describedby={props.validationError ? validationErrorId : undefined}
                 aria-label="Go to parent directory"
-                onClick={() => void loadDirectory({ ...location(), directory: parentDirectory() })}
+                onClick={() => loadDirectory({ ...location(), directory: parentDirectory() })}
               >
                 <Icon name="folder" />
                 <span>..</span>
@@ -178,7 +213,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
                     aria-describedby={props.validationError ? validationErrorId : undefined}
                     aria-label={`Browse directory ${directoryName}`}
                     onClick={() =>
-                      void loadDirectory({
+                      loadDirectory({
                         ...location(),
                         directory: serverPathChild(location().directory, directoryName),
                       })

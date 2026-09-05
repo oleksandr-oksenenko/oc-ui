@@ -1,6 +1,7 @@
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import type { FormInfo, LocationRef, OpenCodeEvent } from "@opencode-ai/client";
 import type { FormWithLocation } from "@opencode-ai/client/solid";
-import { createRoot, createSignal } from "solid-js";
+import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { deferred } from "../../../../test/deferred.ts";
@@ -48,7 +49,7 @@ function created(
 }
 
 function setup(initialConnected = false, initialForms: FormWithLocation[] = []) {
-  return createRoot((dispose) => {
+  return withTestWorkspace((effects, dispose) => {
     const [connected, setConnected] = createSignal(initialConnected);
     const [listed, setListed] = createSignal(initialForms);
     const list = vi.fn<FormApi["list"]>(() => listed());
@@ -58,6 +59,7 @@ function setup(initialConnected = false, initialForms: FormWithLocation[] = []) 
     const cancel = vi.fn<FormApi["cancel"]>(async () => undefined);
     const events = createOpenCodeEventSource();
     const value = createGlobalForms({
+      effects,
       connected,
       location,
       runtime: {

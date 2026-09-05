@@ -1,3 +1,7 @@
+import { useAtomValue } from "@effect/atom-solid";
+import { Effect, Exit, Result } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../../../../../workspace-owner.ts";
 import type {
   OpenCodeClient,
   SessionInfo,
@@ -6,7 +10,7 @@ import type {
 } from "@opencode-ai/client";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { showToast } from "@opencode-ai/ui/toast";
-import { createSignal, onCleanup, onMount, type Accessor } from "solid-js";
+import { createEffect, onCleanup, onMount, type Accessor } from "solid-js";
 
 import { useServerFlowDismissBlock } from "../../../../../ui/ServerFlowDialogProvider.tsx";
 import { sessionSubtreeIDs } from "../session-selection.ts";
@@ -18,7 +22,8 @@ type CleanupPlan = {
   readonly retainedPaths: readonly string[];
 };
 
-export type DeleteSessionFlowProps = {
+export type CreateDeleteSessionFlowInput = {
+  readonly effects: WorkspaceOwner;
   readonly session: SessionInfo;
   readonly subtreeIDs: readonly string[];
   readonly subtreeSessions: readonly SessionInfo[];
@@ -33,180 +38,207 @@ export type DeleteSessionFlowProps = {
   readonly onDismiss: () => void;
 };
 
-export function DeleteSessionFlow(props: DeleteSessionFlowProps) {
-  const dialog = useDialog();
-  const setDismissBlocked = useServerFlowDismissBlock();
-  const [deleting, setDeleting] = createSignal(false);
-  const [error, setError] = createSignal<string>();
-  let activeDialog = dialog.active;
-  let closingFlow = false;
-  const ownsDialog = (): boolean => !closingFlow && dialog.active === activeDialog;
+export function createDeleteSessionFlow(props: CreateDeleteSessionFlowInput) {
+  const effects = props.effects;
+  const status = Atom.make<{ deleting: boolean; error?: string; closed?: boolean }>({
+    deleting: false,
+  });
+  const releaseStatus = effects.mount(status);
+  const current = () => effects.registry.get(status);
+  const update = (patch: Partial<ReturnType<typeof current>>) =>
+    effects.registry.set(status, { ...effects.registry.get(status), ...patch });
+  const dispose = (): void => {
+    update({ closed: true });
+    if (!current().deleting) releaseStatus();
+  };
+  const deleteSession = Effect.fn("DeleteSessionFlow.deleteSession")(function* () {
+    if (current().deleting || current().closed) return;
 
-  const title = () => props.session.title?.trim() || "Untitled session";
-
-  const deleteSession = async (): Promise<void> => {
-    if (deleting()) return;
-
-    setDeleting(true);
-    if (ownsDialog()) setDismissBlocked(true);
-    setError(undefined);
+    update({ deleting: true, error: undefined });
     let sessionRemoved = false;
     let subtreeIDs = props.subtreeIDs;
     let cleanup: CleanupPlan = { candidates: [], retainedPaths: [] };
+    yield* Effect.addFinalizer((exit) =>
+      Effect.sync(() => {
+        if (Exit.hasInterrupts(exit) && sessionRemoved) notifyRetained(cleanup);
+        update({ deleting: false });
+        if (current().closed) releaseStatus();
+      }),
+    );
 
-    try {
-      try {
-        await props.syncCatalog();
-      } catch {
-        setError("The session catalog could not be refreshed. Retry before deleting.");
-        return;
-      }
+    const refreshed = yield* Effect.tryPromise(props.syncCatalog).pipe(Effect.result);
+    if (Result.isFailure(refreshed)) {
+      update({ error: "The session catalog could not be refreshed. Retry before deleting." });
+      return;
+    }
 
-      const currentSessions = props.sessions();
-      if (
-        props
-          .sessionIDs()
-          .some((sessionID) => !currentSessions.some((session) => session.id === sessionID))
-      ) {
-        setError("The session records could not be fully loaded. Retry before deleting.");
-        return;
-      }
-      const status = props.deletionStatusForSession(props.session.id);
-      if (status === "running") {
-        setError("Wait for this session and its child sessions to finish before deleting.");
-        return;
-      }
-
-      const target = deletionTarget(
-        props.session.id,
-        props.subtreeIDs,
-        props.subtreeSessions,
-        currentSessions,
-      );
-      subtreeIDs = target.subtreeIDs;
-      sessionRemoved = target.sessionRemoved;
-      cleanup = await collectInitialCleanup({
-        sessions: target.subtreeSessions,
-        listWorktrees: props.listWorktrees,
+    const currentSessions = props.sessions();
+    if (
+      props
+        .sessionIDs()
+        .some((sessionID) => !currentSessions.some((session) => session.id === sessionID))
+    ) {
+      update({ error: "The session records could not be fully loaded. Retry before deleting." });
+      return;
+    }
+    const deletionStatus = props.deletionStatusForSession(props.session.id);
+    if (deletionStatus === "running") {
+      update({
+        error: "Wait for this session and its child sessions to finish before deleting.",
       });
+      return;
+    }
 
-      if (!ownsDialog()) return;
-      if (!sessionRemoved) {
-        if (props.deletionStatusForSession(props.session.id) === "running") {
-          setError("Wait for this session and its child sessions to finish before deleting.");
-          return;
-        }
-        await props.removeSession({ sessionID: props.session.id });
-        sessionRemoved = true;
+    const target = deletionTarget(
+      props.session.id,
+      props.subtreeIDs,
+      props.subtreeSessions,
+      currentSessions,
+    );
+    subtreeIDs = target.subtreeIDs;
+    sessionRemoved = target.sessionRemoved;
+    cleanup = yield* collectInitialCleanup({
+      effects,
+      sessions: target.subtreeSessions,
+      listWorktrees: props.listWorktrees,
+    });
+
+    if (!sessionRemoved) {
+      if (props.deletionStatusForSession(props.session.id) === "running") {
+        update({
+          error: "Wait for this session and its child sessions to finish before deleting.",
+        });
+        return;
       }
+      const removed = yield* effects
+        .request((signal) => props.removeSession({ sessionID: props.session.id }, { signal }))
+        .pipe(Effect.result);
+      if (Result.isFailure(removed)) {
+        update({
+          error: "The session could not be deleted. Check the connection and try again.",
+        });
+        return;
+      }
+      sessionRemoved = true;
+    }
 
-      // Keep the catalog and selection responsive while cleanup performs more server reads.
-      props.onDeleted(subtreeIDs);
-      if (!ownsDialog()) {
-        notifyRetained([
+    // Keep the catalog and selection responsive while cleanup performs more server reads.
+    props.onDeleted(subtreeIDs);
+
+    const finalRefresh = yield* Effect.tryPromise(props.syncCatalog).pipe(Effect.result);
+    if (
+      Result.isFailure(finalRefresh) ||
+      props
+        .sessionIDs()
+        .some((sessionID) => !props.sessions().some((session) => session.id === sessionID))
+    ) {
+      cleanup = {
+        candidates: [],
+        retainedPaths: [
           ...cleanup.retainedPaths,
           ...cleanup.candidates.map((candidate) => candidate.directory),
-        ]);
-        return;
-      }
-
-      let remainingCleanup: CleanupPlan;
-      try {
-        await props.syncCatalog();
-        if (
-          props
-            .sessionIDs()
-            .some((sessionID) => !props.sessions().some((session) => session.id === sessionID))
-        ) {
-          throw new Error("The session records could not be fully loaded.");
-        }
-        remainingCleanup = {
-          candidates: cleanup.candidates.filter(
-            (candidate) =>
-              !props
-                .sessions()
-                .some(
-                  (session) =>
-                    session.location.workspaceID === undefined &&
-                    isWithinDirectory(session.location.directory, candidate.directory),
-                ),
-          ),
-          retainedPaths: [],
-        };
-      } catch {
-        remainingCleanup = {
-          candidates: [],
-          retainedPaths: cleanup.candidates.map((candidate) => candidate.directory),
-        };
-      }
-
-      const retainedPaths = new Set([...cleanup.retainedPaths, ...remainingCleanup.retainedPaths]);
-      for (const candidate of remainingCleanup.candidates) {
-        if (!ownsDialog()) {
-          retainedPaths.add(candidate.directory);
-          continue;
-        }
-        try {
-          await props.removeWorktree(candidate);
-        } catch {
-          retainedPaths.add(candidate.directory);
-        }
-      }
-
-      if (retainedPaths.size > 0) {
-        notifyRetained([...retainedPaths]);
-      }
-      if (!ownsDialog()) return;
-      setDismissBlocked(false);
-      dialog.close();
-    } catch {
-      if (!sessionRemoved) {
-        setError("The session could not be deleted. Check the connection and try again.");
-      }
-    } finally {
-      setDeleting(false);
-      if (ownsDialog()) setDismissBlocked(false);
+        ],
+      };
+    } else {
+      cleanup = {
+        ...cleanup,
+        candidates: cleanup.candidates.filter(
+          (candidate) =>
+            !props
+              .sessions()
+              .some(
+                (session) =>
+                  session.location.workspaceID === undefined &&
+                  isWithinDirectory(session.location.directory, candidate.directory),
+              ),
+        ),
+      };
     }
-  };
 
+    for (const candidate of cleanup.candidates) {
+      const removed = yield* effects
+        .request((signal) => props.removeWorktree(candidate, { signal }))
+        .pipe(Effect.result);
+      if (Result.isSuccess(removed))
+        cleanup = {
+          ...cleanup,
+          candidates: cleanup.candidates.filter((entry) => entry !== candidate),
+        };
+    }
+
+    notifyRetained(cleanup);
+    update({ closed: true });
+    props.onDismiss();
+  }, Effect.scoped);
+
+  return {
+    dispose,
+    status,
+    current,
+    title: props.session.title?.trim() || "Untitled session",
+    descendantCount: props.subtreeIDs.length - 1,
+    pending: () => current().deleting,
+    delete: () => {
+      effects.runFork(deleteSession());
+    },
+    dismiss: () => {
+      if (current().deleting || current().closed) return;
+      dispose();
+      props.onDismiss();
+    },
+  };
+}
+
+export type DeleteSessionFlowController = ReturnType<typeof createDeleteSessionFlow>;
+export type DeleteSessionFlowProps = { readonly flow: DeleteSessionFlowController };
+
+export function DeleteSessionFlow(props: DeleteSessionFlowProps) {
+  const flow = props.flow;
+  const current = useAtomValue(() => flow.status);
+  const dialog = useDialog();
+  const setDismissBlocked = useServerFlowDismissBlock();
+  let closingView = false;
+  const onClose = () => {
+    queueMicrotask(() => {
+      if (!closingView) flow.dismiss();
+    });
+  };
+  const ownsDialog = () => dialog.active?.onClose === onClose;
+  createEffect(() => {
+    setDismissBlocked(current().deleting);
+    if (current().closed && ownsDialog()) dialog.close();
+  });
   onMount(() => {
     const shown = dialog.show(
       () => (
         <DeleteSessionDialog
-          title={title()}
-          descendantCount={props.subtreeIDs.length - 1}
-          deleting={deleting()}
-          error={error()}
-          onDelete={() => void deleteSession()}
+          title={flow.title}
+          descendantCount={flow.descendantCount}
+          deleting={current().deleting}
+          error={current().error}
+          onDelete={flow.delete}
         />
       ),
-      () => {
-        queueMicrotask(() => {
-          if (!closingFlow) props.onDismiss();
-        });
-      },
+      onClose,
     );
-    queueMicrotask(() => {
-      if (!closingFlow) activeDialog = dialog.active;
-    });
     void shown.then(() => {
-      if (closingFlow && dialog.active === activeDialog) dialog.close();
+      if (closingView && ownsDialog()) dialog.close();
       return undefined;
     });
   });
-
   onCleanup(() => {
-    closingFlow = true;
-    if (dialog.active !== activeDialog) return;
+    closingView = true;
+    if (!ownsDialog()) return;
     setDismissBlocked(false);
     dialog.close();
   });
-
   return null;
 }
 
-function notifyRetained(paths: readonly string[]): void {
-  const uniquePaths = [...new Set(paths)];
+function notifyRetained(cleanup: CleanupPlan): void {
+  const uniquePaths = [
+    ...new Set([...cleanup.retainedPaths, ...cleanup.candidates.map(({ directory }) => directory)]),
+  ];
   if (uniquePaths.length === 0) return;
   showToast({
     title: "Session deleted",
@@ -249,11 +281,14 @@ function deletionTarget(
 }
 
 type InitialCleanupInput = {
+  readonly effects: WorkspaceOwner;
   readonly sessions: readonly SessionInfo[];
-  readonly listWorktrees: DeleteSessionFlowProps["listWorktrees"];
+  readonly listWorktrees: CreateDeleteSessionFlowInput["listWorktrees"];
 };
 
-async function collectInitialCleanup(input: InitialCleanupInput): Promise<CleanupPlan> {
+const collectInitialCleanup = Effect.fn("DeleteSessionFlow.collectInitialCleanup")(function* (
+  input: InitialCleanupInput,
+): Effect.fn.Return<CleanupPlan> {
   const retainedPaths = new Set<string>();
   const candidates: WorktreeRemoveInput[] = [];
   const projects = new Map<string, readonly WorktreeDirectory[] | undefined>();
@@ -263,14 +298,10 @@ async function collectInitialCleanup(input: InitialCleanupInput): Promise<Cleanu
       continue;
     }
     if (!projects.has(session.projectID)) {
-      try {
-        projects.set(
-          session.projectID,
-          await input.listWorktrees({ projectID: session.projectID }),
-        );
-      } catch {
-        projects.set(session.projectID, undefined);
-      }
+      const listed = yield* input.effects
+        .request((signal) => input.listWorktrees({ projectID: session.projectID }, { signal }))
+        .pipe(Effect.result);
+      projects.set(session.projectID, Result.isSuccess(listed) ? listed.success : undefined);
     }
     const worktrees = projects.get(session.projectID);
     if (worktrees === undefined) {
@@ -292,7 +323,7 @@ async function collectInitialCleanup(input: InitialCleanupInput): Promise<Cleanu
     candidates.push(candidate);
   }
   return { candidates, retainedPaths: [...retainedPaths] };
-}
+});
 
 function isWithinDirectory(path: string, directory: string): boolean {
   const normalizedPath = normalizeDirectory(path);

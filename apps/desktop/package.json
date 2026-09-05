@@ -23,6 +23,7 @@
     "test": "vp test run --passWithNoTests"
   },
   "dependencies": {
+    "@effect/atom-solid": "catalog:",
     "@effect/platform-node": "catalog:",
     "@kobalte/core": "catalog:",
     "@opencode-ai/client": "catalog:",

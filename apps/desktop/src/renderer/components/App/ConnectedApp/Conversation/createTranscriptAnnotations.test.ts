@@ -1,7 +1,8 @@
-import { createRoot, createSignal } from "solid-js";
+import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createAnnotationDraftStore } from "../../../../domain/annotation-drafts.ts";
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { createTranscriptAnnotations } from "./createTranscriptAnnotations.ts";
 
 function setup() {
@@ -9,9 +10,9 @@ function setup() {
   host.innerHTML =
     '<article data-message-id="message"><p data-annotation-block="text">A useful passage.</p></article>';
   document.body.append(host);
-  const result = createRoot((dispose) => {
+  const result = withTestWorkspace((effects, dispose) => {
     const [sessionID, setSessionID] = createSignal("first");
-    const drafts = createAnnotationDraftStore();
+    const drafts = createAnnotationDraftStore(effects);
     const controller = createTranscriptAnnotations({
       sessionID,
       drafts,

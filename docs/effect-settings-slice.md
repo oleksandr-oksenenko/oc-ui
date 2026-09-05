@@ -1,6 +1,6 @@
-# Settings ordering and shutdown — slice design
+# Settings ordering and shutdown
 
-Settings uses the pinned Effect `4.0.0-rc.112`. Queue supplies FIFO ordering; Scope owns the requests. No semaphore ordering assumptions or retry policy are involved.
+Settings implements this contract with pinned Effect `4.0.0-rc.112`. Queue supplies FIFO ordering; Scope owns the requests. No semaphore ordering assumptions or retry policy are involved. The wider main and renderer migration is being integrated; historical verification below is not a result for that combined change.
 
 ## Owner and caller contract
 
@@ -47,11 +47,11 @@ Cancellation does not prove a write was never applied. There are no retries. Eac
 
 Use the current tagged file format (`kind: "local"` or `kind: "remote"`); records without `kind` are ignored. Keep validation, secure-storage behavior and atomic rename. Production supplies Electron's `safeStorage`; the dependency type selects its three required methods.
 
-Settings uses the Effect `FileSystem` service for reads, directory creation, writes, rename and removal. New temporary files use exclusive creation with mode `0600`; no separate permission mutation is needed. The Node layer is pinned to the same RC as Effect. The separate filesystem boundary keeps native I/O owned through settlement; Settings contains no Node filesystem Promise adapter.
+Settings uses the Effect `FileSystem` service for reads, directory creation, writes, rename and removal. Each save exclusively acquires a temporary directory with mode `0700` beside the settings file, writes a private file with mode `0600` inside it, then atomically renames the file to its destination. `Effect.acquireUseRelease` registers cleanup only after directory acquisition succeeds; no separate permission mutation is needed. The Node layer is pinned to the same RC as Effect. The separate filesystem boundary keeps native I/O owned through settlement; Settings contains no Node filesystem Promise adapter.
 
 The pinned Node FileSystem read/write effects do not wait for native callbacks after interruption. The Settings filesystem layer therefore adapts the five native Promise operations it uses, forwarding AbortSignal to reads/writes and awaiting each Promise in the interruption finalizer. It extends the real Node FileSystem and regenerates its string helpers with `FileSystem.make`; it is not a production no-op filesystem. The directory-read fallback used by ConfigProvider remains owned until native completion. Other unused operations retain the upstream implementation.
 
-Failed or interrupted writes remove the temporary file before the request settles. An exclusive-create collision does not clean up because that path belongs to another creator. Rename failure or interruption removes the file this request created. If an interrupted rename nevertheless succeeds, cleanup can encounter an already-absent temporary file; ignore that cleanup failure and preserve the original outcome.
+Every successful directory acquisition registers removal of that directory and its contents after native work settles, on success, failure or interruption. Failed acquisition never removes the path, including when cancellation arrives before the native collision error. Protect directory acquisition and cleanup from interruption; keep writing and rename interruptible. If rename succeeds during cancellation, cleanup removes the now-empty directory without undoing the committed settings file. Cleanup remains best effort and preserves the original outcome.
 
 On interruption, request abort and await native settlement, including temporary-file cleanup. If rename or other uncancellable work has already started, await it before allowing another mutation.
 
@@ -81,7 +81,7 @@ The provider owns reading the configuration source; Settings still owns encrypti
 
 ## Main integration
 
-Main has no separate Settings Promise queue. Preserve IPC validation, `runSettings`, and accepted-IPC tracking.
+Main has no separate Settings Promise queue. The shared `runIpc` boundary retains IPC validation and accepted-IPC tracking for Settings and LocalOpenCode.
 
 After the local child has stopped successfully, main cleanup closes the renderer, calls Settings shutdown, waits for remaining tracked IPC settlements, removes handlers, and disposes the runtime. Calling shutdown before awaiting pending IPC allows queued callers to be canceled instead of deadlocking cleanup.
 
@@ -95,15 +95,15 @@ Use `@effect/vitest` and the public service with controlled Promise gates and re
 - Save/load/clear preserve FIFO; canceling alternating queued requests preserves survivor order.
 - Failed and defective operations settle without retries or stopping later requests.
 - Queued cancellation does no I/O; active cancellation holds successors until actual I/O and cleanup settle. Canceled directory creation finishes before later write steps can run.
-- Cancellation across the temporary-write/rename handoff cannot orphan the owned temporary file.
+- Cancellation across the temporary-write/rename handoff cannot orphan the owned temporary file. A collision during directory acquisition, including one settling after cancellation, preserves the other creator’s directory and contents.
 - Shutdown discards pending requests, rejects new work, and makes simultaneous callers wait for active cleanup.
 - Scope disposal and admission/shutdown races settle callers at ordinary and reduced scheduler budgets.
 - Main tests retain Settings-before-IPC ordering, Cancel Quit, failed child stop, and distinct cleanup failures.
 
 Unexpected private-worker termination is source-reviewed through its finalizer; tests do not expose a private worker solely for injection. Cooperative scheduler tests exercise interleavings without claiming exhaustive concurrency proof.
 
-Verified the FileSystem/ConfigProvider integration with `pnpm check` and `pnpm test` (597 tests across 80 files). The packaged startup, reconnect, restart and shutdown acceptance scenario also passes against this implementation.
+Historical verification of the temporary-directory refinement used `pnpm check` and `pnpm test` (598 tests across 80 files, including 31 Settings tests). Packaged startup, reconnect, restart and shutdown acceptance passed for the preceding implementation; it was not rerun for this filesystem correction.
 
-Compared with the preceding reviewed version, this refinement adds one net production line and 49 test lines while adding explicit source-failure, exclusive-file, collision-ownership and handoff-interruption checks. It removes the permission operation and the manual ManagedRuntime test harness. The exact-version `@effect/vitest` dependency adds two manifest lines and generated lockfile entries.
+That earlier correction added three net production lines and 24 net test lines; these counts do not describe the wider migration. It replaces the separate error and interruption cleanup handlers with `Effect.acquireUseRelease`, without adding a service, helper or dependency. The extra directory acquisition establishes ownership before cleanup can run.
 
 See [the application design](./effect-architecture.md) for wider ownership and [the main cleanup](../apps/desktop/src/main/index.ts) for integration.

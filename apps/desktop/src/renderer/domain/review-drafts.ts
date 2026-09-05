@@ -1,4 +1,6 @@
-import { createStore } from "solid-js/store";
+import { useAtomValue } from "@effect/atom-solid";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../workspace-owner.ts";
 import type { SelectedLineRange } from "@pierre/diffs";
 
 type ReviewComparison = "working" | "branch";
@@ -55,26 +57,30 @@ type ReviewStoreState = { sessions: Record<string, ReviewSessionDrafts> };
 const EMPTY_DRAFT: ReviewDraft = { comments: [] };
 
 /** Creates reactive, in-memory review drafts isolated by session and comparison. */
-export function createReviewDraftStore(): ReviewDraftStore {
-  const [state, setState] = createStore<ReviewStoreState>({ sessions: {} });
+export function createReviewDraftStore(effects: WorkspaceOwner): ReviewDraftStore {
+  const state = Atom.make<ReviewStoreState>({ sessions: {} });
+  effects.mount(state);
+  const drafts = useAtomValue(() => state);
   let nextCommentID = 1;
 
   const readStored = (key: ReviewDraftKey): StoredDraft | undefined =>
-    state.sessions[key.sessionID]?.[key.comparison];
+    effects.registry.get(state).sessions[key.sessionID]?.[key.comparison];
 
   const read = (key: ReviewDraftKey): ReviewDraft => {
-    const draft = readStored(key);
+    const draft = drafts().sessions[key.sessionID]?.[key.comparison];
     if (!draft) return EMPTY_DRAFT;
     if (draft.editingCommentID === undefined) return { comments: draft.comments };
     return { comments: draft.comments, editingCommentID: draft.editingCommentID };
   };
 
   const write = (key: ReviewDraftKey, draft: StoredDraft): void => {
-    if (state.sessions[key.sessionID] === undefined) {
-      setState("sessions", key.sessionID, { [key.comparison]: draft });
-    } else {
-      setState("sessions", key.sessionID, key.comparison, draft);
-    }
+    const sessions = effects.registry.get(state).sessions;
+    effects.registry.set(state, {
+      sessions: {
+        ...sessions,
+        [key.sessionID]: { ...sessions[key.sessionID], [key.comparison]: draft },
+      },
+    });
   };
 
   const revisionOf = (key: ReviewDraftKey): number => readStored(key)?.revision ?? 0;
@@ -157,7 +163,9 @@ export function createReviewDraftStore(): ReviewDraftStore {
     clear,
 
     clearSession: (sessionID) => {
-      setState("sessions", sessionID, {});
+      effects.registry.set(state, {
+        sessions: { ...effects.registry.get(state).sessions, [sessionID]: {} },
+      });
     },
   };
 }

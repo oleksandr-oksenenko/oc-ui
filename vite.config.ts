@@ -100,8 +100,39 @@ export default defineConfig({
     },
     overrides: [
       {
-        files: ["apps/desktop/src/renderer/**/*.{ts,tsx}"],
+        files: [
+          "apps/desktop/src/renderer/connection.ts",
+          "apps/desktop/src/renderer/test/workspace.ts",
+          "apps/desktop/stories/transcript-annotations/TranscriptAnnotations.tsx",
+          "apps/desktop/stories/AddProjectDialog.stories.tsx",
+        ],
+        rules: { "anti-slop-effect/no-service-constructor-imports": "off" },
+      },
+      {
+        files: ["apps/desktop/src/renderer/test/**/*.ts"],
         rules: effectPromiseBoundaryRules,
+      },
+      {
+        // The SDK requires a fetch callback; preserve HTTP status at that boundary.
+        files: ["apps/desktop/src/renderer/opencode/connection.ts"],
+        rules: {
+          "effecttsgo/async-function": "off",
+          "effecttsgo/extends-native-error": "off",
+          "effecttsgo/global-fetch": "off",
+        },
+      },
+      {
+        files: ["apps/desktop/src/renderer/ui/restoreDialogFocusAfterClose.ts"],
+        rules: { "effecttsgo/global-timers": "off" },
+      },
+      {
+        // DOM hashing and focus updates await browser APIs or already-owned actions.
+        files: [
+          "apps/desktop/src/renderer/components/App/ConnectedApp/Conversation/createAnnotationHighlights.ts",
+          "apps/desktop/src/renderer/components/App/ConnectedApp/Conversation/createTranscriptAnnotations.ts",
+          "apps/desktop/src/renderer/components/App/ConnectedApp/GlobalForms/ReviewDialog.tsx",
+        ],
+        rules: { "effecttsgo/async-function": "off" },
       },
       {
         files: [

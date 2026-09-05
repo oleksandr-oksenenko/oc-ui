@@ -1,7 +1,9 @@
-import type { SessionInfo } from "@opencode-ai/client";
+import { OpenCode, type SessionInfo } from "@opencode-ai/client";
+import { createData } from "@opencode-ai/client/solid";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { sessionFixture } from "../../../../test/session-fixture.ts";
 import {
   createSessionFlows,
@@ -28,10 +30,35 @@ function setup() {
     syncCatalog,
     remove,
   };
+  const api = OpenCode.make({ baseUrl: "http://session-flows.test" });
+  vi.spyOn(api.session, "remove").mockResolvedValue(undefined);
+  vi.spyOn(api.worktree, "list").mockResolvedValue([]);
+  const { effects: workspaceEffects, data } = withTestWorkspace((effects) => ({
+    effects,
+    data: createData({
+      api: () => api,
+      directory: "/srv/worktree",
+      event: {
+        on: () => () => undefined,
+        listen: () => () => undefined,
+      },
+    }),
+  }));
+  vi.spyOn(data.session, "status").mockImplementation((id) => status.get(id) ?? "idle");
+  vi.spyOn(data.project, "sync").mockResolvedValue(undefined);
   const runtime: SessionFlowsRuntime = {
-    sessions: { ids: () => records.map((item) => item.id) },
-    data: {
-      session: { status: (id: string) => status.get(id) ?? "idle" },
+    effects: workspaceEffects,
+    api,
+    data,
+    onShellExited: () => () => undefined,
+    defaultLocation: { directory: "/srv/worktree" },
+    sessions: {
+      ids: () => records.map((item) => item.id),
+      admit: () => undefined,
+      remove: () => undefined,
+      sync: async () => undefined,
+      state: () => "ready",
+      error: () => undefined,
     },
   };
   return {
@@ -53,20 +80,50 @@ function mount(fixture: ReturnType<typeof setup>, clearDraft: (sessionID: string
       connected: fixture.connected,
       workspace: fixture.workspace,
       clearDraft,
+      onSessionCreated: () => undefined,
     }),
     dispose,
   }));
 }
 
 describe("createSessionFlows", () => {
-  it("prunes expanded sessions when deleting a subtree", () => {
+  it("releases status mounts whenever creation and deletion flows are dismissed", async () => {
+    const fixture = setup();
+    const registry = fixture.runtime.effects.registry;
+    const mountAtom = registry.mount.bind(registry);
+    let mountedAtoms = 0;
+    vi.spyOn(registry, "mount").mockImplementation((atom) => {
+      const release = mountAtom(atom);
+      mountedAtoms += 1;
+      return () => {
+        mountedAtoms -= 1;
+        release();
+      };
+    });
+    const { flows, dispose } = mount(fixture, vi.fn());
+    for (let index = 0; index < 5; index += 1) {
+      flows.openNewSession();
+      expect(mountedAtoms).toBe(1);
+      flows.dismissNewSession();
+      await vi.waitFor(() => expect(mountedAtoms).toBe(0));
+      flows.openSessionDeletion("root", document.createElement("button"));
+      expect(mountedAtoms).toBe(1);
+      flows.dismissDeletion();
+      await vi.waitFor(() => expect(mountedAtoms).toBe(0));
+    }
+    dispose();
+  });
+
+  it("prunes expanded sessions when deleting a subtree", async () => {
     const fixture = setup();
     const clearDraft = vi.fn<(sessionID: string) => void>();
     const { flows, dispose } = mount(fixture, clearDraft);
 
     flows.toggleExpanded("root");
     flows.toggleExpanded("child");
-    flows.deleteSessions(["root", "child"]);
+    flows.openSessionDeletion("root", document.createElement("button"));
+    flows.deletion()?.flow.delete();
+    await vi.waitFor(() => expect(fixture.remove).toHaveBeenCalled());
 
     expect(flows.expandedIDs()).toEqual([]);
     expect(fixture.remove).toHaveBeenCalledWith(["root", "child"]);
@@ -88,8 +145,7 @@ describe("createSessionFlows", () => {
     expect(flows.deletionStatusForSession("root")).toBe("ready");
     expect(flows.deletionStatusForSession("missing")).toBe("removed");
     flows.openSessionDeletion("root", opener);
-    expect(flows.sessions()).toBe(fixture.records);
-    expect(flows.syncCatalog).toBe(fixture.workspace.syncCatalog);
+    expect(flows.deletion()?.flow.pending()).toBe(false);
     fixture.setStreamStatus("reconnecting");
     flows.dismissDeletion();
     flows.openSessionDeletion("root", opener);
@@ -123,7 +179,42 @@ describe("createSessionFlows", () => {
   it.each([
     ["successful deletion", true],
     ["external removal", false],
-  ])("restores focus to the fallback after %s removes the opener", (_scenario, deleteFirst) => {
+  ])(
+    "restores focus to the fallback after %s removes the opener",
+    async (_scenario, deleteFirst) => {
+      vi.useFakeTimers();
+      try {
+        const fixture = setup();
+        const { flows, dispose } = mount(fixture, vi.fn<(sessionID: string) => void>());
+        const opener = document.createElement("button");
+        const fallback = document.createElement("button");
+        const resolveFallback = vi.fn<() => HTMLElement | undefined>(() => fallback);
+        document.body.append(opener, fallback);
+
+        flows.openSessionDeletion("root", opener, resolveFallback);
+        if (deleteFirst) {
+          flows.deletion()?.flow.delete();
+          await vi.waitFor(() => {
+            if (fixture.remove.mock.calls.length === 0)
+              throw new Error("Deletion has not completed");
+          });
+        }
+        opener.remove();
+        flows.dismissDeletion();
+        vi.advanceTimersByTime(111);
+
+        expect(resolveFallback).toHaveBeenCalledOnce();
+        expect(document.activeElement).toBe(fallback);
+
+        fallback.remove();
+        dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("restores focus to a connected deletion opener after deletion", async () => {
     vi.useFakeTimers();
     try {
       const fixture = setup();
@@ -134,33 +225,8 @@ describe("createSessionFlows", () => {
       document.body.append(opener, fallback);
 
       flows.openSessionDeletion("root", opener, resolveFallback);
-      if (deleteFirst) flows.deleteSessions(["root"]);
-      opener.remove();
-      flows.dismissDeletion();
-      vi.advanceTimersByTime(111);
-
-      expect(resolveFallback).toHaveBeenCalledOnce();
-      expect(document.activeElement).toBe(fallback);
-
-      fallback.remove();
-      dispose();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("restores focus to a connected deletion opener after deletion", () => {
-    vi.useFakeTimers();
-    try {
-      const fixture = setup();
-      const { flows, dispose } = mount(fixture, vi.fn<(sessionID: string) => void>());
-      const opener = document.createElement("button");
-      const fallback = document.createElement("button");
-      const resolveFallback = vi.fn<() => HTMLElement | undefined>(() => fallback);
-      document.body.append(opener, fallback);
-
-      flows.openSessionDeletion("root", opener, resolveFallback);
-      flows.deleteSessions(["root"]);
+      flows.deletion()?.flow.delete();
+      await vi.waitFor(() => expect(fixture.remove).toHaveBeenCalled());
       flows.dismissDeletion();
       vi.advanceTimersByTime(111);
 

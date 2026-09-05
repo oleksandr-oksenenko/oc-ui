@@ -2,6 +2,7 @@ import type { FormInfo } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { mount } from "../../../../test/mount.ts";
 import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { stubResizeObserver } from "../../../../test/resize-observer.ts";
@@ -98,17 +99,19 @@ function setup(initialForms: readonly FormInfo[] = []) {
     sync: vi.fn<SessionAgentSelectionController["sync"]>(async () => undefined),
     selectAgent: vi.fn<SessionAgentSelectionController["selectAgent"]>(async () => undefined),
   };
-  const { host, dispose } = mount(() => (
-    <ConversationRegion
-      annotationDrafts={createAnnotationDraftStore()}
-      workspace={workspace}
-      composer={composer}
-      modelSelection={modelSelection}
-      agentSelection={agentSelection}
-      forms={formsController}
-      connected={connected}
-    />
-  ));
+  const { host, dispose } = withTestWorkspace((effects) =>
+    mount(() => (
+      <ConversationRegion
+        annotationDrafts={createAnnotationDraftStore(effects)}
+        workspace={workspace}
+        composer={composer}
+        modelSelection={modelSelection}
+        agentSelection={agentSelection}
+        forms={formsController}
+        connected={connected}
+      />
+    )),
+  );
   return {
     host,
     formsController,

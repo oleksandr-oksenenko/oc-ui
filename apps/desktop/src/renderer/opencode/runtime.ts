@@ -1,21 +1,25 @@
 import { createClientConnection, createData } from "@opencode-ai/client/solid";
 import type { Data, ClientConnectionStatus } from "@opencode-ai/client/solid";
 import type { LocationRef, OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client";
+import { Deferred, Effect } from "effect";
+import type { WorkspaceOwner } from "../workspace-owner.ts";
 import { createEffect, getOwner, onCleanup } from "solid-js";
 import { createOpenCodeEventSource } from "./event-source";
-import { mapConnectionFailure } from "./connection";
+import { mapConnectionFailure, type OpenCodeConnectionError } from "./connection";
 import { createSessionCatalog } from "./session-catalog";
 import type { SessionCatalog } from "./session-catalog";
-import { syncSessionTranscript } from "./transcript";
+import { createSessionTranscriptSync } from "./transcript";
 import { createVcsDiffStore } from "./vcs-diff";
 import type { VcsDiffStore } from "./vcs-diff";
 
 type RuntimeConnection = {
+  readonly effects: WorkspaceOwner;
   readonly api: OpenCodeClient;
   readonly defaultLocation: LocationRef;
 };
 
 export type ConnectedRuntime = {
+  readonly effects: WorkspaceOwner;
   readonly api: OpenCodeClient;
   readonly data: Data;
   readonly defaultLocation: LocationRef;
@@ -26,7 +30,7 @@ export type ConnectedRuntime = {
   };
   readonly sessions: SessionCatalog;
   readonly diffs: VcsDiffStore;
-  /** Resolves after the event stream receives its first server.connected event. */
+  /** Resolves after the initial stream handshake and default location synchronization. */
   readonly ready: Promise<void>;
   readonly onShellExited: (
     handler: (event: Extract<OpenCodeEvent, { type: "shell.exited" }>) => void,
@@ -55,36 +59,29 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     connection: { status: stream.status },
   });
   const sessions = createSessionCatalog({
+    effects: input.effects,
     api: input.api,
     data,
     events,
   });
-  const diffs = createVcsDiffStore({ diff: input.api.vcs.diff, events });
+  const diffs = createVcsDiffStore({ diff: input.api.vcs.diff, events, effects: input.effects });
 
-  let resolveReady!: () => void;
-  let rejectReady!: (cause: unknown) => void;
-  const ready = new Promise<void>((resolve, reject) => {
-    resolveReady = resolve;
-    rejectReady = reject;
-  });
-  let connected = false;
+  const handshake = Deferred.makeUnsafe<void, OpenCodeConnectionError>();
   const stopReady = events.on("server.connected", () => {
-    if (connected) return;
-    connected = true;
-    resolveReady();
-    // createData also preloads location on this event. This explicit call
-    // makes the remote workspace-aware default location authoritative here.
-    void data.location.syncInfo(input.defaultLocation).catch(() => undefined);
+    Deferred.doneUnsafe(handshake, Effect.void);
   });
 
-  // The first failed handshake is terminal for initial setup. Once connected,
-  // the public client owns retries and exposes reconnecting status to callers.
+  // Deferred accepts only the first handshake result. Later reconnects remain
+  // entirely owned by the public client.
   createEffect(() => {
-    if (!connected && stream.status() === "reconnecting" && stream.attempt() > 0) {
-      rejectReady(
-        mapConnectionFailure(
-          new Error(stream.error() ?? "The OpenCode event stream handshake failed."),
-          "stream",
+    if (stream.status() === "reconnecting" && stream.attempt() > 0) {
+      Deferred.doneUnsafe(
+        handshake,
+        Effect.fail(
+          mapConnectionFailure(
+            new Error(stream.error() ?? "The OpenCode event stream handshake failed."),
+            "stream",
+          ),
         ),
       );
     }
@@ -97,13 +94,21 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     events.close();
   });
 
-  const syncTranscript = (sessionID: string, options?: { readonly isCurrent?: () => boolean }) =>
-    syncSessionTranscript(data, sessionID, options);
+  const ready = input.effects.runPromise(
+    Effect.gen(function* () {
+      yield* Deferred.await(handshake);
+      yield* input.effects.request(() => data.location.syncInfo(input.defaultLocation));
+    }),
+  );
+  // A workspace can close before a view has subscribed to readiness.
+  void ready.catch(() => undefined);
+  const syncTranscript = createSessionTranscriptSync(input.effects, data);
   const onShellExited = (
     handler: (event: Extract<OpenCodeEvent, { type: "shell.exited" }>) => void,
   ): (() => void) => events.on("shell.exited", handler);
 
   return {
+    effects: input.effects,
     api: input.api,
     data,
     defaultLocation: input.defaultLocation,

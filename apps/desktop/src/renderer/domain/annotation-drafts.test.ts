@@ -1,3 +1,4 @@
+import { withTestWorkspace } from "../test/workspace.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createAnnotationDraftStore, type TranscriptAnnotation } from "./annotation-drafts.ts";
@@ -17,7 +18,7 @@ const annotation = (id: string, body = "Fix this"): TranscriptAnnotation => ({
 
 describe("createAnnotationDraftStore", () => {
   it("keeps drafts isolated and updates/removes them by ID", () => {
-    const drafts = createAnnotationDraftStore();
+    const drafts = withTestWorkspace((effects) => createAnnotationDraftStore(effects));
     const input = annotation("ignored");
     const id = drafts.add("session-1", input);
 
@@ -30,7 +31,7 @@ describe("createAnnotationDraftStore", () => {
   });
 
   it("takes drafts and restores them without overwriting newer entries", () => {
-    const drafts = createAnnotationDraftStore();
+    const drafts = withTestWorkspace((effects) => createAnnotationDraftStore(effects));
     const first = annotation("first");
     const second = annotation("second", "Second");
     drafts.restore({ sessionID: "session-1", comments: [first, second] });
@@ -48,7 +49,7 @@ describe("createAnnotationDraftStore", () => {
   });
 
   it("clears only unchanged restored comments", () => {
-    const drafts = createAnnotationDraftStore();
+    const drafts = withTestWorkspace((effects) => createAnnotationDraftStore(effects));
     const first = annotation("first");
     const second = annotation("second", "Second");
     const snapshot = { sessionID: "session-1", comments: [first, second] } as const;
@@ -60,7 +61,7 @@ describe("createAnnotationDraftStore", () => {
   });
 
   it("allows empty edits without changing the frozen submitted annotation", () => {
-    const drafts = createAnnotationDraftStore();
+    const drafts = withTestWorkspace((effects) => createAnnotationDraftStore(effects));
     const input = annotation("ignored");
     const id = drafts.add("session-1", input);
     const snapshot = drafts.take("session-1");
@@ -77,7 +78,7 @@ describe("createAnnotationDraftStore", () => {
   });
 
   it("rejects empty comments and invalid source bounds", () => {
-    const drafts = createAnnotationDraftStore();
+    const drafts = withTestWorkspace((effects) => createAnnotationDraftStore(effects));
     expect(() => drafts.add("session-1", annotation("id", "  "))).toThrow(
       "Invalid transcript annotation",
     );

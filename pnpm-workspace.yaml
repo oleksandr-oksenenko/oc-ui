@@ -5,6 +5,7 @@ packages:
 catalogMode: prefer
 
 catalog:
+  "@effect/atom-solid": 4.0.0-rc.112
   "@effect/platform-node": 4.0.0-rc.112
   "@effect/tsgo": 0.38.0
   "@effect/vitest": 4.0.0-rc.112

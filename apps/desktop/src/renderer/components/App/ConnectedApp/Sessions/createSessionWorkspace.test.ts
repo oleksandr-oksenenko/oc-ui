@@ -1,7 +1,10 @@
 import type { SessionInfo, SessionMessageInfo } from "@opencode-ai/client";
-import { createRoot, createSignal } from "solid-js";
+import { Effect, Exit, Scope } from "effect";
+import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { deferred } from "../../../../test/deferred.ts";
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { createSessionWorkspace, type SessionWorkspaceRuntime } from "./createSessionWorkspace.ts";
 
@@ -61,13 +64,17 @@ function setup(initial: readonly SessionInfo[]) {
 }
 
 function mount(fixture: ReturnType<typeof setup>) {
-  return createRoot((dispose) => ({
+  return withTestWorkspace((effects, dispose) => ({
     workspace: createSessionWorkspace({
+      effects,
       runtime: fixture.runtime,
       connected: fixture.connected,
       bootstrapped: fixture.bootstrapped,
     }),
-    dispose,
+    dispose: () => {
+      dispose();
+      void Effect.runPromise(Scope.close(effects.scope, Exit.void));
+    },
   }));
 }
 
@@ -88,7 +95,10 @@ describe("createSessionWorkspace", () => {
     await workspace.stop();
 
     expect(fixture.runtime.api.session.interrupt).toHaveBeenCalledOnce();
-    expect(fixture.runtime.api.session.interrupt).toHaveBeenCalledWith({ sessionID: "one" });
+    expect(fixture.runtime.api.session.interrupt).toHaveBeenCalledWith(
+      { sessionID: "one" },
+      { signal: expect.any(AbortSignal) },
+    );
     resolveInterrupt();
     await firstStop;
     dispose();
@@ -181,5 +191,56 @@ describe("createSessionWorkspace", () => {
     expect(workspace.selectedID()).toBeUndefined();
     expect(workspace.transcriptError()).toBeUndefined();
     dispose();
+  });
+  it("interrupts obsolete hydration without overwriting the replacement result", async () => {
+    const fixture = setup([session("one", 1)]);
+    const { workspace, dispose } = mount(fixture);
+    await vi.waitFor(() => expect(workspace.transcriptLoading()).toBe(false));
+    const old = deferred();
+    vi.mocked(fixture.runtime.syncTranscript).mockReturnValueOnce(old.promise);
+    const obsolete = workspace.hydrate("one");
+    const isCurrent = vi.mocked(fixture.runtime.syncTranscript).mock.lastCall?.[1]?.isCurrent;
+    await workspace.hydrate("one");
+    expect(isCurrent?.()).toBe(false);
+    old.reject(new Error("obsolete failure"));
+    await obsolete;
+    expect(workspace.transcriptError()).toBeUndefined();
+    expect(workspace.transcriptLoading()).toBe(false);
+    dispose();
+  });
+
+  it("refreshes the catalog before retrying the selected child transcript", async () => {
+    const fixture = setup([session("root", 1), session("child", 2, "root")]);
+    const { workspace, dispose } = mount(fixture);
+    await vi.waitFor(() => expect(workspace.transcriptLoading()).toBe(false));
+    const order: string[] = [];
+    vi.mocked(fixture.runtime.sessions.sync).mockImplementation(async () => {
+      order.push("catalog");
+    });
+    vi.mocked(fixture.runtime.syncTranscript).mockImplementation(async (id) => {
+      order.push(id);
+    });
+    await workspace.retryCatalog();
+    expect(order).toEqual(["catalog", "child"]);
+    dispose();
+  });
+
+  it("settles a disposed hydration wait while transcript work retains its owner", async () => {
+    const fixture = setup([session("one", 1)]);
+    const { workspace, dispose } = mount(fixture);
+    await vi.waitFor(() => expect(workspace.transcriptLoading()).toBe(false));
+    const request = deferred();
+    vi.mocked(fixture.runtime.syncTranscript).mockReturnValueOnce(request.promise);
+    let settled = false;
+    const pending = workspace.hydrate("one").then(() => {
+      settled = true;
+      return undefined;
+    });
+    const isCurrent = vi.mocked(fixture.runtime.syncTranscript).mock.lastCall?.[1]?.isCurrent;
+    dispose();
+    await vi.waitFor(() => expect(isCurrent?.()).toBe(false));
+    await pending;
+    expect(settled).toBe(true);
+    request.resolve();
   });
 });

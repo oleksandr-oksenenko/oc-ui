@@ -1,4 +1,7 @@
 import type { Data } from "@opencode-ai/client/solid";
+import { Deferred, Effect, Queue, RcMap } from "effect";
+
+import type { WorkspaceOwner, WorkspaceRequestError } from "../workspace-owner.ts";
 
 type SessionTranscriptData = {
   readonly session: Pick<Data["session"], "sync"> & {
@@ -7,42 +10,52 @@ type SessionTranscriptData = {
   };
 };
 
-const activeSyncs = new WeakMap<SessionTranscriptData, Map<string, Promise<void>>>();
+type TranscriptRequest = {
+  readonly isCurrent?: () => boolean;
+  readonly result: Deferred.Deferred<void, WorkspaceRequestError>;
+};
 
-/** Sync the selected session, pending inputs, and every available message page. */
-export async function syncSessionTranscript(
-  data: SessionTranscriptData,
-  sessionID: string,
-  options?: { readonly isCurrent?: () => boolean },
-): Promise<void> {
-  let sessions = activeSyncs.get(data);
-  if (!sessions) {
-    sessions = new Map();
-    activeSyncs.set(data, sessions);
-  }
-
-  const previous = sessions.get(sessionID);
-  const run = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(async () => {
-    if (options?.isCurrent && !options.isCurrent()) return undefined;
-
-    await Promise.all([
-      data.session.sync(sessionID),
-      data.session.pending.sync(sessionID),
-      data.session.message.sync(sessionID),
-    ]);
-
+/** The SDK owns messages; one FIFO worker per session owns complete pagination. */
+export function createSessionTranscriptSync(effects: WorkspaceOwner, data: SessionTranscriptData) {
+  const hydrate = Effect.fn("hydrateTranscript")(function* (
+    sessionID: string,
+    job: TranscriptRequest,
+  ) {
+    if (job.isCurrent && !job.isCurrent()) return;
+    yield* Effect.all(
+      [
+        effects.request(() => data.session.sync(sessionID)),
+        effects.request(() => data.session.pending.sync(sessionID)),
+        effects.request(() => data.session.message.sync(sessionID)),
+      ],
+      { concurrency: "unbounded" },
+    );
     while (data.session.message.more(sessionID)) {
-      if (options?.isCurrent && !options.isCurrent()) return undefined;
-      await data.session.message.loadMore(sessionID);
+      if (job.isCurrent && !job.isCurrent()) return;
+      yield* effects.request(() => data.session.message.loadMore(sessionID));
     }
-    return undefined;
   });
 
-  const tracked = run.finally(() => {
-    if (sessions.get(sessionID) !== tracked) return;
-    sessions.delete(sessionID);
-    if (sessions.size === 0) activeSyncs.delete(data);
-  });
-  sessions.set(sessionID, tracked);
-  return tracked;
+  const sessions = effects.runSync(
+    RcMap.make({
+      lookup: Effect.fn("transcript.worker")(function* (sessionID: string) {
+        const queue = yield* Queue.unbounded<TranscriptRequest>();
+        yield* Effect.gen(function* () {
+          const job = yield* Queue.take(queue);
+          yield* Deferred.complete(job.result, hydrate(sessionID, job));
+        }).pipe(Effect.forever, Effect.forkScoped);
+        return queue;
+      }),
+    }),
+  );
+
+  return (sessionID: string, options?: { readonly isCurrent?: () => boolean }): Promise<void> =>
+    effects.runPromise(
+      Effect.gen(function* () {
+        const queue = yield* RcMap.get(sessions, sessionID);
+        const result = yield* Deferred.make<void, WorkspaceRequestError>();
+        yield* Queue.offer(queue, { ...options, result });
+        yield* Deferred.await(result);
+      }).pipe(Effect.scoped),
+    );
 }

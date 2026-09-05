@@ -1,5 +1,7 @@
 import type { FileDiffInfo, SessionInfo } from "@opencode-ai/client";
-import { createRoot, createSignal } from "solid-js";
+import { createSignal } from "solid-js";
+import { Effect } from "effect";
+import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { sessionFixture } from "../../../../test/session-fixture.ts";
@@ -45,7 +47,7 @@ const setup = (options?: {
   readonly snapshot?: Snapshot;
   readonly branch?: { readonly current?: string; readonly default?: string };
 }) =>
-  createRoot((dispose) => {
+  withTestWorkspace((effects, dispose) => {
     const [selectedSession, setSelectedSession] = createSignal(options?.selected);
     const [bootstrapped, setBootstrapped] = createSignal(false);
     const [connected, setConnected] = createSignal(false);
@@ -54,13 +56,13 @@ const setup = (options?: {
       options?.snapshot ?? { files: [], status: "idle", stale: false },
     );
     const [branch, setBranch] = createSignal(options?.branch);
-    const reviewDrafts = createReviewDraftStore();
+    const reviewDrafts = createReviewDraftStore(effects);
     const requestRemoveComment = vi.fn<WorkspaceChangesInput["requestRemoveComment"]>();
     type Vcs = WorkspaceChangesRuntime["data"]["location"]["vcs"];
     type Diffs = WorkspaceChangesRuntime["diffs"];
     const syncLocation = vi.fn<Vcs["sync"]>(() => Promise.resolve());
-    const syncDiff = vi.fn<Diffs["sync"]>(() => Promise.resolve());
-    const refreshDiff = vi.fn<Diffs["refresh"]>(() => Promise.resolve());
+    const syncDiff = vi.fn<Diffs["sync"]>(() => Effect.void);
+    const refreshDiff = vi.fn<Diffs["refresh"]>(() => Effect.void);
     const info = vi.fn<Vcs["info"]>(() => {
       const current = branch();
       return current === undefined ? undefined : { branch: current };
@@ -82,6 +84,7 @@ const setup = (options?: {
     };
     const changes = createWorkspaceChanges({
       runtime,
+      effects,
       selectedSession,
       bootstrapped,
       connected,

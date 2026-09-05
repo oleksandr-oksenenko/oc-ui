@@ -5,7 +5,8 @@ import type {
   OpenCodeEvent,
   VcsDiffOutput,
 } from "@opencode-ai/client";
-import { createRoot } from "solid-js";
+import { Effect, Exit, Scope } from "effect";
+import { withTestWorkspace } from "../test/workspace.ts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createOpenCodeEventSource } from "./event-source.ts";
@@ -37,11 +38,21 @@ const response = (ref: LocationRef, files: FileDiffInfo[]): VcsDiffOutput => ({
 
 const setup = (diff: DiffRequest) => {
   const events = createOpenCodeEventSource();
-  return createRoot((dispose) => ({
-    dispose,
-    events,
-    store: createVcsDiffStore({ diff, events }),
-  }));
+  return withTestWorkspace((effects, dispose) => {
+    const store = createVcsDiffStore({ diff, events, effects });
+    return {
+      dispose,
+      events,
+      effects,
+      store: {
+        state: store.state,
+        sync: (ref: LocationRef, mode: Parameters<typeof store.sync>[1]) =>
+          effects.runPromise(store.sync(ref, mode)),
+        refresh: (ref: LocationRef, mode: Parameters<typeof store.refresh>[1]) =>
+          effects.runPromise(store.refresh(ref, mode)),
+      },
+    };
+  });
 };
 
 describe("VCS diff store", () => {
@@ -152,5 +163,60 @@ describe("VCS diff store", () => {
       files: [{ file: "cached.ts" }],
     });
     dispose();
+  });
+
+  it("discards late results from an invalidated request while a replacement loads", async () => {
+    const ref = location("/workspace");
+    let resolveOld!: (value: VcsDiffOutput) => void;
+    let signal: AbortSignal | undefined;
+    const diff = vi
+      .fn<DiffRequest>()
+      .mockImplementationOnce((_input, options) => {
+        signal = options?.signal;
+        return new Promise((resolve) => {
+          resolveOld = resolve;
+        });
+      })
+      .mockResolvedValueOnce(response(ref, [file("latest.ts")]));
+    const { store, events } = setup(diff);
+    const obsolete = store.sync(ref, "working");
+    events.emit({
+      id: "change",
+      created: 1,
+      type: "filesystem.changed",
+      location: ref,
+      data: { file: "old.ts", event: "change" },
+    } satisfies OpenCodeEvent);
+    expect(signal?.aborted).toBe(true);
+    await store.sync(ref, "working");
+    resolveOld(response(ref, [file("obsolete.ts")]));
+    await obsolete;
+    expect(store.state(ref, "working").files[0]?.file).toBe("latest.ts");
+  });
+
+  it("waits for uncancellable SDK work before releasing the workspace", async () => {
+    const ref = location("/workspace");
+    let resolve!: (value: VcsDiffOutput) => void;
+    let signal: AbortSignal | undefined;
+    const diff = vi.fn<DiffRequest>((_input, options) => {
+      signal = options?.signal;
+      return new Promise((done) => {
+        resolve = done;
+      });
+    });
+    const { store, effects } = setup(diff);
+    const pending = store.sync(ref, "working").catch(() => undefined);
+    let closed = false;
+    const closing = Effect.runPromise(Scope.close(effects.scope, Exit.void)).then(() => {
+      closed = true;
+      return undefined;
+    });
+    await Promise.resolve();
+    expect(signal?.aborted).toBe(true);
+    expect(closed).toBe(false);
+    resolve(response(ref, [file("late.ts")]));
+    await closing;
+    await pending;
+    expect(store.state(ref, "working").status).toBe("loading");
   });
 });

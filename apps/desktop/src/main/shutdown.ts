@@ -1,34 +1,38 @@
 import type { MessageBoxOptions, MessageBoxReturnValue } from "electron";
+import { Effect, type Fiber } from "effect";
 
-import type { LocalOpenCodeService } from "./local-opencode.ts";
+import type { LocalOpenCode } from "./local-opencode.ts";
 
 /** Cancel Settings jobs before waiting for IPC callers that depend on them. */
-export async function settleSettingsIpc(
-  shutdownSettings: () => Promise<void>,
+export const settleSettingsIpc = Effect.fn("Desktop.settleSettingsIpc")(function* (
+  shutdownSettings: Effect.Effect<void>,
   pendingIpc: Iterable<Promise<unknown>>,
-): Promise<void> {
-  await shutdownSettings();
-  await Promise.allSettled(pendingIpc);
-}
+) {
+  yield* shutdownSettings;
+  yield* Effect.promise(() => Promise.allSettled(pendingIpc)).pipe(Effect.uninterruptible);
+});
 
-/** Owns one native quit attempt, including cancellation and a failed-stop retry. */
+/** Owns the native quit fiber outside the runtime it must eventually dispose. */
 export function createAppQuitHandler(dependencies: {
-  readonly localOpenCode: () =>
-    | Pick<LocalOpenCodeService, "needsQuitConfirmation" | "shutdown">
-    | undefined;
+  readonly localOpenCode: Effect.Effect<Pick<
+    LocalOpenCode["Service"],
+    "needsQuitConfirmation" | "shutdown"
+  > | void>;
   readonly showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>;
-  readonly cleanup: () => Promise<void>;
+  readonly cleanup: Effect.Effect<void>;
   readonly quit: () => void;
 }) {
-  let quitting = false;
+  let attempt: Fiber.Fiber<unknown, unknown> | undefined;
   let complete = false;
+  const showMessageBox = (options: MessageBoxOptions) =>
+    Effect.tryPromise(() => dependencies.showMessageBox(options)).pipe(Effect.uninterruptible);
 
-  const finish = async (): Promise<void> => {
+  const finish = Effect.gen(function* () {
     let serverStopped = false;
-    try {
-      const local = dependencies.localOpenCode();
-      if (local?.needsQuitConfirmation()) {
-        const { response } = await dependencies.showMessageBox({
+    yield* Effect.gen(function* () {
+      const local = yield* dependencies.localOpenCode;
+      if (local !== undefined && (yield* local.needsQuitConfirmation)) {
+        const { response } = yield* showMessageBox({
           type: "warning",
           message: "Quit Ocui and stop built-in OpenCode?",
           detail: "Any work it is doing will be interrupted.",
@@ -39,14 +43,14 @@ export function createAppQuitHandler(dependencies: {
         });
         if (response !== 1) return;
       }
-      await local?.shutdown();
+      if (local !== undefined) yield* local.shutdown;
       serverStopped = true;
-      await dependencies.cleanup();
+      yield* dependencies.cleanup;
       complete = true;
       dependencies.quit();
-    } catch {
-      await dependencies
-        .showMessageBox({
+    }).pipe(
+      Effect.catchCause(() =>
+        showMessageBox({
           type: "error",
           message: serverStopped
             ? "Ocui could not finish closing."
@@ -56,21 +60,28 @@ export function createAppQuitHandler(dependencies: {
           defaultId: 0,
           cancelId: 0,
           noLink: true,
-        })
-        .catch(() => undefined);
-    } finally {
-      if (!complete) quitting = false;
-    }
-  };
+        }).pipe(Effect.ignore),
+      ),
+    );
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        attempt = undefined;
+      }),
+    ),
+  );
 
   return {
-    isQuitting: (): boolean => quitting,
+    isQuitting: (): boolean => complete || attempt !== undefined,
     beforeQuit: (event: { preventDefault(): void }): void => {
       if (complete) return;
       event.preventDefault();
-      if (quitting) return;
-      quitting = true;
-      void finish();
+      if (attempt !== undefined) return;
+      Effect.runFork(finish, {
+        onFiberStart: (fiber) => {
+          attempt = fiber;
+        },
+      });
     },
   };
 }

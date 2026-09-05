@@ -1,10 +1,10 @@
-# Effect application design
+# Effect application architecture
 
-High-level design for review. Based on main `f9554f8`, OpenCode `0.0.0-beta-18866` and Effect `4.0.0-rc.112`. This describes the intended architecture and the steps to reach it; it is not an implementation status report.
+The current worktree implements this ownership model with OpenCode `0.0.0-beta-18866`, Effect `4.0.0-rc.112` and `@effect/atom-solid` `4.0.0-rc.112`. The migration is implemented and verified; the ownership map records the final checks.
 
 ## Purpose and caller model
 
-Give application work and state clear owners, make resource lifetimes explicit, and preserve the current desktop and OpenCode behavior. Effect services own operations and resources; atoms expose application state; Solid renders and handles the DOM.
+Give application work and state clear owners, make resource lifetimes explicit, and preserve the current desktop and OpenCode behavior. Effect services own oc-ui workflows and resources; atoms expose oc-ui-owned application state. OpenCode helpers and its Solid store retain SDK-managed data and behavior. Solid also renders and handles the DOM.
 
 Callers express an action, without coordinating its internal steps. These are conceptual operations, not new IPC endpoints or final TypeScript signatures:
 
@@ -34,7 +34,7 @@ Renderer — one runtime and atom registry per window lifetime
 └── Connection: selected target, attempts and workspace lifetime
     └── Workspace: feature workflows and application state
         ├── Sessions, composer, forms, changes and local drafts
-        └── Existing SDK data store — retained during migration
+        └── OpenCode SDK helpers and Solid store — authoritative SDK state
 
 Solid views → dispatch application actions and subscribe to state
             → own focus, scrolling, layout and DOM behavior
@@ -54,17 +54,17 @@ These are responsibility boundaries, not a service or class for every item. Use 
 
 Application draft content belongs to Workspace; DOM editor mechanics belong to Solid. Atom projections and derived views do not become additional authoritative stores. No new disk persistence or cross-server draft retention is introduced.
 
-## Existing SDK store is application code
+## OpenCode helpers and store remain authoritative
 
-The SDK's Solid data store is **inside Workspace**. It currently owns cached server data, optimistic updates, acknowledgement, rollback and event reconciliation. Keeping it during migration is an explicit temporary exception to moving application state into Effect.
+The SDK's Solid data store is **inside Workspace**. OpenCode's helpers and store own cached server data, optimistic updates, acknowledgement, rollback and event reconciliation. Retaining them is part of the application architecture. Our migration changes oc-ui's workflows, state and resource lifetimes; it does not reimplement SDK responsibilities.
 
-Effect workflows call the required SDK helpers through a small local adapter. The UI reads the existing store directly through its established accessors; do not copy that data into atoms. Our new application state uses atoms and atom-solid. The adapter is an integration detail, not an independent application owner or a generic abstraction over the entire SDK.
+Effect workflows call the required SDK helpers through `WorkspaceOwner.request`, which forwards an AbortSignal where supported and waits for the underlying Promise to settle during interruption. The UI reads the existing store through its established accessors; SDK data is not copied into atoms. oc-ui-owned application state uses owner-mounted atoms and atom-solid. The adapter is an integration detail, not an independent application owner or a generic abstraction over the entire SDK.
 
-Give the store one explicit Solid lifecycle owner per connection, controlled by Workspace. Its mount/cleanup requirements must work independently of which panels subscribe. Preserve its event subscription and reconnect behavior while it remains authoritative; do not introduce a competing reconciliation stream.
+`connection.ts` creates a retained Solid root for each Workspace. That root constructs both `createConnectedRuntime` and `createWorkspaceModel`; `ServerProvider` supplies the existing runtime to views. Workspace scope cleanup waits for owned work before disposing the Solid root. Panel subscriptions do not own the SDK store or feature model. Open session-creation and deletion controllers also belong to that model; remounted dialogs subscribe to the same pending operation. SDK mount/cleanup hooks, event subscription and transport reconnection remain in use.
 
-Use the native Effect client for direct operations where the same behavior can be preserved. Keep operations that update the cache or perform optimistic changes on the existing SDK path until their replacement is verified. Replacing a Promise signature alone does not migrate data ownership.
+Direct SDK calls also run through the owned request boundary. Main uses Effect HttpClient for local health verification. Operations that update the SDK cache or perform optimistic changes stay on the SDK helper path; adopting a different client must not bypass those helpers or introduce a second owner of their state.
 
-Remove the temporary store only when an Effect replacement covers the required cache, optimistic admission, ordered sends, acknowledgement, rollback and event/reconnect behavior. Transfer each responsibility once, remove the previous owner, and keep the same visible behavior. The final design has application state and workflows owned by Effect, with Solid used for rendering and DOM behavior.
+Revisit the SDK boundary only if OpenCode ships suitable Effect-based helpers and stores. That would be a separate adoption decision, requiring parity for cache, optimistic admission, ordered sends, acknowledgement, rollback and event/reconnect behavior. Building local replacements is outside this migration.
 
 ## Lifetimes and important flows
 
@@ -72,9 +72,9 @@ Remove the temporary store only when an Effect replacement covers the required c
 
 **Change or forget.** Stop accepting mutations for the old workspace and cancel obsolete reads. Define pending-job cancellation and active-operation settlement for each workflow; leaving a workspace does not imply executing every queued mutation. Settle affected callers and retain resources needed by active I/O and cleanup before releasing them. Forget also clears the saved target and reports a persistence failure. The current IPC contract does not propagate renderer cancellation to main; any cancellation must be performed explicitly by its main-side owner. The built-in child stays running.
 
-**Feature work.** Capture the connection and session identity when accepting an action. Session changes, panel collapse and subscriber loss must not abandon it or apply its result to a new selection. Serialize conflicting mutations at their actual owner; do not route every unrelated action through one global queue. Wait for request settlement or protocol acknowledgement, not all subsequent server activity.
+**Feature work.** Capture the connection and session identity when accepting an action. Admit locally created sessions to the application catalog after acknowledgement or authoritative reconciliation, so dependent reads cannot race creation. Session changes, panel collapse and subscriber loss must not abandon it or apply its result to a new selection. Serialize conflicting mutations at their actual owner; do not route every unrelated action through one global queue. Wait for request settlement or protocol acknowledgement, not all subsequent server activity.
 
-**Reconnect or crash.** While the existing SDK store is retained, it owns transport reconnection and event reconciliation. Workspace owns application recovery order: refresh location, then session and selected-feature data. Initial setup failure returns to connection selection with an actionable error. A built-in process crash invalidates a selected local connection and requires explicit restart; it does not disturb a selected remote connection.
+**Reconnect or crash.** The OpenCode SDK owns transport reconnection and event reconciliation. Workspace owns application recovery order: refresh location, then session and selected-feature data. Initial setup failure returns to connection selection with an actionable error. A built-in process crash invalidates a selected local connection and requires explicit restart; it does not disturb a selected remote connection.
 
 **Quit.** Main owns one attempt: block new local connects during the attempt; confirm if a child is retained; stop the child and observe exit. Then close the renderer and invoke Settings shutdown: reject new jobs, discard pending jobs and settle their callers as canceled, request active-job cancellation, and await actual I/O and cleanup. Only then wait for remaining tracked IPC settlements, remove handlers and dispose services. Waiting for IPC before canceling its pending Settings jobs can deadlock. Cancel Quit leaves the server running and allows connects again; failed child termination keeps its owner available for another Quit and does not begin Settings shutdown. Preserve the current rule that local connects remain closed once child shutdown has started, even if stopping fails. Distinguish a child-stop failure from a later cleanup failure.
 
@@ -84,21 +84,24 @@ Closing the last macOS window may leave main and the child alive. Reopening crea
 
 - Validate untrusted IPC and external input with schemas. Keep Electron events, native dialogs, secure storage and unavoidable Promises at narrow adapters. Use the pinned Effect APIs and upstream types instead of inventing parallel models.
 - Represent expected failures with typed errors. Recover where an owner can retry safely or show a useful message; keep unexpected defects visible. Log failures and useful lifecycle transitions at their owner without credentials or duplicate reports.
-- Forward Effect's AbortSignal where supported. Interrupting a Promise wrapper alone does not establish that I/O stopped. A timeout requests cancellation or retains active ownership until actual settlement and cleanup. Keep uninterruptible regions limited to a concrete correctness requirement, and distinguish caller cancellation from worker-job interruption. Cancellation does not undo a mutation already applied. Retry only when the operation's contract makes it safe; keep pending, canceled and failed outcomes meaningful.
+- Forward Effect's AbortSignal where supported. Interrupting a Promise wrapper alone does not establish that I/O stopped. A timeout requests cancellation or retains active ownership until actual settlement and cleanup. Keep uninterruptible regions limited to a concrete correctness requirement, and distinguish caller cancellation from worker-job interruption. Cancellation does not undo a mutation already applied. This migration adds no automatic mutation retries. Keep existing explicit retry behavior and SDK transport recovery, with pending, canceled and failed outcomes distinct.
 - Preserve launch policy: app-specific config directory, persistent OpenCode database under its existing data root unless overridden, and upstream provider credentials. The temporary local HTTP password and saved remote password remain separate concerns.
 - Preserve the worker entrypoint, Node runtime, dependency staging and native/WASM assets. Keep OpenCode's existing server scope and cleanup rather than rebuilding its service graph in main.
 
 ## Migration and completion
 
-The first bounded slice is [Settings operation ordering](/Users/alex/.codex/worktrees/b7b2/oc-ui/docs/effect-settings-slice.md): use Queue for FIFO ordering and Scope for request fibers inside the existing service, discard pending jobs on shutdown, and remove main's separate queue.
+The implementation now covers the three migration stages. [Settings operation ordering](./effect-settings-slice.md) documents its FIFO and shutdown contract in detail. The [primitive inventory](./effect-primitives-review.md) records higher-level replacements and the explicit boundaries retained for required behavior.
 
-| Stage                 | Change                                                                                                                                                  | Proof needed before moving on                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 1. Main ownership     | Put process coordination, Settings ordering and Quit under the main runtime; retain thin Electron adapters.                                             | Shared startup, timeout cleanup, failed-stop retry, pending-job cancellation and active I/O settlement before disposal. |
-| 2. Renderer lifetime  | Move connection commands/state out of `App.tsx`; introduce the renderer runtime/registry and an explicitly owned Workspace with its existing SDK store. | Connect/change/forget, obsolete results, initial stream failure, remount and subscriber loss.                           |
-| 3. Feature workflows  | Move sessions/recovery, composer and selections, forms, changes and drafts in small slices.                                                             | Existing behavior, correct operation identity and concurrency, useful pending/error states.                             |
-| 4. SDK data ownership | Replace retained SDK responsibilities with verified Effect equivalents, then remove the adapter/store.                                                  | Cache, optimistic updates, rollback, acknowledgement, ordering and reconnect parity.                                    |
+| Area              | Current implementation                                                                                                                                                                                      | Verification still required for the combined change                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Main ownership    | One `ManagedRuntime` composes Settings and LocalOpenCode. Effect fibers own startup, stop and Quit; the utility process retains upstream server scope ownership.                                            | Shared startup, timeout cleanup, failed-stop retry, queued cancellation, native settlement and packaged lifecycle acceptance. |
+| Renderer lifetime | `createRenderer` owns one Connection service and atom registry per window. Workspace owns a child scope, retained Solid root, SDK runtime and feature model. App renders and dispatches connection actions. | Connect/change/forget, obsolete results, initial stream failure, view remount and subscriber loss.                            |
+| Feature workflows | Workspace-owned Effects and atoms cover sessions/recovery, composer and drafts, selections, forms, changes and session/project operations. SDK helpers and store remain authoritative for SDK behavior.     | Operation identity, ordering, cancellation, partial failure, draft preservation and actual Electron UI behavior.              |
 
-Each slice removes the application-state owner it replaces and narrows its lint exceptions. Add platform, testing or observability integrations only where they replace required local machinery. Use the existing root checks and tests; keep new regression tests focused on real failure modes. Renderer slices also require the actual Electron UI checks in AGENTS.md; lifecycle changes require packaged startup/reload/crash/Quit acceptance. Documentation alone does not satisfy those implementation gates.
+`workspace-owner.ts` captures the renderer runtime context and supplies child scopes, atom mounts and the Promise boundary; it does not create another runtime. Solid owns reactive projections, focus, scrolling, responsive layout and dialog mechanics. Existing application policies such as catalog pagination reconciliation, review draft revisions and exact-payload draft retry matching remain necessary; Effect replaces their lifetime machinery, not those policies.
 
-The [launcher investigation and source evidence](/Users/alex/.codex/worktrees/b7b2/oc-ui/docs/effect-ownership-map.md) record the current behavior that informed this design.
+The migration is complete when the scoped oc-ui responsibilities have moved to Effect and their superseded coordination is removed; retaining the SDK helpers and Solid store does not leave the migration incomplete.
+
+Each slice removes the oc-ui state or workflow owner it replaces and narrows its lint exceptions. Add platform, testing or observability integrations only where they replace required local machinery. Use the existing root checks and tests; keep new regression tests focused on real failure modes. Renderer slices also require the actual Electron UI checks in AGENTS.md; lifecycle changes require packaged startup/reload/crash/Quit acceptance. Documentation alone does not satisfy those implementation gates.
+
+The [ownership map and source evidence](./effect-ownership-map.md) distinguish the current implementation from historical verification.

@@ -2,7 +2,7 @@
 import { EventEmitter } from "node:events";
 
 import type { ServerProcess } from "@opencode-ai/server/process";
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type {
@@ -105,6 +105,9 @@ describe("OpenCode worker scope ownership", () => {
     await vi.waitFor(() => expect(exitProcess).toHaveBeenCalledExactlyOnceWith(0));
     expect(finalized).toHaveBeenCalledTimes(1);
     expect(signaled).toHaveBeenCalledTimes(1);
+    expect(signaled.mock.invocationCallOrder[0]).toBeLessThan(
+      finalized.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("remembers stop during asynchronous import preparation and never starts afterward", async () => {
@@ -125,13 +128,18 @@ describe("OpenCode worker scope ownership", () => {
     expect(mocks.start).not.toHaveBeenCalled();
   });
 
-  it("interrupts an unfinished boot and runs its scope finalizers once", async () => {
+  it("signals shutdown before waiting for unfinished boot and closes its scope once", async () => {
+    const stopped = Deferred.makeUnsafe<void>();
     const finalized = vi.fn<() => void>();
     mocks.start.mockImplementation((_options, lifecycle) =>
       Effect.gen(function* () {
         yield* Effect.addFinalizer(() => Effect.sync(finalized));
-        const cleanup = yield* lifecycle.onListen(address, Effect.void);
+        const cleanup = yield* lifecycle.onListen(
+          address,
+          Deferred.succeed(stopped, undefined).pipe(Effect.asVoid),
+        );
         yield* Effect.addFinalizer(() => cleanup);
+        yield* Deferred.await(stopped).pipe(Effect.uninterruptible);
         return yield* Effect.never;
       }),
     );
@@ -144,6 +152,40 @@ describe("OpenCode worker scope ownership", () => {
     expect(parent.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "fatal" }));
   });
 
+  it.each(["malformed", "duplicate"])(
+    "reports a %s command and stops unfinished boot cleanly",
+    async (command) => {
+      const stopped = Deferred.makeUnsafe<void>();
+      const finalized = vi.fn<() => void>();
+      mocks.start.mockImplementation((_options, lifecycle) =>
+        Effect.gen(function* () {
+          yield* Effect.addFinalizer(() => Effect.sync(finalized));
+          const cleanup = yield* lifecycle.onListen(
+            address,
+            Deferred.succeed(stopped, undefined).pipe(Effect.asVoid),
+          );
+          yield* Effect.addFinalizer(() => cleanup);
+          yield* Deferred.await(stopped).pipe(Effect.uninterruptible);
+          return yield* Effect.never;
+        }),
+      );
+      await import("./opencode-worker.ts");
+      parent.command(startCommand);
+      await vi.waitFor(() => expect(parent.postMessage).toHaveBeenCalled());
+      parent.emit("message", {
+        data: command === "duplicate" ? startCommand : { type: "start", password: "sensitive" },
+      });
+      await vi.waitFor(() => expect(exitProcess).toHaveBeenCalledExactlyOnceWith(0));
+      expect(parent.postMessage).toHaveBeenLastCalledWith({
+        type: "fatal",
+        message: "Built-in OpenCode failed.",
+      });
+      expect(parent.postMessage).toHaveBeenCalledTimes(2);
+      expect(finalized).toHaveBeenCalledTimes(1);
+      expect(mocks.start).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("reports only a sanitized boot failure and still closes the acquired scope", async () => {
     const finalized = vi.fn<() => void>();
     mocks.start.mockImplementation(() =>
@@ -154,22 +196,54 @@ describe("OpenCode worker scope ownership", () => {
     );
     await import("./opencode-worker.ts");
     parent.command(startCommand);
-    await vi.waitFor(() => expect(exitProcess).toHaveBeenCalledWith(0));
-    expect(parent.postMessage).toHaveBeenCalledExactlyOnceWith({
-      type: "fatal",
-      message: "Built-in OpenCode failed.",
-    });
+    await vi.waitFor(() =>
+      expect(parent.postMessage).toHaveBeenCalledExactlyOnceWith({
+        type: "fatal",
+        message: "Built-in OpenCode failed.",
+      }),
+    );
+    await vi.waitFor(() => expect(exitProcess).toHaveBeenCalledExactlyOnceWith(0));
     expect(finalized).toHaveBeenCalledTimes(1);
   });
 
-  it("does not claim a clean exit when scope cleanup fails", async () => {
-    const finalized = vi.fn<() => void>();
+  it("stops before receiving a start command", async () => {
+    await import("./opencode-worker.ts");
+    parent.command({ type: "stop" });
+    await vi.waitFor(() => expect(exitProcess).toHaveBeenCalledExactlyOnceWith(0));
+    parent.command(startCommand);
+    expect(mocks.configure).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("retains cleanup until it settles after SIGTERM", async () => {
+    const release = Deferred.makeUnsafe<void>();
+    const finalizing = vi.fn<() => void>();
     mocks.start.mockImplementation((_options, lifecycle) =>
       Effect.gen(function* () {
         yield* Effect.addFinalizer(() =>
-          Effect.sync(finalized).pipe(Effect.andThen(Effect.die("cleanup failed"))),
+          Effect.sync(finalizing).pipe(Effect.andThen(Deferred.await(release))),
         );
         const cleanup = yield* lifecycle.onListen(address, Effect.void);
+        yield* Effect.addFinalizer(() => cleanup);
+        return yield* Effect.never;
+      }),
+    );
+    await import("./opencode-worker.ts");
+    parent.command(startCommand);
+    await vi.waitFor(() => expect(parent.postMessage).toHaveBeenCalled());
+    process.emit("SIGTERM");
+    await vi.waitFor(() => expect(finalizing).toHaveBeenCalledTimes(1));
+    expect(exitProcess).not.toHaveBeenCalled();
+    Deferred.doneUnsafe(release, Effect.void);
+    await vi.waitFor(() => expect(exitProcess).toHaveBeenCalledExactlyOnceWith(0));
+  });
+
+  it("closes the server scope even when its shutdown signal fails", async () => {
+    const finalized = vi.fn<() => void>();
+    mocks.start.mockImplementation((_options, lifecycle) =>
+      Effect.gen(function* () {
+        yield* Effect.addFinalizer(() => Effect.sync(finalized));
+        const cleanup = yield* lifecycle.onListen(address, Effect.die("shutdown failed"));
         yield* Effect.addFinalizer(() => cleanup);
         return { address, shutdown: Effect.never };
       }),
@@ -187,4 +261,34 @@ describe("OpenCode worker scope ownership", () => {
     expect(finalized).toHaveBeenCalledTimes(1);
     expect(exitProcess).not.toHaveBeenCalled();
   });
+
+  it.each(["stop", "invalid"])(
+    "does not claim a clean exit when scope cleanup fails after %s",
+    async (command) => {
+      const finalized = vi.fn<() => void>();
+      mocks.start.mockImplementation((_options, lifecycle) =>
+        Effect.gen(function* () {
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(finalized).pipe(Effect.andThen(Effect.die("cleanup failed"))),
+          );
+          const cleanup = yield* lifecycle.onListen(address, Effect.void);
+          yield* Effect.addFinalizer(() => cleanup);
+          return { address, shutdown: Effect.never };
+        }),
+      );
+      await import("./opencode-worker.ts");
+      parent.command(startCommand);
+      await vi.waitFor(() => expect(parent.postMessage).toHaveBeenCalled());
+      if (command === "stop") parent.command({ type: "stop" });
+      else parent.command(startCommand);
+      await vi.waitFor(() =>
+        expect(parent.postMessage).toHaveBeenCalledWith({
+          type: "fatal",
+          message: "Built-in OpenCode failed.",
+        }),
+      );
+      expect(finalized).toHaveBeenCalledTimes(1);
+      expect(exitProcess).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -1,3 +1,4 @@
+import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 import type { FormAnswer, LocationRef } from "@opencode-ai/client";
 import { locationKey, type Data, type FormWithLocation } from "@opencode-ai/client/solid";
 import { createMemo, onCleanup, type Accessor } from "solid-js";
@@ -33,6 +34,7 @@ export type GlobalFormsController = {
 };
 
 export type CreateGlobalFormsInput = {
+  readonly effects: WorkspaceOwner;
   readonly runtime: {
     readonly data: GlobalFormsData;
   };
@@ -42,6 +44,7 @@ export type CreateGlobalFormsInput = {
 
 export function createGlobalForms(input: CreateGlobalFormsInput): GlobalFormsController {
   const controller = createFormController({
+    effects: input.effects,
     connected: input.connected,
     sessionID: () => GLOBAL_SESSION_ID,
     location: input.location,
@@ -53,7 +56,7 @@ export function createGlobalForms(input: CreateGlobalFormsInput): GlobalFormsCon
     if (event.data.form.sessionID !== GLOBAL_SESSION_ID) return;
     if (event.location && locationKey(event.location) !== locationKey(input.location)) return;
     input.runtime.data.session.form.invalidate(GLOBAL_SESSION_ID, input.location);
-    void controller.sync();
+    controller.startSync();
   });
 
   onCleanup(stopCreated);

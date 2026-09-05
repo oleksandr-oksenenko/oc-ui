@@ -1,10 +1,11 @@
 import { constants } from "node:fs";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { startScriptedProvider } from "./scripted-provider.mjs";
 
 const desktopRoot = fileURLToPath(new URL("../..", import.meta.url));
 const appBundlePath = join(desktopRoot, "dist", "mac-arm64", "Ocui.app");
@@ -22,11 +23,17 @@ const main = async () => {
     ]),
   );
   await Promise.all(Object.values(paths).map((path) => mkdir(path, { recursive: true })));
+  const provider = await startScriptedProvider();
   let runnerError;
   try {
-    await runWdio(paths);
+    const project = join(paths.app, "acceptance-project");
+    await mkdir(project, { recursive: true });
+    await writeFile(join(project, "opencode.json"), JSON.stringify(provider.config));
+    await runWdio(paths, provider.url);
   } catch (cause) {
     runnerError = cause;
+  } finally {
+    await provider.close();
   }
 
   // Tests record only PIDs observed through this app's own utility-process metrics.
@@ -91,7 +98,7 @@ const isAlive = (pid) => {
   }
 };
 
-const runWdio = (paths) =>
+const runWdio = (paths, providerUrl) =>
   new Promise((resolve, reject) => {
     const child = spawn("pnpm", ["run", "test:acceptance:mac:wdio"], {
       cwd: desktopRoot,
@@ -109,6 +116,7 @@ const runWdio = (paths) =>
         pnpm_config_verify_deps_before_run: "false",
         OCUI_E2E_APP_BINARY_PATH: appBinaryPath,
         OCUI_E2E_USER_DATA_PATH: paths.app,
+        OCUI_E2E_PROVIDER_URL: providerUrl,
       },
       stdio: "inherit",
     });

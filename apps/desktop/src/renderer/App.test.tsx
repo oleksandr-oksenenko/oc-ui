@@ -1,4 +1,9 @@
 import { render } from "solid-js/web";
+import { onCleanup } from "solid-js";
+import { RegistryContext } from "@effect/atom-solid";
+import { createRenderer } from "./connection.ts";
+import type { WorkspaceOwner } from "./workspace-owner.ts";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { deferred } from "./test/deferred.ts";
@@ -19,16 +24,38 @@ const verifyServer = vi.hoisted(() =>
 vi.mock("./opencode/index.ts", () => ({
   OpenCodeConnectionError: class extends Error {},
   ServerProvider: (props: { readonly children?: unknown }) => props.children,
-  verifyServer,
+  verifyServer: (input: { serverUrl: string; password: string }) =>
+    Effect.tryPromise((signal) => verifyServer(input, signal)),
+}));
+
+const handshake = vi.hoisted(() => ({
+  connect: () => {},
+  fail: (_cause: Error) => {},
+  disposed: vi.fn<() => void>(),
+}));
+vi.mock("./opencode/runtime.ts", () => ({
+  createConnectedRuntime: (input: { effects: WorkspaceOwner }) => {
+    onCleanup(handshake.disposed);
+    return {
+      effects: input.effects,
+      ready: input.effects.runPromise(
+        Effect.callback<void, Error>((resume) => {
+          handshake.connect = () => resume(Effect.void);
+          handshake.fail = (cause: Error) => resume(Effect.fail(cause));
+        }),
+      ),
+    };
+  },
+}));
+
+vi.mock("./components/App/ConnectedApp/createWorkspace.ts", () => ({
+  createWorkspaceModel: () => ({}),
 }));
 
 vi.mock("./components/App/ConnectedApp.tsx", () => ({
-  ConnectedApp: (props: {
-    readonly onConnected: () => void;
-    readonly onChangeServer: () => void;
-  }) => (
+  ConnectedApp: (props: { readonly onChangeServer: () => void }) => (
     <>
-      <button type="button" data-testid="connected" onClick={props.onConnected}>
+      <button type="button" data-testid="connected" onClick={() => handshake.connect()}>
         Connected
       </button>
       <button type="button" data-testid="change-server" onClick={props.onChangeServer}>
@@ -41,8 +68,7 @@ vi.mock("./components/App/ConnectedApp.tsx", () => ({
 import { App } from "./App.tsx";
 
 const flush = async (): Promise<void> => {
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
 const makeDesktop = (options: {
@@ -73,12 +99,29 @@ const mount = (desktop: DesktopApi) => {
   Object.defineProperty(window, "desktop", { configurable: true, value: desktop });
   const host = document.createElement("div");
   document.body.append(host);
-  const dispose = render(() => <App />, host);
-  return { host, dispose };
+  const renderer = createRenderer(desktop);
+  const disposeView = render(
+    () => (
+      <RegistryContext.Provider value={renderer.registry}>
+        <App renderer={renderer} />
+      </RegistryContext.Provider>
+    ),
+    host,
+  );
+  return {
+    host,
+    renderer,
+    disposeView,
+    dispose: () => {
+      disposeView();
+      void renderer.dispose();
+    },
+  };
 };
 
 afterEach(() => {
   verifyServer.mockReset();
+  handshake.disposed.mockClear();
   document.body.replaceChildren();
 });
 
@@ -308,7 +351,12 @@ describe("App target startup", () => {
         return () => undefined;
       },
     });
-    verifyServer.mockImplementation(() => new Promise(() => undefined));
+    verifyServer.mockImplementation(
+      (_input, signal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        }),
+    );
     const { host, dispose } = mount(desktop);
     await flush();
     host.querySelector<HTMLButtonElement>(".connection-form-submit")?.click();
@@ -413,5 +461,119 @@ describe("App target startup", () => {
     });
     await flush();
     expect(verifyServer).not.toHaveBeenCalled();
+  });
+  it("keeps the SDK root when the workspace view is removed", async () => {
+    const desktop = makeDesktop({
+      load: () =>
+        Promise.resolve({
+          kind: "remote",
+          serverUrl: "http://remote.test",
+          password: "secret",
+        }),
+    });
+    verifyServer.mockResolvedValue({ serverUrl: "http://remote.test" });
+    const { renderer, disposeView, host } = mount(desktop);
+    await flush();
+    const model = renderer.registry.get(renderer.connection.state).workspace?.model;
+    disposeView();
+    expect(handshake.disposed).not.toHaveBeenCalled();
+    handshake.connect();
+    await flush();
+    expect(desktop.target.saveRemote).toHaveBeenCalledOnce();
+    const disposeRemount = render(
+      () => (
+        <RegistryContext.Provider value={renderer.registry}>
+          <App renderer={renderer} />
+        </RegistryContext.Provider>
+      ),
+      host,
+    );
+    expect(renderer.registry.get(renderer.connection.state).workspace?.model).toBe(model);
+    expect(host.querySelector('[data-testid="connected"]')).not.toBeNull();
+    disposeRemount();
+    await renderer.dispose();
+    expect(handshake.disposed).toHaveBeenCalledOnce();
+  });
+
+  it("returns to selection after initial stream or location readiness fails", async () => {
+    const desktop = makeDesktop({
+      load: () =>
+        Promise.resolve({
+          kind: "remote",
+          serverUrl: "http://remote.test",
+          password: "secret",
+        }),
+    });
+    verifyServer.mockResolvedValue({ serverUrl: "http://remote.test" });
+    const { host, dispose } = mount(desktop);
+    await flush();
+    handshake.fail(new Error("readiness failed"));
+    await flush();
+    expect(host.querySelector('[data-testid="connected"]')).toBeNull();
+    expect(host.textContent).toContain("The OpenCode server connection could not be set up");
+    expect(desktop.target.saveRemote).not.toHaveBeenCalled();
+    expect(handshake.disposed).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it("retains accepted local IPC until settlement when the renderer closes", async () => {
+    const local = deferred<LocalOpenCodeConnectResult>();
+    const desktop = makeDesktop({
+      load: () => Promise.resolve(undefined),
+      connectLocal: () => local.promise,
+    });
+    const { renderer, disposeView } = mount(desktop);
+    await flush();
+    renderer.connection.connect("local");
+    disposeView();
+    let closed = false;
+    const closing = renderer.dispose().then(() => {
+      closed = true;
+      return undefined;
+    });
+    await flush();
+    expect(closed).toBe(false);
+    local.resolve({
+      status: "connected",
+      connection: { serverUrl: "http://127.0.0.1:4096", password: "secret" },
+    });
+    await closing;
+    expect(verifyServer).not.toHaveBeenCalled();
+  });
+  it("settles workspace cleanup before the latest replacement can verify", async () => {
+    const desktop = makeDesktop({
+      load: () =>
+        Promise.resolve({
+          kind: "remote",
+          serverUrl: "http://first.test",
+          password: "secret",
+        }),
+    });
+    verifyServer.mockResolvedValue({ serverUrl: "http://first.test" });
+    const { renderer, dispose } = mount(desktop);
+    await flush();
+    handshake.connect();
+    await flush();
+    const workspace = renderer.registry.get(renderer.connection.state).workspace!;
+    const helper = deferred();
+    const pending = workspace.runtime.effects
+      .runPromise(workspace.runtime.effects.request(() => helper.promise))
+      .catch(() => undefined);
+    renderer.connection.changeServer();
+    renderer.connection.connect("remote", { serverUrl: "http://second.test", password: "" });
+    renderer.connection.connect("remote", { serverUrl: "http://third.test", password: "" });
+    await flush();
+    expect(verifyServer).toHaveBeenCalledTimes(1);
+    expect(handshake.disposed).not.toHaveBeenCalled();
+    helper.resolve();
+    await pending;
+    await flush();
+    expect(verifyServer).toHaveBeenCalledTimes(2);
+    expect(verifyServer).toHaveBeenLastCalledWith(
+      { serverUrl: "http://third.test", password: "" },
+      expect.any(AbortSignal),
+    );
+    expect(handshake.disposed).toHaveBeenCalledOnce();
+    dispose();
   });
 });

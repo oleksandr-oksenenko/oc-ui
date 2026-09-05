@@ -1,3 +1,7 @@
+import { useAtomValue } from "@effect/atom-solid";
+import { Effect } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../workspace-owner.ts";
 import type { Data } from "@opencode-ai/client/solid";
 import type {
   LocationRef,
@@ -6,7 +10,7 @@ import type {
   OpenCodeClient,
   SessionInfo,
 } from "@opencode-ai/client";
-import { createMemo, createSignal } from "solid-js";
+import { createMemo } from "solid-js";
 
 type ModelSelectionChoice = {
   readonly id: string;
@@ -30,6 +34,7 @@ export type ModelSelection = {
 };
 
 type ModelSelectionInput = {
+  readonly effects: WorkspaceOwner;
   readonly api: {
     readonly model: Pick<OpenCodeClient["model"], "default">;
     readonly session: Pick<OpenCodeClient["session"], "switchModel">;
@@ -46,15 +51,19 @@ type ModelSelectionInput = {
 
 /** Owns the server-backed model and variant selection policy for the selected session. */
 export function createModelSelection(input: ModelSelectionInput): ModelSelection {
-  const [serverDefault, setServerDefault] = createSignal<ModelInfo>();
-  const [state, setState] = createSignal<ModelSelectionState>("loading");
-  const [loadError, setLoadError] = createSignal<string>();
-  const [switchError, setSwitchError] = createSignal<{
-    readonly sessionID: string;
-    readonly message: string;
-  }>();
-  const [switchingIDs, setSwitchingIDs] = createSignal<ReadonlySet<string>>(new Set());
-  let inFlight: Promise<void> | undefined;
+  const { effects } = input;
+  const status = Atom.make<{
+    state: ModelSelectionState;
+    serverDefault?: ModelInfo;
+    loadError?: string;
+    switchError?: { sessionID: string; message: string };
+    switchingIDs: ReadonlySet<string>;
+  }>({ state: "loading", switchingIDs: new Set<string>() });
+  effects.mount(status);
+  const current = useAtomValue(() => status);
+  const update = (patch: Partial<Atom.Type<typeof status>>) => {
+    effects.registry.set(status, { ...effects.registry.get(status), ...patch });
+  };
 
   const models = createMemo(() =>
     (input.data.location.model.list(input.defaultLocation) ?? []).filter((model) => model.enabled),
@@ -69,7 +78,7 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
   const selectedModel = createMemo(() => {
     const sessionModel = input.selectedSession()?.model;
     if (sessionModel) return models().find((model) => sameModel(model, sessionModel));
-    const fallback = serverDefault();
+    const fallback = current().serverDefault;
     return fallback?.enabled ? models().find((model) => sameModel(model, fallback)) : undefined;
   });
   const selectedModelID = createMemo(() => {
@@ -87,77 +96,90 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
   });
   const switching = createMemo(() => {
     const sessionID = input.selectedSession()?.id;
-    return sessionID !== undefined && switchingIDs().has(sessionID);
+    return sessionID !== undefined && current().switchingIDs.has(sessionID);
   });
   const error = createMemo(() => {
-    if (state() === "failed") return loadError();
-    const sessionID = input.selectedSession()?.id;
-    const failure = switchError();
-    return sessionID !== undefined && failure?.sessionID === sessionID
-      ? failure.message
+    const value = current();
+    if (value.state === "failed") return value.loadError;
+    return value.switchError?.sessionID === input.selectedSession()?.id
+      ? value.switchError?.message
       : undefined;
   });
 
-  async function sync(): Promise<void> {
-    if (inFlight) return inFlight;
-    const run = (async () => {
-      setState("loading");
-      setLoadError(undefined);
-      try {
-        const location = input.defaultLocation;
-        input.data.location.model.invalidate(location);
-        const [, fallback] = await Promise.all([
-          input.data.location.model.sync(location),
-          input.api.model.default({ location }),
-        ]);
-        setServerDefault(fallback.data ?? undefined);
-        setState("ready");
-      } catch (cause) {
-        setServerDefault(undefined);
-        setState("failed");
-        setLoadError("Models could not be loaded. Check the connection and try again.");
-        throw cause;
-      } finally {
-        inFlight = undefined;
-      }
-    })();
-    inFlight = run;
-    return run;
-  }
+  const refresh = Effect.fn("modelSelection.refresh")(function* () {
+    update({ state: "loading", loadError: undefined });
+    const location = input.defaultLocation;
+    input.data.location.model.invalidate(location);
+    const [, fallback] = yield* Effect.all(
+      [
+        effects.request(() => input.data.location.model.sync(location)),
+        effects.request((signal) => input.api.model.default({ location }, { signal })),
+      ],
+      { concurrency: "unbounded" },
+    ).pipe(
+      Effect.tapError(() =>
+        Effect.sync(() =>
+          update({
+            serverDefault: undefined,
+            state: "failed",
+            loadError: "Models could not be loaded. Check the connection and try again.",
+          }),
+        ),
+      ),
+    );
+    update({ serverDefault: fallback.data ?? undefined, state: "ready" });
+  });
+  const sharedRefresh = effects.runSync(Effect.cachedWithTTL(refresh(), 0));
+  const sync = (): Promise<void> => effects.runPromise(sharedRefresh);
 
-  async function switchSelection(model: ModelRef, failureMessage: string): Promise<void> {
+  const switchSelection = Effect.fn("modelSelection.switch")(function* (
+    model: ModelRef,
+    failureMessage: string,
+  ) {
     const session = input.selectedSession();
-    if (!session || switchingIDs().has(session.id)) return;
-
-    setSwitchError(undefined);
-    setSwitchingIDs((current) => new Set([...current, session.id]));
-    try {
-      try {
-        await input.api.session.switchModel({ sessionID: session.id, model });
-      } catch {
-        setSwitchError({ sessionID: session.id, message: failureMessage });
-        return;
-      }
-
-      try {
-        await input.data.session.sync(session.id);
-      } catch {
-        setSwitchError({
-          sessionID: session.id,
-          message: "The selection changed, but its current value could not be refreshed.",
-        });
-      }
-    } finally {
-      setSwitchingIDs((current) => {
-        const next = new Set(current);
-        next.delete(session.id);
-        return next;
-      });
-    }
-  }
+    if (!session || effects.registry.get(status).switchingIDs.has(session.id)) return;
+    update({
+      switchError: undefined,
+      switchingIDs: new Set(effects.registry.get(status).switchingIDs).add(session.id),
+    });
+    const report = (message: string) => update({ switchError: { sessionID: session.id, message } });
+    yield* Effect.gen(function* () {
+      const switched = yield* effects
+        .request((signal) =>
+          input.api.session.switchModel({ sessionID: session.id, model }, { signal }),
+        )
+        .pipe(
+          Effect.match({
+            onSuccess: () => true,
+            onFailure: () => {
+              report(failureMessage);
+              return false;
+            },
+          }),
+        );
+      if (!switched) return;
+      yield* effects
+        .request(() => input.data.session.sync(session.id))
+        .pipe(
+          Effect.catch(() =>
+            Effect.sync(() =>
+              report("The selection changed, but its current value could not be refreshed."),
+            ),
+          ),
+        );
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          const next = new Set(effects.registry.get(status).switchingIDs);
+          next.delete(session.id);
+          update({ switchingIDs: next });
+        }),
+      ),
+    );
+  });
 
   return {
-    state,
+    state: () => current().state,
     error,
     switching,
     models: choices,
@@ -165,20 +187,25 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
     variants,
     selectedVariantID,
     sync,
-    selectModel: async (choiceID) => {
+    selectModel: (choiceID) => {
       const model = models().find((candidate) => modelChoiceID(candidate) === choiceID);
-      if (!model) return;
-      await switchSelection(
-        { id: model.id, providerID: model.providerID },
-        "The model could not be changed. Try again.",
+      if (!model) return Promise.resolve();
+      return effects.runPromise(
+        switchSelection(
+          { id: model.id, providerID: model.providerID },
+          "The model could not be changed. Try again.",
+        ),
       );
     },
-    selectVariant: async (variantID) => {
+    selectVariant: (variantID) => {
       const model = selectedModel();
-      if (!model || !variants().some((variant) => variant.id === variantID)) return;
-      await switchSelection(
-        { id: model.id, providerID: model.providerID, variant: variantID },
-        "The variant could not be changed. Try again.",
+      if (!model || !variants().some((variant) => variant.id === variantID))
+        return Promise.resolve();
+      return effects.runPromise(
+        switchSelection(
+          { id: model.id, providerID: model.providerID, variant: variantID },
+          "The variant could not be changed. Try again.",
+        ),
       );
     },
   };

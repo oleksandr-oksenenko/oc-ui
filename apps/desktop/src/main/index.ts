@@ -6,16 +6,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { NodePath } from "@effect/platform-node";
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session } from "electron";
 import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electron";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Context, Effect, Layer, ManagedRuntime } from "effect";
 
 import type { SaveTargetInput } from "../shared/desktop-api.ts";
 import { IPC_CHANNELS, parseSaveTargetInput } from "../shared/desktop-api.ts";
-import {
-  createLocalOpenCodeService,
-  LocalOpenCodeUnavailableError,
-  type LocalOpenCodeService,
-} from "./local-opencode.ts";
-import type { SettingsError } from "./settings.ts";
+import { LocalOpenCode, LocalOpenCodeUnavailableError } from "./local-opencode.ts";
 import { settingsLayer, Settings } from "./settings.ts";
 import { settingsFileSystemLayer } from "./settings-file-system.ts";
 import { createAppQuitHandler, settleSettingsIpc } from "./shutdown.ts";
@@ -47,39 +42,44 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-type DesktopRuntime = ManagedRuntime.ManagedRuntime<Settings, never>;
+type DesktopRuntime = ManagedRuntime.ManagedRuntime<Settings | LocalOpenCode, never>;
 
 let mainWindow: BrowserWindow | undefined;
 let desktopRuntime: DesktopRuntime | undefined;
-let localOpenCode: LocalOpenCodeService | undefined;
 let removeIpcHandlers: (() => void) | undefined;
 let removeLocalOpenCodeUnavailableListener: (() => void) | undefined;
 let rendererProtocolInstalled = false;
 const pendingIpc = new Set<Promise<unknown>>();
 
 const quitHandler = createAppQuitHandler({
-  localOpenCode: () => localOpenCode,
+  localOpenCode: Effect.suspend(() =>
+    desktopRuntime === undefined
+      ? Effect.void
+      : Effect.map(desktopRuntime.contextEffect, Context.get(LocalOpenCode)),
+  ),
   // Omitting a BrowserWindow makes this an app-modal native dialog.
   showMessageBox: (options) => dialog.showMessageBox(options),
-  cleanup: async () => {
+  cleanup: Effect.gen(function* () {
     // Keep handlers and settings alive until the renderer can no longer make
     // requests and every already accepted request has settled.
     mainWindow?.destroy();
     mainWindow = undefined;
-    await settleSettingsIpc(
-      () =>
-        desktopRuntime?.runPromise(Effect.flatMap(Settings, (service) => service.shutdown)) ??
-        Promise.resolve(),
+    const runtime = desktopRuntime;
+    yield* settleSettingsIpc(
+      runtime === undefined
+        ? Effect.void
+        : Effect.flatMap(
+            runtime.contextEffect,
+            (context) => Context.get(context, Settings).shutdown,
+          ),
       pendingIpc,
     );
     removeIpcHandlers?.();
     removeLocalOpenCodeUnavailableListener?.();
     removeLocalOpenCodeUnavailableListener = undefined;
-    localOpenCode = undefined;
-    const runtime = desktopRuntime;
     desktopRuntime = undefined;
-    await runtime?.dispose();
-  },
+    if (runtime !== undefined) yield* runtime.disposeEffect;
+  }),
   quit: () => app.quit(),
 });
 
@@ -101,17 +101,11 @@ const resolveDesktopRuntimeEnvironment = (): DesktopRuntimeEnvironment => {
   };
 };
 
-const runSettings = <A>(
-  operation: (service: Settings["Service"]) => Effect.Effect<A, SettingsError>,
-): Promise<A> => {
+const runIpc = <A, E>(operation: Effect.Effect<A, E, Settings | LocalOpenCode>): Promise<A> => {
   if (desktopRuntime === undefined) {
     return Promise.reject(new Error("Desktop services are not ready"));
   }
-  return desktopRuntime.runPromise(Effect.flatMap(Settings, operation));
-};
-
-const trackIpc = <A>(operation: () => Promise<A>): Promise<A> => {
-  const result = operation();
+  const result = desktopRuntime.runPromise(operation);
   pendingIpc.add(result);
   void result.then(
     () => pendingIpc.delete(result),
@@ -137,7 +131,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("target.load does not accept arguments"));
     }
-    return trackIpc(() => runSettings((service) => service.load));
+    return runIpc(Effect.flatMap(Settings, (service) => service.load));
   });
 
   ipcMain.handle(IPC_CHANNELS.targetSave, (event, rawInput) => {
@@ -149,7 +143,7 @@ const installIpcHandlers = (): void => {
       return Promise.reject(new TypeError("invalid OpenCode target"));
     }
 
-    return trackIpc(() => runSettings((service) => service.save(input)));
+    return runIpc(Effect.flatMap(Settings, (service) => service.save(input)));
   });
 
   ipcMain.handle(IPC_CHANNELS.targetClear, (event, ...args: unknown[]) => {
@@ -157,7 +151,7 @@ const installIpcHandlers = (): void => {
     if (args.length !== 0) {
       return Promise.reject(new TypeError("target.clear does not accept arguments"));
     }
-    return trackIpc(() => runSettings((service) => service.clear));
+    return runIpc(Effect.flatMap(Settings, (service) => service.clear));
   });
 
   ipcMain.handle(IPC_CHANNELS.localOpenCodeConnect, (event, ...args: unknown[]) => {
@@ -168,21 +162,23 @@ const installIpcHandlers = (): void => {
     if (quitHandler.isQuitting()) {
       return { status: "failed" as const, message: "Ocui is closing. Cancel Quit to connect." };
     }
-    const service = localOpenCode;
-    if (service === undefined) {
+    if (desktopRuntime === undefined) {
       return { status: "failed" as const, message: "Desktop services are not ready." };
     }
-    return trackIpc(async () => {
-      try {
-        const connection = await service.connect();
-        return { status: "connected" as const, connection };
-      } catch (cause) {
-        const error = Schema.is(LocalOpenCodeUnavailableError)(cause)
-          ? cause
-          : LocalOpenCodeUnavailableError.fromReason("start-failed");
-        return { status: "failed" as const, message: error.message };
-      }
-    });
+    return runIpc(
+      Effect.flatMap(LocalOpenCode, (service) => service.connect).pipe(
+        Effect.map((connection) => ({ status: "connected" as const, connection })),
+        Effect.catchTag("LocalOpenCodeUnavailableError", (error) =>
+          Effect.succeed({ status: "failed" as const, message: error.message }),
+        ),
+        Effect.catchDefect(() =>
+          Effect.succeed({
+            status: "failed" as const,
+            message: LocalOpenCodeUnavailableError.fromReason("start-failed").message,
+          }),
+        ),
+      ),
+    );
   });
 
   removeIpcHandlers = () => {
@@ -322,17 +318,20 @@ const start = async (): Promise<void> => {
   if (quitHandler.isQuitting()) return;
   configurePermissions();
   desktopRuntime = ManagedRuntime.make(
-    settingsLayer(app.getPath("userData"), safeStorage).pipe(
-      Layer.provide(Layer.mergeAll(NodePath.layer, settingsFileSystemLayer())),
+    Layer.merge(
+      settingsLayer(app.getPath("userData"), safeStorage).pipe(
+        Layer.provide(Layer.mergeAll(NodePath.layer, settingsFileSystemLayer())),
+      ),
+      LocalOpenCode.layer({
+        userDataPath: app.getPath("userData"),
+        workerPath: resolveDesktopRuntimeEnvironment().workerPath,
+      }),
     ),
   );
-  localOpenCode = createLocalOpenCodeService({
-    userDataPath: app.getPath("userData"),
-    workerPath: resolveDesktopRuntimeEnvironment().workerPath,
-  });
-  removeLocalOpenCodeUnavailableListener = localOpenCode.onUnavailable(
-    forwardLocalOpenCodeUnavailable,
+  removeLocalOpenCodeUnavailableListener = await desktopRuntime.runPromise(
+    Effect.map(LocalOpenCode, (service) => service.onUnavailable(forwardLocalOpenCodeUnavailable)),
   );
+  if (quitHandler.isQuitting()) return;
   installIpcHandlers();
   await createMainWindow();
 

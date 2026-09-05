@@ -1,8 +1,13 @@
+import { useAtomValue } from "@effect/atom-solid";
+import { Cause, Effect, Fiber } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 import type { Data } from "@opencode-ai/client/solid";
 import type { OpenCodeClient, SessionInfo } from "@opencode-ai/client";
-import { createEffect, createMemo, createSignal, on, onCleanup, type Accessor } from "solid-js";
+import { createEffect, createMemo, on, onCleanup, type Accessor } from "solid-js";
 
 type SessionAgentSelectionInput = {
+  readonly effects: WorkspaceOwner;
   readonly api: {
     readonly session: Pick<OpenCodeClient["session"], "switchAgent">;
   };
@@ -37,30 +42,32 @@ const LOAD_FAILURE_MESSAGE = "Agents could not be loaded. Check the connection a
 const SWITCH_FAILURE_MESSAGE = "The agent could not be changed. Try again.";
 const SYNC_FAILURE_MESSAGE = "The agent changed, but its current value could not be refreshed.";
 
-/** Owns the location-scoped agent catalog and selected session agent. */
+/** Owns loading and mutation workflows for SDK-backed agent selection. */
 export function createSessionAgentSelection(
   input: SessionAgentSelectionInput,
 ): SessionAgentSelectionController {
-  const [state, setState] = createSignal<SessionAgentSelectionState>("loading");
-  const [loadError, setLoadError] = createSignal<string>();
-  const [switchError, setSwitchError] = createSignal<{
-    readonly sessionID: string;
-    readonly selection: number;
-    readonly message: string;
-  }>();
-  const [switchingIDs, setSwitchingIDs] = createSignal<ReadonlySet<string>>(new Set());
-  let selection = 0;
-  let loadRun = 0;
-  let alive = true;
-
+  const { effects } = input;
+  const status = Atom.make<{
+    state: SessionAgentSelectionState;
+    loadError?: string;
+    switchError?: { sessionID: string; message: string };
+    switchingIDs: ReadonlySet<string>;
+  }>({ state: "loading", switchingIDs: new Set<string>() });
+  effects.mount(status);
+  const current = useAtomValue(() => status);
+  const state = createMemo(() => current().state);
+  const update = (patch: Partial<Atom.Type<typeof status>>) => {
+    effects.registry.set(status, { ...effects.registry.get(status), ...patch });
+  };
+  const read = effects.latest();
+  let selection: object | undefined = {};
   onCleanup(() => {
-    alive = false;
-    selection += 1;
-    loadRun += 1;
+    selection = undefined;
+    read.cancel();
   });
 
   const visibleAgents = createMemo(() => {
-    void state();
+    state();
     const session = input.selectedSession();
     return (
       (session ? input.data.location.agent.list(session.location) : undefined)?.filter(
@@ -74,51 +81,44 @@ export function createSessionAgentSelection(
   const selectedAgentID = createMemo(() => input.selectedSession()?.agent);
   const switching = createMemo(() => {
     const sessionID = input.selectedSession()?.id;
-    return sessionID !== undefined && switchingIDs().has(sessionID);
+    return sessionID !== undefined && current().switchingIDs.has(sessionID);
   });
   const error = createMemo(() => {
-    if (state() === "failed") return loadError();
-    const sessionID = input.selectedSession()?.id;
-    const failure = switchError();
-    return sessionID !== undefined &&
-      failure?.sessionID === sessionID &&
-      failure.selection === selection
-      ? failure.message
+    const value = current();
+    if (value.state === "failed") return value.loadError;
+    return value.switchError?.sessionID === input.selectedSession()?.id
+      ? value.switchError?.message
       : undefined;
   });
 
-  const isSelected = (sessionID: string, run: number): boolean =>
-    alive && run === selection && input.connected() && input.selectedSession()?.id === sessionID;
-
-  const load = async (session: SessionInfo, run: number): Promise<void> => {
-    try {
-      await input.data.location.agent.sync(session.location);
-      if (!alive || run !== loadRun || !input.connected()) return;
-      setState("ready");
-    } catch {
-      if (!alive || run !== loadRun || !input.connected()) return;
-      setState("failed");
-      setLoadError(LOAD_FAILURE_MESSAGE);
-    }
-  };
-
-  const sync = async (): Promise<void> => {
+  const refresh = Effect.fn("agentSelection.refresh")(function* () {
     const session = input.selectedSession();
-    const run = ++loadRun;
-    setLoadError(undefined);
-
+    update({ loadError: undefined });
     if (!session) {
-      setState("ready");
+      update({ state: "ready" });
       return;
     }
-
     if (!input.connected()) {
-      setState("failed");
+      update({ state: "failed" });
       return;
     }
-    setState("loading");
-    await load(session, run);
-  };
+    update({ state: "loading" });
+    yield* effects
+      .request(() => input.data.location.agent.sync(session.location))
+      .pipe(
+        Effect.match({
+          onSuccess: () => update({ state: "ready" }),
+          onFailure: () => update({ state: "failed", loadError: LOAD_FAILURE_MESSAGE }),
+        }),
+      );
+  });
+  const startRefresh = () => read.run(selection ? refresh() : Effect.void);
+  const sync = (): Promise<void> =>
+    effects.runPromise(
+      Fiber.join(startRefresh()).pipe(
+        Effect.catchCauseIf(Cause.hasInterruptsOnly, () => Effect.void),
+      ),
+    );
 
   const selectedContext = createMemo(() => {
     const session = input.selectedSession();
@@ -133,55 +133,77 @@ export function createSessionAgentSelection(
 
   createEffect(
     on(selectedContext, () => {
-      selection += 1;
-      setSwitchError(undefined);
-      void sync();
+      selection = {};
+      update({ switchError: undefined });
+      startRefresh();
+    }),
+  );
+  createEffect(
+    on(input.connected, (connected) => {
+      if (!connected) read.cancel();
     }),
   );
 
-  const selectAgent = async (agentID: string): Promise<void> => {
+  const selectAgent = Effect.fn("agentSelection.select")(function* (agentID: string) {
     const session = input.selectedSession();
     const agent = visibleAgents().find((candidate) => candidate.id === agentID);
-    if (!session || !agent || switchingIDs().has(session.id)) return;
-
+    const initiatingSelection = selection;
+    if (
+      !initiatingSelection ||
+      !session ||
+      !agent ||
+      effects.registry.get(status).switchingIDs.has(session.id)
+    )
+      return;
     const sessionID = session.id;
-    const switchSelection = selection;
-    setSwitchError(undefined);
-    setSwitchingIDs((current) => new Set(current).add(sessionID));
-    try {
-      try {
-        await input.api.session.switchAgent({ sessionID, agent: agent.id });
-      } catch {
-        if (isSelected(sessionID, switchSelection)) {
-          setSwitchError({
-            sessionID,
-            selection: switchSelection,
-            message: SWITCH_FAILURE_MESSAGE,
-          });
-        }
-        return;
+    update({
+      switchError: undefined,
+      switchingIDs: new Set(effects.registry.get(status).switchingIDs).add(sessionID),
+    });
+    const report = (message: string) => {
+      if (selection === initiatingSelection && input.connected()) {
+        update({ switchError: { sessionID, message } });
       }
+    };
+    yield* Effect.gen(function* () {
+      const switched = yield* effects
+        .request((signal) =>
+          input.api.session.switchAgent({ sessionID, agent: agent.id }, { signal }),
+        )
+        .pipe(
+          Effect.match({
+            onSuccess: () => true,
+            onFailure: () => {
+              report(SWITCH_FAILURE_MESSAGE);
+              return false;
+            },
+          }),
+        );
+      if (!switched) return;
+      yield* effects
+        .request(() => {
+          input.data.session.invalidate(sessionID);
+          return input.data.session.sync(sessionID);
+        })
+        .pipe(Effect.catch(() => Effect.sync(() => report(SYNC_FAILURE_MESSAGE))));
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          const next = new Set(effects.registry.get(status).switchingIDs);
+          next.delete(sessionID);
+          update({ switchingIDs: next });
+        }),
+      ),
+    );
+  });
 
-      try {
-        input.data.session.invalidate(sessionID);
-        await input.data.session.sync(sessionID);
-      } catch {
-        if (isSelected(sessionID, switchSelection)) {
-          setSwitchError({
-            sessionID,
-            selection: switchSelection,
-            message: SYNC_FAILURE_MESSAGE,
-          });
-        }
-      }
-    } finally {
-      setSwitchingIDs((current) => {
-        const next = new Set(current);
-        next.delete(sessionID);
-        return next;
-      });
-    }
+  return {
+    state,
+    error,
+    switching,
+    agents,
+    selectedAgentID,
+    sync,
+    selectAgent: (agentID) => effects.runPromise(selectAgent(agentID)),
   };
-
-  return { state, error, switching, agents, selectedAgentID, sync, selectAgent };
 }

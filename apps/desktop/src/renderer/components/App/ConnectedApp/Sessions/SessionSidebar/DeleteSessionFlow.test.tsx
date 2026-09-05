@@ -1,3 +1,7 @@
+import { Effect, Exit, Scope } from "effect";
+import * as toastModule from "@opencode-ai/ui/toast";
+import { RegistryContext } from "@effect/atom-solid";
+import { withTestWorkspace } from "../../../../../test/workspace.ts";
 import { deferred } from "../../../../../test/deferred.ts";
 import { sessionFixture } from "../../../../../test/session-fixture.ts";
 import type { OpenCodeClient, SessionInfo } from "@opencode-ai/client";
@@ -6,7 +10,11 @@ import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ServerFlowDialogProvider } from "../../../../../ui/ServerFlowDialogProvider.tsx";
-import { DeleteSessionFlow, type DeleteSessionFlowProps } from "./DeleteSessionFlow.tsx";
+import {
+  DeleteSessionFlow,
+  createDeleteSessionFlow,
+  type CreateDeleteSessionFlowInput,
+} from "./DeleteSessionFlow.tsx";
 
 const session = (
   id: string,
@@ -29,7 +37,7 @@ const root = session("root");
 
 function setup(
   currentSessions: readonly SessionInfo[] = [root],
-  overrides: Partial<DeleteSessionFlowProps> = {},
+  overrides: Partial<CreateDeleteSessionFlowInput> = {},
 ) {
   const capturedSession = currentSessions[0] ?? root;
   const [sessions, setSessions] = createSignal<readonly SessionInfo[]>(currentSessions);
@@ -46,7 +54,8 @@ function setup(
     setSessions((current) => current.filter(({ id }) => !ids.includes(id)));
     setCatalogIDs((current) => current.filter((id) => !ids.includes(id)));
   });
-  const props: DeleteSessionFlowProps = {
+  const props: CreateDeleteSessionFlowInput = {
+    effects: withTestWorkspace((effects) => effects),
     session: capturedSession,
     subtreeIDs: [capturedSession.id],
     subtreeSessions: [capturedSession],
@@ -85,13 +94,16 @@ function mount(fixture: ReturnType<typeof setup>) {
   document.body.append(host);
   const [visible, setVisible] = createSignal(true);
   const onDismiss = vi.fn<() => void>(() => setVisible(false));
+  const flow = createDeleteSessionFlow({ ...fixture.props, onDismiss });
   const rootDispose = render(
     () => (
-      <ServerFlowDialogProvider>
-        <Show when={visible()}>
-          <DeleteSessionFlow {...fixture.props} onDismiss={onDismiss} />
-        </Show>
-      </ServerFlowDialogProvider>
+      <RegistryContext.Provider value={fixture.props.effects.registry}>
+        <ServerFlowDialogProvider>
+          <Show when={visible()}>
+            <DeleteSessionFlow flow={flow} />
+          </Show>
+        </ServerFlowDialogProvider>
+      </RegistryContext.Provider>
     ),
     host,
   );
@@ -103,6 +115,9 @@ function mount(fixture: ReturnType<typeof setup>) {
       return findDeleteButton();
     },
     onDismiss,
+    flow,
+    unmountFlow: () => setVisible(false),
+    remountFlow: () => setVisible(true),
     dispose: () => {
       rootDispose();
       host.remove();
@@ -115,6 +130,66 @@ afterEach(() => {
 });
 
 describe("DeleteSessionFlow", () => {
+  it("reconnects a remounted view to pending deletion and retains its failure", async () => {
+    const fixture = setup();
+    const pending = deferred();
+    fixture.removeSession.mockReturnValueOnce(pending.promise);
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.removeSession).toHaveBeenCalledOnce());
+    mounted.unmountFlow();
+    mounted.remountFlow();
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Deleting"));
+    mounted.flow.delete();
+    expect(fixture.removeSession).toHaveBeenCalledOnce();
+    pending.reject(new Error("offline"));
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain("The session could not be deleted."),
+    );
+    expect(fixture.onDeleted).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
+  it("closes the workspace while deletion waits for its owned catalog refresh", async () => {
+    const fixture = setup();
+    const catalog = fixture.props.effects.runPromise(Effect.never);
+    const catalogOutcome = catalog.catch(() => undefined);
+    fixture.syncCatalog.mockImplementation(() => catalog);
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.syncCatalog).toHaveBeenCalledOnce());
+    await Effect.runPromise(Scope.close(fixture.props.effects.scope, Exit.void));
+    await catalogOutcome;
+    expect(fixture.removeSession).not.toHaveBeenCalled();
+    mounted.dispose();
+  });
+
+  it("reports retained cleanup when the workspace closes after session deletion", async () => {
+    const fixture = setup();
+    const notify = vi.spyOn(toastModule, "showToast");
+    fixture.removeWorktree.mockImplementationOnce(
+      (_input, options) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(new Error("cancelled")), {
+            once: true,
+          });
+        }),
+    );
+    const mounted = mount(fixture);
+    (await vi.waitFor(() => mounted.deleteButton)).click();
+    await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledOnce());
+    await Effect.runPromise(Scope.close(fixture.props.effects.scope, Exit.void));
+    expect(fixture.onDeleted).toHaveBeenCalledOnce();
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Session deleted",
+        description: expect.stringContaining("/worktree"),
+      }),
+    );
+    mounted.dispose();
+    notify.mockRestore();
+  });
+
   it("closes cleanly when its owner unmounts during dismissal", async () => {
     const fixture = setup();
     const mounted = mount(fixture);
@@ -141,12 +216,18 @@ describe("DeleteSessionFlow", () => {
     });
     button.click();
     await vi.waitFor(() => {
-      expect(fixture.removeSession).toHaveBeenCalledWith({ sessionID: "root" });
-      expect(fixture.removeWorktree).toHaveBeenCalledWith({
-        projectID: "project",
-        directory: "/worktree",
-        force: true,
-      });
+      expect(fixture.removeSession).toHaveBeenCalledWith(
+        { sessionID: "root" },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(fixture.removeWorktree).toHaveBeenCalledWith(
+        {
+          projectID: "project",
+          directory: "/worktree",
+          force: true,
+        },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
       expect(fixture.onDeleted).toHaveBeenCalledWith(["root"]);
       expect(fixture.syncCatalog).toHaveBeenCalledTimes(2);
     });
@@ -174,23 +255,39 @@ describe("DeleteSessionFlow", () => {
     const mounted = mount(fixture);
     (await vi.waitFor(() => mounted.deleteButton)).click();
     await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledTimes(2));
-    expect(fixture.removeWorktree).toHaveBeenNthCalledWith(1, {
-      projectID: "project",
-      directory: "/worktree",
-      force: true,
-    });
-    expect(fixture.removeWorktree).toHaveBeenNthCalledWith(2, {
-      projectID: "other-project",
-      directory: "/other",
-      force: true,
-    });
-    expect(fixture.listWorktrees).toHaveBeenNthCalledWith(1, { projectID: "project" });
-    expect(fixture.listWorktrees).toHaveBeenNthCalledWith(2, { projectID: "other-project" });
+    expect(fixture.removeWorktree).toHaveBeenNthCalledWith(
+      1,
+      {
+        projectID: "project",
+        directory: "/worktree",
+        force: true,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(fixture.removeWorktree).toHaveBeenNthCalledWith(
+      2,
+      {
+        projectID: "other-project",
+        directory: "/other",
+        force: true,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(fixture.listWorktrees).toHaveBeenNthCalledWith(
+      1,
+      { projectID: "project" },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(fixture.listWorktrees).toHaveBeenNthCalledWith(
+      2,
+      { projectID: "other-project" },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(fixture.listWorktrees).toHaveBeenCalledTimes(2);
     mounted.dispose();
   });
 
-  it("does not start another worktree removal after its owner closes", async () => {
+  it("continues worktree cleanup after its view closes", async () => {
     const second = session("second", "/other/src", "root");
     const fixture = setup([root, second], {
       subtreeIDs: ["root", "second"],
@@ -207,8 +304,7 @@ describe("DeleteSessionFlow", () => {
     await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledOnce());
     mounted.dispose();
     firstRemoval.resolve();
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
-    expect(fixture.removeWorktree).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledTimes(2));
   });
 
   it("does not let stale cleanup close or unblock a replacement flow", async () => {
@@ -228,14 +324,20 @@ describe("DeleteSessionFlow", () => {
     const host = document.createElement("div");
     document.body.append(host);
     const [flow, setFlow] = createSignal<"old" | "replacement">("old");
+    const oldFlow = createDeleteSessionFlow(oldFixture.props);
+    const replacementFlow = createDeleteSessionFlow(replacementFixture.props);
     const rootDispose = render(
       () => (
         <ServerFlowDialogProvider>
           <Show when={flow() === "old"}>
-            <DeleteSessionFlow {...oldFixture.props} />
+            <RegistryContext.Provider value={oldFixture.props.effects.registry}>
+              <DeleteSessionFlow flow={oldFlow} />
+            </RegistryContext.Provider>
           </Show>
           <Show when={flow() === "replacement"}>
-            <DeleteSessionFlow {...replacementFixture.props} />
+            <RegistryContext.Provider value={replacementFixture.props.effects.registry}>
+              <DeleteSessionFlow flow={replacementFlow} />
+            </RegistryContext.Provider>
           </Show>
         </ServerFlowDialogProvider>
       ),
@@ -337,7 +439,7 @@ describe("DeleteSessionFlow", () => {
       const mounted = mount(fixture);
       (await vi.waitFor(() => mounted.deleteButton)).click();
       await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
-      expect(vi.mocked(fixture.removeWorktree).mock.calls).toEqual(
+      expect(vi.mocked(fixture.removeWorktree).mock.calls.map(([input]) => [input])).toEqual(
         removed === undefined ? [] : [[{ projectID: "project", directory: removed, force: true }]],
       );
       mounted.dispose();
@@ -364,7 +466,10 @@ describe("DeleteSessionFlow", () => {
     const mounted = mount(fixture);
     (await vi.waitFor(() => mounted.deleteButton)).click();
     await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
-    expect(fixture.removeSession).toHaveBeenCalledWith({ sessionID: "root" });
+    expect(fixture.removeSession).toHaveBeenCalledWith(
+      { sessionID: "root" },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(fixture.removeWorktree).not.toHaveBeenCalled();
     mounted.dispose();
   });
@@ -405,7 +510,10 @@ describe("DeleteSessionFlow", () => {
     const mounted = mount(fixture);
     (await vi.waitFor(() => mounted.deleteButton)).click();
     await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledTimes(2));
-    expect(fixture.removeSession).toHaveBeenCalledWith({ sessionID: "root" });
+    expect(fixture.removeSession).toHaveBeenCalledWith(
+      { sessionID: "root" },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(fixture.onDeleted).toHaveBeenCalledWith(["root", "second"]);
     mounted.dispose();
   });
@@ -511,11 +619,14 @@ describe("DeleteSessionFlow", () => {
     (await vi.waitFor(() => mounted.deleteButton)).click();
     await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledOnce());
     expect(fixture.removeSession).not.toHaveBeenCalled();
-    expect(fixture.removeWorktree).toHaveBeenCalledWith({
-      projectID: "project",
-      directory: "/worktree",
-      force: true,
-    });
+    expect(fixture.removeWorktree).toHaveBeenCalledWith(
+      {
+        projectID: "project",
+        directory: "/worktree",
+        force: true,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     mounted.dispose();
   });
 

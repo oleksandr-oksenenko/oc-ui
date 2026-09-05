@@ -1,3 +1,4 @@
+import { Effect, Exit } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -52,7 +53,7 @@ describe("OpenCode connection input", () => {
     );
 
     await expect(
-      verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "secret" }),
+      Effect.runPromise(verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "secret" })),
     ).rejects.toMatchObject({
       reason: "incompatible-version",
       phase: "health",
@@ -66,7 +67,7 @@ describe("OpenCode connection input", () => {
     );
 
     await expect(
-      verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "wrong" }),
+      Effect.runPromise(verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "wrong" })),
     ).rejects.toMatchObject({
       reason: "unauthorized",
       phase: "health",
@@ -77,7 +78,7 @@ describe("OpenCode connection input", () => {
   it.each(["health", "location"] as const)(
     "aborts the actual %s request at its deadline",
     async (phase) => {
-      vi.useFakeTimers();
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       let requestSignal: AbortSignal | undefined;
       const fetcher = vi.fn<typeof fetch>((_input, init) => {
         requestSignal = init?.signal ?? undefined;
@@ -93,7 +94,9 @@ describe("OpenCode connection input", () => {
         );
       }
       vi.stubGlobal("fetch", fetcher);
-      const verification = verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "secret" });
+      const verification = Effect.runPromise(
+        verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "secret" }),
+      );
       const settled = verification.catch((cause: unknown) => cause);
       await vi.advanceTimersByTimeAsync(10_000);
       expect(await settled).toMatchObject({ reason: "unreachable", phase });
@@ -104,7 +107,7 @@ describe("OpenCode connection input", () => {
   );
 
   it("cancels superseded verification and does not begin another request", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const controller = new AbortController();
     let requestSignal: AbortSignal | undefined;
     const fetcher = vi.fn<typeof fetch>((_input, init) => {
@@ -117,15 +120,45 @@ describe("OpenCode connection input", () => {
     });
     vi.stubGlobal("fetch", fetcher);
     const input = { serverUrl: "http://127.0.0.1:4096", password: "secret" };
-    const verification = verifyServer(input, controller.signal);
-    const settled = verification.catch((cause: unknown) => cause);
+    const verification = Effect.runPromiseExit(verifyServer(input), { signal: controller.signal });
     controller.abort();
-    expect(await settled).toMatchObject({ name: "AbortError" });
+    expect(Exit.hasInterrupts(await verification)).toBe(true);
     expect(requestSignal?.aborted).toBe(true);
-    await expect(verifyServer(input, controller.signal)).rejects.toMatchObject({
-      name: "AbortError",
-    });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
   });
+  it.each(["timeout", "caller cancellation"])(
+    "retains an uncooperative request until it settles after %s",
+    async (cancellation) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      const controller = new AbortController();
+      let requestSignal: AbortSignal | undefined;
+      let finish: ((response: Response) => void) | undefined;
+      const fetcher = vi.fn<typeof fetch>((_input, init) => {
+        requestSignal = init?.signal ?? undefined;
+        return new Promise<Response>((resolve) => {
+          finish = resolve;
+        });
+      });
+      vi.stubGlobal("fetch", fetcher);
+      const completed = vi.fn<() => void>();
+      const verification = Effect.runPromiseExit(
+        verifyServer({ serverUrl: "http://127.0.0.1:4096", password: "secret" }),
+        { signal: controller.signal },
+      ).then((result) => {
+        completed();
+        return result;
+      });
+      if (cancellation === "timeout") await vi.advanceTimersByTimeAsync(10_000);
+      else controller.abort();
+      expect(requestSignal?.aborted).toBe(true);
+      await Promise.resolve();
+      expect(completed).not.toHaveBeenCalled();
+      finish?.(Response.json({ healthy: true, version: OPENCODE_VERSION, pid: 1 }));
+      const result = await verification;
+      expect(Exit.isFailure(result)).toBe(true);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
 });

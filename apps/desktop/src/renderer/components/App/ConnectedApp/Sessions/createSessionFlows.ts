@@ -1,15 +1,21 @@
 import type { SessionInfo } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
+import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { createSignal, type Accessor } from "solid-js";
 
 import { restoreDialogFocusAfterClose } from "../../../../ui/restoreDialogFocusAfterClose.ts";
 import { sessionSubtreeIDs } from "./session-selection.ts";
+import {
+  createNewSessionFlow,
+  type NewSessionFlowController,
+} from "./SessionSidebar/NewSessionFlow.tsx";
+import {
+  createDeleteSessionFlow,
+  type DeleteSessionFlowController,
+} from "./SessionSidebar/DeleteSessionFlow.tsx";
 import type { SessionWorkspace } from "./createSessionWorkspace.ts";
 
 type SessionDeletion = {
-  readonly session: SessionInfo;
-  readonly subtreeIDs: readonly string[];
-  readonly subtreeSessions: readonly SessionInfo[];
+  readonly flow: DeleteSessionFlowController;
   readonly opener: HTMLButtonElement;
   readonly focusFallback?: SessionFocusResolver;
 };
@@ -18,26 +24,17 @@ type SessionFocusResolver = () => HTMLElement | undefined;
 
 export type SessionDeletionStatus = "ready" | "running" | "removed";
 
-export type SessionFlowsRuntime = {
-  readonly sessions: {
-    readonly ids: () => readonly string[];
-  };
-  readonly data: {
-    readonly session: {
-      readonly status: (sessionID: string) => DataSessionStatus;
-    };
-  };
-};
+export type SessionFlowsRuntime = Pick<
+  ConnectedRuntime,
+  "effects" | "api" | "data" | "sessions" | "onShellExited" | "defaultLocation"
+>;
 
 export type SessionFlowsWorkspace = Pick<SessionWorkspace, "sessions" | "syncCatalog" | "remove">;
 
 export type SessionFlows = {
   readonly expandedIDs: Accessor<readonly string[]>;
-  readonly newSessionOpen: Accessor<boolean>;
+  readonly newSession: Accessor<NewSessionFlowController | undefined>;
   readonly deletion: Accessor<SessionDeletion | undefined>;
-  readonly sessions: Accessor<readonly SessionInfo[]>;
-  readonly sessionIDs: () => readonly string[];
-  readonly syncCatalog: () => Promise<void>;
   readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
   readonly openNewSession: () => void;
   readonly dismissNewSession: () => void;
@@ -47,7 +44,6 @@ export type SessionFlows = {
     focusFallback?: SessionFocusResolver,
   ) => void;
   readonly dismissDeletion: () => void;
-  readonly deleteSessions: (sessionIDs: readonly string[]) => void;
   readonly toggleExpanded: (sessionID: string) => void;
 };
 
@@ -56,23 +52,34 @@ export type CreateSessionFlowsInput = {
   readonly connected: Accessor<boolean>;
   readonly workspace: SessionFlowsWorkspace;
   readonly clearDraft: (sessionID: string) => void;
+  readonly onSessionCreated: (sessionID: string) => void;
 };
 
 /** Owns session sidebar expansion and the modal flows opened from it. */
 export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows {
   const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>([]);
-  const [newSessionOpen, setNewSessionOpen] = createSignal(false);
+  const [newSession, setNewSession] = createSignal<NewSessionFlowController>();
   const [deletion, setDeletion] = createSignal<SessionDeletion>();
   let newSessionOpener: HTMLElement | undefined;
 
   const openNewSession = (): void => {
+    if (newSession()) return;
     newSessionOpener =
       document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
-    setNewSessionOpen(true);
+    setNewSession(
+      createNewSessionFlow({
+        runtime: input.runtime,
+        onSessionCreated: input.onSessionCreated,
+        onDismiss: dismissNewSession,
+      }),
+    );
   };
 
   const dismissNewSession = (): void => {
-    setNewSessionOpen(false);
+    const flow = newSession();
+    if (flow?.pending() && !flow.current().closed) return;
+    flow?.dispose();
+    setNewSession(undefined);
     restoreDialogFocusAfterClose(() => newSessionOpener);
   };
 
@@ -105,14 +112,30 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
     opener: HTMLButtonElement,
     focusFallback?: SessionFocusResolver,
   ): void => {
-    if (!input.connected()) return;
+    if (!input.connected() || deletion()) return;
     const target = inspectDeletion(sessionID);
     if (target.status !== "ready") return;
     const sessions = input.workspace.sessions();
-    setDeletion({
+    const subtreeSessions = sessions.filter((candidate) =>
+      target.subtreeIDs.includes(candidate.id),
+    );
+    const flow = createDeleteSessionFlow({
+      effects: input.runtime.effects,
       session: target.session,
       subtreeIDs: target.subtreeIDs,
-      subtreeSessions: sessions.filter((candidate) => target.subtreeIDs.includes(candidate.id)),
+      subtreeSessions,
+      sessions: input.workspace.sessions,
+      sessionIDs: input.runtime.sessions.ids,
+      syncCatalog: input.workspace.syncCatalog,
+      listWorktrees: input.runtime.api.worktree.list,
+      removeSession: input.runtime.api.session.remove,
+      removeWorktree: input.runtime.api.worktree.remove,
+      deletionStatusForSession,
+      onDeleted: deleteSessions,
+      onDismiss: dismissDeletion,
+    });
+    setDeletion({
+      flow,
       opener,
       focusFallback,
     });
@@ -120,6 +143,8 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
 
   const dismissDeletion = (): void => {
     const current = deletion();
+    if (current?.flow.pending() && !current.flow.current().closed) return;
+    current?.flow.dispose();
     setDeletion(undefined);
     restoreDialogFocusAfterClose(() => {
       if (current === undefined) return undefined;
@@ -145,17 +170,13 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
 
   return {
     expandedIDs,
-    newSessionOpen,
+    newSession,
     deletion,
-    sessions: input.workspace.sessions,
-    sessionIDs: input.runtime.sessions.ids,
-    syncCatalog: input.workspace.syncCatalog,
     deletionStatusForSession,
     openNewSession,
     dismissNewSession,
     openSessionDeletion,
     dismissDeletion,
-    deleteSessions,
     toggleExpanded,
   };
 }

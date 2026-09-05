@@ -1,3 +1,4 @@
+import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 import type { FormAnswer, FormInfo } from "@opencode-ai/client";
 import type { Data } from "@opencode-ai/client/solid";
 import { onCleanup, type Accessor } from "solid-js";
@@ -10,6 +11,7 @@ type SessionFormsData = {
 };
 
 type SessionFormsInput = {
+  readonly effects: WorkspaceOwner;
   readonly data: SessionFormsData;
   readonly selectedID: Accessor<string | undefined>;
   readonly connected: Accessor<boolean>;
@@ -35,6 +37,7 @@ const CANCEL_FAILURE_MESSAGE = "The form could not be cancelled. Try again.";
 /** Owns pending forms for the selected session and their server mutations. */
 export function createSessionForms(input: SessionFormsInput): SessionFormsController {
   const controller = createFormController({
+    effects: input.effects,
     connected: input.connected,
     sessionID: input.selectedID,
     form: input.data.session.form,
@@ -48,7 +51,7 @@ export function createSessionForms(input: SessionFormsInput): SessionFormsContro
     const sessionID = event.data.form.sessionID;
     if (sessionID === "global") return;
     input.data.session.form.invalidate(sessionID);
-    if (sessionID === input.selectedID()) void controller.sync();
+    if (sessionID === input.selectedID()) controller.startSync();
   });
 
   onCleanup(stopCreated);
@@ -60,11 +63,7 @@ export function createSessionForms(input: SessionFormsInput): SessionFormsContro
     submitting: controller.submitting,
     errorFor: controller.errorFor,
     sync: controller.sync,
-    reply: async (formID, answer) => {
-      await controller.reply(formID, answer);
-    },
-    cancel: async (formID) => {
-      await controller.cancel(formID);
-    },
+    reply: (formID, answer) => controller.reply(formID, answer).then(() => undefined),
+    cancel: (formID) => controller.cancel(formID).then(() => undefined),
   };
 }

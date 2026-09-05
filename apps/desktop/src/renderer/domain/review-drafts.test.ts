@@ -1,3 +1,4 @@
+import { withTestWorkspace } from "../test/workspace.ts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createReviewDraftStore, type ReviewDraftKey } from "./review-drafts.ts";
@@ -7,7 +8,7 @@ const selection = { start: 3, side: "additions" as const, end: 4 };
 
 describe("createReviewDraftStore", () => {
   it("isolates drafts by session and comparison", () => {
-    const drafts = createReviewDraftStore();
+    const drafts = withTestWorkspace((effects) => createReviewDraftStore(effects));
     const branch = { ...key, comparison: "branch" as const };
     const id = drafts.begin(key, "src/a.ts", selection, "const a = 1;\n");
     drafts.updateBody(key, id, "Use a named constant");
@@ -20,7 +21,7 @@ describe("createReviewDraftStore", () => {
   });
 
   it("drops an empty prior draft and makes the new comment the sole editor", () => {
-    const drafts = createReviewDraftStore();
+    const drafts = withTestWorkspace((effects) => createReviewDraftStore(effects));
     const emptyID = drafts.begin(key, "empty.ts", selection, "empty");
     const savedID = drafts.begin(key, "saved.ts", selection, "saved");
     drafts.updateBody(key, savedID, "Keep this comment");
@@ -37,7 +38,7 @@ describe("createReviewDraftStore", () => {
   });
 
   it("captures only nonempty comments and clears only an unchanged revision", () => {
-    const drafts = createReviewDraftStore();
+    const drafts = withTestWorkspace((effects) => createReviewDraftStore(effects));
     const emptyID = drafts.begin(key, "empty.ts", selection, "empty");
     const submittedID = drafts.begin(key, "submitted.ts", selection, "submitted");
     drafts.updateBody(key, emptyID, "  \n");
@@ -56,7 +57,7 @@ describe("createReviewDraftStore", () => {
   });
 
   it("supports editing and removal without changing the content for edit", () => {
-    const drafts = createReviewDraftStore();
+    const drafts = withTestWorkspace((effects) => createReviewDraftStore(effects));
     const id = drafts.begin(key, "a.ts", selection, "code");
     const snapshot = drafts.capture(key);
     drafts.edit(key);

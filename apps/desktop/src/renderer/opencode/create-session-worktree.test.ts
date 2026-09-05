@@ -6,14 +6,20 @@ import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client";
+import { Effect, Exit, Schema, Scope } from "effect";
+import { deferred } from "../test/deferred.ts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { withTestWorkspace } from "../test/workspace.ts";
 import { createOpenCodeEventSource } from "./event-source.ts";
 import {
-  createSessionWorktree,
+  createSessionWorktree as createSessionWorktreeEffect,
   SessionWorktreeError,
   type SessionWorktreeInput,
 } from "./create-session-worktree.ts";
+
+const createSessionWorktree = (...args: Parameters<typeof createSessionWorktreeEffect>) =>
+  args[0].effects.runPromise(createSessionWorktreeEffect(...args));
 
 const root = "/srv/project";
 const parent = "/srv/data/opencode/worktree";
@@ -136,6 +142,7 @@ const fixture = (options: FixtureOptions = {}) => {
     },
   };
   const input: SessionWorktreeInput = {
+    effects: withTestWorkspace((effects) => effects),
     api,
     onShellExited: (handler) => events.on("shell.exited", handler),
     isCurrent: () => current,
@@ -161,18 +168,67 @@ const git = (cwd: string, ...args: string[]) =>
   ).trim();
 
 describe("createSessionWorktree", () => {
+  it("keeps shell ownership until an aborted SDK request actually settles", async () => {
+    const fake = fixture();
+    const pendingShell = deferred<Awaited<ReturnType<OpenCodeClient["shell"]["create"]>>>();
+    const unsubscribe = vi.fn<() => void>();
+    let signal: AbortSignal | undefined;
+    fake.api.shell.create.mockImplementationOnce((_input, options) => {
+      signal = options?.signal;
+      return pendingShell.promise;
+    });
+    const request = createSessionWorktree(
+      { ...fake.input, onShellExited: () => unsubscribe },
+      { directory: root },
+    );
+    const outcome = request.catch(() => undefined);
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    let closed = false;
+    const closing = Effect.runPromise(Scope.close(fake.input.effects.scope, Exit.void)).then(() => {
+      closed = true;
+      return undefined;
+    });
+    await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+    expect(closed).toBe(false);
+    expect(unsubscribe).not.toHaveBeenCalled();
+    pendingShell.reject(new Error("request settled"));
+    await closing;
+    await outcome;
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(fake.api.worktree.create).not.toHaveBeenCalled();
+  });
+
+  it("releases the completion subscription when its workspace closes", async () => {
+    const fake = fixture({ omitExitFor: 1 });
+    const unsubscribe = vi.fn<() => void>();
+    const request = createSessionWorktree(
+      { ...fake.input, onShellExited: () => unsubscribe },
+      { directory: root },
+    );
+    const outcome = request.catch(() => undefined);
+    await vi.waitFor(() => expect(fake.api.shell.create).toHaveBeenCalledOnce());
+    await Effect.runPromise(Scope.close(fake.input.effects.scope, Exit.void));
+    await outcome;
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(fake.api.shell.output).not.toHaveBeenCalled();
+    expect(fake.api.worktree.create).not.toHaveBeenCalled();
+  });
+
   it("buffers an early zsh completion and creates at the fetched immutable commit", async () => {
     const fake = fixture();
     const result = await createSessionWorktree(fake.input, { directory: root });
 
     expect(result).toEqual({ location: { directory: parent + "/generated" } });
-    expect(fake.api.worktree.create).toHaveBeenCalledWith({
-      projectID: "project",
-      strategy: "git",
-      from: root,
-      directory: parent,
-      branch: fetched,
-    });
+    expect(fake.api.worktree.create).toHaveBeenCalledWith(
+      {
+        projectID: "project",
+        strategy: "git",
+        from: root,
+        directory: parent,
+        branch: fetched,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(fake.api.shell.create).toHaveBeenCalledTimes(2);
     expect(fake.api.shell.remove).toHaveBeenCalledTimes(2);
   });
@@ -227,6 +283,7 @@ describe("createSessionWorktree", () => {
             directory: dataHome + "/opencode/worktree",
             branch: rewritten,
           }),
+          expect.objectContaining({ signal: expect.any(AbortSignal) }),
         );
       } finally {
         rmSync(directory, { recursive: true, force: true });
@@ -244,6 +301,7 @@ describe("createSessionWorktree", () => {
     });
     expect(fake.api.worktree.create).toHaveBeenCalledWith(
       expect.objectContaining({ branch: cached }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -270,6 +328,7 @@ describe("createSessionWorktree", () => {
       expect(result.fetchError).toBe("Origin discovery or fetch failed.");
       expect(replay.api.worktree.create).toHaveBeenCalledWith(
         expect.objectContaining({ branch: cached }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     },
   );
@@ -280,6 +339,7 @@ describe("createSessionWorktree", () => {
     expect(result.fetchError).toContain("timed out");
     expect(fake.api.worktree.create).toHaveBeenCalledWith(
       expect.objectContaining({ branch: cached }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -291,6 +351,7 @@ describe("createSessionWorktree", () => {
     await createSessionWorktree(fake.input, { directory: root });
     expect(fake.api.worktree.create).toHaveBeenCalledWith(
       expect.objectContaining({ branch: cached }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -350,7 +411,7 @@ describe("createSessionWorktree", () => {
       const rejection = pending.then(
         () => undefined,
         (error: Error) =>
-          error instanceof SessionWorktreeError ? error : new Error("Unexpected rejection"),
+          Schema.is(SessionWorktreeError)(error) ? error : new Error("Unexpected rejection"),
       );
       await vi.runAllTimersAsync();
       await expect(rejection).resolves.toMatchObject({ uncertain: true });

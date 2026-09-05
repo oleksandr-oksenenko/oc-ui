@@ -1,13 +1,16 @@
+import { useAtomValue } from "@effect/atom-solid";
+import { Effect, Exit, Result } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../../../../../workspace-owner.ts";
 import type { LocationRef, OpenCodeClient, Project, SessionInfo } from "@opencode-ai/client";
 import type { Data } from "@opencode-ai/client/solid";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { showToast, toaster } from "@opencode-ai/ui/toast";
-import { createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, on, onCleanup } from "solid-js";
 
 import type { SessionCatalog } from "../../../../../opencode/session-catalog.ts";
 import {
   createSessionWorktree,
-  SessionWorktreeError,
   type SessionWorktreeInput,
 } from "../../../../../opencode/create-session-worktree.ts";
 import {
@@ -30,16 +33,12 @@ type NewSessionFlowApi = SessionWorktreeInput["api"] & {
 };
 
 export type NewSessionFlowRuntime = {
+  readonly effects: WorkspaceOwner;
   readonly api: NewSessionFlowApi;
   readonly onShellExited: SessionWorktreeInput["onShellExited"];
   readonly data: {
-    readonly project: {
-      readonly list: Data["project"]["list"];
-      readonly sync: Data["project"]["sync"];
-    };
-    readonly session: {
-      readonly create: Data["session"]["create"];
-      readonly sync: Data["session"]["sync"];
+    readonly project: Pick<Data["project"], "list" | "sync">;
+    readonly session: Pick<Data["session"], "create" | "sync"> & {
       readonly get: (sessionID: string) => SessionInfo | undefined;
     };
   };
@@ -50,52 +49,45 @@ export type NewSessionFlowRuntime = {
   };
 };
 
-export type NewSessionFlowProps = {
+export type CreateNewSessionFlowInput = {
   readonly runtime: NewSessionFlowRuntime;
   readonly onDismiss: () => void;
   readonly onSessionCreated: (sessionID: string) => void;
 };
 
-export function NewSessionFlow(props: NewSessionFlowProps) {
-  const dialog = useDialog();
-  const setDismissBlocked = useServerFlowDismissBlock();
-  let activeDialog = dialog.active;
-  let closingFlow = false;
+/** One open creation operation, retained by the workspace across view remounts. */
+export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
   const [selectedProjectID, setSelectedProjectID] = createSignal<string>();
   const [mode, setMode] = createSignal<NewSessionLocationMode>("direct");
   const [selectedLocation, setSelectedLocation] = createSignal<LocationRef>();
-  const [projectsLoading, setProjectsLoading] = createSignal(true);
-  const [projectsError, setProjectsError] = createSignal<string>();
-  const [error, setError] = createSignal<NewSessionDialogError>();
-  const [mutation, setMutation] = createSignal<"creating-worktree" | "creating-session">();
-  const [addingProject, setAddingProject] = createSignal(false);
-  const [addProjectError, setAddProjectError] = createSignal<AddProjectDialogError>();
+  const effects = props.runtime.effects;
+  const status = Atom.make<{
+    closed?: boolean;
+    dialog: "session" | "project";
+    projectsLoading: boolean;
+    projectsError?: string;
+    error?: NewSessionDialogError;
+    mutation?: "creating-worktree" | "creating-session";
+    addingProject: boolean;
+    addProjectError?: AddProjectDialogError;
+  }>({ projectsLoading: true, addingProject: false, dialog: "session" });
+  const releaseStatus = effects.mount(status);
+  const current = () => effects.registry.get(status);
+  const pending = () => current().mutation !== undefined || current().addingProject;
+  const update = (patch: Partial<ReturnType<typeof current>>) =>
+    effects.registry.set(status, { ...effects.registry.get(status), ...patch });
+  const dispose = (): void => {
+    update({ closed: true });
+    if (!pending()) releaseStatus();
+  };
   let retainedToast:
     | { readonly id: ReturnType<typeof showToast>; readonly location?: LocationRef }
     | undefined;
 
-  const showOwnedDialog = (
-    element: Parameters<typeof dialog.show>[0],
-    onClose?: Parameters<typeof dialog.show>[1],
-  ): void => {
-    void dialog.show(element, onClose).then(() => {
-      activeDialog = dialog.active;
-      if (closingFlow) dialog.close();
-      return undefined;
-    });
-  };
-
-  onCleanup(() => {
-    closingFlow = true;
-    setDismissBlocked(false);
-    if (dialog.active === activeDialog) dialog.close();
-  });
-
-  const projects = createMemo<readonly NewSessionProject[]>(() =>
+  const projects = (): readonly NewSessionProject[] =>
     props.runtime.data.project
       .list()
-      .map((project) => projectOption(project, props.runtime.defaultLocation.workspaceID)),
-  );
+      .map((project) => projectOption(project, props.runtime.defaultLocation.workspaceID));
 
   const selectedProject = () => {
     const project = projects().find((candidate) => candidate.id === selectedProjectID());
@@ -103,40 +95,43 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
     return project && location ? { ...project, location } : project;
   };
 
-  const state = createMemo<NewSessionDialogState>(() => ({
+  const state = (): NewSessionDialogState => ({
     projects: projects(),
     selectedProjectID: selectedProjectID(),
     mode: mode(),
-    projectsLoading: projectsLoading(),
-    projectsError: projectsError(),
-    error: error(),
-  }));
+    projectsLoading: current().projectsLoading,
+    projectsError: current().projectsError,
+    error: current().error,
+  });
 
-  const syncProjects = async (): Promise<void> => {
-    setProjectsLoading(true);
-    setProjectsError(undefined);
-    try {
-      await props.runtime.data.project.sync();
-      const available = projects();
-      const selected = selectedProjectID();
-      if (!selected || !available.some((project) => project.id === selected)) {
-        setSelectedProjectID(available[0]?.id);
-        setSelectedLocation(undefined);
-      }
-    } catch {
-      setProjectsError("Projects could not be loaded from the server.");
-    } finally {
-      setProjectsLoading(false);
+  const syncProjects = Effect.fn("NewSessionFlow.syncProjects")(function* () {
+    update({ projectsLoading: true, projectsError: undefined });
+    const result = yield* effects
+      .request(() => props.runtime.data.project.sync())
+      .pipe(Effect.result);
+    if (Result.isFailure(result)) {
+      update({
+        projectsLoading: false,
+        projectsError: "Projects could not be loaded from the server.",
+      });
+      return;
     }
-  };
+    const available = projects();
+    const selected = selectedProjectID();
+    if (!selected || !available.some((project) => project.id === selected)) {
+      setSelectedProjectID(available[0]?.id);
+      setSelectedLocation(undefined);
+    }
+    update({ projectsLoading: false });
+  });
 
-  onMount(() => void syncProjects());
+  effects.runFork(syncProjects());
 
   const changeProject = (projectID: string): void => {
     setSelectedProjectID(projectID);
     setSelectedLocation(undefined);
     if (projects().find((project) => project.id === projectID)?.vcs !== "git") setMode("direct");
-    setError(undefined);
+    update({ error: undefined });
   };
 
   const showRetainedWorktreeToast = (location: LocationRef | undefined): void => {
@@ -169,210 +164,275 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
     retainedToast = undefined;
   };
 
-  const createSessionAt = async (
+  const createSessionAt = Effect.fn("NewSessionFlow.createSessionAt")(function* (
     project: NewSessionProject,
     location: LocationRef,
     worktreeLocation?: LocationRef,
-  ): Promise<void> => {
-    setMutation("creating-session");
-    setError(undefined);
-    const created = props.runtime.data.session.create({
-      projectID: project.id,
-      location,
-    });
-    props.runtime.sessions.admit(created.id);
-    const finishSession = (sessionID: string): void => {
-      if (closingFlow) return;
-      props.onSessionCreated(sessionID);
+  ) {
+    update({ mutation: "creating-session", error: undefined });
+    const created = props.runtime.data.session.create({ projectID: project.id, location });
+    const reconcile = Effect.gen(function* () {
+      const result = yield* effects.request(() => created.request).pipe(Effect.result);
+      if (Result.isFailure(result)) {
+        // A session.created event may precede hydration; reconcile before removing it.
+        yield* effects
+          .request(() => props.runtime.data.session.sync(created.id))
+          .pipe(Effect.ignore);
+        if (props.runtime.data.session.get(created.id)?.id !== created.id) {
+          props.runtime.sessions.remove(created.id);
+          if (worktreeLocation) showRetainedWorktreeToast(worktreeLocation);
+          return undefined;
+        }
+      }
+      props.runtime.sessions.admit(created.id);
       dismissRetainedWorktreeToast(worktreeLocation);
-      if (dialog.active === activeDialog) dialog.close();
-    };
-    try {
-      const session = await created.request;
-      finishSession(session.id);
-    } catch {
-      // A session.created event can arrive before its SessionInfo hydration
-      // finishes. Wait for that authoritative refresh before rolling back.
-      await props.runtime.data.session.sync(created.id).catch(() => undefined);
-      const accepted = props.runtime.data.session.get(created.id);
-      if (accepted?.id === created.id) {
-        finishSession(created.id);
-        return;
-      }
-      props.runtime.sessions.remove(created.id);
-      if (worktreeLocation) showRetainedWorktreeToast(worktreeLocation);
-      if (closingFlow) {
-        return;
-      }
-      setError({
-        kind: "session",
-        message: worktreeLocation
-          ? "The worktree exists, but its session could not be created."
-          : "The session could not be created. Try again.",
-        worktreeLocation,
+      return Result.isSuccess(result) ? result.success.id : created.id;
+    });
+    yield* Effect.addFinalizer((exit) =>
+      Effect.gen(function* () {
+        // The SDK owns this uncancellable request. Its settled result still needs
+        // reconciliation when workspace shutdown interrupts the caller's wait.
+        if (Exit.hasInterrupts(exit)) yield* reconcile;
+        update({ mutation: undefined });
+        if (current().closed) releaseStatus();
+      }),
+    );
+    const sessionID = yield* reconcile;
+    if (sessionID === undefined) {
+      update({
+        error: {
+          kind: "session",
+          message: worktreeLocation
+            ? "The worktree exists, but its session could not be created."
+            : "The session could not be created. Try again.",
+          worktreeLocation,
+        },
       });
-    } finally {
-      setMutation(undefined);
+      return;
     }
-  };
+    update({ closed: true });
+    props.onSessionCreated(sessionID);
+    props.onDismiss();
+  }, Effect.scoped);
 
   const useProject = (projectID: string): void => {
-    if (closingFlow || mutation() !== undefined) return;
+    if (current().closed || pending()) return;
     const project =
       projectID === selectedProjectID()
         ? selectedProject()
         : projects().find((candidate) => candidate.id === projectID);
     if (!project) {
-      setError({ kind: "validation", message: "Choose a project." });
+      update({ error: { kind: "validation", message: "Choose a project." } });
       return;
     }
-    void createSessionAt(project, project.location);
+    effects.runFork(createSessionAt(project, project.location));
   };
 
-  const createWorktree = async (): Promise<void> => {
-    if (closingFlow || mutation() !== undefined) return;
+  const createWorktree = Effect.fn("NewSessionFlow.createWorktree")(function* () {
+    if (current().closed || pending()) return;
     const project = selectedProject();
     if (!project || project.vcs !== "git") {
-      setError({ kind: "validation", message: "Choose a Git project." });
+      update({ error: { kind: "validation", message: "Choose a Git project." } });
       return;
     }
-
-    setMutation("creating-worktree");
-    setError(undefined);
-    try {
-      const created = await createSessionWorktree(
-        {
-          api: props.runtime.api,
-          onShellExited: props.runtime.onShellExited,
-          isCurrent: () => !closingFlow,
+    update({ mutation: "creating-worktree", error: undefined });
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        update({ mutation: undefined });
+        if (current().closed) releaseStatus();
+      }),
+    );
+    const result = yield* createSessionWorktree(
+      {
+        effects,
+        api: props.runtime.api,
+        onShellExited: props.runtime.onShellExited,
+        isCurrent: () => !current().closed,
+      },
+      project.location,
+    ).pipe(Effect.result);
+    if (Result.isFailure(result)) {
+      const worktreeError = result.failure;
+      if (worktreeError.uncertain) showUncertainWorktreeToast(worktreeError.location);
+      else if (worktreeError.location) showRetainedWorktreeToast(worktreeError.location);
+      update({
+        error: {
+          kind: "worktree",
+          message: worktreeError.message,
+          worktreeLocation: worktreeError.location,
         },
-        project.location,
-      );
-      if (created.fetchError) {
-        showToast({
-          title: "Could not update from origin.",
-          description: "Using the last fetched default branch.",
-          persistent: true,
-        });
-      }
-      if (closingFlow) {
-        showRetainedWorktreeToast(created.location);
-        return;
-      }
-      await createSessionAt(project, created.location, created.location);
-    } catch (cause) {
-      const worktreeError = cause instanceof SessionWorktreeError ? cause : undefined;
-      const details = worktreeError?.message ?? "The worktree could not be created.";
-      const retainedLocation = worktreeError?.location;
-      if (worktreeError?.uncertain) showUncertainWorktreeToast(retainedLocation);
-      else if (retainedLocation) showRetainedWorktreeToast(retainedLocation);
-      if (closingFlow) {
-        return;
-      }
-      setError({
-        kind: "worktree",
-        message: details,
-        worktreeLocation: retainedLocation,
       });
-    } finally {
-      setMutation(undefined);
+      return;
     }
-  };
+    const created = result.success;
+    if (created.fetchError)
+      showToast({
+        title: "Could not update from origin.",
+        description: "Using the last fetched default branch.",
+        persistent: true,
+      });
+    yield* createSessionAt(project, created.location, created.location);
+  }, Effect.scoped);
 
   const retry = (): void => {
-    if (closingFlow || mutation() !== undefined) return;
+    if (current().closed || pending()) return;
     const project = selectedProject();
     if (!project) return;
-    const current = error();
-    if (current?.kind === "session") {
-      const location = current.worktreeLocation ?? project.location;
-      void createSessionAt(project, location, current.worktreeLocation);
+    const failure = current().error;
+    if (failure?.kind === "session") {
+      const location = failure.worktreeLocation ?? project.location;
+      effects.runFork(createSessionAt(project, location, failure.worktreeLocation));
     }
   };
 
-  const addProject = async (location: LocationRef): Promise<void> => {
-    setAddingProject(true);
-    setAddProjectError(undefined);
-    let added = false;
-    try {
-      const current = await props.runtime.api.project.current({
-        location: {
-          directory: location.directory,
-          workspace: location.workspaceID,
-        },
+  const addProject = Effect.fn("NewSessionFlow.addProject")(function* (location: LocationRef) {
+    if (current().closed || pending()) return;
+    update({ addingProject: true, addProjectError: undefined });
+    const result = yield* effects
+      .request((signal) =>
+        props.runtime.api.project.current(
+          {
+            location: { directory: location.directory, workspace: location.workspaceID },
+          },
+          { signal },
+        ),
+      )
+      .pipe(
+        Effect.tap(() => effects.request(() => props.runtime.data.project.sync())),
+        Effect.result,
+      );
+    update({ addingProject: false });
+    if (Result.isFailure(result)) {
+      update({
+        addProjectError: { kind: "add-project", message: "The project could not be added." },
       });
-      await props.runtime.data.project.sync();
-      setSelectedProjectID(current.id);
-      setSelectedLocation(location);
-      if (projects().find((project) => project.id === current.id)?.vcs !== "git") setMode("direct");
-      setError(undefined);
-      added = true;
-    } catch {
-      setAddProjectError({ kind: "add-project", message: "The project could not be added." });
-    } finally {
-      setAddingProject(false);
+      return;
     }
-    if (added && !closingFlow) showNewSessionDialog();
+    setSelectedProjectID(result.success.id);
+    setSelectedLocation(location);
+    if (projects().find((project) => project.id === result.success.id)?.vcs !== "git")
+      setMode("direct");
+    update({ error: undefined });
+    update({ dialog: "session" });
+  });
+
+  return {
+    runtime: props.runtime,
+    dispose,
+    status,
+    state,
+    current,
+    useProject,
+    retry,
+    changeProject,
+    pending,
+    dismiss: () => {
+      if (pending() || current().closed) return;
+      dispose();
+      props.onDismiss();
+    },
+    showSession: () => update({ dialog: "session" }),
+    openAddProject: () => update({ dialog: "project" }),
+    changeMode: (next: NewSessionLocationMode) => {
+      if (next === "worktree" && selectedProject()?.vcs !== "git") return;
+      setMode(next);
+      update({ error: undefined });
+    },
+    syncProjects: () => {
+      effects.runFork(syncProjects());
+    },
+    createWorktree: () => {
+      effects.runFork(createWorktree());
+    },
+    addProject: (location: LocationRef) => {
+      effects.runFork(addProject(location));
+    },
+  };
+}
+
+export type NewSessionFlowController = ReturnType<typeof createNewSessionFlow>;
+export type NewSessionFlowProps = { readonly flow: NewSessionFlowController };
+
+/** Binds the retained operation to this view's dialog and focus lifetime. */
+export function NewSessionFlow(props: NewSessionFlowProps) {
+  const flow = props.flow;
+  const current = useAtomValue(() => flow.status);
+  const dialog = useDialog();
+  const setDismissBlocked = useServerFlowDismissBlock();
+  let activeOnClose: (() => void) | undefined;
+  let closingView = false;
+  const showOwnedDialog = (element: Parameters<typeof dialog.show>[0], onClose: () => void) => {
+    activeOnClose = onClose;
+    void dialog.show(element, onClose).then(() => {
+      if (closingView && dialog.active?.onClose === onClose) dialog.close();
+      return undefined;
+    });
   };
 
-  const showNewSessionDialog = (): void => {
-    setDismissBlocked(false);
-    showOwnedDialog(
-      () => (
-        <NewSessionDialog
-          state={state()}
-          mutation={mutation()}
-          onDismissBlockedChange={setDismissBlocked}
-          onAddProject={openAddProject}
-          onProjectChange={changeProject}
-          onModeChange={(next) => {
-            if (next === "worktree" && selectedProject()?.vcs !== "git") return;
-            setMode(next);
-            setError(undefined);
-          }}
-          onRetryProjects={() => void syncProjects()}
-          onUseProject={useProject}
-          onCreateWorktree={() => void createWorktree()}
-          onRetry={retry}
-        />
-      ),
-      () => {
-        if (!closingFlow) props.onDismiss();
-      },
-    );
-  };
-
-  const openAddProject = (): void => {
-    setDismissBlocked(false);
-    showOwnedDialog(
-      () => (
-        <AddProjectDialog
-          listDirectory={props.runtime.api.file.list}
-          initialLocation={props.runtime.defaultLocation}
-          adding={addingProject()}
-          error={addProjectError()}
-          onDismissBlockedChange={setDismissBlocked}
-          onAddProject={(directory) => void addProject(directory)}
-        />
-      ),
-      () => {
-        if (closingFlow) return;
+  createEffect(
+    on(
+      () => current().dialog,
+      (page) => {
         setDismissBlocked(false);
-        queueMicrotask(() => {
-          if (closingFlow) return;
-          showNewSessionDialog();
-          restoreDialogFocusAfterClose(() =>
-            [...document.querySelectorAll<HTMLButtonElement>("[data-dialog-layer] button")].find(
-              (button) => button.textContent?.trim() === "Add project",
+        if (page === "session") {
+          showOwnedDialog(
+            () => (
+              <NewSessionDialog
+                state={{ ...flow.state(), ...current() }}
+                mutation={current().mutation}
+                onDismissBlockedChange={setDismissBlocked}
+                onAddProject={flow.openAddProject}
+                onProjectChange={flow.changeProject}
+                onModeChange={flow.changeMode}
+                onRetryProjects={flow.syncProjects}
+                onUseProject={flow.useProject}
+                onCreateWorktree={flow.createWorktree}
+                onRetry={flow.retry}
+              />
             ),
+            () => {
+              if (!closingView) flow.dismiss();
+            },
           );
-        });
+        } else {
+          showOwnedDialog(
+            () => (
+              <AddProjectDialog
+                effects={flow.runtime.effects}
+                listDirectory={flow.runtime.api.file.list}
+                initialLocation={flow.runtime.defaultLocation}
+                adding={current().addingProject}
+                error={current().addProjectError}
+                onDismissBlockedChange={setDismissBlocked}
+                onAddProject={flow.addProject}
+              />
+            ),
+            () => {
+              if (closingView) return;
+              queueMicrotask(() => {
+                if (closingView) return;
+                flow.showSession();
+                restoreDialogFocusAfterClose(() =>
+                  [
+                    ...document.querySelectorAll<HTMLButtonElement>("[data-dialog-layer] button"),
+                  ].find((button) => button.textContent?.trim() === "Add project"),
+                );
+              });
+            },
+          );
+        }
       },
-    );
-  };
-
-  onMount(showNewSessionDialog);
-
+    ),
+  );
+  createEffect(() => {
+    if (current().closed && dialog.active?.onClose === activeOnClose) dialog.close();
+  });
+  onCleanup(() => {
+    closingView = true;
+    if (dialog.active?.onClose !== activeOnClose) return;
+    setDismissBlocked(false);
+    dialog.close();
+  });
   return null;
 }
 

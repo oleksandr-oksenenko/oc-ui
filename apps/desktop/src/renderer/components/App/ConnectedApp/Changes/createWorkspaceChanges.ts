@@ -1,5 +1,10 @@
 import type { FileDiffInfo, SessionInfo } from "@opencode-ai/client";
-import { createEffect, createMemo, createSignal, type Accessor } from "solid-js";
+import { useAtomValue } from "@effect/atom-solid";
+import { Effect } from "effect";
+import { Atom } from "effect/unstable/reactivity";
+import { createEffect, createMemo, type Accessor } from "solid-js";
+
+import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 
 import type { ReviewDraftKey, ReviewDraftStore } from "../../../../domain/review-drafts.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
@@ -20,6 +25,7 @@ export type WorkspaceChangesRuntime = {
 
 export type WorkspaceChangesInput = {
   readonly runtime: WorkspaceChangesRuntime;
+  readonly effects: WorkspaceOwner;
   readonly selectedSession: Accessor<SessionInfo | undefined>;
   readonly bootstrapped: Accessor<boolean>;
   readonly connected: Accessor<boolean>;
@@ -38,7 +44,22 @@ export type WorkspaceChangesController = {
 };
 
 export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceChangesController {
-  const [diffMode, setDiffMode] = createSignal<VcsDiffMode>("working");
+  const { effects } = input;
+  const mode = Atom.make<VcsDiffMode>("working");
+  effects.mount(mode);
+  const diffMode = useAtomValue(() => mode);
+  const setDiffMode = (value: VcsDiffMode): void => effects.registry.set(mode, value);
+  const syncVcs = Effect.fn("WorkspaceChanges.syncVcs")(function* (
+    location: NonNullable<SessionInfo["location"]>,
+  ) {
+    yield* effects
+      .request(() => input.runtime.data.location.vcs.sync(location))
+      .pipe(
+        Effect.catchTag("WorkspaceRequestError", (error) =>
+          Effect.logWarning("VCS information could not be loaded", error),
+        ),
+      );
+  });
 
   const selectedLocation = createMemo(() => input.selectedSession()?.location);
   const reviewKey = createMemo<ReviewDraftKey | undefined>(() => {
@@ -84,10 +105,10 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
       return;
     }
 
-    void input.runtime.data.location.vcs.sync(location).catch(() => undefined);
+    effects.runFork(syncVcs(location));
     const snapshot = input.runtime.diffs.state(location, diffMode());
     if (snapshot.status === "idle" || (snapshot.status === "ready" && snapshot.stale)) {
-      void input.runtime.diffs.sync(location, diffMode());
+      effects.runFork(input.runtime.diffs.sync(location, diffMode()));
     }
   });
 
@@ -168,7 +189,9 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
       comparison: diffMode(),
       comparisonOptions: diffComparisonOptions(),
       onComparisonChange: changeDiffMode,
-      onRetry: () => void input.runtime.diffs.refresh(location, diffMode()),
+      onRetry: () => {
+        effects.runFork(input.runtime.diffs.refresh(location, diffMode()));
+      },
       review,
     };
   });

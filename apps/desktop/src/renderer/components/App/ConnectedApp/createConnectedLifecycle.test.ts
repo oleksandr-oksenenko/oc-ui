@@ -1,6 +1,8 @@
-import { createRoot, createSignal } from "solid-js";
+import { Effect, Exit, Scope } from "effect";
+import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { withTestWorkspace } from "../../../test/workspace.ts";
 import { deferred } from "../../../test/deferred.ts";
 import { createConnectedLifecycle } from "./createConnectedLifecycle.ts";
 
@@ -36,10 +38,6 @@ function setup(ready: Promise<void>) {
   const syncSelectedFeatures = vi.fn<() => Promise<void>>(async () => {
     calls.push("models");
   });
-  const onConnected = vi.fn<() => void>(() => {
-    calls.push("connected");
-  });
-  const onInitialFailure = vi.fn<(cause: unknown) => void>();
   const markBootstrapped = vi.fn<() => void>(() => setBootstrapped(true));
 
   return {
@@ -51,36 +49,38 @@ function setup(ready: Promise<void>) {
     runtime,
     setStatus,
     syncSelectedFeatures,
-    onConnected,
-    onInitialFailure,
   };
 }
 
 function mount(fixture: ReturnType<typeof setup>) {
-  return createRoot((dispose) => {
-    createConnectedLifecycle(fixture);
-    return dispose;
+  return withTestWorkspace((effects, dispose) => {
+    createConnectedLifecycle({ ...fixture, effects });
+    return () => {
+      dispose();
+      void Effect.runPromise(Scope.close(effects.scope, Exit.void));
+    };
   });
 }
 
 describe("createConnectedLifecycle", () => {
-  it("announces connection after location setup, then refreshes feature data", async () => {
+  it("refreshes feature data after Connection readiness", async () => {
     const fixture = setup(Promise.resolve());
     const dispose = mount(fixture);
 
     await vi.waitFor(() => expect(fixture.sessions.syncCatalog).toHaveBeenCalledOnce());
-    expect(fixture.calls).toEqual(["location", "connected", "catalog", "models"]);
-    expect(fixture.onInitialFailure).not.toHaveBeenCalled();
+    expect(fixture.calls).toEqual(["catalog", "models"]);
+    expect(fixture.runtime.data.location.syncInfo).not.toHaveBeenCalled();
     dispose();
   });
 
-  it("reports initial setup failure while mounted", async () => {
+  it("does not bootstrap features when Connection readiness fails", async () => {
     const failure = new Error("offline");
     const fixture = setup(Promise.reject(failure));
     const dispose = mount(fixture);
 
-    await vi.waitFor(() => expect(fixture.onInitialFailure).toHaveBeenCalledWith(failure));
-    expect(fixture.onConnected).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(fixture.sessions.syncCatalog).not.toHaveBeenCalled();
+    expect(fixture.markBootstrapped).not.toHaveBeenCalled();
     dispose();
   });
 
@@ -94,8 +94,8 @@ describe("createConnectedLifecycle", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(fixture.onConnected).not.toHaveBeenCalled();
-    expect(fixture.onInitialFailure).not.toHaveBeenCalled();
+    expect(fixture.markBootstrapped).not.toHaveBeenCalled();
+    expect(fixture.sessions.syncCatalog).not.toHaveBeenCalled();
   });
 
   it("waits for initial feature sync before refreshing after reconnect", async () => {
@@ -118,8 +118,6 @@ describe("createConnectedLifecycle", () => {
     await vi.waitFor(() => expect(fixture.sessions.refreshAfterReconnect).toHaveBeenCalledOnce());
     expect(fixture.syncSelectedFeatures).toHaveBeenCalledTimes(2);
     expect(fixture.calls).toEqual([
-      "location",
-      "connected",
       "catalog",
       "models",
       "begin-recovery",
@@ -145,7 +143,7 @@ describe("createConnectedLifecycle", () => {
 
     await vi.waitFor(() => expect(fixture.sessions.refreshAfterReconnect).toHaveBeenCalledOnce());
     expect(fixture.sessions.failRecovery).not.toHaveBeenCalled();
-    expect(fixture.onInitialFailure).not.toHaveBeenCalled();
+    expect(fixture.markBootstrapped).toHaveBeenCalledOnce();
     dispose();
   });
 
@@ -161,7 +159,7 @@ describe("createConnectedLifecycle", () => {
 
     fixture.setStatus("reconnecting");
     fixture.setStatus("connected");
-    await vi.waitFor(() => expect(fixture.runtime.data.location.syncInfo).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(fixture.runtime.data.location.syncInfo).toHaveBeenCalledTimes(1));
     fixture.setStatus("reconnecting");
     reconnectLocation.resolve();
     await Promise.resolve();
@@ -169,5 +167,15 @@ describe("createConnectedLifecycle", () => {
 
     expect(fixture.sessions.refreshAfterReconnect).not.toHaveBeenCalled();
     dispose();
+  });
+  it("closes while readiness is owned by an earlier workspace fiber", async () => {
+    const { state, owner } = withTestWorkspace((effects) => {
+      const fixture = setup(effects.runPromise(Effect.never));
+      createConnectedLifecycle({ ...fixture, effects });
+      return { state: fixture, owner: effects };
+    });
+    await Effect.runPromise(Scope.close(owner.scope, Exit.void));
+    expect(state.markBootstrapped).not.toHaveBeenCalled();
+    expect(state.sessions.syncCatalog).not.toHaveBeenCalled();
   });
 });

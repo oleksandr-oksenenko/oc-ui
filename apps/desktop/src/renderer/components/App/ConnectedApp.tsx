@@ -1,135 +1,39 @@
-import { createSignal, Show } from "solid-js";
+import { Show } from "solid-js";
 
-import { createAnnotationDraftStore } from "../../domain/annotation-drafts.ts";
-import { createReviewDraftStore } from "../../domain/index.ts";
-import {
-  createModelSelection,
-  useServerRuntime,
-  type VerifiedServer,
-} from "../../opencode/index.ts";
+import { useServerRuntime, type VerifiedServer } from "../../opencode/index.ts";
 import { ChangesRegion } from "./ConnectedApp/Changes/ChangesRegion.tsx";
 import { ChangesTitlebarRegion } from "./ConnectedApp/Changes/ChangesTitlebarRegion.tsx";
-import { createWorkspaceChanges } from "./ConnectedApp/Changes/createWorkspaceChanges.ts";
 import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegion.tsx";
-import { createSessionAgentSelection } from "./ConnectedApp/Conversation/createSessionAgentSelection.ts";
-import { createSessionComposer } from "./ConnectedApp/Conversation/createSessionComposer.ts";
-import { createSessionForms } from "./ConnectedApp/Conversation/createSessionForms.ts";
 import { GlobalFormsRegion } from "./ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
-import { createGlobalForms } from "./ConnectedApp/GlobalForms/createGlobalForms.ts";
-import { createReviewFlow, ReviewRegion } from "./ConnectedApp/Review/ReviewRegion.tsx";
+import { ReviewRegion } from "./ConnectedApp/Review/ReviewRegion.tsx";
 import { SessionFlowsRegion } from "./ConnectedApp/Sessions/SessionFlowsRegion.tsx";
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
-import { createSessionFlows } from "./ConnectedApp/Sessions/createSessionFlows.ts";
-import { createSessionWorkspace } from "./ConnectedApp/Sessions/createSessionWorkspace.ts";
 import { ShellRegion } from "./ConnectedApp/Shell/ShellRegion.tsx";
-import { createShellPanelState } from "./ConnectedApp/Shell/createShellPanelState.ts";
-import { createConnectedLifecycle } from "./ConnectedApp/createConnectedLifecycle.ts";
+import type { WorkspaceModel } from "./ConnectedApp/createWorkspace.ts";
 
 export type ConnectedAppProps = {
   readonly server: VerifiedServer;
-  readonly onConnected: () => void;
-  readonly onInitialFailure: (cause: unknown) => void;
+  readonly model: WorkspaceModel;
   readonly onChangeServer: () => void;
 };
 
-/** Composes the connected workspace from feature-owned controllers and regions. */
+/** Renders the model retained by the connection's workspace. */
 export function ConnectedApp(props: ConnectedAppProps) {
   const runtime = useServerRuntime();
-  const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
-  const connected = () => runtime.stream.status() === "connected";
-  const globalForms = createGlobalForms({
-    runtime,
+  const {
+    panels,
     connected,
-    location: runtime.defaultLocation,
-  });
-  const [bootstrapped, setBootstrapped] = createSignal(false);
-  const reviewDrafts = createReviewDraftStore();
-  const annotationDrafts = createAnnotationDraftStore();
-  const reviewFlow = createReviewFlow();
-
-  const sessions = createSessionWorkspace({
-    runtime,
-    connected,
-    bootstrapped,
-  });
-  const modelSelection = createModelSelection({
-    api: runtime.api,
-    data: runtime.data,
-    defaultLocation: runtime.defaultLocation,
-    selectedSession: sessions.selectedSession,
-  });
-  const agentSelection = createSessionAgentSelection({
-    api: runtime.api,
-    data: runtime.data,
-    selectedSession: sessions.selectedSession,
-    connected,
-  });
-  const forms = createSessionForms({
-    data: runtime.data,
-    selectedID: sessions.selectedID,
-    connected,
-  });
-  createConnectedLifecycle({
-    runtime,
-    bootstrapped,
-    markBootstrapped: () => setBootstrapped(true),
-    connected,
+    globalForms,
+    annotationDrafts,
+    reviewFlow,
     sessions,
-    syncSelectedFeatures: () =>
-      Promise.all([
-        modelSelection.sync().catch(() => undefined),
-        agentSelection.sync().catch(() => undefined),
-      ]).then(() => undefined),
-    onConnected: props.onConnected,
-    onInitialFailure: props.onInitialFailure,
-  });
-
-  const changes = createWorkspaceChanges({
-    runtime,
-    selectedSession: sessions.selectedSession,
-    bootstrapped,
-    connected,
-    panelOpen: panels.rightPanelOpen,
-    reviewDrafts,
-    requestRemoveComment: (key, commentID, opener) => {
-      reviewFlow.confirmRemoval({
-        title: "Delete review comment?",
-        description: "This review comment will be permanently deleted.",
-        confirmLabel: "Delete comment",
-        focusTarget: opener,
-        onConfirm: () => reviewDrafts.remove(key, commentID),
-      });
-    },
-  });
-  const composer = createSessionComposer({
-    runtime,
-    selectedID: sessions.selectedID,
-    running: sessions.running,
-    transcriptLoading: sessions.transcriptLoading,
-    transcriptError: sessions.transcriptError,
-    annotations: annotationDrafts,
-    connected,
-    selectionSwitching: () => modelSelection.switching() || agentSelection.switching(),
-    review: {
-      drafts: reviewDrafts,
-      key: changes.reviewKey,
-      requestDiscard: (key, count, opener) => {
-        reviewFlow.confirmRemoval({
-          title: "Discard code review?",
-          description: `${count} review ${count === 1 ? "comment" : "comments"} will be permanently deleted.`,
-          confirmLabel: "Discard review",
-          focusTarget: opener,
-          onConfirm: () => reviewDrafts.clear(key),
-        });
-      },
-    },
-  });
-  const flows = createSessionFlows({
-    runtime,
-    connected,
-    workspace: sessions,
-    clearDraft: composer.clear,
-  });
+    modelSelection,
+    agentSelection,
+    forms,
+    changes,
+    composer,
+    flows,
+  } = props.model;
 
   const closeLeftSidebarOnMobile = (): void => {
     if (panels.mobile()) panels.setLeftSidebarOpen(false);
@@ -141,7 +45,11 @@ export function ConnectedApp(props: ConnectedAppProps) {
     <>
       <ShellRegion
         panels={panels}
-        selectedTitle={() => sessions.selectedSession()?.title}
+        selectedTitle={() =>
+          sessions.selectedID()
+            ? sessions.selectedSession()?.title?.trim() || "Untitled session"
+            : undefined
+        }
         globalControls={<GlobalFormsRegion controller={globalForms} />}
         rightControls={<ChangesTitlebarRegion onClose={closeRightPanel} />}
         sidebar={
@@ -176,12 +84,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
           />
         }
       />
-      <SessionFlowsRegion
-        runtime={runtime}
-        flows={flows}
-        onSessionCreated={sessions.markCreated}
-        onSessionOpened={closeLeftSidebarOnMobile}
-      />
+      <SessionFlowsRegion flows={flows} />
       <Show when={reviewFlow.removal()}>
         <ReviewRegion flow={reviewFlow} />
       </Show>

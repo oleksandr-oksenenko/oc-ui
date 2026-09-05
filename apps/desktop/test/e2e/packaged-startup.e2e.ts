@@ -3,11 +3,14 @@
 /// <reference types="@wdio/electron-service" />
 
 import assert from "node:assert/strict";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { $, browser } from "@wdio/globals";
 import type { DesktopApi } from "../../src/shared/desktop-api.ts";
+import { verifyConnectionSettings } from "./connection-flows.ts";
+import { prepareProjectFixture, verifyProjectFlows } from "./project-flows.ts";
+import { verifyProviderFlows } from "./provider-flows.ts";
 
 declare global {
   interface Window {
@@ -26,9 +29,10 @@ const pidRecordPath = join(userDataPath, "acceptance-worker-pids.json");
 const workerPids: number[] = [];
 const terminalPids: number[] = [];
 const artifactDirectory = fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
+const projectDirectory = join(userDataPath, "acceptance-project");
 
 describe("packaged owned OpenCode", () => {
-  it("starts lazily, reconnects without replacing the worker, and restarts only on request", async () => {
+  it("starts lazily and preserves session drafts through dialog and layout changes", async () => {
     await mkdir(artifactDirectory, { recursive: true });
     const runtime = await browser.electron.execute((electron) => ({
       isPackaged: electron.app.isPackaged,
@@ -40,6 +44,19 @@ describe("packaged owned OpenCode", () => {
     assert.equal(runtime.userData, userDataPath);
     assert.equal(runtime.mockKeychain, true);
     assert.equal(runtime.databasePath, globalThis.process.env.OPENCODE_DB);
+    await Promise.all(
+      Array.from({ length: 24 }, (_, index) =>
+        mkdir(join(projectDirectory, `folder-${String(index).padStart(2, "0")}`), {
+          recursive: true,
+        }),
+      ),
+    );
+    await prepareProjectFixture(projectDirectory);
+    // The server's default location is its working directory; keep UI-created sessions isolated.
+    await browser.electron.execute(
+      (_electron, directory) => process.chdir(directory),
+      projectDirectory,
+    );
 
     await $("#connection-form-title").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
     assert.deepEqual(await ownedWorkerPids(), []);
@@ -59,6 +76,27 @@ describe("packaged owned OpenCode", () => {
     await assert.rejects(access(join(userDataPath, "opencode", "service.json")), {
       code: "ENOENT",
     });
+    await verifySessionDrafts();
+  });
+
+  it("validates connections, saves encrypted credentials, reconnects, and forgets them", async () => {
+    await verifyConnectionSettings(settingsPath);
+    assert.deepEqual(await ownedWorkerPids(), [workerPids[0]]);
+  });
+
+  it("runs prompts, selections, forms, cancellation, and transcript recovery", async () => {
+    await verifyProviderFlows();
+    await browser.saveScreenshot(join(artifactDirectory, "provider-flows-complete.png"));
+  });
+
+  it("updates diffs and creates and removes a worktree through the UI", async () => {
+    await verifyProjectFlows(projectDirectory);
+    await browser.saveScreenshot(join(artifactDirectory, "project-flows-complete.png"));
+  });
+
+  it("preserves the worker on Cancel Quit and reload, then restarts only on request", async () => {
+    const firstPid = workerPids[0];
+    assert.ok(firstPid !== undefined);
 
     // Native confirmation is mocked only by the test; Cancel must preserve the worker.
     const confirmation = await browser.electron.mock("dialog", "showMessageBox");
@@ -128,6 +166,93 @@ describe("packaged owned OpenCode", () => {
     for (const pid of terminalPids) await waitForProcessExit(pid);
   });
 });
+
+async function verifySessionDrafts(): Promise<void> {
+  const opener = '[aria-label="Create session"]';
+  const submit = '.server-flow-dialog button[type="submit"]';
+  const prompt = 'textarea[aria-label="Prompt"]';
+  await $(opener).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
+  await $(opener).click();
+  await $('[aria-label="Close new session dialog"]').waitForDisplayed();
+  await browser.keys("Escape");
+  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
+  await browser.waitUntil(() => $(opener).isFocused());
+  await $(opener).click();
+  await $("button=Add project").click();
+  await $(submit).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
+  assert.equal(await $('.server-directory-browser[aria-busy="true"]').isExisting(), false);
+  const initialDirectory = await $(".server-directory-browser-path").getText();
+  assert.equal(initialDirectory, await realpath(projectDirectory));
+  await $('[aria-label="Browse directory folder-00/"]').click();
+  await browser.waitUntil(async () =>
+    (await $(".server-directory-browser-path").getText()).endsWith("/folder-00"),
+  );
+  await $(submit).waitForClickable();
+  assert.equal(await $("p=No child directories.").isDisplayed(), true);
+  await $('[aria-label="Go to parent directory"]').click();
+  await browser.waitUntil(
+    async () => (await $(".server-directory-browser-path").getText()) === initialDirectory,
+  );
+  await $(submit).waitForClickable();
+  await resizeWindow(430, 600);
+  assert.equal(
+    await browser.execute(() => {
+      const entries = document.querySelector<HTMLElement>('[aria-label="Directories"]');
+      if (!entries) return false;
+      entries.scrollTop = entries.scrollHeight;
+      return entries.scrollTop > 0 && document.documentElement.scrollWidth <= window.innerWidth;
+    }),
+    true,
+  );
+  assert.equal(await $(submit).isClickable(), true);
+  await browser.saveScreenshot(join(artifactDirectory, "session-directory-narrow.png"));
+  await browser.keys("Escape");
+  await $('[aria-label="Close new session dialog"]').waitForDisplayed();
+  await browser.waitUntil(() => $("button=Add project").isFocused());
+  await $("button=Add project").click();
+  await $(submit).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
+  assert.equal(await $(".server-directory-browser-path").getText(), initialDirectory);
+  await $(submit).click();
+  await $(".new-session-project-trigger").waitForClickable();
+  await $(".new-session-project-trigger").click();
+  await $('input[placeholder="Search projects"]').waitForDisplayed();
+  await browser.keys("Escape");
+  await browser.waitUntil(() => $(".new-session-project-trigger").isFocused());
+  await $(submit).waitForClickable();
+  await $(submit).click();
+  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
+  await $(prompt).waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
+  await $(".transcript-empty-state").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
+  assert.equal(await $(".titlebar-session-title").getText(), "Untitled session");
+  assert.equal(await $('[aria-label="Send"]').isEnabled(), false);
+  const draft = "Keep this draft with its original session.";
+  await $(prompt).setValue(draft);
+  assert.equal(await $(prompt).getValue(), draft);
+  assert.equal(
+    await browser.execute(() => document.documentElement.scrollWidth <= window.innerWidth),
+    true,
+  );
+  await browser.saveScreenshot(join(artifactDirectory, "session-draft-narrow.png"));
+  await resizeWindow(1280, 860);
+  await $('[aria-label="Show sessions"]').click();
+
+  await $(opener).click();
+  await $("button=Add project").click();
+  await $(submit).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
+  await $(submit).click();
+  await $(".new-session-project-trigger").waitForClickable();
+  await $(submit).waitForClickable();
+  await $(submit).click();
+  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
+  await browser.waitUntil(async () => (await $(prompt).getValue()) === "");
+  await $(".transcript-empty-state").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
+  assert.equal(
+    await browser.execute(() => document.querySelectorAll(".shell-session-main").length),
+    2,
+  );
+  await $('.shell-session-main:not([aria-current="page"])').click();
+  await browser.waitUntil(async () => (await $(prompt).getValue()) === draft);
+}
 
 async function ownedWorkerPids(): Promise<number[]> {
   return browser.electron.execute((electron) =>

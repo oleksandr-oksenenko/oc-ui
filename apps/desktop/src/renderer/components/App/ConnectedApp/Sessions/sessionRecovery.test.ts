@@ -1,7 +1,9 @@
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { deferred } from "../../../../test/deferred.ts";
-import { createReconnectRefreshQueue, retryCatalogAndTranscript } from "./sessionRecovery.ts";
+import { withTestWorkspace } from "../../../../test/workspace.ts";
+import { createReconnectRefreshQueue } from "./sessionRecovery.ts";
 
 describe("session recovery", () => {
   it("runs one queued refresh after reconnecting during an active refresh", async () => {
@@ -10,33 +12,42 @@ describe("session recovery", () => {
       .fn<() => Promise<void>>()
       .mockReturnValueOnce(first.promise)
       .mockResolvedValue(undefined);
-    const queue = createReconnectRefreshQueue(refresh, () => true);
+    const transition = withTestWorkspace((effects) =>
+      createReconnectRefreshQueue(effects, effects.request(refresh).pipe(Effect.ignore)),
+    );
 
-    queue.markDisconnected();
-    queue.refreshIfPending();
-    queue.markDisconnected();
-    queue.refreshIfPending();
+    transition(false);
+    transition(true);
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    transition(false);
+    transition(true);
+    transition(false);
+    transition(true);
 
     expect(refresh).toHaveBeenCalledTimes(1);
     first.resolve();
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
   });
 
-  it("rehydrates a selected child transcript after refreshing the catalog", async () => {
-    const order: string[] = [];
-    const syncCatalog = vi.fn<() => Promise<void>>(async () => {
-      order.push("catalog");
-    });
-    const hydrateTranscript = vi
-      .fn<(sessionID: string) => Promise<void>>()
-      .mockImplementation(async (sessionID) => {
-        order.push(`transcript:${sessionID}`);
-      });
+  it("discards a pending reconnect superseded by disconnect and does not retry a failure", async () => {
+    const first = deferred();
+    const refresh = vi
+      .fn<() => Promise<void>>()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValue(undefined);
+    const transition = withTestWorkspace((effects) =>
+      createReconnectRefreshQueue(effects, effects.request(refresh).pipe(Effect.ignore)),
+    );
 
-    await retryCatalogAndTranscript(syncCatalog, () => "child", hydrateTranscript);
+    transition(true);
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    transition(true);
+    transition(false);
+    first.reject(new Error("connection lost"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(refresh).toHaveBeenCalledTimes(1);
 
-    expect(syncCatalog).toHaveBeenCalledOnce();
-    expect(hydrateTranscript).toHaveBeenCalledWith("child");
-    expect(order).toEqual(["catalog", "transcript:child"]);
+    transition(true);
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
   });
 });

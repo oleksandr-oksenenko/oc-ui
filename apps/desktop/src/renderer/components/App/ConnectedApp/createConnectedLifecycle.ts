@@ -1,6 +1,8 @@
-import { createEffect, onCleanup, onMount, type Accessor } from "solid-js";
+import { Deferred, Effect } from "effect";
+import { createEffect, on, onMount, type Accessor } from "solid-js";
 
 import type { ConnectedRuntime } from "../../../opencode/runtime.ts";
+import type { WorkspaceOwner } from "../../../workspace-owner.ts";
 import { createReconnectRefreshQueue } from "./Sessions/sessionRecovery.ts";
 
 type ConnectedLifecycleRuntime = Pick<ConnectedRuntime, "ready" | "defaultLocation"> & {
@@ -21,70 +23,62 @@ type ConnectedLifecycleSessions = {
 };
 
 export type ConnectedLifecycleOptions = {
+  readonly effects: WorkspaceOwner;
   readonly runtime: ConnectedLifecycleRuntime;
   readonly bootstrapped: Accessor<boolean>;
   readonly markBootstrapped: () => void;
   readonly connected: Accessor<boolean>;
   readonly sessions: ConnectedLifecycleSessions;
   readonly syncSelectedFeatures: () => Promise<void>;
-  readonly onConnected: () => void;
-  readonly onInitialFailure: (cause: unknown) => void;
 };
 
-/** Owns initial connection setup and reconnect refresh ordering. */
+/** Connection owns readiness; this owner orders initial and reconnect feature refresh. */
 export function createConnectedLifecycle(options: ConnectedLifecycleOptions): void {
-  let alive = true;
-  let initialFeatureSync = Promise.resolve();
-
-  onCleanup(() => {
-    alive = false;
-  });
-
+  const { effects } = options;
+  const initialSync = Deferred.makeUnsafe<void>();
   onMount(() => {
-    void (async () => {
-      try {
-        await options.runtime.ready;
-        await options.runtime.data.location.syncInfo(options.runtime.defaultLocation);
-        if (!alive) return;
-        options.onConnected();
+    effects.runFork(
+      Effect.gen(function* () {
+        yield* Effect.tryPromise(() => options.runtime.ready);
         options.markBootstrapped();
-        initialFeatureSync = Promise.all([
-          options.sessions.syncCatalog().catch(() => undefined),
-          options.syncSelectedFeatures().catch(() => undefined),
-        ]).then(() => undefined);
-        await initialFeatureSync;
-      } catch (cause) {
-        if (alive) options.onInitialFailure(cause);
-      }
-    })();
+        yield* Effect.all(
+          [
+            Effect.tryPromise(options.sessions.syncCatalog).pipe(Effect.ignore),
+            Effect.tryPromise(options.syncSelectedFeatures).pipe(Effect.ignore),
+          ],
+          { concurrency: "unbounded" },
+        );
+      }).pipe(Effect.ignore, Effect.ensuring(Deferred.succeed(initialSync, undefined))),
+    );
   });
 
-  const reconnectRefresh = createReconnectRefreshQueue(
-    async () => {
+  const transition = createReconnectRefreshQueue(
+    effects,
+    Effect.gen(function* () {
       options.sessions.beginRecovery();
-      try {
-        await initialFeatureSync;
-        if (!alive || !options.connected()) return;
-        await options.runtime.data.location.syncInfo(options.runtime.defaultLocation);
-        if (!alive || !options.connected()) return;
-        await Promise.all([
-          options.sessions.refreshAfterReconnect(),
-          options.syncSelectedFeatures().catch(() => undefined),
-        ]);
-      } catch {
-        if (alive) options.sessions.failRecovery();
-      }
-    },
-    () => alive && options.connected(),
+      yield* Deferred.await(initialSync);
+      if (!options.connected()) return;
+      yield* effects.request(() =>
+        options.runtime.data.location.syncInfo(options.runtime.defaultLocation),
+      );
+      if (!options.connected()) return;
+      yield* Effect.all(
+        [
+          Effect.tryPromise<void>(options.sessions.refreshAfterReconnect),
+          Effect.tryPromise(options.syncSelectedFeatures).pipe(Effect.ignore),
+        ],
+        { concurrency: "unbounded" },
+      );
+    }).pipe(Effect.catch(() => Effect.sync(options.sessions.failRecovery))),
   );
 
-  createEffect(() => {
-    const connected = options.connected();
-    if (!options.bootstrapped()) return;
-    if (!connected) {
-      reconnectRefresh.markDisconnected();
-      return;
-    }
-    reconnectRefresh.refreshIfPending();
-  });
+  createEffect(
+    on(
+      options.connected,
+      (connected) => {
+        if (options.bootstrapped()) transition(connected);
+      },
+      { defer: true },
+    ),
+  );
 }

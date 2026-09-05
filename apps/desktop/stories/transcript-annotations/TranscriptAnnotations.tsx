@@ -1,7 +1,10 @@
 import type { SessionInboxUser, SessionMessageInfo, SessionPromptInput } from "@opencode-ai/client";
 import { Button } from "@opencode-ai/ui/button";
-import { createSignal } from "solid-js";
-import { Effect } from "effect";
+import { createSignal, onCleanup } from "solid-js";
+import { RegistryContext } from "@effect/atom-solid";
+import { AtomRegistry } from "effect/unstable/reactivity";
+import { makeWorkspaceOwner, type WorkspaceOwner } from "../../src/renderer/workspace-owner.ts";
+import { Effect, Exit, Scope } from "effect";
 
 import { createAnnotationDraftStore } from "../../src/renderer/domain/annotation-drafts.ts";
 import { createReviewDraftStore } from "../../src/renderer/domain/review-drafts.ts";
@@ -61,7 +64,25 @@ export type TranscriptAnnotationsProps = {
 
 /** Real annotation components and submission controller, with a simulated SDK transport. */
 export function TranscriptAnnotations(props: TranscriptAnnotationsProps) {
-  const drafts = createAnnotationDraftStore();
+  const registry = AtomRegistry.make();
+  const scope = Scope.makeUnsafe();
+  const effects = Effect.runSync(
+    makeWorkspaceOwner(registry).pipe(Effect.provideService(Scope.Scope, scope)),
+  );
+  onCleanup(() => {
+    void Effect.runPromise(Scope.close(scope, Exit.void)).then(() => registry.dispose());
+  });
+  return (
+    <RegistryContext.Provider value={registry}>
+      <TranscriptAnnotationsContent {...props} effects={effects} />
+    </RegistryContext.Provider>
+  );
+}
+
+function TranscriptAnnotationsContent(
+  props: TranscriptAnnotationsProps & { readonly effects: WorkspaceOwner },
+) {
+  const drafts = createAnnotationDraftStore(props.effects);
   for (const [quote, body] of [
     [
       "annotation drafts remain above the composer",
@@ -112,6 +133,7 @@ export function TranscriptAnnotations(props: TranscriptAnnotationsProps) {
   const [variantID, setVariantID] = createSignal("deep");
   const [agentID, setAgentID] = createSignal("build");
   const composer = createSessionComposer({
+    effects: props.effects,
     runtime: {
       data: {
         session: {
@@ -171,7 +193,7 @@ export function TranscriptAnnotations(props: TranscriptAnnotationsProps) {
     selectionSwitching: () => false,
     annotations: drafts,
     review: {
-      drafts: createReviewDraftStore(),
+      drafts: createReviewDraftStore(props.effects),
       key: () => undefined,
       requestDiscard: () => undefined,
     },

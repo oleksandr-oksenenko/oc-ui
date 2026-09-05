@@ -1,8 +1,9 @@
 import { OpenCode } from "@opencode-ai/client";
 import type { LocationGetOutput, OpenCodeClient } from "@opencode-ai/client";
-import { Predicate } from "effect";
+import { Effect, Predicate } from "effect";
 
 import { OPENCODE_VERSION } from "../../shared/desktop-api.ts";
+import { workspaceRequest } from "../workspace-owner.ts";
 const HEALTH_TIMEOUT_MS = 10_000;
 const BASIC_USERNAME = "opencode";
 
@@ -132,56 +133,43 @@ class HttpStatusError extends Error {
 }
 
 /** Verify health, exact protocol version, and the server's default location. */
-export async function verifyServer(
+export const verifyServer = Effect.fn("verifyServer")(function* (
   input: VerifyServerInput,
-  signal?: AbortSignal,
-): Promise<VerifiedServer> {
-  signal?.throwIfAborted();
-  const serverUrl = normalizeServerUrl(input.serverUrl);
+): Effect.fn.Return<VerifiedServer, OpenCodeConnectionError> {
+  const serverUrl = yield* Effect.try({
+    try: () => normalizeServerUrl(input.serverUrl),
+    catch: (cause) =>
+      cause instanceof OpenCodeConnectionError
+        ? cause
+        : new OpenCodeConnectionError(
+            "invalid-url",
+            "Enter a valid plain HTTP server origin.",
+            "url",
+            { cause },
+          ),
+  });
   const api = createAuthenticatedClient(serverUrl, input.password);
-
-  let health;
-  try {
-    health = await withTimeout(
-      (requestSignal) => api.health.get({ signal: requestSignal }),
-      "health",
-      signal,
-    );
-  } catch (cause) {
-    signal?.throwIfAborted();
-    throw mapConnectionFailure(cause, "health");
-  }
-
+  const health = yield* verifyRequest((signal) => api.health.get({ signal }), "health");
   if (health.version !== OPENCODE_VERSION) {
-    throw new OpenCodeConnectionError(
-      "incompatible-version",
-      `This app requires OpenCode ${OPENCODE_VERSION}; the server reports ${health.version}.`,
-      "health",
+    return yield* Effect.fail(
+      new OpenCodeConnectionError(
+        "incompatible-version",
+        `This app requires OpenCode ${OPENCODE_VERSION}; the server reports ${health.version}.`,
+        "health",
+      ),
     );
   }
-
-  let location: LocationGetOutput;
-  try {
-    location = await withTimeout(
-      (requestSignal) => api.location.get(undefined, { signal: requestSignal }),
-      "location",
-      signal,
-    );
-  } catch (cause) {
-    signal?.throwIfAborted();
-    throw mapConnectionFailure(cause, "location");
-  }
-
+  const location = yield* verifyRequest(
+    (signal) => api.location.get(undefined, { signal }),
+    "location",
+  );
   if (location.directory.length === 0) {
-    throw new OpenCodeConnectionError(
-      "setup",
-      "The server returned no default directory.",
-      "location",
+    return yield* Effect.fail(
+      new OpenCodeConnectionError("setup", "The server returned no default directory.", "location"),
     );
   }
-
   return { serverUrl, api, location };
-}
+});
 
 export function mapConnectionFailure(
   cause: unknown,
@@ -221,34 +209,20 @@ export function mapConnectionFailure(
   );
 }
 
-async function withTimeout<T>(
-  operation: (signal: AbortSignal) => Promise<T>,
-  phase: Exclude<ConnectionFailurePhase, "url" | "stream">,
-  parent?: AbortSignal,
-): Promise<T> {
-  parent?.throwIfAborted();
-  const controller = new AbortController();
-  const cancel = (): void => controller.abort(parent?.reason);
-  parent?.addEventListener("abort", cancel, { once: true });
-  const timer = setTimeout(
-    () =>
-      controller.abort(
-        new OpenCodeConnectionError("unreachable", `Timed out during ${phase}.`, phase),
-      ),
-    HEALTH_TIMEOUT_MS,
+const verifyRequest = <A>(
+  operation: (signal: AbortSignal) => Promise<A>,
+  phase: "health" | "location",
+) =>
+  workspaceRequest(operation).pipe(
+    Effect.mapError((error) => mapConnectionFailure(error.cause, phase)),
+    Effect.timeoutOrElse({
+      duration: HEALTH_TIMEOUT_MS,
+      orElse: () =>
+        Effect.fail(
+          new OpenCodeConnectionError("unreachable", `Timed out during ${phase}.`, phase),
+        ),
+    }),
   );
-  try {
-    // Keep ownership until the actual request settles; a rejected timer alone
-    // would leave the fetch (or its response body) running after disconnection.
-    return await operation(controller.signal);
-  } catch (cause) {
-    if (controller.signal.aborted) throw controller.signal.reason;
-    throw cause;
-  } finally {
-    clearTimeout(timer);
-    parent?.removeEventListener("abort", cancel);
-  }
-}
 
 function hasTag(cause: unknown, tag: string): boolean {
   return Predicate.isObject(cause) && "_tag" in cause && cause._tag === tag;

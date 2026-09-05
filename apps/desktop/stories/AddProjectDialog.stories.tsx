@@ -1,5 +1,10 @@
 /* oxlint-disable effecttsgo/async-function */
 
+import { RegistryContext } from "@effect/atom-solid";
+import { Effect, Exit, Scope } from "effect";
+import { AtomRegistry } from "effect/unstable/reactivity";
+import { onCleanup } from "solid-js";
+import { makeWorkspaceOwner } from "../src/renderer/workspace-owner.ts";
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
@@ -37,9 +42,9 @@ const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
   return Promise.resolve(response(directory, entries, input?.location?.workspace));
 };
 
-// This fixture intentionally never resolves so Storybook can show the loading state.
-const loadingResponse = Promise.race<FileListOutput>([]);
-const loadingListDirectory: OpenCodeClient["file"]["list"] = () => loadingResponse;
+// Keep the loading fixture pending until its view closes.
+const loadingListDirectory: OpenCodeClient["file"]["list"] = (_input, options) =>
+  Effect.runPromise(Effect.never, { signal: options?.signal });
 
 const meta = {
   title: "Projects/AddProjectDialog",
@@ -61,19 +66,30 @@ function dialog(
     readonly onAddProject?: (location: LocationRef) => void;
   } = {},
 ) {
+  const registry = AtomRegistry.make();
+  const scope = Scope.makeUnsafe();
+  const effects = Effect.runSync(
+    makeWorkspaceOwner(registry).pipe(Effect.provideService(Scope.Scope, scope)),
+  );
+  onCleanup(() => {
+    void Effect.runPromise(Scope.close(scope, Exit.void)).then(() => registry.dispose());
+  });
   return (
-    <DialogStory>
-      {(onDismissBlockedChange) => (
-        <AddProjectDialog
-          listDirectory={options.listDirectory ?? listDirectory}
-          initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
-          error={options.error}
-          adding={options.adding}
-          onDismissBlockedChange={onDismissBlockedChange}
-          onAddProject={options.onAddProject ?? (() => undefined)}
-        />
-      )}
-    </DialogStory>
+    <RegistryContext.Provider value={registry}>
+      <DialogStory>
+        {(onDismissBlockedChange) => (
+          <AddProjectDialog
+            effects={effects}
+            listDirectory={options.listDirectory ?? listDirectory}
+            initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
+            error={options.error}
+            adding={options.adding}
+            onDismissBlockedChange={onDismissBlockedChange}
+            onAddProject={options.onAddProject ?? (() => undefined)}
+          />
+        )}
+      </DialogStory>
+    </RegistryContext.Provider>
   );
 }
 

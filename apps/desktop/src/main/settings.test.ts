@@ -285,25 +285,49 @@ describe("connection settings", () => {
     }),
   );
 
-  it.effect("does not remove a temporary path it failed to create", () =>
+  it.effect.each([false, true])("preserves an unowned temporary directory (cancel: %s)", (cancel) =>
     Effect.gen(function* () {
+      const started = gate();
+      const release = gate();
       let removed = false;
+      let collisionPath = "";
       const collision = Object.assign(new Error("collision"), { code: "EEXIST" });
       const { settings } = yield* makeSettings(encryptedStorage, {
         ...files,
-        writeFile: async () => Promise.reject(collision),
+        mkdir: async (path, options) => {
+          if (!String(path).endsWith(".tmp")) {
+            await mkdir(path, options);
+            return undefined;
+          }
+          collisionPath = String(path);
+          await mkdir(path);
+          await writeFile(join(collisionPath, "sentinel"), "belongs to another creator");
+          started.resolve();
+          await release.promise;
+          throw collision;
+        },
         rm: async (path, options) => {
           if (String(path).endsWith(".tmp")) removed = true;
           await rm(path, options);
         },
       });
 
-      const error = yield* settings.save({ kind: "local" }).pipe(Effect.flip);
-      expect(error.cause).toMatchObject({
-        _tag: "PlatformError",
-        reason: { _tag: "AlreadyExists" },
-      });
+      const request = yield* Effect.forkChild(settings.save({ kind: "local" }));
+      yield* started.wait;
+      const cancellation = cancel ? yield* Effect.forkChild(Fiber.interrupt(request)) : undefined;
+      yield* Effect.yieldNow;
+      release.resolve();
+      if (cancellation) yield* Fiber.join(cancellation);
+      expect(Exit.isFailure(yield* Fiber.await(request))).toBe(true);
+      if (!cancel) {
+        const error = yield* Fiber.join(request).pipe(Effect.flip);
+        expect(error.cause).toMatchObject({
+          _tag: "PlatformError",
+          reason: { _tag: "AlreadyExists" },
+        });
+      }
       expect(removed).toBe(false);
+      expect(yield* readText(join(collisionPath, "sentinel"))).toBe("belongs to another creator");
     }),
   );
 });
@@ -337,7 +361,7 @@ const blockedWrite = Effect.fn("SettingsTest.blockedWrite")(function* (owner?: S
         await rename(source, destination);
       },
       rm: async (path, options) => {
-        if (String(path).endsWith(".tmp")) {
+        if (String(path).endsWith(".tmp") && writes === 1 && renames === 0) {
           cleanupStarted.resolve();
           await cleanupRelease.promise;
         }

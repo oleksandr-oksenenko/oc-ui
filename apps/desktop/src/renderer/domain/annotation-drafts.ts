@@ -1,5 +1,7 @@
 import { Schema } from "effect";
-import { createSignal } from "solid-js";
+import { useAtomValue } from "@effect/atom-solid";
+import { Atom } from "effect/unstable/reactivity";
+import type { WorkspaceOwner } from "../workspace-owner.ts";
 
 const NonBlankStringSchema = Schema.String.check(Schema.isPattern(/\S/));
 const OffsetSchema = Schema.Finite.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0));
@@ -44,25 +46,27 @@ const EMPTY: readonly TranscriptAnnotation[] = Object.freeze([]);
 type SessionComments = Readonly<Record<string, readonly TranscriptAnnotation[]>>;
 
 /** Creates an in-memory, reactive annotation draft store keyed by session ID. */
-export function createAnnotationDraftStore(): AnnotationDraftStore {
-  const [sessions, setSessions] = createSignal<SessionComments>({});
+export function createAnnotationDraftStore(effects: WorkspaceOwner): AnnotationDraftStore {
+  const state = Atom.make<SessionComments>({});
+  effects.mount(state);
+  const sessions = useAtomValue(() => state);
 
   const read = (sessionID: string): readonly TranscriptAnnotation[] =>
-    sessions()[sessionID] ?? EMPTY;
+    effects.registry.get(state)[sessionID] ?? EMPTY;
 
   const write = (sessionID: string, comments: readonly TranscriptAnnotation[]): void => {
-    setSessions({ ...sessions(), [sessionID]: comments });
+    effects.registry.set(state, { ...effects.registry.get(state), [sessionID]: comments });
   };
 
   const clear = (sessionID: string): void => {
-    if (sessions()[sessionID] === undefined) return;
-    const next = { ...sessions() };
+    if (effects.registry.get(state)[sessionID] === undefined) return;
+    const next = { ...effects.registry.get(state) };
     delete next[sessionID];
-    setSessions(next);
+    effects.registry.set(state, next);
   };
 
   return {
-    get: read,
+    get: (sessionID) => sessions()[sessionID] ?? EMPTY,
 
     add: (sessionID, input) => {
       const existing = read(sessionID);
