@@ -1,4 +1,4 @@
-import type { FormInfo } from "@opencode-ai/client";
+import type { FormInfo, PermissionRequest } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -9,6 +9,7 @@ import { stubResizeObserver } from "../../../../test/resize-observer.ts";
 import { createAnnotationDraftStore } from "../../../../domain/annotation-drafts.ts";
 import { ConversationRegion } from "./ConversationRegion.tsx";
 import type { SessionFormsController } from "./createSessionForms.ts";
+import type { SessionPermissionsController } from "./createSessionPermissions.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
 import type { SessionAgentSelectionController } from "./createSessionAgentSelection.ts";
 import type { SessionWorkspace } from "../Sessions/createSessionWorkspace.ts";
@@ -32,11 +33,29 @@ const formForSession = (sessionID: string, id: string, title: string): FormInfo 
   sessionID,
 });
 
-function setup(initialForms: readonly FormInfo[] = []) {
+const permission = (id: string, action: string, sessionID = session.id): PermissionRequest => ({
+  id,
+  sessionID,
+  action,
+  resources: [`/workspace/${id}`],
+  save: [`${id}/**`],
+});
+
+function setup(
+  initialForms: readonly FormInfo[] = [],
+  initialPermissions: readonly PermissionRequest[] = [],
+) {
   stubResizeObserver();
   const [forms, setForms] = createSignal<readonly FormInfo[]>(initialForms);
   const [state, setState] = createSignal<"loading" | "ready" | "failed">("ready");
   const [connected, setConnected] = createSignal(true);
+  const [selectedID, setSelectedID] = createSignal<string | undefined>(session.id);
+  const [permissions, setPermissions] =
+    createSignal<readonly PermissionRequest[]>(initialPermissions);
+  const [permissionsState, setPermissionsState] = createSignal<"loading" | "ready" | "failed">(
+    "ready",
+  );
+  const [permissionsPending, setPermissionsPending] = createSignal(false);
   const formsController: SessionFormsController = {
     sessionForms: forms,
     state,
@@ -47,10 +66,23 @@ function setup(initialForms: readonly FormInfo[] = []) {
     reply: vi.fn<SessionFormsController["reply"]>(async () => undefined),
     cancel: vi.fn<SessionFormsController["cancel"]>(async () => undefined),
   };
+  const permissionsController: SessionPermissionsController = {
+    requests: permissions,
+    state: permissionsState,
+    error: () =>
+      permissionsState() === "failed"
+        ? "Permissions could not be refreshed. Try again."
+        : undefined,
+    pending: permissionsPending,
+    submitting: (requestID) => permissionsPending() && requestID === permissions()[0]?.id,
+    errorFor: () => undefined,
+    sync: vi.fn<SessionPermissionsController["sync"]>(async () => undefined),
+    reply: vi.fn<SessionPermissionsController["reply"]>(async () => undefined),
+  };
   const workspace: SessionWorkspace = {
     sessions: () => [session],
     selectedSession: () => session,
-    selectedID: () => session.id,
+    selectedID,
     running: () => false,
     stopError: () => undefined,
     transcript: () => [],
@@ -108,6 +140,7 @@ function setup(initialForms: readonly FormInfo[] = []) {
         modelSelection={modelSelection}
         agentSelection={agentSelection}
         forms={formsController}
+        permissions={permissionsController}
         connected={connected}
       />
     )),
@@ -115,9 +148,14 @@ function setup(initialForms: readonly FormInfo[] = []) {
   return {
     host,
     formsController,
+    permissionsController,
     setForms,
     setState,
     setConnected,
+    setSelectedID,
+    setPermissions,
+    setPermissionsState,
+    setPermissionsPending,
     dispose: () => {
       dispose();
       vi.unstubAllGlobals();
@@ -196,6 +234,150 @@ describe("ConversationRegion session forms", () => {
         ...mounted.host.querySelectorAll<HTMLInputElement | HTMLButtonElement>("input, button"),
       ].every((element) => element.disabled),
     ).toBe(true);
+    mounted.dispose();
+  });
+});
+
+describe("ConversationRegion session permissions", () => {
+  it("renders permissions before questions and keeps both pending interactions", () => {
+    const mounted = setup(
+      [form("first", "Release question")],
+      [permission("per_read", "read files")],
+    );
+    const pending = mounted.host.querySelector(".transcript-pending-interaction");
+    expect(pending?.querySelector("[data-permission-request-id]")?.textContent).toContain(
+      "read files",
+    );
+    expect(pending?.querySelector(".question-form-card")?.textContent).toContain(
+      "Release question",
+    );
+    const permissionCard = pending?.querySelector("[data-permission-request-id]");
+    const questionCard = pending?.querySelector(".question-form-card");
+    expect(permissionCard).not.toBeNull();
+    expect(questionCard).not.toBeNull();
+    expect(
+      permissionCard!.compareDocumentPosition(questionCard!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    mounted.dispose();
+  });
+
+  it("keeps refresh failures visible without a cached request and retries explicitly", () => {
+    const mounted = setup();
+    mounted.setPermissionsState("failed");
+    expect(mounted.host.querySelector(".transcript-pending-interaction")).not.toBeNull();
+    expect(mounted.host.querySelector('[role="alert"]')?.textContent).toContain(
+      "Permissions could not be refreshed",
+    );
+    const retry = [...mounted.host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Retry permissions",
+    );
+    retry?.click();
+    expect(mounted.permissionsController.sync).toHaveBeenCalledOnce();
+    mounted.dispose();
+  });
+
+  it("disables every permission card while disconnected, loading, or workspace-pending", () => {
+    const mounted = setup(
+      [],
+      [permission("per_first", "read files"), permission("per_second", "run command")],
+    );
+    const everyReplyDisabled = () =>
+      [
+        ...mounted.host.querySelectorAll<HTMLButtonElement>(".permission-request-card button"),
+      ].every((button) => button.disabled);
+    mounted.setConnected(false);
+    expect(everyReplyDisabled()).toBe(true);
+    mounted.setConnected(true);
+    mounted.setPermissionsState("loading");
+    expect(everyReplyDisabled()).toBe(true);
+    mounted.setPermissionsState("ready");
+    mounted.setPermissionsPending(true);
+    expect(everyReplyDisabled()).toBe(true);
+    mounted.dispose();
+  });
+
+  it("routes a controlled card reply through the session permission controller", () => {
+    const mounted = setup([], [permission("per_first", "read files")]);
+    [...mounted.host.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Allow once")
+      ?.click();
+    expect(mounted.permissionsController.reply).toHaveBeenCalledWith("per_first", "once");
+    mounted.dispose();
+  });
+
+  it("restores focus to the next permission card after the focused card is removed", async () => {
+    const second = permission("per_second", "run command");
+    const mounted = setup([], [permission("per_first", "read files"), second]);
+    mounted.host
+      .querySelector<HTMLButtonElement>('[data-permission-request-id="per_first"] button')
+      ?.focus();
+
+    mounted.setPermissions([second]);
+    await Promise.resolve();
+
+    const nextCard = mounted.host.querySelector<HTMLElement>(
+      '[data-permission-request-id="per_second"]',
+    );
+    expect(document.activeElement).toBe(nextCard);
+    expect(nextCard?.getAttribute("role")).toBe("group");
+    const labelID = nextCard?.getAttribute("aria-labelledby");
+    expect(labelID).toBeTruthy();
+    expect(mounted.host.querySelector(`#${labelID}`)?.textContent).toBe("run command");
+    mounted.dispose();
+  });
+
+  it("restores focus to the prompt after the last focused card is removed", async () => {
+    const mounted = setup([], [permission("per_first", "read files")]);
+    mounted.host
+      .querySelector<HTMLButtonElement>('[data-permission-request-id="per_first"] button')
+      ?.focus();
+
+    mounted.setPermissions([]);
+    await Promise.resolve();
+
+    expect(document.activeElement).toBe(
+      mounted.host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]'),
+    );
+    mounted.dispose();
+  });
+
+  it("preserves focus intent when submission disables the focused button before removal", async () => {
+    const mounted = setup([], [permission("per_first", "read files")]);
+    const allow = [...mounted.host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Allow once",
+    );
+    allow?.focus();
+    allow?.click();
+    expect(document.activeElement).toBe(
+      mounted.host.querySelector('[data-permission-request-id="per_first"]'),
+    );
+    mounted.setPermissionsPending(true);
+
+    mounted.setPermissions([]);
+    await Promise.resolve();
+
+    expect(document.activeElement).toBe(
+      mounted.host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]'),
+    );
+    mounted.dispose();
+  });
+
+  it("does not move focus on session navigation or when another control held focus", async () => {
+    const mounted = setup([], [permission("per_first", "read files")]);
+    const prompt = mounted.host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]');
+    prompt?.focus();
+    mounted.setPermissions([]);
+    await Promise.resolve();
+    expect(document.activeElement).toBe(prompt);
+
+    mounted.setPermissions([permission("per_other", "run command")]);
+    mounted.host
+      .querySelector<HTMLButtonElement>('[data-permission-request-id="per_other"] button')
+      ?.focus();
+    mounted.setSelectedID("ses_other");
+    mounted.setPermissions([]);
+    await Promise.resolve();
+    expect(document.activeElement).not.toBe(prompt);
     mounted.dispose();
   });
 });

@@ -30,6 +30,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
     modelSelection,
     agentSelection,
     forms,
+    permissions,
     changes,
     composer,
     flows,
@@ -72,6 +73,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
             modelSelection={modelSelection}
             agentSelection={agentSelection}
             forms={forms}
+            permissions={permissions}
             connected={connected}
           />
         }

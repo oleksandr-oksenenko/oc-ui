@@ -116,19 +116,16 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
   const description = () => {
     const location = props.controller.location;
     const workspace = location.workspaceID ? ` · Workspace ${location.workspaceID}` : "";
-    return `Review each request before the server continues · ${location.directory}${workspace}`;
+    return `Review each global form before the server continues · ${location.directory}${workspace}`;
   };
 
   return (
     <Dialog size="x-large" containerClass="global-forms-region-dialog">
-      <DialogHeader
-        closeLabel="Close server requests dialog"
-        hideClose={props.controller.pending()}
-      >
+      <DialogHeader closeLabel="Close global forms dialog" hideClose={props.controller.pending()}>
         <DialogTitleGroup
           title={
             <span class="global-forms-region-dialog-title">
-              Review server requests{" "}
+              Review global forms{" "}
               <Badge appearance="compact" variant="accent">
                 {forms().length}
               </Badge>
@@ -140,14 +137,15 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
       <DialogBody class="global-forms-region-dialog-body">
         <Show when={disconnected()}>
           <div class="global-forms-region-notice" role="status">
-            Disconnected. Cached requests are available for inspection, but responses are disabled.
+            Disconnected. Cached global forms are available for inspection, but responses are
+            disabled.
           </div>
         </Show>
         <Show
           when={!props.controller.loading()}
           fallback={
             <div class="global-forms-region-state" role="status">
-              Loading server requests…
+              Loading global forms…
             </div>
           }
         >
@@ -182,12 +180,12 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
             </Show>
             <Show
               when={forms().length > 0}
-              fallback={<div class="global-forms-region-state">No requests</div>}
+              fallback={<div class="global-forms-region-state">No global forms</div>}
             >
               <div class="global-forms-region-dialog-layout">
                 <aside
                   class="global-forms-region-request-list"
-                  aria-label="Pending server requests"
+                  aria-label="Pending global forms"
                   onFocusOut={(event) => {
                     const nextTarget = event.relatedTarget;
                     if (
@@ -232,12 +230,12 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
                 </aside>
                 <Show
                   when={selected()}
-                  fallback={<div class="global-forms-region-state">No requests</div>}
+                  fallback={<div class="global-forms-region-state">No global forms</div>}
                 >
                   {(current) => (
-                    <section class="global-forms-region-detail" aria-label="Request details">
+                    <section class="global-forms-region-detail" aria-label="Global form details">
                       <p class="sr-only" role="status" aria-live="polite">
-                        Request{" "}
+                        Global form{" "}
                         {forms().findIndex((candidate) => candidate.id === current().id) + 1} of{" "}
                         {forms().length} selected: {current().title}
                       </p>

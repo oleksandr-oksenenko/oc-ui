@@ -1,4 +1,5 @@
 import { createProfile } from "./profile.mjs";
+import { OpenCode } from "@opencode-ai/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 import { build, preview } from "vite-plus";
 import { chromium } from "playwright";
@@ -18,7 +19,9 @@ let context;
 let project;
 let page;
 let uiUrl;
+let api;
 let failed = false;
+let permissionRequestNumber = 0;
 const errors = [];
 const artifacts = new URL("../../dist/web-artifacts/", import.meta.url).pathname;
 
@@ -27,7 +30,21 @@ beforeAll(async () => {
   provider = await startScriptedProvider();
   project = join(profile.paths.app, "acceptance-project");
   await prepareProjectFixture(project);
-  await writeFile(join(project, "opencode.json"), JSON.stringify(provider.config));
+  await writeFile(
+    join(project, "opencode.json"),
+    JSON.stringify({
+      ...provider.config,
+      agents: {
+        ...provider.config.agents,
+        "permission-review": {
+          mode: "primary",
+          description: "Permission acceptance agent",
+          model: "acceptance/alternate",
+          permissions: [{ action: "*", resource: "*", effect: "ask" }],
+        },
+      },
+    }),
+  );
   await Promise.all(
     Array.from({ length: 24 }, (_, index) =>
       mkdir(join(project, `folder-${String(index).padStart(2, "0")}`)),
@@ -57,6 +74,7 @@ beforeAll(async () => {
   });
   uiUrl = `${ui.resolvedUrls.local[0]}ocui/`.replace("/ocui/ocui/", "/ocui/");
   server = await startServer(profile, project, new URL(uiUrl).origin);
+  api = OpenCode.make({ baseUrl: server.url, headers: server.headers });
   proxy = await startTlsProxy(tls, server.url);
   browser = await chromium.launch({ ignoreDefaultArgs: ["--disable-back-forward-cache"] });
   // Trust the disposable test certificate only in this test context, never in app code.
@@ -125,6 +143,67 @@ async function idle() {
 async function changeServer(target = page) {
   await target.getByRole("button", { name: /Select server, .*Connected/u }).click();
   await target.getByRole("heading", { name: "Connect to OpenCode" }).waitFor();
+}
+
+async function ensureConnected() {
+  if (page.url() === "about:blank") await page.goto(uiUrl);
+  const connected = page.getByRole("button", { name: /Select server, .*Connected/u });
+  const serverUrl = page.getByLabel("Server URL", { exact: true });
+  await expect
+    .poll(async () => {
+      if (await connected.count()) return "connected";
+      if (await serverUrl.count()) return "connect";
+      return "loading";
+    })
+    .not.toBe("loading");
+  if (!(await connected.count())) await connect();
+}
+
+async function createPermissionSession(title) {
+  return api.session.create({
+    title,
+    agent: "permission-review",
+    location: { directory: await realpath(project) },
+  });
+}
+
+async function createPermission(sessionID, action, options = {}) {
+  permissionRequestNumber += 1;
+  const id = `per_acceptance_${permissionRequestNumber}`;
+  const result = await api.permission.create({
+    sessionID,
+    id,
+    action,
+    resources: options.resources ?? [`/acceptance/${action}/${permissionRequestNumber}`],
+    save: options.save,
+    source: options.source,
+    agent: "permission-review",
+  });
+  expect(result).toEqual({ id, effect: "ask" });
+  await expect
+    .poll(async () => (await api.permission.list({ sessionID })).some((item) => item.id === id))
+    .toBe(true);
+  return id;
+}
+
+function permissionCard(requestID) {
+  return page.locator(`[data-permission-request-id="${requestID}"]`);
+}
+
+async function selectSession(title) {
+  const session = page.getByRole("button", { name: new RegExp(`^${title},`, "u") });
+  await session.waitFor();
+  await session.click();
+  await expect.poll(() => session.getAttribute("aria-current")).toBe("page");
+}
+
+async function expectPermissionSettled(sessionID, requestID) {
+  await permissionCard(requestID).waitFor({ state: "hidden" });
+  await expect
+    .poll(async () =>
+      (await api.permission.list({ sessionID })).some((item) => item.id === requestID),
+    )
+    .toBe(false);
 }
 
 describe.sequential("production browser app", () => {
@@ -333,6 +412,87 @@ describe.sequential("production browser app", () => {
       .not.toContain(worktree);
     await expect(access(worktree)).rejects.toHaveProperty("code", "ENOENT");
     await access(join(project, "working.txt"));
+  });
+
+  it("loads, preserves, and replies to real pinned-server permission requests", async () => {
+    await ensureConnected();
+    const title = "Permission acceptance";
+    const permissionSession = await createPermissionSession(title);
+    const navigationTitle = "Permission navigation target";
+    await createPermissionSession(navigationTitle);
+    const beforeConnect = await createPermission(permissionSession.id, "acceptance.preexisting", {
+      resources: ["/acceptance/preexisting/one", "/acceptance/preexisting/two"],
+      source: { type: "tool", messageID: "msg_acceptance", id: "call_acceptance" },
+    });
+
+    await changeServer();
+    await connect();
+    await selectSession(title);
+    const preexistingCard = permissionCard(beforeConnect);
+    await preexistingCard.waitFor();
+    await expect.poll(() => preexistingCard.textContent()).toContain("acceptance.preexisting");
+    await expect.poll(() => preexistingCard.textContent()).toContain("/acceptance/preexisting/one");
+    await expect.poll(() => preexistingCard.textContent()).toContain("/acceptance/preexisting/two");
+    await expect.poll(() => preexistingCard.textContent()).toContain("call_acceptance");
+
+    await selectSession(navigationTitle);
+    expect(await preexistingCard.count()).toBe(0);
+    await selectSession(title);
+    const allowOnce = preexistingCard.getByRole("button", { name: "Allow once", exact: true });
+    await allowOnce.focus();
+    await page.keyboard.press("Enter");
+    await expectPermissionSettled(permissionSession.id, beforeConnect);
+    await expect
+      .poll(() =>
+        page
+          .getByLabel("Prompt", { exact: true })
+          .evaluate((node) => node === document.activeElement),
+      )
+      .toBe(true);
+
+    const live = await createPermission(permissionSession.id, "acceptance.live");
+    const liveCard = permissionCard(live);
+    await liveCard.waitFor();
+    await liveCard.getByRole("button", { name: "Allow once", exact: true }).click();
+    await expectPermissionSettled(permissionSession.id, live);
+
+    const rejected = await createPermission(permissionSession.id, "acceptance.reject.first");
+    const rejectedTogether = await createPermission(
+      permissionSession.id,
+      "acceptance.reject.second",
+    );
+    await permissionCard(rejectedTogether).waitFor();
+    await permissionCard(rejected).getByRole("button", { name: "Reject all", exact: true }).click();
+    await expectPermissionSettled(permissionSession.id, rejected);
+    await expectPermissionSettled(permissionSession.id, rejectedTogether);
+
+    const savedPattern = "/acceptance/persist/*";
+    const always = await createPermission(permissionSession.id, "acceptance.persist", {
+      resources: ["/acceptance/persist/current"],
+      save: [savedPattern],
+    });
+    const alwaysCard = permissionCard(always);
+    await alwaysCard.waitFor();
+    await expect.poll(() => alwaysCard.textContent()).toContain(savedPattern);
+    await alwaysCard.getByRole("button", { name: "Always allow", exact: true }).click();
+    await expectPermissionSettled(permissionSession.id, always);
+    await expect
+      .poll(async () =>
+        (await api.permission.saved.list()).some(
+          (rule) => rule.action === "acceptance.persist" && rule.resource === savedPattern,
+        ),
+      )
+      .toBe(true);
+
+    const external = await createPermission(permissionSession.id, "acceptance.external");
+    await permissionCard(external).waitFor();
+    await api.permission.reply({
+      sessionID: permissionSession.id,
+      requestID: external,
+      reply: "once",
+    });
+    await expectPermissionSettled(permissionSession.id, external);
+    expect(errors).toEqual([]);
   });
 
   it("recovers from browser navigation and unavailable storage without stopping the server", async () => {

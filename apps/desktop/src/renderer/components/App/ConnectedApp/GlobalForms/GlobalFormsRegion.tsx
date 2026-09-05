@@ -35,24 +35,22 @@ export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
     if (!props.controller.connected()) {
       const count = forms().length;
       return count === 0
-        ? "Disconnected"
-        : `${count} cached server request${count === 1 ? "" : "s"} · Disconnected`;
+        ? "Global forms · Disconnected"
+        : `${count} cached global form${count === 1 ? "" : "s"} · Disconnected`;
     }
-    if (props.controller.loading()) return "Loading requests";
-    if (props.controller.loadError()) return "Requests unavailable";
+    if (props.controller.loading()) return "Loading global forms";
+    if (props.controller.loadError()) return "Global forms unavailable";
     const count = forms().length;
-    return count === 0 ? "No requests" : `${count} server request${count === 1 ? "" : "s"}`;
+    return count === 0 ? "No global forms" : `${count} global form${count === 1 ? "" : "s"}`;
   };
   const launcherLabel = () => {
     const directory = props.controller.location.directory;
     if (!props.controller.connected()) {
-      return `Disconnected; inspect cached server requests for ${directory}`;
+      return `Disconnected; inspect cached global forms for ${directory}`;
     }
-    if (props.controller.loading()) return `Loading server requests for ${directory}`;
-    if (props.controller.loadError()) return `Server requests unavailable for ${directory}`;
-    return forms().length > 0
-      ? `Review ${statusLabel()} for ${directory}`
-      : "Review server requests";
+    if (props.controller.loading()) return `Loading global forms for ${directory}`;
+    if (props.controller.loadError()) return `Global forms unavailable for ${directory}`;
+    return forms().length > 0 ? `Review ${statusLabel()} for ${directory}` : "Review global forms";
   };
   const openReview = () => {
     if (openingDialog || (ownedDialogID && dialog.active?.id === ownedDialogID)) return;

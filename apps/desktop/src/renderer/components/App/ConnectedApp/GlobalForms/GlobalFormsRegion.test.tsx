@@ -124,13 +124,17 @@ describe("GlobalFormsRegion", () => {
   it("keeps a live launcher and shows the complete server location", async () => {
     const state = controller([form("one")]);
     const mounted = mount(state.value);
-    expect(launcher(mounted.host).textContent).toContain("1 server request");
+    expect(launcher(mounted.host).textContent).toContain("1 global form");
+    expect(launcher(mounted.host).getAttribute("aria-label")).toContain("Review 1 global form");
+    state.setForms([form("one"), form("two")]);
+    expect(launcher(mounted.host).textContent).toContain("2 global forms");
+    state.setForms([form("one")]);
     launcher(mounted.host).click();
     await settle();
     expect(document.body.textContent).toContain(location.directory);
     expect(document.body.textContent).toContain(location.workspaceID);
     state.setForms([]);
-    expect(launcher(mounted.host).textContent).toContain("No requests");
+    expect(launcher(mounted.host).textContent).toContain("No global forms");
     mounted.dispose();
   });
 
@@ -196,7 +200,7 @@ describe("GlobalFormsRegion", () => {
     buttonWithText(document.body, "Cancel").click();
     await settle();
     expect(state.cancel).toHaveBeenCalledWith("two");
-    expect(document.body.textContent).toContain("No requests");
+    expect(document.body.textContent).toContain("No global forms");
     mounted.dispose();
   });
 
@@ -204,13 +208,15 @@ describe("GlobalFormsRegion", () => {
     const state = controller([]);
     state.setLoading(true);
     const mounted = mount(state.value);
+    expect(launcher(mounted.host).textContent).toContain("Loading global forms");
     launcher(mounted.host).click();
     await settle();
-    expect(document.body.textContent).toContain("Loading server requests");
+    expect(document.body.textContent).toContain("Loading global forms");
 
     state.setLoading(false);
     state.setLoadError("Could not load requests");
     await settle();
+    expect(launcher(mounted.host).textContent).toContain("Global forms unavailable");
     expect(document.body.textContent).toContain("Could not load requests");
     buttonWithText(document.body, "Retry").click();
     expect(state.refresh).toHaveBeenCalledOnce();
@@ -225,6 +231,7 @@ describe("GlobalFormsRegion", () => {
 
     state.setConnected(false);
     await settle();
+    expect(launcher(mounted.host).textContent).toContain("1 cached global form");
     expect(document.body.textContent).toContain("Disconnected");
     expect(document.body.textContent).toContain("Request one");
     expect(answerInput().disabled).toBe(true);
@@ -291,7 +298,7 @@ describe("GlobalFormsRegion", () => {
     first.resolve(true);
     second.resolve(true);
     await settle();
-    expect(document.body.textContent).toContain("No requests");
+    expect(document.body.textContent).toContain("No global forms");
     mounted.dispose();
   });
 

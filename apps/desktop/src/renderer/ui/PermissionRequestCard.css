@@ -1,0 +1,180 @@
+.permission-request-entry {
+  width: 100%;
+}
+
+.permission-request-card {
+  display: grid;
+  width: min(620px, 100%);
+  gap: 14px;
+  padding: 12px 16px;
+  overflow: hidden;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-control);
+  box-shadow: var(--oc-shadow-popover);
+}
+
+.permission-request-card::before {
+  display: none;
+}
+
+.permission-request-card:focus-visible {
+  outline: 2px solid var(--oc-border-strong);
+  outline-offset: 2px;
+}
+
+.permission-request-header {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.permission-request-eyebrow {
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-kicker-size);
+  font-weight: var(--oc-type-kicker-weight);
+  letter-spacing: var(--oc-type-kicker-letter-spacing);
+  line-height: var(--oc-type-kicker-line-height);
+  text-transform: uppercase;
+}
+
+.permission-request-header h2 {
+  margin: 0;
+  color: var(--oc-text-strong);
+  font-size: var(--oc-type-heading-size);
+  font-weight: var(--oc-type-heading-weight);
+  letter-spacing: -0.015em;
+  line-height: var(--oc-type-heading-line-height);
+  overflow-wrap: anywhere;
+}
+
+.permission-request-message,
+.permission-request-help,
+.permission-request-reject-help,
+.permission-request-error,
+.permission-request-source {
+  margin: 0;
+}
+
+.permission-request-message {
+  color: var(--oc-text-base);
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.permission-request-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.permission-request-section h3 {
+  margin: 0;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-control-weight);
+  line-height: var(--oc-type-metadata-line-height);
+}
+
+.permission-request-values {
+  display: grid;
+  max-height: 132px;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  scrollbar-color: var(--oc-scrollbar-thumb, var(--oc-border-base)) transparent;
+  scrollbar-width: thin;
+}
+
+.permission-request-values li {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-canvas);
+}
+
+.permission-request-values:focus-visible {
+  outline: 2px solid var(--oc-border-strong);
+  outline-offset: 2px;
+}
+
+.permission-request-values code,
+.permission-request-source code {
+  color: var(--oc-text-base);
+  font-family: var(--font-mono);
+  font-size: var(--oc-type-metadata-size);
+  line-height: var(--oc-type-metadata-line-height);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.permission-request-source {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-metadata-size);
+  line-height: var(--oc-type-metadata-line-height);
+}
+
+.permission-request-help,
+.permission-request-reject-help {
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.permission-request-error {
+  color: var(--oc-status-danger);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.permission-request-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-status-size);
+  line-height: var(--oc-type-status-line-height);
+}
+
+.permission-request-footer {
+  display: grid;
+  gap: 10px;
+}
+
+.permission-request-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (width <= 520px) {
+  .permission-request-card {
+    gap: 12px;
+    padding: 10px 12px 12px;
+  }
+
+  .permission-request-source {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .permission-request-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .permission-request-actions > * {
+    width: 100%;
+  }
+}
