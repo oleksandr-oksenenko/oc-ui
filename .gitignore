@@ -21,6 +21,7 @@ audit-live/
 design-qa-live/
 design-qa.md
 design-qa-*.png
+.amp/portals/*
 
 # Local files
 *.local

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly pnpm_version="11.23.0"
+
+run_step() {
+  local label="$1"
+  shift
+  printf '\n[setup] %s\n' "$label"
+  time "$@"
+}
+
+if ! command -v node >/dev/null 2>&1; then
+  printf '[setup] Node.js 22.18 or newer is required but is not installed.\n' >&2
+  exit 1
+fi
+
+if ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 18) ? 0 : 1)'; then
+  printf '[setup] Node.js 22.18 or newer is required; found %s.\n' "$(node --version)" >&2
+  exit 1
+fi
+
+if ! command -v pnpm >/dev/null 2>&1 || [[ "$(pnpm --version)" != "$pnpm_version" ]]; then
+  if ! command -v corepack >/dev/null 2>&1; then
+    printf '[setup] Corepack is required to install pnpm %s.\n' "$pnpm_version" >&2
+    exit 1
+  fi
+  run_step "Installing pnpm $pnpm_version" corepack install --global "pnpm@$pnpm_version"
+  corepack enable pnpm
+fi
+
+run_step "Installing workspace dependencies" pnpm install --frozen-lockfile
+run_step "Provisioning Playwright Chromium" pnpm --filter desktop exec playwright install chromium
+
+printf '\n[setup] Orb setup complete.\n'
