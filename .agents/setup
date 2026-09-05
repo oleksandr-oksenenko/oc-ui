@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+readonly node_version="24.20.0"
 readonly pnpm_version="11.23.0"
+readonly node_install="$HOME/.local/share/node-v$node_version"
 
 run_step() {
   local label="$1"
@@ -10,14 +12,43 @@ run_step() {
   time "$@"
 }
 
-if ! command -v node >/dev/null 2>&1; then
-  printf '[setup] Node.js 22.18 or newer is required but is not installed.\n' >&2
-  exit 1
+if [[ ! -x "$node_install/bin/node" ]]; then
+  case "$(uname -m)" in
+    x86_64) node_arch="x64" ;;
+    aarch64 | arm64) node_arch="arm64" ;;
+    *)
+      printf '[setup] Unsupported architecture: %s\n' "$(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+
+  node_archive="node-v$node_version-linux-$node_arch.tar.xz"
+  node_url="https://nodejs.org/dist/v$node_version"
+  download_directory="$(mktemp -d)"
+  trap 'rm -rf "$download_directory"' EXIT
+
+  run_step "Downloading Node.js $node_version" curl -fsSLo "$download_directory/$node_archive" \
+    "$node_url/$node_archive"
+  curl -fsSL "$node_url/SHASUMS256.txt" \
+    | grep -F "  $node_archive" > "$download_directory/SHASUMS256"
+  (cd "$download_directory" && sha256sum --check SHASUMS256)
+  mkdir -p "$(dirname "$node_install")"
+  tar -xJf "$download_directory/$node_archive" -C "$download_directory"
+  mv "$download_directory/${node_archive%.tar.xz}" "$node_install"
 fi
 
-if ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 18) ? 0 : 1)'; then
-  printf '[setup] Node.js 22.18 or newer is required; found %s.\n' "$(node --version)" >&2
-  exit 1
+export PATH="$node_install/bin:$PATH"
+
+profile_marker="# oc-ui Node.js toolchain"
+if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
+  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  cat >> "$HOME/.bash_profile" <<EOF
+
+$profile_marker
+if [[ "\${PWD}" == "$repo_root" ]]; then
+  export PATH="\$HOME/.local/share/node-v\$(<"$repo_root/.node-version")/bin:\${PATH}"
+fi
+EOF
 fi
 
 if ! command -v pnpm >/dev/null 2>&1 || [[ "$(pnpm --version)" != "$pnpm_version" ]]; then
@@ -29,6 +60,7 @@ if ! command -v pnpm >/dev/null 2>&1 || [[ "$(pnpm --version)" != "$pnpm_version
   corepack enable pnpm
 fi
 
+printf '[setup] Using Node.js %s and pnpm %s.\n' "$(node --version)" "$(pnpm --version)"
 run_step "Installing workspace dependencies" pnpm install --frozen-lockfile
 run_step "Provisioning Playwright Chromium" pnpm --filter desktop exec playwright install chromium
 

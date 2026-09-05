@@ -12,7 +12,7 @@ A desktop and browser client for OpenCode.
 
 ## Requirements
 
-- Node.js 22.18 or newer
+- Node.js 24.20.0 LTS
 - pnpm 11.23.0
 
 ## Setup
