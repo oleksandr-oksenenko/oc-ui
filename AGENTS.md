@@ -2,6 +2,7 @@
 
 - After implementation, run `pnpm check` and `pnpm test` from the repository root.
 - Fix every finding before calling the work complete. Do not substitute package-scoped or focused checks.
+- Use [App verification](docs/app-verification.md) to choose additional checks by the kind of change. It defines browser, Storybook, Electron, and packaging evidence for each boundary.
 
 # Code size and complexity
 
@@ -47,10 +48,8 @@ If its guidance does not cover a particular Effect API or concept, search the in
 - Treat the approved Storybook story, mockup, and latest browser annotations as the visual contract. Match their structure, controls, spacing, density, and placement instead of creating a new interpretation.
 - Use the Codex in-app browser for standalone local web pages and Storybook whenever it can perform the required verification. Use an external browser only when the in-app browser cannot perform the check. This guidance does not cover embedded webviews: the Electron renderer and any view embedded in the app window are not reachable from the in-app browser, so verify them in the running app instead.
 - Prefer installed OpenCode UI controls and icons over custom approximations. Keep a local component only when it owns real oc-ui behavior that the package does not provide.
-- Complete the following verification checklist as one unit before calling UI work done:
-  - Inspect the actual Electron app after the final change. Do not call UI work complete from tests, types, or a browser preview alone.
-  - For affected UI, verify the first open as well as reopen, resize and narrow layouts, scrolling, empty and error states, loading and disabled states, keyboard and Escape behavior, focus restoration, and collapse or remount behavior where applicable.
-  - Keep regression tests lean: add one focused test for each real failure mode. Avoid large full-app fixtures and repeated setup for a small policy or component behavior.
+- Follow the affected-UI checklist in [App verification](docs/app-verification.md#check-affected-ui). Use Storybook for the detailed state matrix and the full browser app (`pnpm dev:web`) by default for renderer workflows. Inspect Electron after changes to native integration, host-dependent layout, preload/settings, built-in server ownership, or packaging.
+- Keep regression tests lean: add one focused test for each real failure mode. Avoid large full-app fixtures and repeated setup for a small policy or component behavior.
 
 # Desktop and server runtime
 

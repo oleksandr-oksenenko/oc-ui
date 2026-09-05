@@ -88,6 +88,17 @@ const expectCanceled = (outcome: Exit.Exit<unknown, unknown>) => {
 };
 
 describe("connection settings", () => {
+  it.effect("saves and reloads HTTPS credentials with the shared origin rule", () =>
+    Effect.gen(function* () {
+      const { settings } = yield* makeSettings();
+      yield* settings.save({ kind: "remote", serverUrl: "HTTPS://HOMIE:443/", password: "secret" });
+      expect(yield* settings.load).toEqual({
+        kind: "remote",
+        serverUrl: "https://homie",
+        password: "secret",
+      });
+    }),
+  );
   it.effect("round-trips an encrypted password without writing plaintext", () =>
     Effect.gen(function* () {
       const { directory, settings } = yield* makeSettings();
@@ -148,7 +159,7 @@ describe("connection settings", () => {
     '{"kind":"local","unexpected":true}',
     '{"serverUrl":"http://homie:4096"}',
     '{"kind":"remote","serverUrl":"invalid"}',
-    '{"kind":"remote","serverUrl":"https://homie"}',
+    '{"kind":"remote","serverUrl":"ftp://homie"}',
     '{"kind":"remote","serverUrl":"http://homie/path"}',
   ])("ignores invalid stored configuration: %s", (contents) =>
     Effect.gen(function* () {
@@ -248,7 +259,7 @@ describe("connection settings", () => {
         "",
         " ",
         "invalid",
-        "https://homie",
+        "ftp://homie",
         "http://user:secret@homie",
         "http://homie/path",
         "http://homie?query",

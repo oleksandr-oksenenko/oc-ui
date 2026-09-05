@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "electron-vite";
 import { build } from "esbuild";
-import solid from "vite-plugin-solid";
+import rendererConfig from "./vite.config.ts";
 
 const configDirectory = dirname(fileURLToPath(import.meta.url));
 const rendererDirectory = resolve(configDirectory, "src/renderer");
@@ -103,12 +103,8 @@ export default defineConfig({
     },
   },
   renderer: {
+    ...rendererConfig,
     root: rendererDirectory,
-    plugins: [solid()],
-    optimizeDeps: {
-      // LineComment's hooks import this CommonJS dependency through source files.
-      include: ["@opencode-ai/ui > fuzzysort"],
-    },
     build: {
       rollupOptions: {
         input: resolve(rendererDirectory, "index.html"),

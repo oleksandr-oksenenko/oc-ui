@@ -19,14 +19,15 @@ describe("OpenCode connection input", () => {
   it("normalizes a plain HTTP origin", () => {
     expect(normalizeServerUrl("http://homie:4096")).toBe("http://homie:4096");
     expect(normalizeServerUrl("http://127.0.0.1:4096/")).toBe("http://127.0.0.1:4096");
+    expect(normalizeServerUrl(" HTTPS://HOMIE:443/ ")).toBe("https://homie");
   });
 
   it.each([
-    "https://homie:4096",
+    "ftp://homie:4096",
     "http://user:secret@homie:4096",
     "http://homie:4096/api",
     "http://homie:4096?query=yes",
-    " http://homie:4096",
+    "http://homie:4096#",
   ])("rejects unsupported server URL %s", (value) => {
     expect(() => normalizeServerUrl(value)).toThrowError(OpenCodeConnectionError);
   });
@@ -36,6 +37,23 @@ describe("OpenCode connection input", () => {
     const encoded = header.slice("Basic ".length);
     const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
     expect(new TextDecoder().decode(bytes)).toBe("opencode:pässword 🔐");
+  });
+
+  it("rejects HTTP from an HTTPS browser page before sending credentials", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      Effect.runPromise(
+        verifyServer(
+          { serverUrl: "http://127.0.0.1:4096", password: "secret" },
+          "https://ocui.example.com",
+        ),
+      ),
+    ).rejects.toMatchObject({
+      reason: "invalid-url",
+      message: expect.stringContaining("HTTPS server"),
+    });
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("maps authentication failures without exposing raw errors", () => {

@@ -9,7 +9,8 @@ import { fileURLToPath } from "node:url";
 import { $, browser } from "@wdio/globals";
 import type { DesktopApi } from "../../src/shared/desktop-api.ts";
 import { verifyConnectionSettings } from "./connection-flows.ts";
-import { prepareProjectFixture, verifyProjectFlows } from "./project-flows.ts";
+import { verifyProjectFlows } from "./project-flows.ts";
+import { prepareProjectFixture } from "./project-fixture.ts";
 import { verifyProviderFlows } from "./provider-flows.ts";
 
 declare global {

@@ -2,6 +2,8 @@ import { render } from "solid-js/web";
 import { onCleanup } from "solid-js";
 import { RegistryContext } from "@effect/atom-solid";
 import { createRenderer } from "./connection.ts";
+import { createBrowserHost } from "./browser-host.ts";
+import type { AppHost } from "../shared/app-host.ts";
 import type { WorkspaceOwner } from "./workspace-owner.ts";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -76,7 +78,8 @@ const makeDesktop = (options: {
   readonly clear?: () => Promise<void>;
   readonly connectLocal?: () => Promise<LocalOpenCodeConnectResult>;
   readonly onUnavailable?: (listener: () => void) => () => void;
-}): DesktopApi => ({
+}): Extract<AppHost, { kind: "desktop" }> => ({
+  kind: "desktop",
   target: {
     load: options.load,
     saveLocal: vi.fn<() => Promise<void>>(() => Promise.resolve()),
@@ -95,11 +98,10 @@ const makeDesktop = (options: {
   },
 });
 
-const mount = (desktop: DesktopApi) => {
-  Object.defineProperty(window, "desktop", { configurable: true, value: desktop });
+const mount = (appHost: AppHost) => {
   const host = document.createElement("div");
   document.body.append(host);
-  const renderer = createRenderer(desktop);
+  const renderer = createRenderer(appHost);
   const disposeView = render(
     () => (
       <RegistryContext.Provider value={renderer.registry}>
@@ -123,6 +125,89 @@ afterEach(() => {
   verifyServer.mockReset();
   handshake.disposed.mockClear();
   document.body.replaceChildren();
+  vi.restoreAllMocks();
+  localStorage.clear();
+});
+
+describe("browser connections", () => {
+  it("prefills an address without auto-connecting and cannot select or start a built-in server", async () => {
+    const browser = createBrowserHost();
+    await browser.target.saveRemote({ serverUrl: "https://server", password: "secret" });
+    const { host, renderer, dispose } = mount(browser);
+    await flush();
+    expect(verifyServer).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLInputElement>('input[autocomplete="url"]')?.value).toBe(
+      "https://server",
+    );
+    expect(host.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe("");
+    expect(host.textContent).not.toContain("Built-in");
+    renderer.connection.setMode("local");
+    renderer.connection.connect("local");
+    expect(renderer.registry.get(renderer.connection.state).mode).toBe("remote");
+    expect(verifyServer).not.toHaveBeenCalled();
+    renderer.connection.forget();
+    await flush();
+    expect(renderer.registry.get(renderer.connection.state)).toMatchObject({
+      mode: "remote",
+      serverUrl: "",
+      savedTarget: undefined,
+    });
+    dispose();
+  });
+
+  it("keeps a connected workspace when saving browser settings fails", async () => {
+    const { renderer, dispose } = mount(createBrowserHost());
+    await flush();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("disk full");
+    });
+    verifyServer.mockResolvedValue({ serverUrl: "https://server" });
+    renderer.connection.connect("remote", { serverUrl: "https://server", password: "secret" });
+    await flush();
+    handshake.connect();
+    await flush();
+    expect(renderer.registry.get(renderer.connection.state)).toMatchObject({
+      status: "connected",
+      password: "",
+      notice: "The connection works, but its settings could not be saved.",
+    });
+    expect(renderer.registry.get(renderer.connection.state).savedTarget).toBeUndefined();
+    renderer.connection.changeServer();
+    await flush();
+    expect(renderer.registry.get(renderer.connection.state)).toMatchObject({
+      mode: "remote",
+      password: "",
+      serverUrl: "https://server",
+    });
+    dispose();
+  });
+
+  it("allows manual connection after corrupt storage and preserves a failed Forget", async () => {
+    localStorage.setItem("ocui.connection.v1", "broken");
+    const { renderer, dispose } = mount(createBrowserHost());
+    await flush();
+    expect(renderer.registry.get(renderer.connection.state)).toMatchObject({
+      status: "disconnected",
+      mode: "remote",
+      notice: expect.any(String),
+    });
+    verifyServer.mockResolvedValue({ serverUrl: "https://server" });
+    renderer.connection.connect("remote", { serverUrl: "https://server", password: "" });
+    await flush();
+    handshake.connect();
+    await flush();
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    renderer.connection.forget();
+    await flush();
+    expect(renderer.registry.get(renderer.connection.state)).toMatchObject({
+      status: "failed",
+      savedTarget: { kind: "remote", serverUrl: "https://server" },
+      error: expect.stringContaining("could not be forgotten"),
+    });
+    dispose();
+  });
 });
 
 describe("App target startup", () => {

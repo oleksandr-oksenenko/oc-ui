@@ -31,6 +31,28 @@ type Story = StoryObj<typeof meta>;
 
 export const Blank: Story = {};
 
+export const Browser: Story = {
+  args: { builtInAvailable: false, mode: "remote" },
+};
+
+export const BrowserConnecting: Story = {
+  args: {
+    builtInAvailable: false,
+    mode: "remote",
+    serverUrl: "https://opencode.example.com",
+    busy: true,
+  },
+};
+
+export const BrowserError: Story = {
+  args: {
+    builtInAvailable: false,
+    mode: "remote",
+    serverUrl: "https://opencode.example.com",
+    error: "The server rejected the password.",
+  },
+};
+
 export const Connecting: Story = {
   args: {
     busy: true,

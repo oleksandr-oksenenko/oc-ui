@@ -1,12 +1,14 @@
 # Ocui
 
-An Electron desktop client for OpenCode.
+A desktop and browser client for OpenCode.
 
 ## Product documentation
 
 - [Product requirements and first-slice design](docs/product-requirements.md)
 - [Final milestone 1 design](docs/milestone-1-design.md)
 - [Managed local sidecar design](docs/milestone-2-design.md)
+- [App verification guidelines](docs/app-verification.md)
+- [Browser mode](docs/browser-mode-design.md)
 
 ## Requirements
 
@@ -19,8 +21,8 @@ An Electron desktop client for OpenCode.
 pnpm install
 ```
 
-Storybook browser tests, which run as part of `pnpm test` and `pnpm ready`,
-require Chromium to be provisioned once per machine:
+Storybook and full-app browser tests, which run as part of `pnpm test` and `pnpm ready`,
+require Chromium to be provisioned once per machine (the full-app HTTPS fixture also uses OpenSSL):
 
 ```sh
 pnpm --filter desktop exec playwright install chromium
@@ -29,23 +31,25 @@ pnpm --filter desktop exec playwright install chromium
 See [Storybook verification](docs/storybook-verification.md) for the full
 verification workflow.
 
-The desktop package owns the pinned OpenCode CLI, client, and UI packages. The
-CLI is installed as a runtime dependency of `apps/desktop`, so the Electron
-main process can resolve the same `0.0.0-beta-18155` executable used by the
-workspace scripts. The three package pins live in the workspace catalog.
+The workspace pins OpenCode CLI, server, client, and UI packages together at
+`0.0.0-beta-18866`. Electron runs the packaged server library in an owned utility
+process. Browser mode connects to an independently running server.
 
 ## Commands
 
 ```sh
 pnpm dev                # Start the Electron desktop app in development
 pnpm build              # Build the Electron main, preload, and Solid renderer
+pnpm dev:web            # Serve the browser app at http://127.0.0.1:5173
+pnpm build:web          # Build static browser assets in apps/desktop/dist-web
+pnpm preview:web        # Preview the static build at http://127.0.0.1:4173
 pnpm check              # Format, lint, type-check, and run Knip
 pnpm lint               # Run type-aware Oxlint checks
 pnpm knip               # Find unused files, exports, and dependencies
-pnpm opencode:server    # Start the installed OpenCode 0.0.0-beta-18155 server
-pnpm opencode:version   # Print the installed OpenCode 0.0.0-beta-18155 version
+pnpm opencode:server    # Start the installed OpenCode 0.0.0-beta-18866 server
+pnpm opencode:version   # Print the installed OpenCode 0.0.0-beta-18866 version
 pnpm test               # Run the automated tests
-pnpm ready              # Run checks, tests, the desktop build, and static Storybook build
+pnpm ready              # Run checks, all tests, desktop/browser builds, and Storybook
 pnpm package:mac        # Build an unpacked macOS arm64 .app in apps/desktop/dist
 pnpm make:mac           # Build the unpacked .app and a macOS arm64 DMG
 pnpm test:acceptance:mac # Package and test the macOS arm64 app with WebdriverIO
@@ -54,11 +58,9 @@ pnpm test:acceptance:mac # Package and test the macOS arm64 app with WebdriverIO
 ## macOS packaging
 
 Packaging is local macOS arm64 only. `pnpm package:mac` and `pnpm make:mac`
-build `out/`, validate the pinned OpenCode CLI, stage its arm64 executable, and
-then run the pinned electron-builder release. The app is written to
-`apps/desktop/dist/` and keeps the compiled Electron-Vite output in
-`apps/desktop/out/`. The staged CLI is bundled at
-`Contents/Resources/opencode/opencode2`.
+build `out/`, stage the pinned server library and native/WASM assets, and run
+electron-builder. The app is written to `apps/desktop/dist/`; the server runtime
+is bundled at `Contents/Resources/opencode-runtime`.
 
 By default the app uses ad-hoc signing for local testing. To use
 an installed Apple Development identity, provide its exact name through
@@ -72,32 +74,36 @@ This packaging slice does not notarize, publish, or configure an updater.
 
 ## OpenCode connection modes
 
-The desktop app is local-first. It tries to start and own a loopback OpenCode
-sidecar from the pinned CLI, verifies its health and exact version, and tears
-the child process down when the app exits. In the pinned CLI's service mode,
-the server-owned default directory is the user's home directory. The first
-integration does not provide a directory picker.
+Desktop offers a built-in server and a remote connection. The built-in server
+starts on request, stays on loopback, and stops with the app. Browser mode offers
+a server address and optional password; it never starts or stops a server.
+Both hosts use the same workspace and exact-version check.
 
-If the managed sidecar cannot start or does not become healthy, the app can
-connect to a remote OpenCode server instead. Remote connections use the same
-Basic-authenticated client and exact-version check. A remote server's default
-directory remains server-owned; the app does not send a local directory or
-silently start an unrelated process.
-
-To start the pinned CLI server manually for development, set its password and
-run:
+For local browser use, start the pinned server separately and then open `pnpm dev:web`:
 
 ```sh
 OPENCODE_SERVER_PASSWORD=your-password pnpm opencode:server
 ```
 
-The sidecar and remote connection both use Basic authentication. Loopback
-sidecar traffic stays on the local machine. Remote plain HTTP can expose the
-password in transit, so use a trusted network or tunnel; HTTPS configuration
-is not part of this slice. A remote password is never persisted in plaintext.
-While the local child runs, its generated password exists in the app-private
-service registration file with owner-only permissions; stopping the child
-removes that file.
+Connections accept HTTP or HTTPS origins, without embedded credentials, paths,
+queries, or fragments. Desktop can store passwords using Electron secure storage.
+Browser storage remembers only the last successful address; reload requires an
+explicit connection and a fresh password. Unsent drafts live in the workspace.
+
+For hosted use, deploy `apps/desktop/dist-web` on a static HTTPS host and provide
+a reachable HTTPS OpenCode endpoint with a valid certificate. Allow the UI origin
+on that server, for example:
+
+```sh
+pnpm --filter desktop exec opencode2 serve --hostname 127.0.0.1 --port 4096 --cors https://ocui.example.com
+```
+
+The operator supplies TLS and authentication; oc-ui does not proxy or host the API.
+An HTTPS browser page requires an HTTPS API, including for loopback addresses.
+To build for a static path, use `pnpm build:web --base /ocui/`. The API itself must
+be available at an origin root. See [Browser mode](docs/browser-mode-design.md)
+for storage, lifecycle, CORS, and deployment details. Chromium is the initial
+verified browser target.
 
 On NixOS, set `ELECTRON_EXEC_PATH` to a wrapped Electron 42 executable when
 running `pnpm dev`; the executable downloaded by the npm package is not wrapped

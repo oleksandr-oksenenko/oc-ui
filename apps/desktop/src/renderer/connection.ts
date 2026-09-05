@@ -3,7 +3,8 @@ import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { RegistryContext } from "@effect/atom-solid";
 import { createComponent, createRoot, getOwner, runWithOwner, untrack } from "solid-js";
 
-import type { DesktopApi, OpenCodeTarget } from "../shared/desktop-api.ts";
+import type { OpenCodeTarget } from "../shared/desktop-api.ts";
+import type { AppHost } from "../shared/app-host.ts";
 import { OpenCodeConnectionError, verifyServer } from "./opencode/index.ts";
 import type { VerifiedServer } from "./opencode/index.ts";
 import { createConnectedRuntime, type ConnectedRuntime } from "./opencode/runtime.ts";
@@ -31,16 +32,19 @@ type ConnectionState = {
   };
   readonly status: "disconnected" | "connecting" | "connected" | "failed";
   readonly error?: string;
+  readonly notice?: string;
   readonly localUnavailable: boolean;
 };
 
 const makeConnection = Effect.fn("Connection.make")(function* (
-  desktop: DesktopApi,
+  host: AppHost,
   registry: AtomRegistry.AtomRegistry,
 ) {
   const effects = yield* makeWorkspaceOwner(registry);
+  const desktop = host.kind === "desktop" ? host : undefined;
+  const defaultMode = desktop ? "local" : "remote";
   const state = Atom.make<ConnectionState>({
-    mode: "local",
+    mode: defaultMode,
     serverUrl: "",
     password: "",
     status: "disconnected",
@@ -82,18 +86,20 @@ const makeConnection = Effect.fn("Connection.make")(function* (
     mode: Mode,
     remote = { serverUrl: get().serverUrl, password: get().password || savedPassword },
   ) => {
+    if (mode === "local" && !desktop) return;
     update({
       mode,
       owner: mode,
       status: "connecting",
       error: undefined,
+      notice: undefined,
       localUnavailable: mode === "local" ? false : get().localUnavailable,
     });
     replace(
       Effect.gen(function* () {
         yield* leave();
         let input = remote;
-        if (mode === "local") {
+        if (mode === "local" && desktop) {
           const local = yield* effects.request(() => desktop.localOpenCode.connect());
           if (local.status === "failed") {
             update({ status: "failed", error: local.message });
@@ -101,7 +107,10 @@ const makeConnection = Effect.fn("Connection.make")(function* (
           }
           input = local.connection;
         }
-        const server = yield* verifyServer(input);
+        const server = yield* verifyServer(
+          input,
+          host.kind === "browser" ? window.location.origin : undefined,
+        );
         yield* ScopedRef.set(
           workspace,
           Effect.gen(function* () {
@@ -140,30 +149,25 @@ const makeConnection = Effect.fn("Connection.make")(function* (
           catch: (cause) => new WorkspaceRequestError({ cause }),
         });
         update({ status: "connected", password: "" });
-        // Main owns accepted persistence. Interruption retains its settlement and suppresses late UI results.
-        if (mode === "local") {
-          yield* effects
-            .request(() => desktop.target.saveLocal())
-            .pipe(
-              Effect.tap(() => Effect.sync(() => update({ savedTarget: { kind: "local" } }))),
-              Effect.ignore,
-            );
-        } else {
-          const target =
-            input.password.length === 0
-              ? { serverUrl: server.serverUrl }
-              : { serverUrl: server.serverUrl, password: input.password };
-          yield* effects
-            .request(() => desktop.target.saveRemote(target))
-            .pipe(
-              Effect.tap(() =>
-                Effect.sync(() =>
-                  update({ savedTarget: { kind: "remote", serverUrl: server.serverUrl } }),
-                ),
-              ),
-              Effect.ignore,
-            );
-        }
+        // The host owns accepted persistence; keep its settlement and suppress late UI results.
+        const savedTarget: SavedTarget =
+          mode === "local" ? { kind: "local" } : { kind: "remote", serverUrl: server.serverUrl };
+        const target =
+          input.password.length === 0
+            ? { serverUrl: server.serverUrl }
+            : { serverUrl: server.serverUrl, password: input.password };
+        const save =
+          mode === "local" && desktop
+            ? effects.request(() => desktop.target.saveLocal())
+            : effects.request(() => host.target.saveRemote(target)).pipe(Effect.asVoid);
+        yield* save.pipe(
+          Effect.tap(() => Effect.sync(() => update({ savedTarget }))),
+          Effect.catch(() =>
+            Effect.sync(() =>
+              update({ notice: "The connection works, but its settings could not be saved." }),
+            ),
+          ),
+        );
       }).pipe(
         Effect.catch((error) =>
           Effect.gen(function* () {
@@ -185,19 +189,25 @@ const makeConnection = Effect.fn("Connection.make")(function* (
       status: "disconnected",
       password: "",
       error: undefined,
-      mode: old.owner ?? old.savedTarget?.kind ?? "local",
+      mode: old.owner ?? old.savedTarget?.kind ?? defaultMode,
       serverUrl: old.owner === "local" ? "" : old.serverUrl,
     });
     replace(leave());
   };
   const forget = () => {
     savedPassword = "";
-    update({ owner: undefined, password: "", status: "disconnected", error: undefined });
+    update({
+      owner: undefined,
+      password: "",
+      status: "disconnected",
+      error: undefined,
+      notice: undefined,
+    });
     replace(
       Effect.gen(function* () {
         yield* leave();
-        yield* effects.request(() => desktop.target.clear());
-        update({ savedTarget: undefined, mode: "local", serverUrl: "" });
+        yield* effects.request(() => host.target.clear());
+        update({ savedTarget: undefined, mode: defaultMode, serverUrl: "" });
       }).pipe(
         Effect.catch(() =>
           Effect.sync(() =>
@@ -211,6 +221,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
     );
   };
   const setMode = (mode: Mode) => {
+    if (mode === "local" && !desktop) return;
     const old = get();
     update({
       mode,
@@ -224,23 +235,24 @@ const makeConnection = Effect.fn("Connection.make")(function* (
     });
     replace(leave());
   };
-  const unsubscribe = desktop.localOpenCode.onUnavailable(() => {
+  const unsubscribe = desktop?.localOpenCode.onUnavailable(() => {
     update({ localUnavailable: true });
     if (get().owner === "local") changeServer();
   });
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
-      unsubscribe();
+      unsubscribe?.();
       savedPassword = "";
     }),
   );
   replace(
     effects
-      .request(() => desktop.target.load())
+      .request<OpenCodeTarget | undefined>(() => host.target.load())
       .pipe(
         Effect.flatMap((loaded: OpenCodeTarget | undefined) =>
           Effect.sync(() => {
             if (!loaded) return;
+            if (loaded.kind === "local" && !desktop) return;
             update({
               savedTarget:
                 loaded.kind === "local" ? loaded : { kind: "remote", serverUrl: loaded.serverUrl },
@@ -248,7 +260,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
             });
             if (loaded.kind !== "remote") return;
             update({ serverUrl: loaded.serverUrl });
-            if (loaded.password === undefined) return;
+            if (!desktop || loaded.password === undefined) return;
             savedPassword = loaded.password;
             connect("remote", { serverUrl: loaded.serverUrl, password: loaded.password });
           }),
@@ -256,8 +268,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
         Effect.catch(() =>
           Effect.sync(() =>
             update({
-              status: "failed",
-              error:
+              notice:
                 "Saved connection settings could not be loaded. You can still connect manually.",
             }),
           ),
@@ -266,6 +277,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
   );
   return {
     state,
+    builtInAvailable: desktop !== undefined,
     connect,
     changeServer,
     forget,
@@ -284,9 +296,9 @@ class Connection extends Context.Service<
 >()("renderer/Connection") {}
 
 /** One runtime and registry per window, composed before rendering views. */
-export function createRenderer(desktop: DesktopApi) {
+export function createRenderer(host: AppHost) {
   const registry = AtomRegistry.make();
-  const runtime = ManagedRuntime.make(Layer.effect(Connection, makeConnection(desktop, registry)));
+  const runtime = ManagedRuntime.make(Layer.effect(Connection, makeConnection(host, registry)));
   const connection = runtime.runSync(Connection);
   let closing: Promise<void> | undefined;
   return {

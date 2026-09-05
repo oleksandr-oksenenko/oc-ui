@@ -10,10 +10,10 @@ export async function verifyConnectionSettings(settingsPath: string): Promise<vo
   await $("span=Remote").click();
   const url = 'input[placeholder="http://homie:4096"]';
   const password = 'input[placeholder="Optional server password"]';
-  await $(url).setValue("https://127.0.0.1:4096");
+  await $(url).setValue("ftp://127.0.0.1:4096");
   await $(".connection-form-submit").click();
   await $(".connection-form-error").waitForDisplayed();
-  assert.match(await $(".connection-form-error").getText(), /http:\/\//u);
+  assert.match(await $(".connection-form-error").getText(), /HTTP or HTTPS/u);
   await $(url).setValue(local.connection.serverUrl);
   await $(password).setValue("incorrect-acceptance-password");
   await $(".connection-form-submit").click();

@@ -3,6 +3,8 @@
 The desktop Storybook is the renderer's controlled verification surface. Its
 project configuration keeps the existing unit tests and the Storybook story
 tests in one Vitest run, with the projects named `unit` and `storybook`.
+Use [App verification](app-verification.md) to decide when stories, full-app
+workflows, Electron checks, and packaging checks are needed.
 
 Run the canonical repository test gate from the root:
 
@@ -19,8 +21,9 @@ pnpm --filter desktop exec vp test run --project=storybook
 
 The Storybook test project uses the Storybook 10.5.10 Vitest addon in headless
 Chromium. The browser provider is an execution detail of the Storybook project;
-there is no standalone Playwright suite. Visual verification and screenshots
-remain a separate, explicitly requested workflow.
+there is no standalone Playwright suite. Visual inspection is separate from the
+automated run and is required for affected UI by the app verification guide.
+Capture screenshots when they help review the change or explain a failure.
 
 A fresh development or CI machine must provision that Chromium runtime once:
 

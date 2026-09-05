@@ -1,7 +1,7 @@
+import { createProfile } from "./profile.mjs";
 import { constants } from "node:fs";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -15,21 +15,14 @@ const execFileAsync = promisify(execFile);
 
 const main = async () => {
   await verifyPackagedApplication();
-  const profile = await mkdtemp(join(tmpdir(), "ocui-packaged-e2e-"));
-  const paths = Object.fromEntries(
-    ["home", "data", "state", "cache", "config", "tmp", "app"].map((name) => [
-      name,
-      join(profile, name),
-    ]),
-  );
-  await Promise.all(Object.values(paths).map((path) => mkdir(path, { recursive: true })));
+  const { root: profile, paths, env } = await createProfile("ocui-packaged-e2e-");
   const provider = await startScriptedProvider();
   let runnerError;
   try {
     const project = join(paths.app, "acceptance-project");
     await mkdir(project, { recursive: true });
     await writeFile(join(project, "opencode.json"), JSON.stringify(provider.config));
-    await runWdio(paths, provider.url);
+    await runWdio(paths, env, provider.url);
   } catch (cause) {
     runnerError = cause;
   } finally {
@@ -98,21 +91,13 @@ const isAlive = (pid) => {
   }
 };
 
-const runWdio = (paths, providerUrl) =>
+const runWdio = (paths, env, providerUrl) =>
   new Promise((resolve, reject) => {
     const child = spawn("pnpm", ["run", "test:acceptance:mac:wdio"], {
       cwd: desktopRoot,
       // No provider keys, normal home files, sessions, or auth state enter this test.
       env: {
-        PATH: process.env.PATH,
-        HOME: paths.home,
-        TMPDIR: paths.tmp,
-        SHELL: "/bin/zsh",
-        XDG_DATA_HOME: paths.data,
-        XDG_STATE_HOME: paths.state,
-        XDG_CACHE_HOME: paths.cache,
-        XDG_CONFIG_HOME: paths.config,
-        OPENCODE_DB: join(paths.data, "acceptance.db"),
+        ...env,
         pnpm_config_verify_deps_before_run: "false",
         OCUI_E2E_APP_BINARY_PATH: appBinaryPath,
         OCUI_E2E_USER_DATA_PATH: paths.app,

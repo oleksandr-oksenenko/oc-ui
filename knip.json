@@ -8,9 +8,11 @@
         "src/main/opencode-worker.ts",
         "stories/**/*.stories.{ts,tsx}",
         "test/e2e/**/*.e2e.ts",
-        "electron-builder.config.mjs"
+        "electron-builder.config.mjs",
+        "src/renderer/browser.ts",
+        "vite.web.config.ts"
       ],
-      "ignoreDependencies": ["@opencode-ai/cli", "@wdio/local-runner"]
+      "ignoreDependencies": ["@wdio/local-runner"]
     }
   }
 }

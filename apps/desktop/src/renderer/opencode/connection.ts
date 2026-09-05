@@ -3,6 +3,7 @@ import type { LocationGetOutput, OpenCodeClient } from "@opencode-ai/client";
 import { Effect, Predicate } from "effect";
 
 import { OPENCODE_VERSION } from "../../shared/desktop-api.ts";
+import { parseServerUrl } from "../../shared/server-url.ts";
 import { workspaceRequest } from "../workspace-owner.ts";
 const HEALTH_TIMEOUT_MS = 10_000;
 const BASIC_USERNAME = "opencode";
@@ -47,56 +48,18 @@ type VerifyServerInput = {
   readonly password: string;
 };
 
-/** Normalize to an origin while rejecting every URL component outside an HTTP origin. */
+/** Apply the same origin contract as saved settings. */
 export function normalizeServerUrl(value: string): string {
-  if (value.trim() !== value || value.length === 0) {
-    throw new OpenCodeConnectionError(
-      "invalid-url",
-      "Enter a plain HTTP server origin, such as http://127.0.0.1:4096.",
-      "url",
-    );
-  }
-
-  let parsed: URL;
   try {
-    parsed = new URL(value);
+    return parseServerUrl(value).origin;
   } catch (cause) {
     throw new OpenCodeConnectionError(
       "invalid-url",
-      "Enter a valid plain HTTP server origin.",
+      "Enter an HTTP or HTTPS server address without credentials, a path, query, or fragment.",
       "url",
       { cause },
     );
   }
-
-  if (
-    parsed.protocol !== "http:" ||
-    parsed.username !== "" ||
-    parsed.password !== "" ||
-    parsed.pathname !== "/" ||
-    parsed.search !== "" ||
-    parsed.hash !== "" ||
-    value.includes("?") ||
-    value.includes("#") ||
-    parsed.hostname === "" ||
-    !hasOnlyOriginPath(value)
-  ) {
-    throw new OpenCodeConnectionError(
-      "invalid-url",
-      "Only a plain http:// origin without credentials, path, query, or fragment is supported.",
-      "url",
-    );
-  }
-
-  return parsed.origin;
-}
-
-function hasOnlyOriginPath(value: string): boolean {
-  const separator = value.indexOf("//");
-  if (separator < 0) return false;
-  const authority = value.slice(separator + 2);
-  const slash = authority.indexOf("/");
-  return slash < 0 || authority.slice(slash) === "/";
 }
 
 /** Build the one Basic header used by both HTTP calls and the SSE stream. */
@@ -135,6 +98,7 @@ class HttpStatusError extends Error {
 /** Verify health, exact protocol version, and the server's default location. */
 export const verifyServer = Effect.fn("verifyServer")(function* (
   input: VerifyServerInput,
+  browserOrigin?: string,
 ): Effect.fn.Return<VerifiedServer, OpenCodeConnectionError> {
   const serverUrl = yield* Effect.try({
     try: () => normalizeServerUrl(input.serverUrl),
@@ -143,11 +107,20 @@ export const verifyServer = Effect.fn("verifyServer")(function* (
         ? cause
         : new OpenCodeConnectionError(
             "invalid-url",
-            "Enter a valid plain HTTP server origin.",
+            "Enter a valid HTTP or HTTPS server address.",
             "url",
             { cause },
           ),
   });
+  if (browserOrigin?.startsWith("https://") && !serverUrl.startsWith("https://")) {
+    return yield* Effect.fail(
+      new OpenCodeConnectionError(
+        "invalid-url",
+        "This HTTPS page requires an HTTPS server address. For an HTTP server, open oc-ui locally.",
+        "url",
+      ),
+    );
+  }
   const api = createAuthenticatedClient(serverUrl, input.password);
   const health = yield* verifyRequest((signal) => api.health.get({ signal }), "health");
   if (health.version !== OPENCODE_VERSION) {
@@ -187,11 +160,9 @@ export function mapConnectionFailure(
   if (isTransportFailure(cause)) {
     return new OpenCodeConnectionError(
       phase === "stream" ? "stream-handshake" : "unreachable",
-      phase === "health"
-        ? "The server did not respond within 10 seconds."
-        : phase === "location"
-          ? "The server could not be reached."
-          : "The event stream could not be established.",
+      phase === "stream"
+        ? "The event stream could not be established. Check the server's browser access settings and network connection."
+        : "The server could not be reached. Check its address, network access, certificate, and browser access settings.",
       phase,
       { cause },
     );

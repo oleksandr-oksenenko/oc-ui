@@ -157,6 +157,10 @@ export async function verifyProviderFlows(): Promise<void> {
 async function addAnnotation(body: string): Promise<void> {
   const block = ".transcript-assistant-message [data-annotation-block]";
   await $(block).scrollIntoView();
+  // Scroll events dismiss annotation selection; select only after scrolling settles.
+  await browser.executeAsync((done) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => done())),
+  );
   await browser.execute((selector) => {
     const element = document.querySelector(selector);
     if (!element) throw new Error("Assistant annotation source is missing");

@@ -1,6 +1,6 @@
 export default {
   extends: ["stylelint-config-standard"],
-  ignoreFiles: ["**/out/**", "**/storybook-static/**"],
+  ignoreFiles: ["**/out/**", "**/dist/**", "**/dist-web/**", "**/storybook-static/**"],
   reportDescriptionlessDisables: true,
   reportNeedlessDisables: true,
   rules: {

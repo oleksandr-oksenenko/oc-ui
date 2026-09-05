@@ -8,6 +8,7 @@ import { Show } from "solid-js";
 import "./ConnectionForm.css";
 
 export type ConnectionFormProps = {
+  readonly builtInAvailable?: boolean;
   readonly mode: "local" | "remote";
   readonly serverUrl: string;
   readonly password: string;
@@ -56,7 +57,11 @@ export function ConnectionForm(props: ConnectionFormProps) {
         <header class="connection-form-heading">
           <p class="connection-form-eyebrow">Ocui</p>
           <h1 id="connection-form-title">Connect to OpenCode</h1>
-          <p>Choose where this app should run and remember that choice for next time.</p>
+          <p>
+            {props.builtInAvailable === false
+              ? "Connect to your OpenCode server. This browser remembers the address; passwords stay on this page."
+              : "Choose where this app should run and remember that choice for next time."}
+          </p>
         </header>
 
         <Show when={props.savedTarget}>
@@ -68,26 +73,28 @@ export function ConnectionForm(props: ConnectionFormProps) {
           )}
         </Show>
 
-        <RadioGroup
-          class="connection-form-mode"
-          label="Connection"
-          value={props.mode}
-          disabled={props.busy}
-          onChange={(value) => {
-            if (value === "local" || value === "remote") props.onModeChange(value);
-          }}
-        >
-          <RadioItem
-            value="local"
-            label="Built-in"
-            description="Start a private OpenCode server managed by this app."
-          />
-          <RadioItem
-            value="remote"
-            label="Remote"
-            description="Connect to an OpenCode server running elsewhere."
-          />
-        </RadioGroup>
+        <Show when={props.builtInAvailable !== false}>
+          <RadioGroup
+            class="connection-form-mode"
+            label="Connection"
+            value={props.mode}
+            disabled={props.busy}
+            onChange={(value) => {
+              if (value === "local" || value === "remote") props.onModeChange(value);
+            }}
+          >
+            <RadioItem
+              value="local"
+              label="Built-in"
+              description="Start a private OpenCode server managed by this app."
+            />
+            <RadioItem
+              value="remote"
+              label="Remote"
+              description="Connect to an OpenCode server running elsewhere."
+            />
+          </RadioGroup>
+        </Show>
 
         <form class="connection-form-fields" aria-busy={props.busy} onSubmit={submit}>
           <Show when={props.mode === "remote"}>
@@ -100,7 +107,11 @@ export function ConnectionForm(props: ConnectionFormProps) {
                   autocomplete="url"
                   disabled={props.busy}
                   invalid={props.error !== undefined}
-                  placeholder="http://homie:4096"
+                  placeholder={
+                    props.builtInAvailable === false
+                      ? "https://opencode.example.com"
+                      : "http://homie:4096"
+                  }
                   spellcheck={false}
                   value={props.serverUrl}
                   onInput={(event) => props.onServerUrlInput(event.currentTarget.value)}
@@ -166,7 +177,9 @@ export function ConnectionForm(props: ConnectionFormProps) {
                     ? "Retry"
                     : props.mode === "local"
                       ? "Start built-in server"
-                      : "Connect to remote"}
+                      : props.builtInAvailable === false
+                        ? "Connect"
+                        : "Connect to remote"}
             </Button>
             <Show when={props.savedTarget}>
               <Button

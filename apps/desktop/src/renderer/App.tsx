@@ -1,6 +1,6 @@
-import { Show } from "solid-js";
+import { createEffect, createMemo, onCleanup, Show, untrack } from "solid-js";
 import { useAtomValue } from "@effect/atom-solid";
-import { Toast } from "@opencode-ai/ui/toast";
+import { showToast, Toast, toaster } from "@opencode-ai/ui/toast";
 
 import type { Renderer } from "./connection.ts";
 import { ConnectionForm } from "./components/App/ConnectionForm.tsx";
@@ -12,6 +12,15 @@ import { ServerFlowDialogProvider } from "./ui/ServerFlowDialogProvider.tsx";
 export function App(props: { readonly renderer: Renderer }) {
   const connection = props.renderer.connection;
   const state = useAtomValue(() => connection.state);
+  const notice = createMemo(() => state().notice);
+  createEffect(() => {
+    const description = notice();
+    if (!description) return;
+    const id = untrack(() =>
+      showToast({ title: "Connection settings", description, persistent: true }),
+    );
+    onCleanup(() => toaster.dismiss(id));
+  });
   const connecting = () => state().status === "connecting";
   const visibleWorkspace = () =>
     connecting() || state().status === "connected" ? state().workspace : undefined;
@@ -38,6 +47,7 @@ export function App(props: { readonly renderer: Renderer }) {
       </Show>
       <Show when={!visibleWorkspace() || connecting()}>
         <ConnectionForm
+          builtInAvailable={connection.builtInAvailable}
           serverUrl={state().serverUrl}
           password={state().password}
           mode={state().mode}

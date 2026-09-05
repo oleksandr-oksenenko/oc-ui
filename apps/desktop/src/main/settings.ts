@@ -19,20 +19,10 @@ import type { PlatformError } from "effect";
 import type { SafeStorage } from "electron";
 
 import type { OpenCodeTarget, SaveTargetResult } from "../shared/desktop-api.ts";
+import { ServerUrlSchema } from "../shared/server-url.ts";
 
 const SETTINGS_FILE_NAME = "connection-settings.json";
-const MAX_URL_LENGTH = 2_048;
 const MAX_PASSWORD_LENGTH = 16_384;
-
-const ServerUrlSchema = Schema.Trim.check(Schema.isLengthBetween(1, MAX_URL_LENGTH)).pipe(
-  Schema.decodeTo(
-    Schema.URLFromString.check(
-      Schema.makeFilter((url) => url.protocol === "http:" && url.href === `${url.origin}/`, {
-        message: "serverUrl must be a plain HTTP origin",
-      }),
-    ),
-  ),
-);
 const parseSaveTarget = Schema.decodeEffect(
   Schema.Union([
     Schema.Struct({ kind: Schema.Literal("local") }),

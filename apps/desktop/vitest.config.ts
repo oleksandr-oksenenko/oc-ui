@@ -23,6 +23,17 @@ export default mergeConfig(
           test: {
             name: "unit",
             environment: "jsdom",
+            include: ["src/**/*.test.{ts,tsx}", "test/*.test.mjs"],
+          },
+        },
+        {
+          test: {
+            name: "web",
+            environment: "node",
+            include: ["test/e2e/browser.test.mjs"],
+            hookTimeout: 60_000,
+            testTimeout: 180_000,
+            expect: { poll: { timeout: 30_000 } },
           },
         },
         {

@@ -1,10 +1,32 @@
 # Product requirements and first-slice design
 
-Status: Implemented for milestone 1.
+Status: milestone 1 historical design, with the current host and transport requirements below.
+
+## Current host and transport requirements
+
+Ocui supports Electron and Chromium browser hosts using the same renderer and
+OpenCode client/store. The current pinned protocol is `0.0.0-beta-18866`.
+Desktop retains its built-in server and remote connection; browser mode connects
+to an independently managed server. Browser mode supports local serving and static
+HTTPS hosting, with configurable UI base paths and root-origin APIs.
+
+Both hosts accept HTTP and HTTPS server origins. HTTPS browser pages require an
+HTTPS endpoint, including for loopback. The operator supplies certificates, TLS
+termination, authentication, and server CORS permission for the UI origin.
+Browser settings store only the last successful address. Passwords remain in the
+current page; reload and new tabs require explicit Connect. Storage failures must
+permit manual connection and must not tear down an established workspace.
+Desktop retains secure password storage. Each page owns its workspace lifetime;
+closing it does not stop the independent server or replay uncertain mutations.
+See [Browser mode](browser-mode-design.md) for the complete current contract.
+
+The remaining sections record the original milestone 1 scope. Later implemented
+features and runtime ownership are described in their milestone documents and
+the current source; old first-slice deferrals do not prohibit browser mode.
 
 ## Product direction
 
-Ocui is an Electron desktop client for OpenCode. It is a place to
+Ocui is a desktop and browser client for OpenCode. It is a place to
 experiment with coding-agent interfaces while keeping OpenCode responsible for
 agent execution and server-side state.
 
@@ -198,8 +220,8 @@ request, including the global event stream.
 
 Basic authentication does not encrypt credentials in transit. With a plain
 HTTP URL, the password is protected only by the surrounding network or tunnel.
-The connection form must warn about this for non-loopback HTTP servers; HTTPS
-and certificate configuration remain outside this slice.
+Both hosts now accept HTTPS origins. Certificate and TLS configuration belong to
+the server operator; an HTTPS browser page requires an HTTPS server endpoint.
 
 The server URL may be stored as ordinary application data. The password is
 encrypted with Electron's secure-storage facility before it is persisted. If
