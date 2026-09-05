@@ -10,7 +10,7 @@ import type { ModelSelection } from "../../../../opencode/model-selection.ts";
 import type { SessionAgentSelectionController } from "./createSessionAgentSelection.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
 import type { SessionFormsController } from "./createSessionForms.ts";
-import type { SessionPermissionsController } from "./createSessionPermissions.ts";
+import type { SessionPermissionsController } from "../Permissions/createPermissions.ts";
 import { Composer } from "./SessionPane/Composer.tsx";
 import { QuestionForm } from "../../../../ui/QuestionForm.tsx";
 import { PermissionRequestCard } from "../../../../ui/PermissionRequestCard.tsx";
@@ -65,6 +65,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
     },
   );
   const pendingVisible = () =>
+    props.permissions.recoveryError() !== undefined ||
     props.permissions.state() !== "ready" ||
     props.permissions.requests().length > 0 ||
     props.forms.state() !== "ready" ||
@@ -74,6 +75,22 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
       class="transcript-message transcript-assistant-message transcript-pending-interaction"
       data-message-id="session-forms"
     >
+      <Show when={props.permissions.recoveryError()}>
+        {(error) => (
+          <div class="transcript-state transcript-error-state" role="alert">
+            <p>{error()}</p>
+            <Button
+              type="button"
+              size="small"
+              variant="outline"
+              disabled={!props.connected()}
+              onClick={() => void props.permissions.sync()}
+            >
+              Refresh permissions
+            </Button>
+          </div>
+        )}
+      </Show>
       <Show when={props.permissions.state() === "loading"}>
         <output class="transcript-state" aria-live="polite">
           <Loader class="transcript-state-loader" width={18} height={18} aria-hidden="true" />

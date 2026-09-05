@@ -9,7 +9,7 @@ import { createWorkspaceChanges } from "./Changes/createWorkspaceChanges.ts";
 import { createSessionAgentSelection } from "./Conversation/createSessionAgentSelection.ts";
 import { createSessionComposer } from "./Conversation/createSessionComposer.ts";
 import { createSessionForms } from "./Conversation/createSessionForms.ts";
-import { createSessionPermissions } from "./Conversation/createSessionPermissions.ts";
+import { createPermissions } from "./Permissions/createPermissions.ts";
 import { createGlobalForms } from "./GlobalForms/createGlobalForms.ts";
 import { createReviewFlow } from "./Review/ReviewRegion.tsx";
 import { createSessionFlows } from "./Sessions/createSessionFlows.ts";
@@ -60,11 +60,15 @@ export function createWorkspaceModel(runtime: ConnectedRuntime) {
     selectedID: sessions.selectedID,
     connected,
   });
-  const permissions = createSessionPermissions({
+  const permissions = createPermissions({
     effects: runtime.effects,
+    api: runtime.api,
     data: runtime.data,
     selectedID: sessions.selectedID,
     connected,
+    defaultLocation: runtime.defaultLocation,
+    sessions: sessions.sessions,
+    catalogState: runtime.sessions.state,
   });
   createConnectedLifecycle({
     effects: runtime.effects,

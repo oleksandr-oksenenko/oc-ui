@@ -9,7 +9,7 @@ import { stubResizeObserver } from "../../../../test/resize-observer.ts";
 import { createAnnotationDraftStore } from "../../../../domain/annotation-drafts.ts";
 import { ConversationRegion } from "./ConversationRegion.tsx";
 import type { SessionFormsController } from "./createSessionForms.ts";
-import type { SessionPermissionsController } from "./createSessionPermissions.ts";
+import type { SessionPermissionsController } from "../Permissions/createPermissions.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
 import type { SessionAgentSelectionController } from "./createSessionAgentSelection.ts";
 import type { SessionWorkspace } from "../Sessions/createSessionWorkspace.ts";
@@ -56,6 +56,7 @@ function setup(
     "ready",
   );
   const [permissionsPending, setPermissionsPending] = createSignal(false);
+  const [recoveryError, setRecoveryError] = createSignal<string>();
   const formsController: SessionFormsController = {
     sessionForms: forms,
     state,
@@ -73,6 +74,7 @@ function setup(
       permissionsState() === "failed"
         ? "Permissions could not be refreshed. Try again."
         : undefined,
+    recoveryError,
     pending: permissionsPending,
     submitting: (requestID) => permissionsPending() && requestID === permissions()[0]?.id,
     errorFor: () => undefined,
@@ -156,6 +158,7 @@ function setup(
     setPermissions,
     setPermissionsState,
     setPermissionsPending,
+    setRecoveryError,
     dispose: () => {
       dispose();
       vi.unstubAllGlobals();
@@ -272,6 +275,20 @@ describe("ConversationRegion session permissions", () => {
       (button) => button.textContent === "Retry permissions",
     );
     retry?.click();
+    expect(mounted.permissionsController.sync).toHaveBeenCalledOnce();
+    mounted.dispose();
+  });
+
+  it("keeps a global recovery failure visible and refreshable without a selected request", () => {
+    const mounted = setup();
+    mounted.setRecoveryError("Permission reconciliation could not be completed.");
+    expect(mounted.host.querySelector(".transcript-pending-interaction")?.textContent).toContain(
+      "Permission reconciliation could not be completed.",
+    );
+    const refresh = [...mounted.host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Refresh permissions",
+    );
+    refresh?.click();
     expect(mounted.permissionsController.sync).toHaveBeenCalledOnce();
     mounted.dispose();
   });

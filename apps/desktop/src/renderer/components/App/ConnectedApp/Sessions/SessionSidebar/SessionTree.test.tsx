@@ -467,4 +467,27 @@ describe("SessionSidebar", () => {
 
     dispose();
   });
+
+  it("places the controlled secondary action before Create session", () => {
+    const host = document.createElement("div");
+    const dispose = render(
+      () => (
+        <SessionSidebar
+          {...sidebarProps()}
+          secondaryAction={<button aria-label="Permissions">3</button>}
+        />
+      ),
+      host,
+    );
+
+    const actions = [
+      ...host.querySelectorAll<HTMLButtonElement>(".shell-session-header-actions > button"),
+    ];
+    expect(actions.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Permissions",
+      "Create session",
+    ]);
+
+    dispose();
+  });
 });

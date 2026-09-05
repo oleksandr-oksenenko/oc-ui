@@ -1,0 +1,255 @@
+.permissions-dialog[data-slot="dialog-container"] {
+  --permissions-dialog-max-height: min(72vh, 640px);
+
+  width: min(calc(100vw - 32px), 680px);
+  max-height: var(--permissions-dialog-max-height);
+}
+
+.permissions-dialog[data-slot="dialog-container"] > [data-slot="dialog-content"] {
+  max-height: var(--permissions-dialog-max-height);
+}
+
+.permissions-dialog-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 16px 16px;
+}
+
+.permissions-notice,
+.permissions-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-muted);
+  background: var(--oc-surface-control);
+  font-size: var(--oc-type-status-size);
+  line-height: var(--oc-type-status-line-height);
+}
+
+.permissions-notice p,
+.permissions-tab-toolbar p,
+.permissions-session p,
+.permissions-project p,
+.permissions-revoke-confirmation p,
+.permissions-empty {
+  margin: 0;
+}
+
+.permissions-recovery {
+  justify-content: space-between;
+  color: var(--oc-status-warning);
+}
+
+.permissions-error,
+.permissions-row-error {
+  color: var(--oc-status-danger);
+}
+
+.permissions-row-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--oc-type-status-size);
+}
+
+.permissions-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.permissions-tabs [data-slot="tabs-v2-list"] {
+  flex: none;
+}
+
+.permissions-tab-content {
+  min-height: 0;
+  overflow: auto;
+  padding-top: 12px;
+}
+
+.permissions-tab-toolbar,
+.permissions-session-header,
+.permissions-project-header,
+.permissions-revoke-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.permissions-tab-toolbar {
+  margin-bottom: 12px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-status-size);
+}
+
+.permissions-inbox-list,
+.permissions-project-list,
+.permissions-request-list,
+.permissions-rule-list {
+  display: grid;
+  gap: 10px;
+}
+
+.permissions-session,
+.permissions-project {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-base);
+}
+
+.permissions-session h3,
+.permissions-project h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--oc-text-contrast);
+  font-size: var(--oc-type-body-size);
+}
+
+.permissions-session-header > div,
+.permissions-project-header > div {
+  min-width: 0;
+}
+
+.permissions-session-header p,
+.permissions-project-canonical,
+.permissions-project-id {
+  overflow-wrap: anywhere;
+  color: var(--oc-text-faint);
+  font-size: var(--oc-type-metadata-size);
+}
+
+.permissions-request-list,
+.permissions-rule-list {
+  margin-top: 10px;
+}
+
+.permissions-request,
+.permissions-rule {
+  min-width: 0;
+  padding: 10px;
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+}
+
+.permissions-rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.permissions-values {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  gap: 8px;
+}
+
+.permissions-values > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.permissions-values dt {
+  color: var(--oc-text-faint);
+  font-size: var(--oc-type-metadata-size);
+  font-weight: 600;
+}
+
+.permissions-values dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--oc-text-base);
+  font-family: var(--font-mono);
+  font-size: var(--oc-type-metadata-size);
+  white-space: pre-wrap;
+}
+
+.permissions-resource-values {
+  max-height: 132px;
+  margin: 0;
+  padding-inline-start: 18px;
+  overflow: auto;
+}
+
+.permissions-revoke-confirmation {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--oc-status-danger);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-muted);
+}
+
+.permissions-revoke-confirmation code {
+  overflow-wrap: anywhere;
+  color: var(--oc-text-base);
+}
+
+.permissions-revoke-actions {
+  justify-content: flex-end;
+}
+
+.permissions-empty,
+.permissions-empty-project {
+  color: var(--oc-text-faint);
+  font-size: var(--oc-type-status-size);
+}
+
+.permissions-empty {
+  padding: 24px 4px;
+  text-align: center;
+}
+
+.permissions-empty-project {
+  margin-top: 10px !important;
+}
+
+@media (width <= 520px) {
+  .permissions-dialog[data-slot="dialog-container"] {
+    --permissions-dialog-max-height: calc(100vh - 32px);
+
+    width: calc(100vw - 16px);
+  }
+
+  .permissions-dialog-body {
+    padding-inline: 12px;
+  }
+
+  .permissions-tab-toolbar,
+  .permissions-session-header,
+  .permissions-project-header,
+  .permissions-recovery,
+  .permissions-rule {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .permissions-rule {
+    display: flex;
+  }
+
+  .permissions-tab-toolbar > button,
+  .permissions-session-header > button,
+  .permissions-rule > button {
+    width: 100%;
+  }
+
+  .permissions-values > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
