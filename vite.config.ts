@@ -188,7 +188,11 @@ export default defineConfig({
         rules: effectNodeBoundaryRules,
       },
       {
-        files: ["apps/desktop/wdio.conf.ts", "apps/desktop/test/e2e/**/*.{ts,mjs}"],
+        files: [
+          "apps/desktop/wdio.conf.ts",
+          "apps/desktop/test/e2e/**/*.{ts,mjs}",
+          "apps/desktop/test/browser-inspection.test.mjs",
+        ],
         rules: {
           ...effectPromiseBoundaryRules,
           ...effectNodeBoundaryRules,

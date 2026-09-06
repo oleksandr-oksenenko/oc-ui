@@ -70,7 +70,7 @@ export async function startServer(profile, project, corsOrigin) {
     child.once("error", fail);
     child.once("exit", (code) => fail(new Error(`Server exited ${code}: ${output}`)));
     const read = (chunk) => {
-      output += chunk.toString();
+      output = (output + chunk.toString()).slice(-8192);
       const match = /http:\/\/127\.0\.0\.1:(\d+)/u.exec(output);
       if (match) {
         clearTimeout(timeout);
@@ -90,6 +90,7 @@ export async function startServer(profile, project, corsOrigin) {
     url,
     password,
     headers,
+    exited,
     health: () => fetch(`${url}/api/health`, { headers }).then((response) => response.json()),
     close,
   };

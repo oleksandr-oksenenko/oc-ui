@@ -15,6 +15,7 @@
     "package:mac": "pnpm run build && pnpm run stage:opencode && electron-builder --config electron-builder.config.mjs --mac dir --arm64",
     "dev": "electron-vite dev",
     "dev:web": "vp dev --config vite.web.config.ts",
+    "verify:browser": "node test/e2e/inspect-browser.mjs",
     "build:web": "tsc -p tsconfig.renderer.json && vp build --config vite.web.config.ts",
     "preview:web": "vp preview --config vite.web.config.ts",
     "preview": "electron-vite preview",
