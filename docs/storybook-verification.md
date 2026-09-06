@@ -21,8 +21,10 @@ pnpm --filter desktop exec vp test run --project=storybook
 
 The Storybook test project uses the Storybook 10.5.10 Vitest addon in headless
 Chromium. The browser provider is an execution detail of the Storybook project;
-there is no standalone Playwright suite. Visual inspection is separate from the
-automated run and is required for affected UI by the app verification guide.
+Storybook does not need a separate Playwright suite. The full browser app has its
+own `web` Vitest project using Playwright. Use automated tests for final behavioral
+verification and targeted visual inspection for appearance or usability questions
+that assertions do not establish; see the app verification guide.
 Capture screenshots when they help review the change or explain a failure.
 
 A fresh development or CI machine must provision that Chromium runtime once:
