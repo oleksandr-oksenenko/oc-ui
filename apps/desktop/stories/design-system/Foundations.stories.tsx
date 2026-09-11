@@ -31,6 +31,8 @@ const tokenGroups: Array<{ title: string; tokens: Token[] }> = [
       { name: "--oc-border-strong", label: "Strong border", swatch: true },
       { name: "--oc-border-emphasis", label: "Emphasized border", swatch: true },
       { name: "--oc-focus-ring", label: "Keyboard focus", swatch: true },
+      { name: "--oc-focus-ring-width", label: "Focus thickness" },
+      { name: "--oc-focus-ring-offset", label: "Focus gap" },
     ],
   },
   {
@@ -56,6 +58,7 @@ const tokenGroups: Array<{ title: string; tokens: Token[] }> = [
       { name: "--oc-diff-addition", label: "Diff addition", swatch: true },
       { name: "--oc-diff-deletion", label: "Diff deletion", swatch: true },
       { name: "--oc-selection", label: "Selection", swatch: true },
+      { name: "--oc-accent", label: "Interactive text and indicators", swatch: true },
     ],
   },
 ];

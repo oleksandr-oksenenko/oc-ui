@@ -22,7 +22,8 @@
   --oc-text-faint: #7f7f7f;
   --oc-icon-faint: #6f6f6f;
   --oc-icon-base: #a5a5a5;
-  --oc-focus-ring: #74a7ff;
+  --oc-accent: #74a7ff;
+  --oc-focus-ring: var(--oc-border-emphasis);
   --oc-focus-ring-width: 1px;
   --oc-focus-ring-offset: 0px;
   --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
@@ -119,7 +120,7 @@
   --text-base: var(--oc-text-base);
   --text-weak: var(--oc-text-muted);
   --text-weaker: var(--oc-text-faint);
-  --text-interactive-base: var(--oc-focus-ring);
+  --text-interactive-base: var(--oc-accent);
   --text-on-success-strong: var(--oc-status-success);
   --text-on-critical-base: var(--oc-status-danger);
   --text-diff-add-base: var(--oc-diff-addition);

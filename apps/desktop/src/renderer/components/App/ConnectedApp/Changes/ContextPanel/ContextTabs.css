@@ -93,6 +93,6 @@
   bottom: 0;
   left: 2px;
   height: 3px;
-  background: var(--oc-focus-ring);
+  background: var(--oc-accent);
   content: "";
 }

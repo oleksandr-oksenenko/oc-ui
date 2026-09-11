@@ -1,23 +1,22 @@
-/* Focus geometry belongs here. Components may opt into an explicit placement
- * role, but must not recreate rings in feature styles. */
-:where(button, a, input, textarea, select, [tabindex]):focus-visible,
-:where(.oc-focus-container):has(.oc-focus-delegate:focus-visible) {
-  outline: var(--oc-focus-ring-outline);
-  outline-offset: var(--oc-focus-ring-offset);
+/* One focus treatment for native controls and the pinned upstream primitives.
+ * Important geometry deliberately wins over upstream slot/state specificity.
+ * Feature styles choose placement, never their own ring values. */
+
+/* Replace legacy focus shadows, without stripping normal control elevation. */
+:where([data-component="inline-input"]):focus,
+:where([data-slot="checkbox-checkbox-input"]):focus-visible
+  + [data-slot="checkbox-checkbox-control"],
+:where([data-slot="switch-input"]):focus-visible ~ [data-slot="switch-control"] {
+  box-shadow: none !important;
 }
 
-/* The focused child delegates its visible ring to a compound control frame. */
-:where(.oc-focus-delegate):focus-visible {
-  outline: none;
-  box-shadow: none;
+/* Toasts retain their floating elevation, without an additional focus shadow. */
+:where(.toast-v2):focus-visible {
+  box-shadow: var(--oc-shadow-floating) !important;
 }
 
-/* Upstream controls hardcode ring geometry, including preview focus states and
- * hidden inputs whose visible indicator is a sibling. Use foundation tokens for
- * those rings without replacing their disabled, invalid, or selected colors. */
-:focus-visible,
-:where([data-state="focus"], [data-focus]),
-:where([data-slot="switch-control"], [data-slot="radio-v2-item-control"]) {
+/* Upstream preview states use the same geometry as actual keyboard focus. */
+:where([data-state="focus"], [data-focus]) {
   outline-width: var(--oc-focus-ring-width) !important;
   outline-offset: var(--oc-focus-ring-offset) !important;
 }
@@ -29,8 +28,8 @@
 }
 
 :root [data-slot="list-search"] [data-slot="input-input"]:focus-visible {
-  outline: none;
-  box-shadow: none;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Legacy text fields use the same compact frame as the current input controls. */
@@ -41,27 +40,68 @@
   box-shadow: none;
 }
 
-/* Keep the ring inside controls that touch an overflow or window edge. */
-:where(
-  .oc-focus-inset,
-  [data-component="split-button-v2-action"],
-  [data-component="split-button-v2-menu-trigger"]
-):is(:focus-visible, [data-state="focus"], [data-focus]) {
-  outline-offset: var(--oc-focus-ring-inset-offset) !important;
-}
-
-/* The pinned upstream controls suppress their browser ring in these states. */
-:root
-  [data-component="select-v2"]:where(:focus-within):not(
+:where(button, a, input, textarea, select, [tabindex]):focus-visible:not(
+    :disabled,
     [data-disabled],
-    [data-invalid],
-    [data-expanded]
-  ) {
-  outline: var(--oc-focus-ring-outline);
-  outline-offset: var(--oc-focus-ring-offset);
+    [aria-disabled="true"]
+  ),
+:where(.oc-focus-container):has(.oc-focus-delegate:focus-visible),
+:where([data-component="text-input-v2"], [data-component="textarea-v2"]):has(
+    :where(input, textarea):focus-visible
+  ):not([data-disabled]),
+:where([data-component="checkbox"]):not([data-disabled], [data-readonly])
+  [data-slot="checkbox-checkbox-input"]:focus-visible
+  + [data-slot="checkbox-checkbox-control"],
+:where([data-component="switch"]):not([data-disabled], [data-readonly])
+  [data-slot="switch-input"]:focus-visible
+  ~ [data-slot="switch-control"],
+:where([data-slot="radio-v2-item"]):not([data-disabled], [data-readonly])
+  [data-slot="radio-v2-item-input"]:focus-visible
+  ~ [data-slot="radio-v2-item-control-stack"]
+  [data-slot="radio-v2-item-control"] {
+  outline: var(--oc-focus-ring-outline) !important;
+  outline-offset: var(--oc-focus-ring-offset) !important;
 }
 
-:root :where([data-slot="collapsible-trigger"], [data-slot="tabs-trigger"]):focus-visible {
-  outline: var(--oc-focus-ring-outline);
-  outline-offset: var(--oc-focus-ring-offset);
+/* A compound field owns its editor's ring. Independent clear/reveal actions
+ * retain their own keyboard indicator; hidden choice inputs delegate too. */
+:root :where(.oc-focus-delegate):focus-visible,
+:root [data-component="input"][data-variant="normal"] [data-slot="input-input"]:focus-visible,
+:root
+  :where(
+    [data-slot="text-input-v2-input"],
+    [data-slot="textarea-v2-textarea"],
+    [data-slot="checkbox-checkbox-input"],
+    [data-slot="switch-input"],
+    [data-slot="radio-v2-item-input"]
+  ):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Keep validation visible alongside the neutral keyboard outline. */
+:where(
+    [data-component="text-input-v2"],
+    [data-component="textarea-v2"],
+    [data-component="select-v2"]
+  )[data-invalid]:is(:focus-visible, :has(:focus-visible)):not([data-disabled]) {
+  box-shadow: inset 0 0 0 1px var(--oc-status-danger-border) !important;
+}
+
+/* Upstream focus-within must not leave a second ring around an action's field. */
+:where([data-component="text-input-v2"], [data-component="textarea-v2"]):focus-within:not(
+    [data-invalid],
+    :has(:where(input, textarea):focus-visible)
+  ) {
+  outline: none !important;
+}
+
+/* Keep the shared ring inside controls touching overflow or window edges. */
+:root
+  :where(
+    .oc-focus-inset,
+    [data-component="split-button-v2-action"],
+    [data-component="split-button-v2-menu-trigger"]
+  ):is(:focus-visible, :has(:focus-visible), [data-state="focus"], [data-focus]) {
+  outline-offset: var(--oc-focus-ring-inset-offset) !important;
 }

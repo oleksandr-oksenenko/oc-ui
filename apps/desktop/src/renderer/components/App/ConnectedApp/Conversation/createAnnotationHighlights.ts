@@ -238,7 +238,7 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     const abort = new AbortController();
     const listenerOptions = { capture: true, signal: abort.signal };
     const style = document.createElement("style");
-    style.textContent = `::highlight(${highlightName}) { background-color: var(--oc-selection-ring); text-decoration: underline; text-decoration-color: var(--oc-focus-ring); }`;
+    style.textContent = `::highlight(${highlightName}) { background-color: var(--oc-selection-ring); text-decoration: underline; text-decoration-color: var(--oc-accent); }`;
     document.head.append(style);
 
     const observer = new MutationObserver(() => {
