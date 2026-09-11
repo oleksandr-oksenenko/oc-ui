@@ -24,7 +24,7 @@
   margin-bottom: 14px;
   border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius-full);
-  color: var(--oc-focus-ring);
+  color: var(--oc-accent);
 }
 
 .global-forms-beacon-home h1 {
@@ -52,7 +52,7 @@
 .global-forms-beacon-status {
   min-height: 18px;
   margin: 20px 0 0;
-  color: var(--oc-focus-ring);
+  color: var(--oc-accent);
   font-size: var(--oc-type-caption-size);
 }
 

@@ -322,7 +322,7 @@
 }
 
 .transcript-markdown a {
-  color: var(--oc-focus-ring);
+  color: var(--oc-accent);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }

@@ -29,7 +29,7 @@
 
 .design-system-kicker {
   margin: 0;
-  color: var(--oc-focus-ring);
+  color: var(--oc-accent);
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-medium);
   letter-spacing: 0.08em;
@@ -461,8 +461,8 @@
 }
 
 .design-system-focus-preview {
-  outline: var(--oc-focus-ring-width, 2px) solid var(--oc-focus-ring);
-  outline-offset: var(--oc-focus-ring-offset, 2px);
+  outline: var(--oc-focus-ring-outline);
+  outline-offset: var(--oc-focus-ring-offset);
 }
 
 .design-system-session-row {
@@ -916,7 +916,7 @@
   display: flex;
   align-items: center;
   gap: 20px;
-  color: var(--oc-focus-ring);
+  color: var(--oc-accent);
 }
 
 .design-system-loader-item {
@@ -948,4 +948,21 @@
     grid-column: 2;
     text-align: left;
   }
+}
+
+.design-system-focus-compound {
+  padding: 8px;
+  border: 1px solid var(--oc-border-strong);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+}
+
+.design-system-focus-compound textarea {
+  border: 0;
+  color: var(--oc-text-base);
+  background: transparent;
+}
+
+.design-system-focus-clipped {
+  overflow: hidden;
 }
