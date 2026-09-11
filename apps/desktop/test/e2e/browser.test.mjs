@@ -438,11 +438,15 @@ describe.sequential("production browser app", () => {
     const pending = new Promise((resolve) => {
       release = resolve;
     });
+    let finish;
+    const continued = new Promise((resolve) => {
+      finish = resolve;
+    });
     let refreshing = false;
     const holdDiff = async (route) => {
       refreshing = true;
       await pending;
-      await route.continue();
+      finish(route.continue());
     };
     await page.route("**/api/vcs/diff**", holdDiff);
     try {
@@ -453,6 +457,7 @@ describe.sequential("production browser app", () => {
       ).toBe(1);
     } finally {
       release();
+      if (refreshing) await continued;
       await page.unroute("**/api/vcs/diff**", holdDiff);
     }
     const path = join(project, "polling.txt");
