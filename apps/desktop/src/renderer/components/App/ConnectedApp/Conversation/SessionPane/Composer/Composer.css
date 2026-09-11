@@ -241,10 +241,6 @@
   background: var(--composer-hover);
 }
 
-.composer-model-list [data-slot="list-search"]:focus-within {
-  border-color: var(--oc-border-strong);
-}
-
 .composer-model-list [data-slot="list-search-container"] {
   gap: 6px;
   max-height: 26px;

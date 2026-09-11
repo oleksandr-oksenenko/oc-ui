@@ -23,8 +23,8 @@
   --oc-icon-faint: #6f6f6f;
   --oc-icon-base: #a5a5a5;
   --oc-focus-ring: #74a7ff;
-  --oc-focus-ring-width: 2px;
-  --oc-focus-ring-offset: 2px;
+  --oc-focus-ring-width: 1px;
+  --oc-focus-ring-offset: 0px;
   --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
   --oc-focus-ring-inset-offset: calc(-1 * var(--oc-focus-ring-width));
   --oc-status-info: #5598f6;

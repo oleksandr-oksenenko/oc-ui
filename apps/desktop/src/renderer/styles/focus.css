@@ -12,8 +12,41 @@
   box-shadow: none;
 }
 
+/* Upstream controls hardcode ring geometry, including preview focus states and
+ * hidden inputs whose visible indicator is a sibling. Use foundation tokens for
+ * those rings without replacing their disabled, invalid, or selected colors. */
+:focus-visible,
+:where([data-state="focus"], [data-focus]),
+:where([data-slot="switch-control"], [data-slot="radio-v2-item-control"]) {
+  outline-width: var(--oc-focus-ring-width) !important;
+  outline-offset: var(--oc-focus-ring-offset) !important;
+}
+
+/* Search fields delegate focus to the rounded frame, including their icons. */
+:root [data-slot="list-search"]:has([data-slot="input-input"]:focus-visible) {
+  outline: var(--oc-focus-ring-outline);
+  outline-offset: var(--oc-focus-ring-inset-offset);
+}
+
+:root [data-slot="list-search"] [data-slot="input-input"]:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Legacy text fields use the same compact frame as the current input controls. */
+:root
+  [data-component="input"][data-variant="normal"]
+  [data-slot="input-wrapper"]:focus-within:not(:has([data-readonly], [data-invalid])) {
+  border-color: var(--oc-focus-ring);
+  box-shadow: none;
+}
+
 /* Keep the ring inside controls that touch an overflow or window edge. */
-:where(.oc-focus-inset):is(:focus-visible, [data-state="focus"]) {
+:where(
+  .oc-focus-inset,
+  [data-component="split-button-v2-action"],
+  [data-component="split-button-v2-menu-trigger"]
+):is(:focus-visible, [data-state="focus"], [data-focus]) {
   outline-offset: var(--oc-focus-ring-inset-offset) !important;
 }
 
