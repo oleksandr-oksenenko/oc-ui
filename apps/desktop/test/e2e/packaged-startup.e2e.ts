@@ -304,7 +304,7 @@ async function verifyHealth(expectedPid: number): Promise<void> {
   });
   assert.equal(health.status, 200);
   assert.equal(health.body.pid, expectedPid);
-  assert.equal(health.body.version, "0.0.0-beta-18866");
+  assert.equal(health.body.version, "0.0.0-beta-19271");
 }
 
 async function waitForProcessExit(pid: number): Promise<void> {

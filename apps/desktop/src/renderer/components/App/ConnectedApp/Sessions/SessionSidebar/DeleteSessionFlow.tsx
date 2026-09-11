@@ -299,7 +299,9 @@ const collectInitialCleanup = Effect.fn("DeleteSessionFlow.collectInitialCleanup
     }
     if (!projects.has(session.projectID)) {
       const listed = yield* input.effects
-        .request((signal) => input.listWorktrees({ projectID: session.projectID }, { signal }))
+        .request((signal) =>
+          input.listWorktrees({ location: { directory: session.location.directory } }, { signal }),
+        )
         .pipe(Effect.result);
       projects.set(session.projectID, Result.isSuccess(listed) ? listed.success : undefined);
     }
@@ -315,7 +317,7 @@ const collectInitialCleanup = Effect.fn("DeleteSessionFlow.collectInitialCleanup
       .toSorted((left, right) => right.directory.length - left.directory.length)[0];
     if (worktree?.strategy !== "git") continue;
     const candidate: WorktreeRemoveInput = {
-      projectID: session.projectID,
+      location: { directory: worktree.directory },
       directory: worktree.directory,
       force: true,
     };
@@ -334,7 +336,7 @@ function isWithinDirectory(path: string, directory: string): boolean {
 }
 
 function sameCandidate(left: WorktreeRemoveInput, right: WorktreeRemoveInput): boolean {
-  return left.projectID === right.projectID && sameDirectory(left.directory, right.directory);
+  return sameDirectory(left.directory, right.directory);
 }
 
 function sameDirectory(left: string, right: string): boolean {

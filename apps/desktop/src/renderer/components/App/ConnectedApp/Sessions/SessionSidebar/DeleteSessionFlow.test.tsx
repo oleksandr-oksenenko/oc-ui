@@ -222,7 +222,7 @@ describe("DeleteSessionFlow", () => {
       );
       expect(fixture.removeWorktree).toHaveBeenCalledWith(
         {
-          projectID: "project",
+          location: { directory: "/worktree" },
           directory: "/worktree",
           force: true,
         },
@@ -246,8 +246,8 @@ describe("DeleteSessionFlow", () => {
       subtreeSessions: [root, duplicate, second],
       listWorktrees: vi
         .fn<OpenCodeClient["worktree"]["list"]>()
-        .mockImplementation(async ({ projectID }) =>
-          projectID === "other-project"
+        .mockImplementation(async (input) =>
+          input?.location?.directory === "/other/src"
             ? [{ directory: "/other", strategy: "git" }]
             : [{ directory: "/worktree", strategy: "git" }],
         ),
@@ -258,7 +258,7 @@ describe("DeleteSessionFlow", () => {
     expect(fixture.removeWorktree).toHaveBeenNthCalledWith(
       1,
       {
-        projectID: "project",
+        location: { directory: "/worktree" },
         directory: "/worktree",
         force: true,
       },
@@ -267,7 +267,7 @@ describe("DeleteSessionFlow", () => {
     expect(fixture.removeWorktree).toHaveBeenNthCalledWith(
       2,
       {
-        projectID: "other-project",
+        location: { directory: "/other" },
         directory: "/other",
         force: true,
       },
@@ -275,12 +275,12 @@ describe("DeleteSessionFlow", () => {
     );
     expect(fixture.listWorktrees).toHaveBeenNthCalledWith(
       1,
-      { projectID: "project" },
+      { location: { directory: "/worktree/src" } },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(fixture.listWorktrees).toHaveBeenNthCalledWith(
       2,
-      { projectID: "other-project" },
+      { location: { directory: "/other/src" } },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(fixture.listWorktrees).toHaveBeenCalledTimes(2);
@@ -440,7 +440,9 @@ describe("DeleteSessionFlow", () => {
       (await vi.waitFor(() => mounted.deleteButton)).click();
       await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
       expect(vi.mocked(fixture.removeWorktree).mock.calls.map(([input]) => [input])).toEqual(
-        removed === undefined ? [] : [[{ projectID: "project", directory: removed, force: true }]],
+        removed === undefined
+          ? []
+          : [[{ location: { directory: removed }, directory: removed, force: true }]],
       );
       mounted.dispose();
     },
@@ -621,7 +623,7 @@ describe("DeleteSessionFlow", () => {
     expect(fixture.removeSession).not.toHaveBeenCalled();
     expect(fixture.removeWorktree).toHaveBeenCalledWith(
       {
-        projectID: "project",
+        location: { directory: "/worktree" },
         directory: "/worktree",
         force: true,
       },

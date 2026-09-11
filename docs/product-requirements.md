@@ -5,7 +5,7 @@ Status: milestone 1 historical design, with the current host and transport requi
 ## Current host and transport requirements
 
 Ocui supports Electron and Chromium browser hosts using the same renderer and
-OpenCode client/store. The current pinned protocol is `0.0.0-beta-18866`.
+OpenCode client/store. The current pinned protocol is `0.0.0-beta-19271`.
 Desktop retains its built-in server and remote connection; browser mode connects
 to an independently managed server. Browser mode supports local serving and static
 HTTPS hosting, with configurable UI base paths and root-origin APIs.

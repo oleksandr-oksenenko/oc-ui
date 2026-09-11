@@ -78,7 +78,12 @@ describe("OpenCode worker scope ownership", () => {
         yield* Effect.addFinalizer(() => Effect.sync(finalized));
         const cleanup = yield* lifecycle.onListen(address, Effect.sync(signaled));
         yield* Effect.addFinalizer(() => cleanup);
-        return { address, shutdown: Effect.never };
+        return {
+          address,
+          shutdown: Effect.never,
+          updateAvailable: () => Effect.void,
+          updated: () => Effect.void,
+        };
       }),
     );
     await import("./opencode-worker.ts");
@@ -95,7 +100,7 @@ describe("OpenCode worker scope ownership", () => {
         hostname: "127.0.0.1",
         port: 0,
         password: "worker-test-secret",
-        app: { name: "oc-ui", version: "0.0.0-beta-18866" },
+        app: { name: "oc-ui", version: "0.0.0-beta-19271" },
       },
       expect.objectContaining({ onListen: expect.any(Function) }),
     );
@@ -245,7 +250,12 @@ describe("OpenCode worker scope ownership", () => {
         yield* Effect.addFinalizer(() => Effect.sync(finalized));
         const cleanup = yield* lifecycle.onListen(address, Effect.die("shutdown failed"));
         yield* Effect.addFinalizer(() => cleanup);
-        return { address, shutdown: Effect.never };
+        return {
+          address,
+          shutdown: Effect.never,
+          updateAvailable: () => Effect.void,
+          updated: () => Effect.void,
+        };
       }),
     );
     await import("./opencode-worker.ts");
@@ -273,7 +283,12 @@ describe("OpenCode worker scope ownership", () => {
           );
           const cleanup = yield* lifecycle.onListen(address, Effect.void);
           yield* Effect.addFinalizer(() => cleanup);
-          return { address, shutdown: Effect.never };
+          return {
+            address,
+            shutdown: Effect.never,
+            updateAvailable: () => Effect.void,
+            updated: () => Effect.void,
+          };
         }),
       );
       await import("./opencode-worker.ts");

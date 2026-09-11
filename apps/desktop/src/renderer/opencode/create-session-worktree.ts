@@ -157,7 +157,7 @@ const createNativeWorktree = Effect.fn("createSessionWorktree.createNativeWorktr
     .request((signal) =>
       input.api.worktree.create(
         {
-          projectID: project.id,
+          location: { directory: project.directory },
           strategy: "git",
           from: project.directory,
           directory: parent,

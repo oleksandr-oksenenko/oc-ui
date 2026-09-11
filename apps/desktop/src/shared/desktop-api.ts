@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 
-export const OPENCODE_VERSION = "0.0.0-beta-18866" as const;
+export const OPENCODE_VERSION = "0.0.0-beta-19271" as const;
 
 const LocalTargetSchema = Schema.Struct({ kind: Schema.Literal("local") });
 const RemoteTargetSchema = Schema.Struct({

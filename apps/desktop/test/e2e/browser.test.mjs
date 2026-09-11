@@ -546,7 +546,8 @@ describe.sequential("production browser app", () => {
   });
 
   it("discovers permissions across locations and revokes a saved approval", async () => {
-    await ensureConnected();
+    // Build the unavailable-location fixture without a live UI reloading its services.
+    await page.goto("about:blank");
     const primaryDirectory = await warmPermissionLocation(project);
     const secondaryDirectory = await warmPermissionLocation(secondaryProject);
     const historicalProject = join(
@@ -578,6 +579,7 @@ describe.sequential("production browser app", () => {
     await rename(historicalProject, movedHistoricalProject);
     await expect(access(historicalDirectory)).rejects.toHaveProperty("code", "ENOENT");
     await access(movedHistoricalProject);
+    await ensureConnected();
     const primaryTitle = "Primary permission inbox";
     const secondaryTitle = "Secondary permission inbox";
     const primarySession = await createPermissionSession(primaryTitle, primaryDirectory);

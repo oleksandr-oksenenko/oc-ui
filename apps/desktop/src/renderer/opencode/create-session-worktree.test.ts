@@ -221,7 +221,7 @@ describe("createSessionWorktree", () => {
     expect(result).toEqual({ location: { directory: parent + "/generated" } });
     expect(fake.api.worktree.create).toHaveBeenCalledWith(
       {
-        projectID: "project",
+        location: { directory: root },
         strategy: "git",
         from: root,
         directory: parent,
