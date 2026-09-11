@@ -5,7 +5,7 @@ import type {
   OpenCodeEvent,
   VcsDiffOutput,
 } from "@opencode-ai/client";
-import { Effect, Exit, Scope } from "effect";
+import { Effect, Exit, Fiber, Scope } from "effect";
 import { withTestWorkspace } from "../test/workspace.ts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -50,12 +50,54 @@ const setup = (diff: DiffRequest) => {
           effects.runPromise(store.sync(ref, mode)),
         refresh: (ref: LocationRef, mode: Parameters<typeof store.refresh>[1]) =>
           effects.runPromise(store.refresh(ref, mode)),
+        poll: store.poll,
       },
     };
   });
 };
 
 describe("VCS diff store", () => {
+  it("polls sequentially, preserves unchanged rows, backs off failures, and stops cleanly", async () => {
+    vi.useFakeTimers();
+    try {
+      const ref = location("/workspace", "worktree-1");
+      let resolve!: (value: VcsDiffOutput) => void;
+      const diff = vi
+        .fn<DiffRequest>()
+        .mockResolvedValueOnce(response(ref, [file("a.ts")]))
+        .mockImplementationOnce(
+          () =>
+            new Promise((done) => {
+              resolve = done;
+            }),
+        )
+        .mockRejectedValueOnce(new Error("offline"))
+        .mockResolvedValue(response(ref, [file("a.ts"), file("b.ts")]));
+      const { store, effects } = setup(diff);
+      const polling = effects.runFork(store.poll(ref, "working"));
+      await vi.advanceTimersByTimeAsync(0);
+      const original = store.state(ref, "working").files;
+      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect(diff).toHaveBeenCalledTimes(2);
+      resolve(response(ref, [file("a.ts")]));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(store.state(ref, "working").files).toBe(original);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(store.state(ref, "working").status).toBe("failed");
+      expect(store.state(ref, "working").files).toBe(original);
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(diff).toHaveBeenCalledTimes(3);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(store.state(ref, "working").files[0]).toBe(original[0]);
+      expect(store.state(ref, "working").files).toHaveLength(2);
+      await effects.runPromise(Fiber.interrupt(polling));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(diff).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("maps workspaceID to the generated API request and caches by mode", async () => {
     const ref = location("/workspace", "worktree-1");
     const diff = vi.fn<DiffRequest>(() => Promise.resolve(response(ref, [file("src/a.ts")])));
@@ -194,7 +236,7 @@ describe("VCS diff store", () => {
     expect(store.state(ref, "working").files[0]?.file).toBe("latest.ts");
   });
 
-  it("waits for uncancellable SDK work before releasing the workspace", async () => {
+  it("retains a pending poll read after its subscriber leaves and awaits it at workspace shutdown", async () => {
     const ref = location("/workspace");
     let resolve!: (value: VcsDiffOutput) => void;
     let signal: AbortSignal | undefined;
@@ -205,7 +247,9 @@ describe("VCS diff store", () => {
       });
     });
     const { store, effects } = setup(diff);
-    const pending = store.sync(ref, "working").catch(() => undefined);
+    const polling = effects.runFork(store.poll(ref, "working"));
+    await effects.runPromise(Fiber.interrupt(polling));
+    expect(signal?.aborted).toBe(false);
     let closed = false;
     const closing = Effect.runPromise(Scope.close(effects.scope, Exit.void)).then(() => {
       closed = true;
@@ -216,7 +260,6 @@ describe("VCS diff store", () => {
     expect(closed).toBe(false);
     resolve(response(ref, [file("late.ts")]));
     await closing;
-    await pending;
     expect(store.state(ref, "working").status).toBe("loading");
   });
 });

@@ -63,6 +63,10 @@ const setup = (options?: {
     const syncLocation = vi.fn<Vcs["sync"]>(() => Promise.resolve());
     const syncDiff = vi.fn<Diffs["sync"]>(() => Effect.void);
     const refreshDiff = vi.fn<Diffs["refresh"]>(() => Effect.void);
+    const stopPolling = vi.fn<() => void>();
+    const pollDiff = vi.fn<Diffs["poll"]>(() =>
+      Effect.never.pipe(Effect.ensuring(Effect.sync(stopPolling))),
+    );
     const info = vi.fn<Vcs["info"]>(() => {
       const current = branch();
       return current === undefined ? undefined : { branch: current };
@@ -80,6 +84,7 @@ const setup = (options?: {
         state: vi.fn<Diffs["state"]>(() => snapshot()),
         sync: syncDiff,
         refresh: refreshDiff,
+        poll: pollDiff,
       },
     };
     const changes = createWorkspaceChanges({
@@ -109,6 +114,8 @@ const setup = (options?: {
       syncLocation,
       syncDiff,
       refreshDiff,
+      pollDiff,
+      stopPolling,
       reviewDrafts,
       requestRemoveComment,
     };
@@ -120,6 +127,58 @@ const settle = async (): Promise<void> => {
 };
 
 describe("createWorkspaceChanges", () => {
+  it("pauses in a hidden document and follows the complete selected location", async () => {
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+    try {
+      const root = setup({ selected: session() });
+      root.setBootstrapped(true);
+      root.setConnected(true);
+      root.setPanelOpen(true);
+      await settle();
+      visibility.mockReturnValue("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await settle();
+      expect(root.stopPolling).toHaveBeenCalledOnce();
+      const next = { directory: "/another", workspaceID: "worktree-2" };
+      root.setSelectedSession(sessionFixture({ id: "other", location: next }));
+      await settle();
+      expect(root.pollDiff).toHaveBeenCalledOnce();
+      visibility.mockReturnValue("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await settle();
+      expect(root.pollDiff).toHaveBeenLastCalledWith(next, "working");
+      root.dispose();
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+  it("restarts polling on focus and mode changes and stops on close, disconnect, and disposal", async () => {
+    const root = setup({ selected: session(), branch: { current: "feature", default: "main" } });
+    root.setBootstrapped(true);
+    root.setConnected(true);
+    root.setPanelOpen(true);
+    await settle();
+    expect(root.pollDiff).toHaveBeenLastCalledWith(location, "working");
+    window.dispatchEvent(new Event("focus"));
+    await settle();
+    expect(root.stopPolling).toHaveBeenCalledTimes(1);
+    root.changes.view().onComparisonChange?.("branch");
+    await settle();
+    expect(root.pollDiff).toHaveBeenLastCalledWith(location, "branch");
+    root.setPanelOpen(false);
+    await settle();
+    expect(root.stopPolling).toHaveBeenCalledTimes(3);
+    root.setPanelOpen(true);
+    await settle();
+    root.setConnected(false);
+    await settle();
+    expect(root.stopPolling).toHaveBeenCalledTimes(4);
+    root.setConnected(true);
+    await settle();
+    root.dispose();
+    await settle();
+    expect(root.stopPolling).toHaveBeenCalledTimes(5);
+  });
   it("synchronizes only when a selected location is fully ready and visible", async () => {
     const root = setup();
 
@@ -269,7 +328,7 @@ describe("createWorkspaceChanges", () => {
 
     root.setSnapshot({ files: [...files], status: "ready", stale: false });
     expect(root.changes.view().files[0]).toEqual(projectedFile);
-    expect(root.changes.view().files[0]).not.toBe(projectedFile);
+    expect(root.changes.view().files[0]).toBe(projectedFile);
 
     root.dispose();
   });
