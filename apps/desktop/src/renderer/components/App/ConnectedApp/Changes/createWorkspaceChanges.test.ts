@@ -37,7 +37,7 @@ const reviewSelection = {
 
 type Snapshot = {
   readonly files: readonly FileDiffInfo[];
-  readonly status: "idle" | "loading" | "ready" | "failed";
+  readonly status: "idle" | "loading" | "refreshing" | "ready" | "failed";
   readonly stale: boolean;
   readonly error?: string;
 };
@@ -127,6 +127,19 @@ const settle = async (): Promise<void> => {
 };
 
 describe("createWorkspaceChanges", () => {
+  it("shows no loading indicator for background refreshes, including empty and failed results", () => {
+    const root = setup({ selected: session() });
+    for (const files of [[], [file("a.ts")]]) {
+      root.setSnapshot({ files, status: "refreshing", stale: false });
+      expect(root.changes.view().loading).toBe(false);
+      expect(root.changes.view().files).toBe(files);
+    }
+    root.setSnapshot({ files: [], status: "refreshing", stale: true, error: "offline" });
+    expect(root.changes.view()).toMatchObject({ loading: false, error: "offline" });
+    root.setSnapshot({ files: [], status: "loading", stale: false });
+    expect(root.changes.view().loading).toBe(true);
+    root.dispose();
+  });
   it("pauses in a hidden document and follows the complete selected location", async () => {
     const visibility = vi.spyOn(document, "visibilityState", "get");
     try {

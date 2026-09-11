@@ -222,7 +222,7 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
     return {
       files: currentFiles,
       loading: snapshot.status === "loading",
-      error: snapshot.status === "failed" ? snapshot.error : undefined,
+      error: snapshot.error,
       stale: snapshot.stale,
       emptyMessage:
         diffMode() === "branch" && defaultBranch
