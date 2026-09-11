@@ -78,9 +78,13 @@ describe("VCS diff store", () => {
       await vi.advanceTimersByTimeAsync(0);
       const original = store.state(ref, "working").files;
       await vi.advanceTimersByTimeAsync(2_000);
+      expect(store.state(ref, "working").status).toBe("refreshing");
+      expect(store.state(ref, "working").files).toBe(original);
+      const joined = store.sync(ref, "working");
       await vi.advanceTimersByTimeAsync(8_000);
       expect(diff).toHaveBeenCalledTimes(2);
       resolve(response(ref, [file("a.ts")]));
+      await joined;
       await vi.advanceTimersByTimeAsync(0);
       expect(store.state(ref, "working").files).toBe(original);
       await vi.advanceTimersByTimeAsync(2_000);
@@ -97,6 +101,30 @@ describe("VCS diff store", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("keeps an empty result visible during background refresh but shows loading for explicit retry", async () => {
+    const ref = location("/empty");
+    const diff = vi
+      .fn<DiffRequest>()
+      .mockResolvedValueOnce(response(ref, []))
+      .mockImplementation(
+        (_input, options) =>
+          new Promise((_, reject) => {
+            options?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            );
+          }),
+      );
+    const { store, effects } = setup(diff);
+    await store.sync(ref, "working");
+    const polling = effects.runFork(store.poll(ref, "working"));
+    expect(store.state(ref, "working")).toMatchObject({ status: "refreshing", files: [] });
+    const retry = store.refresh(ref, "working").catch(() => undefined);
+    expect(store.state(ref, "working").status).toBe("loading");
+    await Effect.runPromise(Scope.close(effects.scope, Exit.void));
+    await retry;
+    await Effect.runPromise(Fiber.interrupt(polling));
   });
   it("maps workspaceID to the generated API request and caches by mode", async () => {
     const ref = location("/workspace", "worktree-1");

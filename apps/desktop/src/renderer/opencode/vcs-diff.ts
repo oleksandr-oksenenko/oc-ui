@@ -8,7 +8,7 @@ import type { WorkspaceOwner } from "../workspace-owner.ts";
 import type { OpenCodeEventSource } from "./event-source";
 
 export type VcsDiffMode = "working" | "branch";
-type VcsDiffStatus = "idle" | "loading" | "ready" | "failed";
+type VcsDiffStatus = "idle" | "loading" | "refreshing" | "ready" | "failed";
 
 type VcsDiffSnapshot = {
   readonly files: readonly FileDiffInfo[];
@@ -62,10 +62,18 @@ export function createVcsDiffStore(input: VcsDiffStoreInput): VcsDiffStore {
     keys.forEach(invalidateEntry);
   };
 
-  const load = Effect.fn("VcsDiffStore.load")(function* (location: LocationRef, mode: VcsDiffMode) {
+  const load = Effect.fn("VcsDiffStore.load")(function* (
+    location: LocationRef,
+    mode: VcsDiffMode,
+    background: boolean,
+  ) {
     const key = keyOf(location, mode);
     const before = effects.registry.get(cache)[key] ?? EMPTY;
-    write(key, { ...before, status: "loading", error: undefined });
+    write(key, {
+      ...before,
+      status: background ? "refreshing" : "loading",
+      error: background ? before.error : undefined,
+    });
     yield* effects
       .request((signal) =>
         input.diff(
@@ -130,9 +138,11 @@ export function createVcsDiffStore(input: VcsDiffStoreInput): VcsDiffStore {
     if (policy === "refresh") invalidateEntry(key);
     const current = effects.registry.get(cache)[key] ?? EMPTY;
     let request = Option.getOrUndefined(FiberMap.getUnsafe(requests, key));
-    if (!request || current.status !== "loading") {
+    if (!request || (current.status !== "loading" && current.status !== "refreshing")) {
       if (policy === "sync" && current.status === "ready" && !current.stale) return;
-      request = effects.runFork(load(location, mode));
+      request = effects.runFork(
+        load(location, mode, policy === "revalidate" && current.status !== "idle"),
+      );
       FiberMap.setUnsafe(requests, key, request);
     }
     yield* Fiber.join(request).pipe(

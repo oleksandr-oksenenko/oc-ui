@@ -434,6 +434,27 @@ describe.sequential("production browser app", () => {
     if (await page.getByLabel("Show context", { exact: true }).count())
       await page.getByLabel("Show context", { exact: true }).click();
     await page.getByRole("button", { name: "Collapse working.txt", exact: true }).click();
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    let refreshing = false;
+    const holdDiff = async (route) => {
+      refreshing = true;
+      await pending;
+      await route.continue();
+    };
+    await page.route("**/api/vcs/diff**", holdDiff);
+    try {
+      await expect.poll(() => refreshing).toBe(true);
+      expect(await page.locator(".context-spinner").count()).toBe(0);
+      expect(
+        await page.getByRole("button", { name: "Expand working.txt", exact: true }).count(),
+      ).toBe(1);
+    } finally {
+      release();
+      await page.unroute("**/api/vcs/diff**", holdDiff);
+    }
     const path = join(project, "polling.txt");
     try {
       await writeFile(path, "External creation\n");
