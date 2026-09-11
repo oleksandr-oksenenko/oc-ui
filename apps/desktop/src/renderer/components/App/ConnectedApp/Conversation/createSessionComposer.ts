@@ -11,6 +11,7 @@ import type {
   ReviewDraftStore,
 } from "../../../../domain/index.ts";
 import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
+import { readPromptFile } from "../../../../opencode/read-prompt-file.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { createEffect, createMemo, type Accessor } from "solid-js";
 
@@ -26,6 +27,7 @@ type SubmissionRequest = {
   readonly id: string;
   readonly prompt: SessionPrompt;
   readonly text: string;
+  readonly files: readonly File[];
   readonly reviewSnapshot: ReturnType<ReviewDraftStore["capture"]> | undefined;
   readonly annotations: AnnotationDraftSnapshot;
 };
@@ -59,6 +61,9 @@ type SessionComposerOptions = {
 
 export type SessionComposerController = {
   readonly value: Accessor<string>;
+  readonly files: Accessor<readonly File[]>;
+  readonly pasteFiles: (files: readonly File[]) => void;
+  readonly removeFile: (file: File) => void;
   readonly disabled: Accessor<boolean>;
   readonly submitting: Accessor<boolean>;
   readonly error: Accessor<string | undefined>;
@@ -72,6 +77,28 @@ export type SessionComposerController = {
 export function createSessionComposer(options: SessionComposerOptions): SessionComposerController {
   const { effects } = options;
   const drafts = createSessionDraftStore(effects);
+  const fileDrafts = Atom.make<Readonly<Record<string, readonly File[]>>>({});
+  effects.mount(fileDrafts);
+  const fileState = useAtomValue(() => fileDrafts);
+  const files = () => fileState()[options.selectedID() ?? ""] ?? [];
+  const setFiles = (sessionID: string, next: readonly File[]) => {
+    const current = { ...effects.registry.get(fileDrafts) };
+    if (next.length === 0) delete current[sessionID];
+    else current[sessionID] = next;
+    effects.registry.set(fileDrafts, current);
+  };
+  const pasteFiles = (incoming: readonly File[]) => {
+    const sessionID = options.selectedID();
+    if (sessionID !== undefined) setFiles(sessionID, [...files(), ...incoming]);
+  };
+  const removeFile = (file: File) => {
+    const sessionID = options.selectedID();
+    if (sessionID !== undefined)
+      setFiles(
+        sessionID,
+        files().filter((item) => item !== file),
+      );
+  };
   const admission = Atom.make<{
     active: SubmissionRequest | undefined;
     error: SubmissionRequest | undefined;
@@ -156,10 +183,16 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     const annotationComments = options.annotations
       .get(sessionID)
       .filter((comment) => comment.body.trim() !== "");
-    if (text.trim() === "" && reviewComments.length === 0 && annotationComments.length === 0) {
+    const attached = effects.registry.get(fileDrafts)[sessionID] ?? [];
+    if (
+      text.trim() === "" &&
+      reviewComments.length === 0 &&
+      annotationComments.length === 0 &&
+      attached.length === 0
+    ) {
       return undefined;
     }
-    return { text, reviewSnapshot, reviewComments, annotationComments };
+    return { text, reviewSnapshot, reviewComments, annotationComments, attached };
   };
 
   const submit = (): Promise<void> => {
@@ -167,7 +200,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     if (!isSubmissionAllowed(sessionID)) return Promise.resolve();
     const captured = captureDraft(sessionID);
     if (captured === undefined) return Promise.resolve();
-    const { text, reviewSnapshot, reviewComments, annotationComments } = captured;
+    const { text, reviewSnapshot, reviewComments, annotationComments, attached } = captured;
 
     const retry = failedRequest(sessionID);
     const candidatePrompt = createSessionPrompt({
@@ -175,7 +208,11 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       reviewComments,
       annotations: annotationComments,
     });
-    const retrying = retry !== undefined && samePrompt(candidatePrompt, retry.prompt);
+    const retrying =
+      retry !== undefined &&
+      samePrompt(candidatePrompt, retry.prompt) &&
+      attached.length === retry.files.length &&
+      attached.every((file, index) => file === retry.files[index]);
     if (retry !== undefined && !retrying) forgetFailedRequest(retry);
     const annotationSnapshot = options.annotations.take(sessionID);
 
@@ -184,6 +221,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       id: retrying ? retry.id : SessionMessage.ID.create(),
       prompt: retrying ? retry.prompt : candidatePrompt,
       text,
+      files: attached,
       reviewSnapshot,
       annotations: annotationSnapshot,
     };
@@ -192,33 +230,39 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     setFailedRequest(sessionID, undefined);
     setActiveRequest(request);
     return effects.runPromise(
-      effects
-        .request(() =>
-          options.runtime.data.session.prompt({ sessionID, id: request.id, ...request.prompt }),
-        )
-        .pipe(
-          Effect.match({
-            onSuccess: () => completeSubmission(request),
-            onFailure: () => {
-              if (activeRequest() !== request) return;
-              // The SDK rolls back before rejecting. A retained row is its durable acknowledgement.
-              if (matchingMessage(request)) completeSubmission(request);
-              else restoreFailed(request);
-            },
-          }),
-          Effect.onInterrupt(() =>
-            Effect.sync(() => {
-              if (activeRequest() !== request) return;
-              if (matchingMessage(request)) completeSubmission(request);
-              else restoreFailed(request);
-            }),
-          ),
-          Effect.ensuring(
-            Effect.sync(() => {
-              if (activeRequest() === request) setActiveRequest(undefined);
+      Effect.forEach(request.files, readPromptFile).pipe(
+        Effect.flatMap((encodedFiles) =>
+          effects.request(() =>
+            options.runtime.data.session.prompt({
+              sessionID,
+              id: request.id,
+              ...request.prompt,
+              files: encodedFiles.length > 0 ? encodedFiles : undefined,
             }),
           ),
         ),
+        Effect.match({
+          onSuccess: () => completeSubmission(request),
+          onFailure: () => {
+            if (activeRequest() !== request) return;
+            // The SDK rolls back before rejecting. A retained row is its durable acknowledgement.
+            if (matchingMessage(request)) completeSubmission(request);
+            else restoreFailed(request);
+          },
+        }),
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            if (activeRequest() !== request) return;
+            if (matchingMessage(request)) completeSubmission(request);
+            else restoreFailed(request);
+          }),
+        ),
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (activeRequest() === request) setActiveRequest(undefined);
+          }),
+        ),
+      ),
     );
   };
 
@@ -235,6 +279,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
   const clear = (sessionID: string): void => {
     drafts.clear(sessionID);
+    setFiles(sessionID, []);
     options.annotations.clear(sessionID);
     options.review.drafts.clearSession(sessionID);
     const failed = failedRequest(sessionID);
@@ -246,6 +291,9 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
   return {
     value,
+    files,
+    pasteFiles,
+    removeFile,
     disabled,
     submitting,
     error: () => (state().error === undefined ? undefined : PROMPT_FAILURE_MESSAGE),
@@ -263,6 +311,12 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       options.annotations.clearIfUnchanged(request.annotations);
     }
     drafts.clearIfUnchanged(request.sessionID, request.text);
+    setFiles(
+      request.sessionID,
+      (effects.registry.get(fileDrafts)[request.sessionID] ?? []).filter(
+        (file) => !request.files.includes(file),
+      ),
+    );
     if (request.reviewSnapshot !== undefined) {
       options.review.drafts.clearIfUnchanged(request.reviewSnapshot);
     }

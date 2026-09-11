@@ -124,6 +124,74 @@ function seedReview(
 }
 
 describe("createSessionComposer", () => {
+  it("keeps pasted files per session and retries attachment-only sends with the same ID", async () => {
+    const prompt = vi
+      .fn<Prompt>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockImplementation((input) => Promise.resolve(promptResult(input)));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    const screenshot = new File(["image"], "screenshot.png", { type: "image/png" });
+    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+    root.composer.pasteFiles([screenshot, notes]);
+    root.setSelectedID("other");
+    expect(root.composer.files()).toEqual([]);
+    root.setSelectedID("session");
+    expect(root.composer.files()).toEqual([screenshot, notes]);
+    await root.composer.submit();
+    expect(root.composer.files()).toEqual([screenshot, notes]);
+    expect(root.composer.error()).toBeDefined();
+    await root.composer.submit();
+    expect(prompt.mock.calls[1]?.[0]).toEqual(prompt.mock.calls[0]?.[0]);
+    expect(prompt.mock.calls[0]?.[0].files).toEqual([
+      { name: "screenshot.png", uri: "data:image/png;base64,aW1hZ2U=" },
+      { name: "notes.txt", uri: "data:text/plain;base64,bm90ZXM=" },
+    ]);
+    expect(root.composer.files()).toEqual([]);
+    root.dispose();
+  });
+
+  it("preserves files pasted during admission and completes after navigation", async () => {
+    let resolvePrompt!: (result: PromptResult) => void;
+    const prompt = vi.fn<Prompt>(
+      () =>
+        new Promise((resolve) => {
+          resolvePrompt = resolve;
+        }),
+    );
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    const sent = new File(["first"], "first.txt");
+    const next = new File(["next"], "next.txt");
+    root.composer.pasteFiles([sent]);
+    const admission = root.composer.submit();
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    root.composer.pasteFiles([next]);
+    root.setSelectedID("other");
+    resolvePrompt(promptResult(prompt.mock.calls[0]![0]));
+    await admission;
+    root.setSelectedID("session");
+    expect(root.composer.files()).toEqual([next]);
+    root.composer.removeFile(next);
+    expect(root.composer.files()).toEqual([]);
+    root.dispose();
+  });
+
+  it("finishes reading and sending pasted files after the UI subscriber unmounts", async () => {
+    const root = setup();
+    root.setSelectedID("session");
+    root.composer.pasteFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+    const admission = root.composer.submit();
+    root.unmountComposer();
+    await admission;
+    expect(root.prompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: [{ name: "notes.txt", uri: "data:text/plain;base64,bm90ZXM=" }],
+      }),
+    );
+    root.dispose();
+  });
+
   it("settles admission and restores annotations after its UI subscriber unmounts", async () => {
     let rejectPrompt!: (error: Error) => void;
     const prompt = vi.fn<Prompt>(

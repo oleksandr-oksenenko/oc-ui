@@ -254,6 +254,9 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
           <Show when={props.workspace.selectedSession()}>
             <Composer
               value={props.composer.value()}
+              files={props.composer.files()}
+              onPasteFiles={props.composer.pasteFiles}
+              onRemoveFile={props.composer.removeFile}
               action={composerAction()}
               disabled={
                 composerAction() === "running" ? !props.connected() : props.composer.disabled()

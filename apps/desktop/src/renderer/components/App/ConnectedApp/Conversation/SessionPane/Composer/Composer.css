@@ -28,6 +28,14 @@
   min-height: 40px;
 }
 
+.composer-v2-files {
+  max-height: 168px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .composer-v2-review-row,
 .composer-v2-annotation-row {
   display: flex;
