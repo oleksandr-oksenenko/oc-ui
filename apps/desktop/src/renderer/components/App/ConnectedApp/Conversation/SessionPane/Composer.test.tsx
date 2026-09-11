@@ -24,6 +24,40 @@ const unavailableAgentSelection = {
 };
 
 describe("Composer", () => {
+  it("attaches pasted files without intercepting ordinary text paste", () => {
+    const paste = vi.fn<(files: readonly File[]) => void>();
+    const remove = vi.fn<(file: File) => void>();
+    const screenshot = new File(["image"], "screenshot.png", { type: "image/png" });
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        files={[screenshot]}
+        onPasteFiles={paste}
+        onRemoveFile={remove}
+        action="send"
+        disabled={false}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+    const input = host.querySelector("textarea")!;
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: { files: [screenshot] } });
+    input.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(paste).toHaveBeenCalledWith([screenshot]);
+    const textPaste = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(textPaste, "clipboardData", { value: { files: [] } });
+    input.dispatchEvent(textPaste);
+    expect(textPaste.defaultPrevented).toBe(false);
+    expect(host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.disabled).toBe(false);
+    host.querySelector<HTMLButtonElement>('[aria-label="Remove screenshot.png"]')!.click();
+    expect(remove).toHaveBeenCalledWith(screenshot);
+    dispose();
+  });
+
   it("replaces Send with Stop while running", () => {
     const [action, setAction] = createSignal<ComposerProps["action"]>("running");
     const stop = vi.fn<() => void>(() => setAction("send"));

@@ -115,6 +115,39 @@ export const Idle: Story = {
   },
 };
 
+export const PastedFiles: Story = {
+  render: () => {
+    const [files, setFiles] = createSignal<readonly File[]>([
+      new File([], "Screenshot.png", { type: "image/png" }),
+      new File([], "Project notes.txt", { type: "text/plain" }),
+    ]);
+    return (
+      <Composer
+        value=""
+        files={files()}
+        onPasteFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
+        onRemoveFile={(file) => setFiles((current) => current.filter((item) => item !== file))}
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={() => undefined}
+        onSubmit={() => setFiles([])}
+      />
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("button", { name: "Send" })).toBeEnabled();
+    await userEvent.click(canvas.getByRole("button", { name: "Remove Screenshot.png" }));
+    const remove = canvas.getByRole("button", { name: "Remove Project notes.txt" });
+    remove.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.queryByRole("list", { name: "Attached files" })).toBeNull();
+    await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
+  },
+};
+
 export const LoadingPickers: Story = {
   render: () => {
     const [value, setValue] = createSignal("Explain the latest change");

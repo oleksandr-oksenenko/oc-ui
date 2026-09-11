@@ -103,6 +103,9 @@ function setup(
     remove: () => undefined,
   };
   const composer: SessionComposerController = {
+    files: () => [],
+    pasteFiles: () => undefined,
+    removeFile: () => undefined,
     value: () => "",
     disabled: () => false,
     submitting: () => false,

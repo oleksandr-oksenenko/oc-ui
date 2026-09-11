@@ -430,6 +430,67 @@ describe.sequential("production browser app", () => {
     ).toBe(true);
   });
 
+  it("pastes screenshot and document attachments, preserves drafts across navigation, and sends their bytes", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Clipboard attachments",
+      location: { directory: await realpath(project) },
+    });
+    const other = await api.session.create({
+      title: "Clipboard other",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    await page.getByRole("textbox", { name: "Prompt", exact: true }).evaluate((input) => {
+      const clipboardData = new DataTransfer();
+      const canvas = document.createElement("canvas");
+      canvas.width = 8;
+      canvas.height = 8;
+      canvas.getContext("2d").fillRect(0, 0, 8, 8);
+      const png = atob(canvas.toDataURL("image/png").split(",")[1]);
+      clipboardData.items.add(
+        new File([Uint8Array.from(png, (char) => char.charCodeAt(0))], "screenshot.png", {
+          type: "image/png",
+        }),
+      );
+      clipboardData.items.add(
+        new File(["Clipboard document contents"], "notes.txt", { type: "text/plain" }),
+      );
+      clipboardData.items.add(new File(["remove me"], "remove.txt", { type: "text/plain" }));
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+    });
+    await page.getByRole("button", { name: "Remove remove.txt", exact: true }).click();
+    await selectSession(other.title);
+    expect(await page.getByRole("list", { name: "Attached files", exact: true }).count()).toBe(0);
+    await selectSession(session.title);
+    await page.getByRole("button", { name: "Remove screenshot.png", exact: true }).waitFor();
+    const admitted = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/session/${session.id}/prompt`) &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    const response = await admitted;
+    expect(response.ok(), await response.text()).toBe(true);
+    await page
+      .getByRole("list", { name: "Attached files", exact: true })
+      .waitFor({ state: "hidden" });
+    await transcript("screenshot.png");
+    await transcript("notes.txt");
+    await idle();
+    const messages = await api.message.list({ sessionID: session.id });
+    const message = messages.data.find((item) => item.type === "user");
+    expect(message.files.map((file) => ({ name: file.name, mime: file.mime }))).toEqual([
+      { name: "screenshot.png", mime: "image/png" },
+      { name: "notes.txt", mime: "text/plain" },
+    ]);
+    expect(Buffer.from(message.files[1].data, "base64").toString()).toBe(
+      "Clipboard document contents",
+    );
+  });
+
   it("creates and removes an isolated server worktree with cancel and reopen", async () => {
     await page.screenshot({ path: join(artifacts, "browser-connected.png") });
     const before = await git(project, "worktree", "list", "--porcelain");

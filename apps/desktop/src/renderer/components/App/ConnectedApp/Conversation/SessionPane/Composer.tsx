@@ -29,6 +29,9 @@ type ComposerAnnotations = {
 
 export type ComposerProps = {
   readonly value: string;
+  readonly files?: readonly File[];
+  readonly onPasteFiles?: (files: readonly File[]) => void;
+  readonly onRemoveFile?: (file: File) => void;
   /** The one action represented by the composer button. */
   readonly action: "send" | "sending" | "running";
   /** Disables the action currently represented by the composer button. */
@@ -190,7 +193,10 @@ export function Composer(props: ComposerProps) {
   });
 
   const sendable = () =>
-    review() !== undefined || annotations() !== undefined || props.value.trim() !== "";
+    review() !== undefined ||
+    annotations() !== undefined ||
+    props.value.trim() !== "" ||
+    (props.files?.length ?? 0) > 0;
 
   const canSubmit = () =>
     !props.disabled &&
@@ -264,6 +270,28 @@ export function Composer(props: ComposerProps) {
           </div>
         )}
       </Show>
+      <Show when={(props.files?.length ?? 0) > 0}>
+        <ul class="composer-v2-files" aria-label="Attached files">
+          {props.files?.map((file) => (
+            <li class="composer-v2-review-row">
+              <span class="composer-v2-review-label" title={file.name || "Pasted file"}>
+                {file.name || "Pasted file"}
+              </span>
+              <IconButton
+                type="button"
+                size="small"
+                variant="ghost-muted"
+                aria-label={`Remove ${file.name || "Pasted file"}`}
+                icon={<Icon name="close" size="small" aria-hidden="true" />}
+                onClick={() => {
+                  props.onRemoveFile?.(file);
+                  textarea?.focus();
+                }}
+              />
+            </li>
+          ))}
+        </ul>
+      </Show>
       <div class="composer-v2-editor-row">
         <textarea
           ref={(element) => {
@@ -280,6 +308,13 @@ export function Composer(props: ComposerProps) {
             resizeTextarea();
           }}
           onKeyDown={keyDown}
+          onPaste={(event) => {
+            if (!props.onPasteFiles || !event.clipboardData) return;
+            const files = Array.from(event.clipboardData.files);
+            if (files.length === 0) return;
+            event.preventDefault();
+            props.onPasteFiles(files);
+          }}
         />
       </div>
 
