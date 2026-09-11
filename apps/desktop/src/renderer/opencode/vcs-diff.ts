@@ -21,6 +21,7 @@ export type VcsDiffStore = {
   readonly state: (location: LocationRef, mode: VcsDiffMode) => VcsDiffSnapshot;
   readonly sync: (location: LocationRef, mode: VcsDiffMode) => Effect.Effect<void>;
   readonly refresh: (location: LocationRef, mode: VcsDiffMode) => Effect.Effect<void>;
+  readonly poll: (location: LocationRef, mode: VcsDiffMode) => Effect.Effect<never>;
 };
 
 type VcsDiffStoreInput = {
@@ -80,7 +81,28 @@ export function createVcsDiffStore(input: VcsDiffStoreInput): VcsDiffStore {
       )
       .pipe(
         Effect.tap((response) =>
-          Effect.sync(() => write(key, { files: response.data, status: "ready", stale: false })),
+          Effect.sync(() => {
+            const previous = new Map(before.files.map((file) => [file.file, file]));
+            const files = response.data.map((file) => {
+              const old = previous.get(file.file);
+              return old &&
+                old.patch === file.patch &&
+                old.status === file.status &&
+                old.additions === file.additions &&
+                old.deletions === file.deletions
+                ? old
+                : file;
+            });
+            write(key, {
+              files:
+                files.length === before.files.length &&
+                files.every((file, i) => file === before.files[i])
+                  ? before.files
+                  : files,
+              status: "ready",
+              stale: false,
+            });
+          }),
         ),
         Effect.catchTag("WorkspaceRequestError", ({ cause }) =>
           Effect.sync(() => {
@@ -102,20 +124,31 @@ export function createVcsDiffStore(input: VcsDiffStoreInput): VcsDiffStore {
   const start = Effect.fn("VcsDiffStore.start")(function* (
     location: LocationRef,
     mode: VcsDiffMode,
-    force: boolean,
+    policy: "sync" | "refresh" | "revalidate",
   ) {
     const key = keyOf(location, mode);
-    if (force) invalidateEntry(key);
+    if (policy === "refresh") invalidateEntry(key);
     const current = effects.registry.get(cache)[key] ?? EMPTY;
     let request = Option.getOrUndefined(FiberMap.getUnsafe(requests, key));
     if (!request || current.status !== "loading") {
-      if (!force && current.status === "ready" && !current.stale) return;
+      if (policy === "sync" && current.status === "ready" && !current.stale) return;
       request = effects.runFork(load(location, mode));
       FiberMap.setUnsafe(requests, key, request);
     }
     yield* Fiber.join(request).pipe(
       Effect.catchCauseIf(Cause.hasInterruptsOnly, () => Effect.void),
     );
+  });
+
+  // HACK: V2 beta-19271 only publishes external filesystem changes for branch
+  // metadata. Remove polling when upstream supplies working-tree change events.
+  // Related report: https://github.com/anomalyco/opencode/issues/48451 (dev, not V2).
+  const poll = Effect.fn("VcsDiffStore.poll")(function* (location: LocationRef, mode: VcsDiffMode) {
+    while (true) {
+      yield* start(location, mode, "revalidate");
+      const failed = effects.registry.get(cache)[keyOf(location, mode)]?.status === "failed";
+      yield* Effect.sleep(failed ? "10 seconds" : "2 seconds");
+    }
   });
 
   effects.runSync(
@@ -131,7 +164,8 @@ export function createVcsDiffStore(input: VcsDiffStoreInput): VcsDiffStore {
 
   return {
     state: (location, mode) => snapshots()[keyOf(location, mode)] ?? EMPTY,
-    sync: (location, mode) => start(location, mode, false),
-    refresh: (location, mode) => start(location, mode, true),
+    sync: (location, mode) => start(location, mode, "sync"),
+    refresh: (location, mode) => start(location, mode, "refresh"),
+    poll,
   };
 }

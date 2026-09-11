@@ -3,7 +3,7 @@ import { OpenCode } from "@opencode-ai/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 import { build, preview } from "vite-plus";
 import { chromium } from "playwright";
-import { access, mkdir, realpath, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { startScriptedProvider } from "./scripted-provider.mjs";
 import { git, prepareProjectFixture } from "./project-fixture.ts";
@@ -428,6 +428,33 @@ describe.sequential("production browser app", () => {
         (request) => request.prompt.includes(review) && request.prompt.includes("working.txt"),
       ),
     ).toBe(true);
+  });
+
+  it("refreshes external disk edits without watcher events and preserves unchanged collapsed files", async () => {
+    if (await page.getByLabel("Show context", { exact: true }).count())
+      await page.getByLabel("Show context", { exact: true }).click();
+    await page.getByRole("button", { name: "Collapse working.txt", exact: true }).click();
+    const path = join(project, "polling.txt");
+    try {
+      await writeFile(path, "External creation\n");
+      const row = page.locator(".diff-file").filter({ has: page.locator('[title="polling.txt"]') });
+      await expect.poll(() => row.count()).toBe(1);
+      await expect
+        .poll(() => page.getByRole("button", { name: "Expand working.txt", exact: true }).count())
+        .toBe(1);
+      await writeFile(path, "External edit\nSecond line\n");
+      await expect
+        .poll(() => row.locator(".sr-only").textContent())
+        .toBe("2 additions, 0 deletions");
+      await unlink(path);
+      await expect.poll(() => row.count()).toBe(0);
+      await page.getByLabel("Hide context panel").click();
+      await writeFile(path, "Created while closed\n");
+      await page.getByLabel("Show context", { exact: true }).click();
+      await expect.poll(() => row.count()).toBe(1);
+    } finally {
+      await unlink(path).catch(() => undefined);
+    }
   });
 
   it("pastes screenshot and document attachments, preserves drafts across navigation, and sends their bytes", async () => {

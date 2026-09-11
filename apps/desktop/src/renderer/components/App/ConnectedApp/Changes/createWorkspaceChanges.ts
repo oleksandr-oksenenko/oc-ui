@@ -2,7 +2,14 @@ import type { FileDiffInfo, SessionInfo } from "@opencode-ai/client";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { createEffect, createMemo, type Accessor } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+  type Accessor,
+} from "solid-js";
 
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 
@@ -20,7 +27,7 @@ export type WorkspaceChangesRuntime = {
       readonly vcs: Pick<ConnectedRuntime["data"]["location"]["vcs"], "info" | "sync">;
     };
   };
-  readonly diffs: Pick<ConnectedRuntime["diffs"], "state" | "sync" | "refresh">;
+  readonly diffs: Pick<ConnectedRuntime["diffs"], "state" | "sync" | "refresh" | "poll">;
 };
 
 export type WorkspaceChangesInput = {
@@ -62,6 +69,35 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
   });
 
   const selectedLocation = createMemo(() => input.selectedSession()?.location);
+  const [visible, setVisible] = createSignal(document.visibilityState !== "hidden");
+  const [focus, setFocus] = createSignal(0);
+  const visibilityChanged = () => setVisible(document.visibilityState !== "hidden");
+  const focused = () => setFocus((value) => value + 1);
+  document.addEventListener("visibilitychange", visibilityChanged);
+  window.addEventListener("focus", focused);
+  const polling = effects.latest<never>();
+  onCleanup(() => {
+    document.removeEventListener("visibilitychange", visibilityChanged);
+    window.removeEventListener("focus", focused);
+    polling.cancel();
+  });
+  createEffect(() => {
+    const location = selectedLocation();
+    const comparison = diffMode();
+    focus();
+    if (
+      !location ||
+      !input.bootstrapped() ||
+      !input.connected() ||
+      !input.panelOpen() ||
+      !visible()
+    ) {
+      polling.cancel();
+      return;
+    }
+    // The workspace retains any in-flight read until settlement when polling stops.
+    untrack(() => polling.run(input.runtime.diffs.poll(location, comparison)));
+  });
   const reviewKey = createMemo<ReviewDraftKey | undefined>(() => {
     const sessionID = input.selectedSession()?.id;
     return sessionID === undefined ? undefined : { sessionID, comparison: diffMode() };
@@ -101,14 +137,26 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
 
   createEffect(() => {
     const location = selectedLocation();
-    if (!location || !input.bootstrapped() || !input.connected() || !input.panelOpen()) {
+    if (
+      !location ||
+      !input.bootstrapped() ||
+      !input.connected() ||
+      !input.panelOpen() ||
+      !visible()
+    ) {
       return;
     }
 
-    effects.runFork(syncVcs(location));
     const snapshot = input.runtime.diffs.state(location, diffMode());
     if (snapshot.status === "idle" || (snapshot.status === "ready" && snapshot.stale)) {
       effects.runFork(input.runtime.diffs.sync(location, diffMode()));
+    }
+  });
+
+  createEffect(() => {
+    const location = selectedLocation();
+    if (location && input.bootstrapped() && input.connected() && input.panelOpen() && visible()) {
+      effects.runFork(syncVcs(location));
     }
   });
 
@@ -148,9 +196,7 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
     };
   };
 
-  const rawFiles = createMemo<readonly FileDiffInfo[]>(() => diffSnapshot()?.files ?? EMPTY_FILES);
-  // A new snapshot array resets file expansion, even when it reuses SDK objects.
-  const files = createMemo(() => rawFiles().map((file) => ({ ...file })));
+  const files = createMemo<readonly FileDiffInfo[]>(() => diffSnapshot()?.files ?? EMPTY_FILES);
 
   const diff = createMemo<DiffViewProps>(() => {
     const location = selectedLocation();
