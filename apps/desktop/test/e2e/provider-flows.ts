@@ -38,6 +38,13 @@ export async function verifyProviderFlows(): Promise<void> {
   await $('input[placeholder="Search models"]').setValue("Acceptance Stream");
   await $(".composer-model-option=Acceptance Stream").click();
   await $('[aria-label="Model: Acceptance Stream"]').waitForClickable({ timeout: TIMEOUT });
+  // The selector updates before the server timeline; later transcript changes dismiss selection.
+  await waitForText("acceptance/alternate → acceptance/stream");
+  // Closing the picker restores focus asynchronously and dismisses any active annotation action.
+  await browser.waitUntil(() => $('[aria-label="Model: Acceptance Stream"]').isFocused(), {
+    timeout: TIMEOUT,
+    timeoutMsg: "Model picker did not restore focus before annotation selection",
+  });
 
   await addAnnotation("Acceptance note to discard.");
   await $('[aria-label="Discard 1 annotations"]').click();
