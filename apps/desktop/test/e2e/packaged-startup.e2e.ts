@@ -13,6 +13,7 @@ import { verifyConnectionSettings } from "./connection-flows.ts";
 import { verifyProjectFlows } from "./project-flows.ts";
 import { prepareProjectFixture } from "./project-fixture.ts";
 import { verifyProviderFlows } from "./provider-flows.ts";
+import { verifySessionTools } from "./session-tools-flows.ts";
 
 declare global {
   interface Window {
@@ -103,6 +104,10 @@ describe("packaged owned OpenCode", () => {
   it("updates diffs and creates and removes a worktree through the UI", async () => {
     await verifyProjectFlows(projectDirectory);
     await browser.saveScreenshot(join(artifactDirectory, "project-flows-complete.png"));
+  });
+
+  it("loads the bundled session tool and creates independent worktree sessions", async () => {
+    await verifySessionTools(projectDirectory);
   });
 
   it("preserves the worker on Cancel Quit and reload, then restarts only on request", async () => {

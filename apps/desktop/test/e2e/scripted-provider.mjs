@@ -58,7 +58,11 @@ export async function startScriptedProvider() {
       };
       send({ role: "assistant", content: "" });
       if (body.model === "title") {
-        send({ content: "Acceptance conversation" });
+        send({
+          content: prompt.includes("Independent acceptance task")
+            ? "Independent acceptance task"
+            : "Acceptance conversation",
+        });
         finish();
         return;
       }
@@ -72,14 +76,7 @@ export async function startScriptedProvider() {
         return;
       }
       if (respondBrowser(prompt, toolReply, body, send, finish, requests.length)) return;
-      if (respondQuestion(prompt, toolReply, body, send, finish, requests.length)) return;
-      if (toolReply) {
-        send({
-          content: `Acceptance question resolved: ${JSON.stringify(toolReply.content)}`,
-        });
-        finish();
-        return;
-      }
+      if (respondTool(prompt, toolReply, body, send, finish, requests.length)) return;
       send({ content: "Acceptance first streamed fragment. " });
       const complete = setTimeout(() => {
         send({ content: `Acceptance completed with ${body.model}.` });
@@ -119,7 +116,7 @@ export async function startScriptedProvider() {
           package: "@opencode-ai/ai/providers/openai-compatible",
           settings: { baseURL: `${url}/v1`, apiKey: "local-acceptance-only" },
           models: {
-            stream: model("Acceptance Stream"),
+            stream: { ...model("Acceptance Stream"), variants: [{ id: "high" }] },
             alternate: model("Acceptance Alternate"),
             title: model("Acceptance Title"),
           },
@@ -131,6 +128,46 @@ export async function startScriptedProvider() {
         server.close((error) => (error ? reject(error) : resolve()));
         server.closeAllConnections();
       }),
+  };
+}
+
+function requestedTool(prompt) {
+  if (prompt.includes("E2E_CREATE_SESSION")) {
+    return { name: "session_create", input: { prompt: "Independent acceptance task" } };
+  }
+  if (prompt.includes("E2E_QUESTION")) {
+    return {
+      name: "question",
+      input: {
+        questions: [
+          {
+            header: "Acceptance choice",
+            question: "Which acceptance option should continue?",
+            options: [
+              { label: "Alpha", description: "Continue with Alpha." },
+              { label: "Beta", description: "Continue with Beta." },
+            ],
+          },
+        ],
+      },
+    };
+  }
+  return undefined;
+}
+
+function toolCall(tools, requested, index) {
+  if (!tools?.some((tool) => tool.function?.name === requested.name)) {
+    throw new Error(`Pinned OpenCode did not offer ${requested.name}`);
+  }
+  return {
+    tool_calls: [
+      {
+        index: 0,
+        id: `call-${requested.name}-${index}`,
+        type: "function",
+        function: { name: requested.name, arguments: JSON.stringify(requested.input) },
+      },
+    ],
   };
 }
 
@@ -216,36 +253,19 @@ function respondBrowser(prompt, toolReply, body, send, finish, requestID) {
   }
 }
 
-function respondQuestion(prompt, toolReply, body, send, finish, requestID) {
-  if (prompt.includes("E2E_QUESTION") && !toolReply) {
-    if (!body.tools?.some((tool) => tool.function?.name === "question")) {
-      throw new Error("Pinned OpenCode did not offer its question tool");
-    }
-    send({
-      tool_calls: [
-        {
-          index: 0,
-          id: `call-question-${requestID}`,
-          type: "function",
-          function: {
-            name: "question",
-            arguments: JSON.stringify({
-              questions: [
-                {
-                  header: "Acceptance choice",
-                  question: "Which acceptance option should continue?",
-                  options: [
-                    { label: "Alpha", description: "Continue with Alpha." },
-                    { label: "Beta", description: "Continue with Beta." },
-                  ],
-                },
-              ],
-            }),
-          },
-        },
-      ],
-    });
+function respondTool(prompt, toolReply, body, send, finish, requestID) {
+  const requested = requestedTool(prompt);
+  if (requested && !toolReply) {
+    send(toolCall(body.tools, requested, requestID));
     finish("tool_calls");
+    return true;
+  }
+  if (toolReply) {
+    const label = prompt.includes("E2E_CREATE_SESSION")
+      ? "Acceptance session created"
+      : "Acceptance question resolved";
+    send({ content: `${label}: ${JSON.stringify(toolReply.content)}` });
+    finish();
     return true;
   }
   return false;

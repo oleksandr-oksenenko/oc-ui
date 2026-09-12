@@ -8,6 +8,7 @@
     "src/main/**/*.ts",
     "src/shared/**/*.ts",
     "electron.vite.config.ts",
+    "../../packages/opencode-session-tools/build.ts",
     "vite.config.ts",
     "vite.web.config.ts"
   ]

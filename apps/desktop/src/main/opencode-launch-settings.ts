@@ -18,6 +18,12 @@ export async function configureOpenCodeLaunch(userDataPath: string, env = proces
   if (database === ":memory:") throw new Error("Built-in OpenCode requires a persistent database.");
   return {
     database: { path: isAbsolute(database) ? database : resolve(Global.Path.data, database) },
-    config: { directory, project: true, content: "{}" },
+    config: {
+      directory,
+      project: true,
+      content: JSON.stringify({
+        plugins: [{ package: new URL("./session-tools/", import.meta.url).href }],
+      }),
+    },
   };
 }

@@ -46,6 +46,9 @@ const main = async () => {
         const project = join(paths.app, "acceptance-project");
         await mkdir(project, { recursive: true });
         await writeFile(join(project, "opencode.json"), JSON.stringify(provider.config));
+        const ownedConfig = join(paths.app, "opencode", "config");
+        await mkdir(ownedConfig, { recursive: true });
+        await writeFile(join(ownedConfig, "opencode.json"), JSON.stringify(provider.config));
         await runWdio(
           { ...env, OCUI_E2E_PROVIDER_URL: provider.url },
           "startup",
@@ -156,6 +159,7 @@ const verifyPackagedApplication = async (signal) => {
   await Promise.all([
     access(appBinaryPath, constants.X_OK),
     access(join(runtimePath, "opencode-worker.mjs")),
+    access(join(runtimePath, "session-tools", "index.js")),
     access(ptyPath, constants.X_OK),
   ]);
   await execFileAsync("codesign", ["--verify", "--deep", "--strict", appBundlePath], {

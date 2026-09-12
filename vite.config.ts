@@ -186,7 +186,7 @@ export default defineConfig({
         rules: effectNodeBoundaryRules,
       },
       {
-        files: ["apps/desktop/electron.vite.config.ts"],
+        files: ["apps/desktop/electron.vite.config.ts", "packages/opencode-session-tools/build.ts"],
         rules: effectNodeBoundaryRules,
       },
       {

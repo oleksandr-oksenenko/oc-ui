@@ -19,7 +19,7 @@
     "opencode:server": "pnpm --filter desktop exec opencode2 serve",
     "opencode:version": "pnpm --filter desktop exec opencode2 --version",
     "prepare": "effect-tsgo patch --no-typescript --oxlint",
-    "ready": "pnpm check && vp run desktop#test && vp run desktop#build && vp run desktop#build:web && vp run desktop#build-storybook",
+    "ready": "pnpm check && pnpm test && pnpm build && vp run desktop#build:web && vp run desktop#build-storybook",
     "storybook": "vp run desktop#storybook",
     "storybook:preview": "vp run desktop#storybook:preview",
     "build-storybook": "vp run desktop#build-storybook",
@@ -27,7 +27,7 @@
     "make:mac": "pnpm --filter desktop make:mac",
     "test:acceptance:mac": "pnpm --filter desktop test:acceptance:mac",
     "test:acceptance:chat:mac": "pnpm --filter desktop test:acceptance:chat:mac",
-    "test": "vp run desktop#test"
+    "test": "vp run @oc-ui/opencode-session-tools#test && vp run desktop#test"
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:",

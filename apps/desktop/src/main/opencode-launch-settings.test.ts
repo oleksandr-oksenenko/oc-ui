@@ -25,7 +25,13 @@ describe("owned OpenCode launch settings", () => {
     const settings = await configureOpenCodeLaunch("/ocui/user-data", env);
     expect(settings).toEqual({
       database: { path: "/shared/opencode-data/opencode.db" },
-      config: { directory: "/ocui/user-data/opencode/config", project: true, content: "{}" },
+      config: {
+        directory: "/ocui/user-data/opencode/config",
+        project: true,
+        content: JSON.stringify({
+          plugins: [{ package: new URL("./session-tools/", import.meta.url).href }],
+        }),
+      },
     });
     expect(env).toEqual({
       HOME: "/real-home",

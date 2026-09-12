@@ -1,0 +1,25 @@
+{
+  "name": "@oc-ui/opencode-session-tools",
+  "version": "0.1.0",
+  "description": "Create independent OpenCode sessions in project worktrees.",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": "./dist/index.js",
+  "scripts": {
+    "build": "node build.ts",
+    "test": "pnpm build && vp test run"
+  },
+  "dependencies": {
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@opencode-ai/plugin": "catalog:",
+    "@opencode-ai/schema": "catalog:",
+    "esbuild": "0.28.2",
+    "vite-plus": "catalog:"
+  }
+}

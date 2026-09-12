@@ -63,6 +63,9 @@ const assets = [
   "tree-sitter-powershell/tree-sitter-powershell.wasm",
   "@opencode-ai/pty-darwin-arm64/bin/opencode-pty",
 ];
+if (!statSync(join(runtimeDirectory, "session-tools/index.js")).isFile()) {
+  throw new Error("OpenCode session tools plugin is missing");
+}
 for (const asset of assets) {
   if (!statSync(join(runtimeDirectory, "node_modules", asset)).isFile()) {
     throw new Error(`OpenCode runtime asset is missing: ${asset}`);

@@ -3,7 +3,7 @@ import { OpenCode } from "@opencode-ai/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 import { build, preview } from "vite-plus";
 import { chromium } from "playwright";
-import { access, mkdir, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { startScriptedProvider } from "./scripted-provider.mjs";
 import { git, prepareProjectFixture } from "./project-fixture.ts";
@@ -72,6 +72,20 @@ beforeAll(async () => {
       },
     },
   });
+  const globalConfig = join(profile.paths.config, "opencode");
+  await mkdir(globalConfig, { recursive: true });
+  await writeFile(
+    join(globalConfig, "opencode.json"),
+    JSON.stringify({
+      ...provider.config,
+      plugins: [
+        {
+          package: new URL("../../../../packages/opencode-session-tools/dist/", import.meta.url)
+            .href,
+        },
+      ],
+    }),
+  );
   await Promise.all(
     [project, secondaryProject].map((directory) =>
       writeFile(join(directory, "opencode.json"), acceptanceConfig),
@@ -980,6 +994,53 @@ describe.sequential("production browser app", () => {
       ),
     ).toBe(false);
     await dialog.getByLabel("Close permissions dialog", { exact: true }).click();
+    expect(errors).toEqual([]);
+  });
+
+  it("creates an independent session through the plugin and admits it to the session catalog", async () => {
+    const directory = await realpath(project);
+    const caller = await api.session.create({
+      title: "Session tool caller",
+      location: { directory },
+      agent: "build",
+      model: { providerID: "acceptance", id: "stream", variant: "high" },
+    });
+    await page.locator(".shell-session-main").filter({ hasText: "Session tool caller" }).click();
+    await send("E2E_CREATE_SESSION browser");
+    await transcript("Acceptance session created:");
+    await idle();
+    await expect
+      .poll(
+        async () =>
+          (await api.session.list({ limit: 100 })).data.find(
+            (session) => session.title === "Independent acceptance task",
+          )?.outcome,
+      )
+      .toBe("succeeded");
+    const created = (await api.session.list({ limit: 100 })).data.find(
+      (session) => session.title === "Independent acceptance task",
+    );
+    expect(created).toBeDefined();
+    expect(created.parentID).toBeUndefined();
+    expect(created.projectID).toBe(caller.projectID);
+    expect(created.location.directory).not.toBe(caller.location.directory);
+    expect(created.agent).toBe("build");
+    expect(created.model).toEqual(caller.model);
+    expect(await git(created.location.directory, "rev-parse", "HEAD")).toBe(
+      await git(directory, "rev-parse", "HEAD"),
+    );
+    expect(await readFile(join(created.location.directory, "working.txt"), "utf8")).toBe(
+      "Original working content\n",
+    );
+    await page
+      .locator(".shell-session-main")
+      .filter({ hasText: "Independent acceptance task" })
+      .click();
+    await transcript("Independent acceptance task");
+    await transcript("Acceptance completed with stream.");
+    expect(await page.locator(".transcript-view").textContent()).not.toContain(
+      "E2E_CREATE_SESSION browser",
+    );
     expect(errors).toEqual([]);
   });
 

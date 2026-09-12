@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "electron-vite";
 import { build } from "esbuild";
 import rendererConfig from "./vite.config.ts";
+import { buildSessionTools } from "../../packages/opencode-session-tools/build.ts";
 
 const configDirectory = dirname(fileURLToPath(import.meta.url));
 const rendererDirectory = resolve(configDirectory, "src/renderer");
@@ -17,6 +18,9 @@ export default defineConfig({
       {
         name: "opencode-runtime",
         async buildStart() {
+          for (const input of await buildSessionTools(resolve(runtimeDirectory, "session-tools"))) {
+            this.addWatchFile(input);
+          }
           // OpenCode publishes extensionless ESM and Node-specific conditional loaders.
           // Bundle its code, but retain native modules and other packages as packages.
           const dependencies = new Map<string, string>();
@@ -68,6 +72,7 @@ export default defineConfig({
           for (const input of [
             "package.json",
             "../../pnpm-lock.yaml",
+            "../../packages/opencode-session-tools/build.ts",
             "../../tools/stage-opencode.mjs",
             "../../tools/opencode-runtime-packages.mjs",
           ]) {
