@@ -12,9 +12,13 @@ describe("ContextTabs", () => {
     const tab = host.querySelector<HTMLElement>('[role="tab"]');
 
     expect(panel).not.toBeNull();
+    expect(panel?.textContent).toContain("Diff content");
     expect(panel?.hasAttribute("hidden")).toBe(false);
     expect(tab).not.toBeNull();
     expect(tab?.getAttribute("aria-controls")).toBe(panel?.id);
+    expect(panel?.getAttribute("aria-labelledby")).toBe(tab?.id);
+    expect(document.getElementById(tab!.id)).toBe(tab);
+    expect(document.getElementById(panel!.id)).toBe(panel);
 
     dispose();
   });

@@ -4,8 +4,9 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import stylelint from "stylelint";
 import { expect, it } from "vite-plus/test";
-it("rejects both upstream token families in feature CSS but allows the adapters", () => {
+it("rejects both upstream token families in feature CSS but allows the adapters", async () => {
   const code = "a {\n  color: var(--v2-text-text-base);\n  border-color: var(--border-base);\n}\n";
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const lint = (file) =>
@@ -27,8 +28,12 @@ it("rejects both upstream token families in feature CSS but allows the adapters"
     JSON.parse(feature.stderr)[0].warnings.filter((w) => w.rule === "custom-property-pattern"),
   ).toHaveLength(2);
   for (const name of ["foundations", "opencode-overrides"]) {
-    const adapter = lint(`apps/desktop/src/renderer/styles/${name}.css`);
-    expect(adapter.status, adapter.stdout || adapter.stderr).toBe(0);
+    const adapter = await stylelint.lint({
+      code,
+      codeFilename: path.join(root, `apps/desktop/src/renderer/styles/${name}.css`),
+      cwd: root,
+    });
+    expect(adapter.results[0].warnings).toEqual([]);
   }
 });
 
@@ -89,19 +94,38 @@ it("checks literal inline and injected design values without linting displayed c
     return spawnSync(process.execPath, [checker, file], { encoding: "utf8" });
   };
   try {
-    for (const source of [
-      'const frame = { background: "#050506" };',
-      'const view = <div style={{ fontSize: "12px" }} />;',
-      'const frame = { "border-radius": "4px" };',
-      'const frame = { color: "var(--oc-unknown-test-token)" };',
-      'const frame = { color: "var(--oc-text-base) !important" };',
-      'const frame = { scrollbarWidth: "thin" };',
-      "const css = `.sr-only { position: absolute; }`;",
-      "const options = { unsafeCSS: `:host { --diffs-font-size: 12px; }` };",
-      "style.textContent = `::highlight(${name}) { color: rgb(1 2 3); }`;",
-    ]) {
-      const result = run(source);
-      expect(result.status, result.stderr).toBe(1);
+    const cases = [
+      ['const frame = { background: "#050506" };', "color-no-hex"],
+      [
+        'const view = <div style={{ fontSize: "12px" }} />;',
+        "declaration-property-unit-allowed-list",
+      ],
+      ['const frame = { "border-radius": "4px" };', "declaration-property-unit-allowed-list"],
+      ['const frame = { color: "var(--oc-unknown-test-token)" };', "no-unknown-custom-properties"],
+      ['const frame = { color: "var(--oc-text-base) !important" };', "declaration-no-important"],
+      ['const frame = { scrollbarWidth: "thin" };', "property-disallowed-list"],
+      ["const css = `.sr-only { position: absolute; }`;", "selector-disallowed-list"],
+      [
+        "const options = { unsafeCSS: `:host { --diffs-font-size: 12px; }` };",
+        "declaration-property-unit-allowed-list",
+      ],
+      [
+        "style.textContent = `::highlight(${name}) { color: rgb(1 2 3); }`;",
+        "function-disallowed-list",
+      ],
+    ];
+    const files = cases.map(([source], index) => {
+      const target = path.join(directory, `invalid-${index}.tsx`);
+      writeFileSync(target, source);
+      return target;
+    });
+    const result = spawnSync(process.execPath, [checker, ...files], { encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(1);
+    for (const [index, [, rule]] of cases.entries()) {
+      const diagnostics = result.stderr
+        .split("\n")
+        .filter((line) => line.startsWith(`${files[index]}:`));
+      expect(diagnostics.join("\n"), files[index]).toContain(rule);
     }
     const allowed = run(`
       const frame = { background: "var(--oc-surface-canvas)", width: "390px" };
@@ -116,40 +140,33 @@ it("checks literal inline and injected design values without linting displayed c
   }
 });
 
-it("enforces shared CSS ownership and token references while allowing the owning files", () => {
+it("enforces shared CSS ownership and token references while allowing the owning files", async () => {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
-  const lint = (code, file = "apps/desktop/src/renderer/ui/Example.css") => {
-    const result = spawnSync(
-      process.execPath,
-      [
-        path.join(root, "node_modules/stylelint/bin/stylelint.mjs"),
-        "--stdin",
-        "--stdin-filename",
-        path.join(root, file),
-        "--formatter",
-        "json",
-      ],
-      { cwd: root, input: code, encoding: "utf8" },
-    );
-    return JSON.parse(result.stderr)[0].warnings.map((warning) => warning.rule);
+  const lint = async (code, file = "apps/desktop/src/renderer/ui/Example.css") => {
+    const result = await stylelint.lint({ code, codeFilename: path.join(root, file), cwd: root });
+    return result.results[0].warnings.map((warning) => warning.rule);
   };
-  expect(lint("a { color: var(--oc-unknown-test-token); }")).toContain(
+  expect(await lint("a { color: var(--oc-unknown-test-token); }")).toContain(
     "no-unknown-custom-properties",
   );
-  expect(lint("a { color: var(--oc-text-base); }")).not.toContain("no-unknown-custom-properties");
-  expect(lint("a { margin: 0 !important; }")).toContain("declaration-no-important");
+  expect(await lint("a { color: var(--oc-text-base); }")).not.toContain(
+    "no-unknown-custom-properties",
+  );
+  expect(await lint("a { margin: 0 !important; }")).toContain("declaration-no-important");
   expect(
-    lint("a { margin: 0 !important; }", "apps/desktop/src/renderer/styles/focus.css"),
+    await lint("a { margin: 0 !important; }", "apps/desktop/src/renderer/styles/focus.css"),
   ).not.toContain("declaration-no-important");
   const scrollbar = "a::-webkit-scrollbar { scrollbar-width: thin; }";
   for (const file of [
     "apps/desktop/src/renderer/ui/Example.css",
     "apps/desktop/stories/Example.css",
   ]) {
-    expect(lint(scrollbar, file)).toEqual(
+    expect(await lint(scrollbar, file)).toEqual(
       expect.arrayContaining(["property-disallowed-list", "selector-disallowed-list"]),
     );
-    expect(lint(".sr-only { position: absolute; }", file)).toContain("selector-disallowed-list");
+    expect(await lint(".sr-only { position: absolute; }", file)).toContain(
+      "selector-disallowed-list",
+    );
   }
-  expect(lint(scrollbar, "apps/desktop/src/renderer/styles/scrollbars.css")).toEqual([]);
+  expect(await lint(scrollbar, "apps/desktop/src/renderer/styles/scrollbars.css")).toEqual([]);
 });

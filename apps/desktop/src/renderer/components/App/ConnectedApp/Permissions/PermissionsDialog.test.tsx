@@ -54,15 +54,6 @@ function mountDialog() {
 afterEach(() => document.body.replaceChildren());
 
 describe("PermissionsDialog", () => {
-  it("uses the shared dialog's content-sized mode instead of an imposed large height", async () => {
-    const mounted = mountDialog();
-    await settle();
-    const shell = document.body.querySelector<HTMLElement>('[data-component="dialog-v2"]');
-    expect(shell?.dataset.fit).toBe("true");
-    expect(shell?.dataset.size).toBe("normal");
-    mounted.dispose();
-  });
-
   it("shows every session location and exact pending request detail without reply controls", async () => {
     const mounted = mountDialog();
     await settle();

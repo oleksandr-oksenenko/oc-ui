@@ -7,7 +7,7 @@ import type { FileListOutput, Project, SessionInfo } from "@opencode-ai/client";
 import * as toastModule from "@opencode-ai/ui/toast";
 import { Show, createSignal } from "solid-js";
 import { mount as mountView } from "../../../../../test/mount.ts";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   createSessionWorktree,
@@ -32,7 +32,11 @@ beforeAll(() => {
   });
 });
 
-beforeEach(() => vi.mocked(createSessionWorktree).mockReset());
+beforeEach(() => {
+  vi.mocked(createSessionWorktree).mockReset();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+});
+afterEach(() => vi.useRealTimers());
 
 const dismissToast = vi.spyOn(toastModule.toaster, "dismiss");
 const showToast = vi.spyOn(toastModule, "showToast");
@@ -166,15 +170,22 @@ async function flush(): Promise<void> {
 }
 
 async function flushDialogClose(): Promise<void> {
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 200));
+  await flush();
+  // The pinned DialogProvider closes after 100 ms; the app restores focus at 110 ms.
+  vi.advanceTimersByTime(110);
   await flush();
 }
 
-function mount(runtime: NewSessionFlowRuntime) {
+function controller(runtime: NewSessionFlowRuntime) {
   const onDismiss = vi.fn<() => void>();
   const onSessionCreated = vi.fn<(sessionID: string) => void>();
-  const [visible, setVisible] = createSignal(true);
   const flow = createNewSessionFlow({ runtime, onDismiss, onSessionCreated });
+  return { flow, onDismiss, onSessionCreated, dispose: flow.dispose };
+}
+
+function mount(runtime: NewSessionFlowRuntime) {
+  const { flow, onDismiss, onSessionCreated } = controller(runtime);
+  const [visible, setVisible] = createSignal(true);
   const { dispose } = mountView(() => (
     <RegistryContext.Provider value={runtime.effects.registry}>
       <ServerFlowDialogProvider>
@@ -205,19 +216,6 @@ function clickButton(host: HTMLElement, text: string): void {
   [...host.querySelectorAll<HTMLButtonElement>("button")]
     .find((button) => button.textContent?.trim() === text)
     ?.click();
-}
-
-async function chooseProject(host: HTMLElement, name: string): Promise<void> {
-  host.querySelector<HTMLButtonElement>(".new-session-project-trigger")?.click();
-  await flush();
-  const pickerID = host
-    .querySelector<HTMLButtonElement>(".new-session-project-trigger")
-    ?.getAttribute("aria-controls");
-  const picker = pickerID ? document.getElementById(pickerID) : undefined;
-  [...(picker?.querySelectorAll<HTMLButtonElement>('[data-slot="list-item"]') ?? [])]
-    .find((button) => button.textContent?.includes(name))
-    ?.click();
-  await flush();
 }
 
 describe("NewSessionFlow", () => {
@@ -294,16 +292,16 @@ describe("NewSessionFlow", () => {
 
   it("creates a direct session in the selected project", async () => {
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
-    submit(mounted.root);
-    await flushDialogClose();
+    operation.flow.useProject(project.id);
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
     expect(fake.sessionCreate).toHaveBeenCalledWith({
       projectID: project.id,
       location: { directory: project.canonical },
     });
-    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
-    mounted.dispose();
+    expect(operation.onSessionCreated).toHaveBeenCalledWith("session-1");
+    operation.dispose();
   });
 
   it("creates a non-Git project directly without offering a worktree", async () => {
@@ -327,20 +325,20 @@ describe("NewSessionFlow", () => {
       Promise.reject(new Error("session failed")),
       Promise.resolve(session("session-2", project.canonical)),
     ]);
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
-    submit(mounted.root);
+    operation.flow.useProject(project.id);
     await flush();
-    await vi.waitFor(() => expect(mounted.root.textContent).toContain("Session creation failed"));
-    submit(mounted.root);
-    await flushDialogClose();
+    await vi.waitFor(() => expect(operation.flow.current().error?.kind).toBe("session"));
+    operation.flow.retry();
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
     expect(fake.sessionCreate).toHaveBeenCalledTimes(2);
     expect(fake.sessionCreate).toHaveBeenLastCalledWith({
       projectID: project.id,
       location: { directory: project.canonical },
     });
-    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-2");
-    mounted.dispose();
+    expect(operation.onSessionCreated).toHaveBeenCalledWith("session-2");
+    operation.dispose();
   });
 
   it("completes session creation after the view unmounts", async () => {
@@ -498,22 +496,20 @@ describe("NewSessionFlow", () => {
       ],
       { projects: [project, nonGitProject] },
     );
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
 
-    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    submit(mounted.root);
+    operation.flow.changeMode("worktree");
+    operation.flow.createWorktree();
     await flush();
-    await vi.waitFor(() =>
-      expect(mounted.root.textContent).toContain("/srv/worktrees/feature-one"),
-    );
-    await chooseProject(mounted.root, "docs");
-    submit(mounted.root);
-    await flushDialogClose();
+    await vi.waitFor(() => expect(operation.flow.current().error?.kind).toBe("session"));
+    operation.flow.changeProject(nonGitProject.id);
+    operation.flow.useProject(nonGitProject.id);
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
 
-    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-2");
+    expect(operation.onSessionCreated).toHaveBeenCalledWith("session-2");
     expect(dismissToast).not.toHaveBeenCalled();
-    mounted.dispose();
+    operation.dispose();
   });
 
   it("shows a second retained notice when a later worktree also fails", async () => {
@@ -528,22 +524,23 @@ describe("NewSessionFlow", () => {
       Promise.reject(new Error("first session failed")),
       Promise.reject(new Error("second session failed")),
     ]);
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
 
-    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    submit(mounted.root);
+    operation.flow.changeMode("worktree");
+    operation.flow.createWorktree();
     await flush();
-    await vi.waitFor(() =>
-      expect(mounted.root.textContent).toContain("/srv/worktrees/feature-one"),
-    );
+    await vi.waitFor(() => expect(operation.flow.current().error?.kind).toBe("session"));
 
-    mounted.root.querySelector<HTMLInputElement>('input[value="direct"]')?.click();
-    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    submit(mounted.root);
+    operation.flow.changeMode("direct");
+    operation.flow.changeMode("worktree");
+    operation.flow.createWorktree();
     await flush();
     await vi.waitFor(() =>
-      expect(mounted.root.textContent).toContain("/srv/worktrees/feature-two"),
+      expect(operation.flow.current().error).toMatchObject({
+        kind: "session",
+        worktreeLocation: { directory: "/srv/worktrees/feature-two" },
+      }),
     );
 
     expect(showToast).toHaveBeenCalledWith(
@@ -558,7 +555,7 @@ describe("NewSessionFlow", () => {
         persistent: true,
       }),
     );
-    mounted.dispose();
+    operation.dispose();
   });
 
   it.each(["/Users/alex/code/oc-ui", "C:\\Users\\alex\\code\\oc-ui", "\\\\server\\share\\oc-ui"])(
@@ -588,20 +585,22 @@ describe("NewSessionFlow", () => {
     } satisfies CreatedSessionWorktree;
     vi.mocked(createSessionWorktree).mockReturnValueOnce(Effect.succeed(worktree));
     const fake = fakeRuntime([Promise.resolve(session("session-1", worktree.location.directory))]);
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
-    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    submit(mounted.root);
-    await flushDialogClose();
+    operation.flow.createWorktree();
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
     expect(createSessionWorktree).toHaveBeenCalledWith(
       expect.objectContaining({ api: fake.runtime.api, isCurrent: expect.any(Function) }),
       { directory: project.canonical },
+    );
+    expect(vi.mocked(createSessionWorktree).mock.invocationCallOrder[0]).toBeLessThan(
+      fake.sessionCreate.mock.invocationCallOrder[0]!,
     );
     expect(fake.sessionCreate).toHaveBeenCalledWith({
       projectID: project.id,
       location: worktree.location,
     });
-    mounted.dispose();
+    operation.dispose();
   });
 
   it("shows a new retained warning when a retry fails after dismissal", async () => {
@@ -612,19 +611,18 @@ describe("NewSessionFlow", () => {
     );
     const retry = deferred<SessionInfo>();
     const fake = fakeRuntime([Promise.reject(new Error("session failed")), retry.promise]);
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
-    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    submit(mounted.root);
+    operation.flow.createWorktree();
     await vi.waitFor(() => expect(showToast).toHaveBeenCalledOnce());
     const firstToast = showToast.mock.results[0]?.value;
     toastModule.toaster.dismiss(firstToast);
-    submit(mounted.root);
+    operation.flow.retry();
     retry.resolve(Promise.reject(new Error("retry failed")));
     await vi.waitFor(() => expect(showToast).toHaveBeenCalledTimes(2));
     expect(showToast.mock.results[1]?.value).not.toBe(firstToast);
     expect(createSessionWorktree).toHaveBeenCalledOnce();
-    mounted.dispose();
+    operation.dispose();
   });
 
   it("retries only session creation for a ready retained worktree", async () => {
@@ -637,21 +635,23 @@ describe("NewSessionFlow", () => {
       Promise.reject(new Error("session failed")),
       Promise.resolve(session("session-2", "/srv/worktrees/feature-one")),
     ]);
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
-    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    submit(mounted.root);
+    operation.flow.createWorktree();
     await flush();
     await vi.waitFor(() =>
-      expect(mounted.root.textContent).toContain("/srv/worktrees/feature-one"),
+      expect(operation.flow.current().error).toMatchObject({
+        kind: "session",
+        worktreeLocation: { directory: "/srv/worktrees/feature-one" },
+      }),
     );
-    submit(mounted.root);
-    await flushDialogClose();
+    operation.flow.retry();
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
     expect(createSessionWorktree).toHaveBeenCalledOnce();
     expect(fake.sessionCreate).toHaveBeenCalledTimes(2);
-    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-2");
+    expect(operation.onSessionCreated).toHaveBeenCalledWith("session-2");
     expect(dismissToast).toHaveBeenCalledOnce();
-    mounted.dispose();
+    operation.dispose();
   });
 
   it("keeps a session acknowledged by the event stream when its request rejects", async () => {
@@ -659,17 +659,17 @@ describe("NewSessionFlow", () => {
     const fake = fakeRuntime([Promise.reject(new Error("response lost"))], {
       acknowledged: new Map([[acknowledged.id, acknowledged]]),
     });
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
 
-    submit(mounted.root);
-    await flushDialogClose();
+    operation.flow.useProject(project.id);
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
 
     expect(fake.sessionGet).toHaveBeenCalledWith("session-1");
     expect(fake.remove).not.toHaveBeenCalled();
-    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
-    expect(mounted.onDismiss).toHaveBeenCalledOnce();
-    mounted.dispose();
+    expect(operation.onSessionCreated).toHaveBeenCalledWith("session-1");
+    expect(operation.onDismiss).toHaveBeenCalledOnce();
+    operation.dispose();
   });
 
   it("reconciles session creation after a request rejection while hydration is pending", async () => {
@@ -682,10 +682,10 @@ describe("NewSessionFlow", () => {
       syncAcknowledgement: acknowledged,
       syncGate,
     });
-    const mounted = mount(fake.runtime);
+    const operation = controller(fake.runtime);
     await flush();
 
-    submit(mounted.root);
+    operation.flow.useProject(project.id);
     await flush();
 
     expect(fake.sessionSync).toHaveBeenCalledWith("session-1");
@@ -693,12 +693,12 @@ describe("NewSessionFlow", () => {
     expect(fake.remove).not.toHaveBeenCalled();
 
     resolveSync();
-    await flushDialogClose();
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
 
     expect(fake.sessionGet).toHaveBeenCalledWith("session-1");
-    expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-1");
-    expect(mounted.onDismiss).toHaveBeenCalledOnce();
-    mounted.dispose();
+    expect(operation.onSessionCreated).toHaveBeenCalledWith("session-1");
+    expect(operation.onDismiss).toHaveBeenCalledOnce();
+    operation.dispose();
   });
 
   it("finishes worktree and session creation after view teardown", async () => {

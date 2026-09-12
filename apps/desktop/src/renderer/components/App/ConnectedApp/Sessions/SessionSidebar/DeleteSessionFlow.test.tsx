@@ -372,11 +372,12 @@ describe("DeleteSessionFlow", () => {
     async (directory) => {
       const survivor = session("survivor", directory, undefined, { projectID: "nested-project" });
       const fixture = setup([root, survivor]);
-      const mounted = mount(fixture);
-      (await vi.waitFor(() => mounted.deleteButton)).click();
+      const flow = createDeleteSessionFlow(fixture.props);
+      flow.delete();
+      await vi.waitFor(() => expect(flow.pending()).toBe(false));
       await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
       expect(fixture.removeWorktree).not.toHaveBeenCalled();
-      mounted.dispose();
+      flow.dispose();
     },
   );
 
@@ -391,12 +392,13 @@ describe("DeleteSessionFlow", () => {
     async ({ directory, removed }) => {
       const survivor = session("survivor", directory);
       const fixture = setup([root, survivor]);
-      const mounted = mount(fixture);
-      (await vi.waitFor(() => mounted.deleteButton)).click();
+      const flow = createDeleteSessionFlow(fixture.props);
+      flow.delete();
+      await vi.waitFor(() => expect(flow.pending()).toBe(false));
       await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
       expect(fixture.removeWorktree).toHaveBeenCalledTimes(removed ? 1 : 0);
       expect(fixture.sessions()).toEqual([survivor]);
-      mounted.dispose();
+      flow.dispose();
     },
   );
 
@@ -411,12 +413,13 @@ describe("DeleteSessionFlow", () => {
         .fn<OpenCodeClient["worktree"]["list"]>()
         .mockResolvedValue([{ directory: "/project" }, { directory: "/other", strategy: "git" }]),
     });
-    const mounted = mount(fixture);
-    (await vi.waitFor(() => mounted.deleteButton)).click();
+    const flow = createDeleteSessionFlow(fixture.props);
+    flow.delete();
+    await vi.waitFor(() => expect(flow.pending()).toBe(false));
     await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
     expect(fixture.listWorktrees).toHaveBeenCalledOnce();
     expect(fixture.removeWorktree).not.toHaveBeenCalled();
-    mounted.dispose();
+    flow.dispose();
   });
 
   it.each([
@@ -436,15 +439,16 @@ describe("DeleteSessionFlow", () => {
           { directory: "/trees/nested", strategy },
         ]),
       });
-      const mounted = mount(fixture);
-      (await vi.waitFor(() => mounted.deleteButton)).click();
+      const flow = createDeleteSessionFlow(fixture.props);
+      flow.delete();
+      await vi.waitFor(() => expect(flow.pending()).toBe(false));
       await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
       expect(vi.mocked(fixture.removeWorktree).mock.calls.map(([input]) => [input])).toEqual(
         removed === undefined
           ? []
           : [[{ location: { directory: removed }, directory: removed, force: true }]],
       );
-      mounted.dispose();
+      flow.dispose();
     },
   );
 
@@ -453,11 +457,12 @@ describe("DeleteSessionFlow", () => {
       projectID: "nested-project",
     });
     const fixture = setup([root, survivor]);
-    const mounted = mount(fixture);
-    (await vi.waitFor(() => mounted.deleteButton)).click();
+    const flow = createDeleteSessionFlow(fixture.props);
+    flow.delete();
+    await vi.waitFor(() => expect(flow.pending()).toBe(false));
     await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
     expect(fixture.removeWorktree).not.toHaveBeenCalled();
-    mounted.dispose();
+    flow.dispose();
   });
 
   it("continues session deletion when worktree discovery fails and retains its path", async () => {
@@ -465,15 +470,16 @@ describe("DeleteSessionFlow", () => {
       .fn<OpenCodeClient["worktree"]["list"]>()
       .mockRejectedValueOnce(new Error("offline"));
     const fixture = setup([root], { listWorktrees });
-    const mounted = mount(fixture);
-    (await vi.waitFor(() => mounted.deleteButton)).click();
+    const flow = createDeleteSessionFlow(fixture.props);
+    flow.delete();
+    await vi.waitFor(() => expect(flow.pending()).toBe(false));
     await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
     expect(fixture.removeSession).toHaveBeenCalledWith(
       { sessionID: "root" },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(fixture.removeWorktree).not.toHaveBeenCalled();
-    mounted.dispose();
+    flow.dispose();
   });
 
   it("requires the refreshed catalog to contain every session before deleting", async () => {
@@ -509,15 +515,16 @@ describe("DeleteSessionFlow", () => {
     fixture.removeWorktree
       .mockRejectedValueOnce(new Error("busy"))
       .mockResolvedValueOnce(undefined);
-    const mounted = mount(fixture);
-    (await vi.waitFor(() => mounted.deleteButton)).click();
+    const flow = createDeleteSessionFlow(fixture.props);
+    flow.delete();
+    await vi.waitFor(() => expect(flow.pending()).toBe(false));
     await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledTimes(2));
     expect(fixture.removeSession).toHaveBeenCalledWith(
       { sessionID: "root" },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(fixture.onDeleted).toHaveBeenCalledWith(["root", "second"]);
-    mounted.dispose();
+    flow.dispose();
   });
 
   it("keeps the session and worktree when session deletion fails, then allows retry", async () => {
@@ -601,11 +608,12 @@ describe("DeleteSessionFlow", () => {
       sessions: () => [archived],
       sessionIDs: () => ["archived"],
     });
-    const mounted = mount(fixture);
-    (await vi.waitFor(() => mounted.deleteButton)).click();
+    const flow = createDeleteSessionFlow(fixture.props);
+    flow.delete();
+    await vi.waitFor(() => expect(flow.pending()).toBe(false));
     await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
     expect(fixture.removeWorktree).not.toHaveBeenCalled();
-    mounted.dispose();
+    flow.dispose();
   });
 
   it("finishes cleanup when the session was removed externally", async () => {
@@ -617,8 +625,9 @@ describe("DeleteSessionFlow", () => {
       sessionIDs: () => [],
       deletionStatusForSession: () => "removed",
     });
-    const mounted = mount(fixture);
-    (await vi.waitFor(() => mounted.deleteButton)).click();
+    const flow = createDeleteSessionFlow(fixture.props);
+    flow.delete();
+    await vi.waitFor(() => expect(flow.pending()).toBe(false));
     await vi.waitFor(() => expect(fixture.removeWorktree).toHaveBeenCalledOnce());
     expect(fixture.removeSession).not.toHaveBeenCalled();
     expect(fixture.removeWorktree).toHaveBeenCalledWith(
@@ -629,7 +638,7 @@ describe("DeleteSessionFlow", () => {
       },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    mounted.dispose();
+    flow.dispose();
   });
 
   it("deletes a session in a workspace context without removing its worktree", async () => {
@@ -641,11 +650,12 @@ describe("DeleteSessionFlow", () => {
       subtreeIDs: ["workspace-root"],
       subtreeSessions: [workspaceSession],
     });
-    const mounted = mount(fixture);
-    (await vi.waitFor(() => mounted.deleteButton)).click();
+    const flow = createDeleteSessionFlow(fixture.props);
+    flow.delete();
+    await vi.waitFor(() => expect(flow.pending()).toBe(false));
     await vi.waitFor(() => expect(fixture.onDeleted).toHaveBeenCalledOnce());
     expect(fixture.removeWorktree).not.toHaveBeenCalled();
-    mounted.dispose();
+    flow.dispose();
   });
 
   it("requires a successful catalog refresh before deleting", async () => {

@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { RegistryContext } from "@effect/atom-solid";
 import { withTestWorkspace } from "../../../../../../test/workspace.ts";
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
@@ -15,6 +16,7 @@ import {
 function response(directory: string): FileListOutput {
   return {
     location: {
+      workspaceID: "remote-workspace",
       directory,
       project: { id: "project", directory, canonical: directory },
     },
@@ -43,6 +45,8 @@ function mount(
 ) {
   const effects = withTestWorkspace((owner) => owner);
   const list = options.listDirectory ?? listDirectory();
+  const [adding, setAdding] = createSignal(options.adding);
+  const [error, setError] = createSignal(options.error);
   const onClose = vi.fn<() => void>();
   const onAddProject = vi.fn<(location: LocationRef) => void>();
   let dialogRoot: HTMLDivElement | undefined;
@@ -56,9 +60,9 @@ function mount(
           <AddProjectDialog
             effects={effects}
             listDirectory={list}
-            initialLocation={{ directory: "/srv/projects" }}
-            adding={options.adding}
-            error={options.error}
+            initialLocation={{ directory: "/srv/projects", workspaceID: "remote-workspace" }}
+            adding={adding()}
+            error={error()}
             onDismissBlockedChange={setBlocked}
             onAddProject={onAddProject}
           />
@@ -81,6 +85,8 @@ function mount(
       return dialogRoot ?? document.body;
     },
     list,
+    setAdding,
+    setError,
     onClose,
     onAddProject,
     dispose,
@@ -96,7 +102,10 @@ describe("AddProjectDialog", () => {
 
     mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     expect(mounted.onAddProject).toHaveBeenCalledOnce();
-    expect(mounted.onAddProject).toHaveBeenCalledWith({ directory: "/srv/projects/oc-ui" });
+    expect(mounted.onAddProject).toHaveBeenCalledWith({
+      directory: "/srv/projects/oc-ui",
+      workspaceID: "remote-workspace",
+    });
     mounted.dispose();
   });
 
@@ -123,7 +132,10 @@ describe("AddProjectDialog", () => {
     child.resolve(response("/srv/projects/oc-ui"));
     await flush();
     mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
-    expect(mounted.onAddProject).toHaveBeenCalledWith({ directory: "/srv/projects/oc-ui" });
+    expect(mounted.onAddProject).toHaveBeenCalledWith({
+      directory: "/srv/projects/oc-ui",
+      workspaceID: "remote-workspace",
+    });
     mounted.dispose();
   });
 
@@ -142,15 +154,24 @@ describe("AddProjectDialog", () => {
   });
 
   it("offers retry after the server rejects the project", async () => {
-    const mounted = mount({
-      error: { kind: "add-project", message: "The server rejected this project." },
-    });
+    const mounted = mount();
+    await flush();
+    const submit = mounted.root.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    submit.click();
+    expect(mounted.onAddProject).toHaveBeenCalledTimes(1);
+    mounted.setAdding(true);
+    mounted.setAdding(false);
+    mounted.setError({ kind: "add-project", message: "The server rejected this project." });
     await flush();
     expect(mounted.root.textContent).toContain("Project could not be added");
-    expect(document.activeElement).toBeTruthy();
-    expect(
-      mounted.root.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent,
-    ).toContain("Try again");
+    expect(document.activeElement).toBe(mounted.root.querySelector('[role="alert"]'));
+    expect(submit.textContent).toContain("Try again");
+    expect(submit.disabled).toBe(false);
+    submit.click();
+    expect(mounted.onAddProject.mock.calls).toEqual([
+      [{ directory: "/srv/projects", workspaceID: "remote-workspace" }],
+      [{ directory: "/srv/projects", workspaceID: "remote-workspace" }],
+    ]);
     mounted.dispose();
   });
 

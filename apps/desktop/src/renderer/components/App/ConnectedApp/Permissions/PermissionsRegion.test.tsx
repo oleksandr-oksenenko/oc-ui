@@ -32,7 +32,10 @@ function mountRegion() {
   return { fixture, connected, setConnected, onOpenSession, host, dispose };
 }
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  vi.useRealTimers();
+});
 
 describe("PermissionsRegion", () => {
   it("shows the workspace pending count and non-ready states without a false zero", () => {
@@ -70,8 +73,11 @@ describe("PermissionsRegion", () => {
     const close = document.body.querySelector<HTMLButtonElement>(
       'button[aria-label="Close permissions dialog"]',
     );
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     close?.click();
-    await new Promise<void>((resolve) => setTimeout(resolve, 130));
+    vi.advanceTimersByTime(110);
+    await Promise.resolve();
+    expect(document.body.querySelector("[data-dialog-layer]")).toBeNull();
     expect(document.activeElement).toBe(launcher);
     mounted.dispose();
   });

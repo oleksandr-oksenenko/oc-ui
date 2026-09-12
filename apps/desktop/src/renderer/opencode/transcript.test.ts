@@ -30,8 +30,8 @@ const makeData = (more: () => boolean) => {
 };
 
 describe("syncSessionTranscript", () => {
-  it("loads every older message page after the first snapshot", async () => {
-    let remaining = 2;
+  it.each([0, 2])("hydrates a session and loads %i older pages", async (pages) => {
+    let remaining = pages;
     const fixture = makeData(() => remaining-- > 0);
 
     await fixture.syncTranscript("session");
@@ -39,25 +39,40 @@ describe("syncSessionTranscript", () => {
     expect(fixture.syncSession).toHaveBeenCalledWith("session");
     expect(fixture.syncPending).toHaveBeenCalledWith("session");
     expect(fixture.syncMessages).toHaveBeenCalledWith("session");
-    expect(fixture.loadMore).toHaveBeenCalledTimes(2);
+    expect(fixture.loadMore).toHaveBeenCalledTimes(pages);
   });
 
-  it("loads a child session transcript through the same runtime path", async () => {
-    const fixture = makeData(() => false);
-
-    await fixture.syncTranscript("child");
-
-    expect(fixture.syncSession).toHaveBeenCalledWith("child");
-    expect(fixture.syncPending).toHaveBeenCalledWith("child");
-    expect(fixture.syncMessages).toHaveBeenCalledWith("child");
-  });
-
-  it("stops requesting older pages after the selection changes", async () => {
+  it("does not hydrate an already obsolete selection", async () => {
     const fixture = makeData(() => true);
 
     await fixture.syncTranscript("old-session", { isCurrent: () => false });
 
+    expect(fixture.syncSession).not.toHaveBeenCalled();
+    expect(fixture.syncMessages).not.toHaveBeenCalled();
+    expect(fixture.syncPending).not.toHaveBeenCalled();
     expect(fixture.loadMore).not.toHaveBeenCalled();
+  });
+
+  it("stops pagination when selection changes during an older page", async () => {
+    const page = deferred();
+    const started = deferred();
+    let current = true;
+    let remaining = 2;
+    const fixture = makeData(() => remaining > 0);
+    fixture.loadMore.mockImplementation(async () => {
+      started.resolve();
+      await page.promise;
+      remaining -= 1;
+    });
+
+    const sync = fixture.syncTranscript("session", { isCurrent: () => current });
+    await started.promise;
+    current = false;
+    page.resolve();
+    await sync;
+
+    expect(fixture.loadMore).toHaveBeenCalledTimes(1);
+    expect(remaining).toBe(1);
   });
 
   it("serializes overlapping pagination for the same session", async () => {
@@ -93,6 +108,9 @@ describe("syncSessionTranscript", () => {
 
   it("releases idle session workers instead of accumulating workspace finalizers", async () => {
     const fixture = makeData(() => false);
+    // Effect rc.112 exposes scope state but no public retained-worker count.
+    // Keep this narrow version-sensitive leak check: shutdown alone cannot detect
+    // workers accumulating while a workspace stays open.
     const finalizerCount = () => {
       const state = fixture.effects.scope.state;
       return state._tag === "Open"

@@ -18,7 +18,11 @@ const comment = (path: string, body: string): SentReviewComment => ({
 describe("code-review codec", () => {
   it("formats every file, range, selected code, and comment", () => {
     const first = comment('src/odd "name".ts', "Please preserve this API.");
-    const second = comment("src/second.ts", "Second comment");
+    const second: SentReviewComment = {
+      ...comment("src/second.ts", "Second comment"),
+      selection: { start: 10, end: 12 },
+      selectedCode: "return second;",
+    };
     const text = formatCodeReviewSection([first, second]);
 
     expect(text).toContain('### Comment 1\nFile: "src/odd \\\"name\\\".ts"');
@@ -27,6 +31,16 @@ describe("code-review codec", () => {
     expect(text).toContain("const before = `one`;");
     expect(text).toContain("Please preserve this API.");
     expect(text).toContain("Please fix all code review comments below.");
+    const sections = text.split("### Comment ");
+    expect(sections).toHaveLength(3);
+    expect(sections[1]).toContain(first.selectedCode.trimEnd());
+    expect(sections[1]).toContain(first.body);
+    expect(sections[1]).not.toContain(second.body);
+    expect(sections[2]).toContain('2\nFile: "src/second.ts"');
+    expect(sections[2]).toContain("Range: line 10 to line 12");
+    expect(sections[2]).toContain(second.selectedCode);
+    expect(sections[2]).toContain(second.body);
+    expect(sections[2]).not.toContain(first.body);
   });
 
   it("uses fences longer than any backtick run in selected code or comments", () => {
