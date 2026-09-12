@@ -655,3 +655,13 @@
   color: var(--oc-text-muted);
   font-size: var(--oc-type-body-size);
 }
+
+.transcript-tool-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 360px;
+  grid-column: 1 / -1;
+  object-fit: contain;
+  border-radius: var(--oc-radius);
+}

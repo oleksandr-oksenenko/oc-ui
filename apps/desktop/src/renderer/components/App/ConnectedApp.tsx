@@ -1,8 +1,9 @@
 import { Show } from "solid-js";
 
 import { useServerRuntime, type VerifiedServer } from "../../opencode/index.ts";
+import { BrowserRegion } from "./ConnectedApp/Browser/BrowserRegion.tsx";
 import { ChangesRegion } from "./ConnectedApp/Changes/ChangesRegion.tsx";
-import { ChangesTitlebarRegion } from "./ConnectedApp/Changes/ChangesTitlebarRegion.tsx";
+import { ContextTitlebarRegion } from "./ConnectedApp/Shell/ContextTitlebarRegion.tsx";
 import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegion.tsx";
 import { GlobalFormsRegion } from "./ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
 import { PermissionsRegion } from "./ConnectedApp/Permissions/PermissionsRegion.tsx";
@@ -22,6 +23,7 @@ export type ConnectedAppProps = {
 export function ConnectedApp(props: ConnectedAppProps) {
   const runtime = useServerRuntime();
   const {
+    browser,
     panels,
     connected,
     globalForms,
@@ -53,7 +55,14 @@ export function ConnectedApp(props: ConnectedAppProps) {
             : undefined
         }
         globalControls={<GlobalFormsRegion controller={globalForms} />}
-        rightControls={<ChangesTitlebarRegion onClose={closeRightPanel} />}
+        rightControls={
+          <ContextTitlebarRegion
+            onClose={closeRightPanel}
+            browserAvailable={browser.available}
+            view={panels.contextView()}
+            onViewChange={panels.setContextView}
+          />
+        }
         sidebar={
           <SessionsRegion
             runtime={runtime}
@@ -89,12 +98,33 @@ export function ConnectedApp(props: ConnectedAppProps) {
           />
         }
         context={
-          <ChangesRegion
-            idBase={changesTabsId}
-            changes={changes.view()}
-            showTabs={panels.mobile()}
-            onClose={closeRightPanel}
-          />
+          <div class="workspace-context-body">
+            <Show when={panels.mobile() && browser.available}>
+              <ContextTitlebarRegion
+                onClose={closeRightPanel}
+                autoFocusClose
+                browserAvailable
+                view={panels.contextView()}
+                onViewChange={panels.setContextView}
+              />
+            </Show>
+            <Show
+              when={browser.available && panels.contextView() === "browser"}
+              fallback={
+                <ChangesRegion
+                  idBase={changesTabsId}
+                  changes={changes.view()}
+                  showTabs={panels.mobile() && !browser.available}
+                  onClose={closeRightPanel}
+                />
+              }
+            >
+              <BrowserRegion
+                controller={browser}
+                sessionSelected={sessions.selectedID() !== undefined}
+              />
+            </Show>
+          </div>
         }
       />
       <SessionFlowsRegion flows={flows} />

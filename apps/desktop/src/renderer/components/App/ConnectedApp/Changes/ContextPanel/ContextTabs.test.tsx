@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { mount } from "../../../../../test/mount.ts";
-import { ChangesTitlebarRegion } from "../ChangesTitlebarRegion.tsx";
+import { ContextTitlebarRegion } from "../../Shell/ContextTitlebarRegion.tsx";
 import { ContextTabs } from "./ContextTabs.tsx";
 
 describe("ContextTabs", () => {
@@ -22,7 +22,7 @@ describe("ContextTabs", () => {
   it("uses a plain titlebar label while keeping the close button actionable", () => {
     let closeCount = 0;
     const { host, dispose } = mount(() => (
-      <ChangesTitlebarRegion onClose={() => (closeCount += 1)} />
+      <ContextTitlebarRegion onClose={() => (closeCount += 1)} />
     ));
 
     expect(host.querySelector('[role="tab"]')).toBeNull();

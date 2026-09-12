@@ -6,7 +6,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { NodePath } from "@effect/platform-node";
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session } from "electron";
 import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electron";
-import { Context, Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
+
+import { BrowserHost } from "./browser/host.ts";
+import { BROWSER_CHANNELS, BrowserRequest } from "../shared/browser-api.ts";
 
 import type { SaveTargetInput } from "../shared/desktop-api.ts";
 import { IPC_CHANNELS, parseSaveTargetInput } from "../shared/desktop-api.ts";
@@ -42,7 +45,7 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-type DesktopRuntime = ManagedRuntime.ManagedRuntime<Settings | LocalOpenCode, never>;
+type DesktopRuntime = ManagedRuntime.ManagedRuntime<Settings | LocalOpenCode | BrowserHost, never>;
 
 let mainWindow: BrowserWindow | undefined;
 let desktopRuntime: DesktopRuntime | undefined;
@@ -101,7 +104,9 @@ const resolveDesktopRuntimeEnvironment = (): DesktopRuntimeEnvironment => {
   };
 };
 
-const runIpc = <A, E>(operation: Effect.Effect<A, E, Settings | LocalOpenCode>): Promise<A> => {
+const runIpc = <A, E>(
+  operation: Effect.Effect<A, E, Settings | LocalOpenCode | BrowserHost>,
+): Promise<A> => {
   if (desktopRuntime === undefined) {
     return Promise.reject(new Error("Desktop services are not ready"));
   }
@@ -181,7 +186,31 @@ const installIpcHandlers = (): void => {
     );
   });
 
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- IPC input is decoded before dispatch.
+  ipcMain.handle(BROWSER_CHANNELS.request, (event, raw: unknown) => {
+    assertTrustedIpcSender(event);
+    const input = Schema.decodeUnknownSync(BrowserRequest)(raw, { onExcessProperty: "error" });
+    const win = mainWindow!;
+    if (input._tag === "attach" && quitHandler.isQuitting()) throw new Error("Ocui is closing.");
+    return runIpc(
+      Effect.gen(function* () {
+        const host = yield* BrowserHost;
+        yield* BrowserRequest.match(input, {
+          attach: (value) =>
+            host.attach(win, value, (message) => {
+              if (!win.isDestroyed() && !win.webContents.isDestroyed())
+                win.webContents.send(BROWSER_CHANNELS.event, message);
+            }),
+          detach: (value) => host.detach(win, value.bindingID),
+          command: (value) => host.command(win, value.bindingID, value.action),
+          layout: (value) => host.layout(win, value),
+        });
+      }),
+    );
+  });
+
   removeIpcHandlers = () => {
+    for (const channel of Object.values(BROWSER_CHANNELS)) ipcMain.removeHandler(channel);
     for (const channel of Object.values(IPC_CHANNELS)) {
       ipcMain.removeHandler(channel);
     }
@@ -318,7 +347,8 @@ const start = async (): Promise<void> => {
   if (quitHandler.isQuitting()) return;
   configurePermissions();
   desktopRuntime = ManagedRuntime.make(
-    Layer.merge(
+    Layer.mergeAll(
+      BrowserHost.layer,
       settingsLayer(app.getPath("userData"), safeStorage).pipe(
         Layer.provide(Layer.mergeAll(NodePath.layer, settingsFileSystemLayer())),
       ),

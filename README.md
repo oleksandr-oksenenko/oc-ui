@@ -9,6 +9,7 @@ A desktop and browser client for OpenCode.
 - [Managed local sidecar design](docs/milestone-2-design.md)
 - [App verification guidelines](docs/app-verification.md)
 - [Browser mode](docs/browser-mode-design.md)
+- [Embedded session browser](docs/browser-tool-integration.md)
 
 ## Requirements
 

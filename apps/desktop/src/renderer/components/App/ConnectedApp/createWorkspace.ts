@@ -1,3 +1,5 @@
+import type { BrowserApi } from "../../../../shared/browser-api.ts";
+import { createSessionBrowser } from "./Browser/createSessionBrowser.ts";
 import { useAtomValue } from "@effect/atom-solid";
 import { Atom } from "effect/unstable/reactivity";
 
@@ -18,7 +20,10 @@ import { createShellPanelState } from "./Shell/createShellPanelState.ts";
 import { createConnectedLifecycle } from "./createConnectedLifecycle.ts";
 
 /** Construct once in the workspace's retained Solid root, independently of views. */
-export function createWorkspaceModel(runtime: ConnectedRuntime) {
+export function createWorkspaceModel(
+  runtime: ConnectedRuntime,
+  browserConnection?: { api: BrowserApi; serverUrl: string; password: string },
+) {
   const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   const connected = () => runtime.stream.status() === "connected";
   const globalForms = createGlobalForms({
@@ -40,6 +45,17 @@ export function createWorkspaceModel(runtime: ConnectedRuntime) {
     connected,
     bootstrapped,
   });
+  const browser = createSessionBrowser(
+    runtime,
+    browserConnection?.api,
+    browserConnection ?? { serverUrl: "", password: "" },
+    sessions.selectedID,
+    (id) => {
+      sessions.select(id);
+      panels.setContextView("browser");
+      panels.setRightPanelOpen(true);
+    },
+  );
   const modelSelection = createModelSelection({
     effects: runtime.effects,
     api: runtime.api,
@@ -135,6 +151,7 @@ export function createWorkspaceModel(runtime: ConnectedRuntime) {
   });
 
   return {
+    browser,
     panels,
     connected,
     globalForms,

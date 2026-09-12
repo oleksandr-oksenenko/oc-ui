@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import type { BrowserApi } from "./browser-api.ts";
 
 export const OPENCODE_VERSION = "0.0.0-beta-19271" as const;
 
@@ -32,6 +33,7 @@ const LocalOpenCodeConnectResultSchema = Schema.Union([
 export type LocalOpenCodeConnectResult = typeof LocalOpenCodeConnectResultSchema.Type;
 
 export type DesktopApi = {
+  readonly browser?: BrowserApi;
   readonly target: {
     readonly load: () => Promise<OpenCodeTarget | undefined>;
     readonly saveLocal: () => Promise<void>;

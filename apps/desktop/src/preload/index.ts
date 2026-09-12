@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { Schema } from "effect";
+import { BROWSER_CHANNELS, BrowserEvent, type BrowserRequest } from "../shared/browser-api.ts";
 
 import {
   IPC_CHANNELS,
@@ -9,7 +11,23 @@ import {
 } from "../shared/desktop-api.ts";
 import type { DesktopApi } from "../shared/desktop-api.ts";
 
+const invokeBrowser = (input: typeof BrowserRequest.Type) =>
+  ipcRenderer.invoke(BROWSER_CHANNELS.request, input).then(parseVoidResult);
+
 const desktopApi: DesktopApi = {
+  browser: {
+    attach: (input) => invokeBrowser({ ...input, _tag: "attach" }),
+    detach: (input) => invokeBrowser({ ...input, _tag: "detach" }),
+    command: (input) => invokeBrowser({ ...input, _tag: "command" }),
+    layout: (input) => invokeBrowser({ ...input, _tag: "layout" }),
+    onEvent: (listener) => {
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- IPC payload is decoded at this boundary.
+      const receive = (_event: Electron.IpcRendererEvent, value: unknown) =>
+        listener(Schema.decodeUnknownSync(BrowserEvent)(value));
+      ipcRenderer.on(BROWSER_CHANNELS.event, receive);
+      return () => ipcRenderer.removeListener(BROWSER_CHANNELS.event, receive);
+    },
+  },
   target: {
     load: () => ipcRenderer.invoke(IPC_CHANNELS.targetLoad).then(parseTargetLoadResult),
     saveLocal: () =>

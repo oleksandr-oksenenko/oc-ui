@@ -47,6 +47,11 @@ const roots = [
   ...dynamicDependencies.map(([specifier, from]) => ({ specifier, from })),
 ];
 stagePackageClosure(roots, runtimeDirectory);
+// Lighthouse dynamically reads its own assets. Main imports the intact package.
+stagePackageClosure(
+  [{ specifier: "lighthouse", from: desktopDirectory }],
+  join(desktopDirectory, "out", "main"),
+);
 
 const assets = [
   "@lydell/node-pty-darwin-arm64/prebuilds/darwin-arm64/pty.node",

@@ -12,6 +12,7 @@ export async function startScriptedProvider() {
   const requests = [];
   let cancelledStreams = 0;
   const server = createServer(async (request, response) => {
+    if (serveBrowserFixture(request, response)) return;
     if (request.url === "/_state") {
       response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify({ requests, cancelledStreams }));
@@ -70,39 +71,12 @@ export async function startScriptedProvider() {
         });
         return;
       }
-      if (prompt.includes("E2E_QUESTION") && !toolReply) {
-        if (!body.tools?.some((tool) => tool.function?.name === "question")) {
-          throw new Error("Pinned OpenCode did not offer its question tool");
-        }
-        send({
-          tool_calls: [
-            {
-              index: 0,
-              id: `call-question-${requests.length}`,
-              type: "function",
-              function: {
-                name: "question",
-                arguments: JSON.stringify({
-                  questions: [
-                    {
-                      header: "Acceptance choice",
-                      question: "Which acceptance option should continue?",
-                      options: [
-                        { label: "Alpha", description: "Continue with Alpha." },
-                        { label: "Beta", description: "Continue with Beta." },
-                      ],
-                    },
-                  ],
-                }),
-              },
-            },
-          ],
-        });
-        finish("tool_calls");
-        return;
-      }
+      if (respondBrowser(prompt, toolReply, body, send, finish, requests.length)) return;
+      if (respondQuestion(prompt, toolReply, body, send, finish, requests.length)) return;
       if (toolReply) {
-        send({ content: `Acceptance question resolved: ${JSON.stringify(toolReply.content)}` });
+        send({
+          content: `Acceptance question resolved: ${JSON.stringify(toolReply.content)}`,
+        });
         finish();
         return;
       }
@@ -130,6 +104,7 @@ export async function startScriptedProvider() {
       autoupdate: false,
       share: "disabled",
       warming: false,
+      permissions: [{ action: "execute", resource: "*", effect: "allow" }],
       agents: {
         title: { model: "acceptance/title" },
         "acceptance-agent": {
@@ -157,4 +132,121 @@ export async function startScriptedProvider() {
         server.closeAllConnections();
       }),
   };
+}
+
+function serveBrowserFixture(request, response) {
+  if (request.url === "/browser-test") {
+    response.setHeader("Content-Type", "text/html");
+    response.end(`<!doctype html><html lang="en"><head><title>Browser acceptance</title></head>
+        <body><h1>Browser acceptance</h1><label>Name <input id="name"></label>
+        <button onclick="document.querySelector('output').textContent='Hello '+document.querySelector('input').value">Greet</button>
+        <output aria-live="polite"></output><label>Upload screenshot <input type="file" id="upload"></label></body></html>`);
+    return true;
+  }
+  if (request.url === "/browser-data") {
+    response.setHeader("Content-Type", "application/json");
+    response.end(JSON.stringify({ source: "connected-server" }));
+    return true;
+  }
+  return false;
+}
+
+function respondBrowser(prompt, toolReply, body, send, finish, requestID) {
+  if (!prompt.includes("E2E_BROWSER")) return false;
+  if (toolReply) {
+    send({ content: `Acceptance browser resolved: ${JSON.stringify(toolReply.content)}` });
+    finish();
+    return true;
+  }
+  {
+    if (!body.tools?.some((tool) => tool.function?.name === "execute")) {
+      throw new Error("Pinned OpenCode did not offer its execute tool");
+    }
+    const pageUrl = prompt.match(/https?:\/\/[^\s]+\/browser-test/)?.[0];
+    if (!pageUrl) throw new Error("Browser acceptance URL missing");
+    const code = `
+          await tools.browser.tabs.open({url: ${JSON.stringify(pageUrl)}});
+          const tabs = await tools.browser.tabs.list({});
+          const tabID = tabs.focusedTabID;
+          if (!tabID) throw new Error("No focused browser tab");
+          const name = await tools.browser.find({tabID, text: "Name"});
+          const ref = name.content.match(/@e[0-9]+/)[0];
+          await tools.browser.fill({tabID, ref, text: "Ocui"});
+          const button = await tools.browser.find({tabID, text: "Greet"});
+          await tools.browser.click({tabID, ref: button.content.match(/@e[0-9]+/)[0]});
+          const snapshot = await tools.browser.snapshot({tabID});
+          if (!snapshot.content.includes("Hello Ocui")) throw new Error(snapshot.content);
+          const data = await tools.browser.evaluate({tabID, script: "console.log('Browser acceptance log'); fetch('/browser-data').then(r=>r.json())"});
+          const logs = await tools.browser.console({tabID});
+          const requests = await tools.browser.network.list({tabID, urlContains: "/browser-data"});
+          const network = await tools.browser.network.get({tabID, id: requests.requests.at(-1).id, includeBody: true});
+          const screenshot = await tools.browser.screenshot({tabID, maxWidth: 320});
+          const upload = await tools.browser.find({tabID, text: "Upload screenshot"});
+          await tools.browser.files.upload({tabID, ref: upload.content.match(/@e[0-9]+/)[0], paths: [screenshot.files[0].path]});
+          const uploaded = await tools.browser.evaluate({tabID, script: "document.querySelector('#upload').files[0].size"});
+          const files = await tools.browser.files.list({tabID});
+          const exported = await tools.browser.files.get({tabID, fileID: files.files.at(-1).id});
+          await tools.browser.trace.start({tabID, durationMs: 5000});
+          await tools.browser.cpu.start({tabID});
+          await tools.browser.evaluate({tabID, script: "Array.from({length:10000},(_,i)=>Math.sqrt(i)).reduce((a,b)=>a+b,0)"});
+          const cpu = await tools.browser.cpu.stop({tabID});
+          const trace = await tools.browser.trace.stop({tabID});
+          const cpuAnalysis = await tools.browser.cpu.analyze({tabID, fileID: cpu.files[0].id});
+          const traceAnalysis = await tools.browser.trace.analyze({tabID, fileID: trace.files[0].id});
+          const audit = await tools.browser.lighthouse({tabID});
+          return {
+            verified: "browser-roundtrip", data, screenshot, uploaded, exported,
+            logs: { messages: logs.messages }, network: { responseBody: network.responseBody },
+            cpuAnalysis: { durationMs: cpuAnalysis.durationMs },
+            traceAnalysis: { metrics: traceAnalysis.metrics }, audit: { files: audit.files }
+          };
+        `;
+    send({
+      tool_calls: [
+        {
+          index: 0,
+          id: `call-browser-${requestID}`,
+          type: "function",
+          function: { name: "execute", arguments: JSON.stringify({ code }) },
+        },
+      ],
+    });
+    finish("tool_calls");
+    return true;
+  }
+}
+
+function respondQuestion(prompt, toolReply, body, send, finish, requestID) {
+  if (prompt.includes("E2E_QUESTION") && !toolReply) {
+    if (!body.tools?.some((tool) => tool.function?.name === "question")) {
+      throw new Error("Pinned OpenCode did not offer its question tool");
+    }
+    send({
+      tool_calls: [
+        {
+          index: 0,
+          id: `call-question-${requestID}`,
+          type: "function",
+          function: {
+            name: "question",
+            arguments: JSON.stringify({
+              questions: [
+                {
+                  header: "Acceptance choice",
+                  question: "Which acceptance option should continue?",
+                  options: [
+                    { label: "Alpha", description: "Continue with Alpha." },
+                    { label: "Beta", description: "Continue with Beta." },
+                  ],
+                },
+              ],
+            }),
+          },
+        },
+      ],
+    });
+    finish("tool_calls");
+    return true;
+  }
+  return false;
 }

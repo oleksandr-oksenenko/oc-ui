@@ -1,0 +1,131 @@
+.browser-pane {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  color: var(--oc-text-base);
+  background: var(--oc-surface-canvas);
+}
+
+.browser-empty {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  gap: 12px;
+  overflow: auto;
+}
+
+.browser-empty p {
+  margin: 0;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-metadata-size);
+  line-height: 1.6;
+}
+
+.browser-tabs,
+.browser-navigation,
+.browser-status {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 4px 6px;
+  gap: 4px;
+  border-bottom: 1px solid var(--oc-border-base);
+}
+
+.browser-tab-list {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.browser-tab {
+  display: flex;
+  min-width: 90px;
+  max-width: 170px;
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-muted);
+}
+
+.browser-tab.selected {
+  color: var(--oc-text-strong);
+  background: var(--oc-surface-raised);
+}
+
+.browser-tab-select {
+  min-width: 0;
+  max-width: 140px;
+  overflow: hidden;
+  padding: 5px 6px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--oc-type-metadata-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-navigation input {
+  width: 0;
+  min-width: 0;
+  height: 28px;
+  flex: 1;
+  padding: 0 6px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-base);
+  background: var(--oc-surface-subtle);
+  font-size: var(--oc-type-metadata-size);
+}
+
+.browser-reload {
+  padding: 4px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--oc-type-caption-size);
+}
+
+.browser-reload:disabled {
+  opacity: 0.5;
+}
+
+.browser-viewport {
+  /* Keep Chromium clear of the sidebar resize handle that overlaps its edge. */
+  margin-inline: 4px;
+  min-width: 0;
+  min-height: 80px;
+  flex: 1;
+  background: var(--oc-surface-canvas);
+}
+
+.browser-status {
+  justify-content: space-between;
+  border-top: 1px solid var(--oc-border-base);
+  border-bottom: 0;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+}
+
+.browser-error {
+  flex-shrink: 0;
+  max-height: 120px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border-top: 1px solid var(--oc-border-base);
+  color: var(--oc-text-base);
+  background: var(--oc-surface-raised);
+  font-size: var(--oc-type-metadata-size);
+  overflow-wrap: anywhere;
+}

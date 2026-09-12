@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { $, browser } from "@wdio/globals";
 import type { DesktopApi } from "../../src/shared/desktop-api.ts";
+import { verifyBrowserFlows } from "./browser-flows.ts";
 import { verifyConnectionSettings } from "./connection-flows.ts";
 import { verifyProjectFlows } from "./project-flows.ts";
 import { prepareProjectFixture } from "./project-fixture.ts";
@@ -88,6 +89,15 @@ describe("packaged owned OpenCode", () => {
   it("runs prompts, selections, forms, cancellation, and transcript recovery", async () => {
     await verifyProviderFlows();
     await browser.saveScreenshot(join(artifactDirectory, "provider-flows-complete.png"));
+  });
+
+  it("shares an embedded browser with the agent and releases its native resources", async () => {
+    try {
+      await verifyBrowserFlows(artifactDirectory);
+    } finally {
+      const diff = $("button=Diff");
+      if (await diff.isDisplayed()) await diff.click();
+    }
   });
 
   it("updates diffs and creates and removes a worktree through the UI", async () => {

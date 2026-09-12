@@ -60,13 +60,6 @@ export default defineConfig({
               })),
             }),
           );
-          execFileSync(
-            process.execPath,
-            [resolve(configDirectory, "../../tools/stage-opencode.mjs")],
-            {
-              stdio: "inherit",
-            },
-          );
           // The worker is not an import of main; explicitly watch all of its local inputs.
           for (const input of Object.keys(result.metafile.inputs)) {
             if (!input.includes("node_modules/"))
@@ -81,6 +74,13 @@ export default defineConfig({
             this.addWatchFile(resolve(configDirectory, input));
           }
         },
+        closeBundle() {
+          execFileSync(
+            process.execPath,
+            [resolve(configDirectory, "../../tools/stage-opencode.mjs")],
+            { stdio: "inherit" },
+          );
+        },
       },
     ],
     build: {
@@ -88,6 +88,8 @@ export default defineConfig({
       externalizeDeps: false,
       rollupOptions: {
         input: resolve(configDirectory, "src/main/index.ts"),
+        // Lighthouse reads package-relative assets; stage its package tree beside main.
+        external: ["lighthouse"],
         output: { format: "es" },
       },
     },

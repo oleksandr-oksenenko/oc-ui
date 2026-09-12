@@ -50,7 +50,9 @@ export default defineConfig({
   },
   lint: {
     extends: [effectRecommended],
-    ignorePatterns: ["tools/oxlint/anti-slop/**"],
+    // Vendored native backend retains upstream structure. It remains typechecked,
+    // built and exercised by native acceptance; house-style diagnostics apply to our adapters.
+    ignorePatterns: ["tools/oxlint/anti-slop/**", "apps/desktop/src/main/browser/upstream/**"],
     plugins: ["unicorn", "typescript", "oxc", "import", "promise"],
     categories: {
       correctness: "error",

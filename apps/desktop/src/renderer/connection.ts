@@ -132,7 +132,16 @@ const makeConnection = Effect.fn("Connection.make")(function* (
                       defaultLocation: server.location,
                       effects: owner,
                     });
-                    model = createWorkspaceModel(runtime);
+                    model = createWorkspaceModel(
+                      runtime,
+                      desktop?.browser
+                        ? {
+                            api: desktop.browser,
+                            serverUrl: server.serverUrl,
+                            password: input.password,
+                          }
+                        : undefined,
+                    );
                   });
                   return undefined;
                 },

@@ -113,13 +113,28 @@ function renderToolContent(content: ToolContent, toolID: string, index: number):
       >
         {content.mime}
       </span>
-      <Show when={content.name}>
-        <span
-          data-annotation-block={annotationBlock("tool", toolID, "output", index, "uri")}
-          class="transcript-tool-file-uri"
-        >
-          {content.uri}
-        </span>
+      <Show
+        when={
+          content.mime.startsWith("image/") &&
+          /^data:image\/(?:png|jpeg|webp|gif);base64,/.test(content.uri)
+        }
+        fallback={
+          <Show when={content.name}>
+            <span
+              class="transcript-tool-file-uri"
+              data-annotation-block={annotationBlock("tool", toolID, "output", index, "uri")}
+            >
+              {content.uri}
+            </span>
+          </Show>
+        }
+      >
+        <img
+          class="transcript-tool-image"
+          src={content.uri}
+          alt={content.name ?? "Browser capture"}
+          loading="lazy"
+        />
       </Show>
     </div>
   );

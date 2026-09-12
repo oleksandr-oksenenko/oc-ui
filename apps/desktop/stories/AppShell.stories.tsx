@@ -10,7 +10,7 @@ import { ShellRegion } from "../src/renderer/components/App/ConnectedApp/Shell/S
 import { Titlebar } from "../src/renderer/components/App/ConnectedApp/Shell/Titlebar.tsx";
 import { Workspace } from "../src/renderer/components/App/ConnectedApp/Shell/Workspace.tsx";
 import { ChangesRegion } from "../src/renderer/components/App/ConnectedApp/Changes/ChangesRegion.tsx";
-import { ChangesTitlebarRegion } from "../src/renderer/components/App/ConnectedApp/Changes/ChangesTitlebarRegion.tsx";
+import { ContextTitlebarRegion } from "../src/renderer/components/App/ConnectedApp/Shell/ContextTitlebarRegion.tsx";
 import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
 import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
@@ -84,7 +84,7 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
         panels={panelState}
         selectedTitle={() => "Test coverage"}
         rightControls={
-          <ChangesTitlebarRegion onClose={() => panelState.setRightPanelOpen(false)} />
+          <ContextTitlebarRegion onClose={() => panelState.setRightPanelOpen(false)} />
         }
         sidebar={
           <SessionSidebar

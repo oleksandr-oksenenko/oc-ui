@@ -96,3 +96,39 @@
   background: var(--oc-accent);
   content: "";
 }
+
+.context-view-controls {
+  display: flex;
+  height: 100%;
+  padding-right: 34px;
+}
+
+.context-view-button {
+  min-width: 70px;
+  height: 100%;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--oc-text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--oc-type-tab-size);
+}
+
+.context-view-button[aria-pressed="true"] {
+  border-bottom-color: var(--oc-accent);
+  color: var(--oc-text-strong);
+}
+
+.workspace-context-body {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.workspace-context-body > .browser-pane,
+.workspace-context-body > .context-panel {
+  min-height: 0;
+  flex: 1;
+}

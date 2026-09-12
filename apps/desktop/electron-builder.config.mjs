@@ -10,6 +10,7 @@ export default {
   files: ["out/main/**/*", "out/preload/**/*", "out/renderer/**/*", "!node_modules/**/*"],
   asar: true,
   extraResources: [
+    { from: "src/main/browser/upstream/LICENSE", to: "licenses/opencode-browser-LICENSE" },
     {
       from: "out/opencode-runtime/opencode-worker.mjs",
       to: "opencode-runtime/opencode-worker.mjs",

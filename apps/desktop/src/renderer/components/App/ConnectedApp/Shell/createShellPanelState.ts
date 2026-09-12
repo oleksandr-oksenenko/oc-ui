@@ -9,6 +9,8 @@ type PanelStateOptions = {
 
 type PanelState = {
   readonly mobile: Accessor<boolean>;
+  readonly contextView: Accessor<"diff" | "browser">;
+  readonly setContextView: (view: "diff" | "browser") => void;
   readonly leftSidebarOpen: Accessor<boolean>;
   readonly rightPanelOpen: Accessor<boolean>;
   readonly setLeftSidebarOpen: (open: boolean) => void;
@@ -18,6 +20,7 @@ type PanelState = {
 };
 
 export function createShellPanelState(options: PanelStateOptions = {}): PanelState {
+  const [contextView, setContextView] = createSignal<"diff" | "browser">("diff");
   const [mobile, setMobile] = createSignal(false);
   const [leftSidebarOpen, setLeftSidebarOpenSignal] = createSignal(options.leftSidebarOpen ?? true);
   const [rightPanelOpen, setRightPanelOpenSignal] = createSignal(options.rightPanelOpen ?? false);
@@ -63,6 +66,8 @@ export function createShellPanelState(options: PanelStateOptions = {}): PanelSta
   });
 
   return {
+    contextView,
+    setContextView,
     mobile,
     leftSidebarOpen,
     rightPanelOpen,
