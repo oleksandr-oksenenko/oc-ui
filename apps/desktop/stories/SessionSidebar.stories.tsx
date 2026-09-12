@@ -77,7 +77,6 @@ type StoryOptions = Partial<
   readonly selectedID?: string;
   readonly expandedIDs?: readonly string[];
   readonly runningIDs?: readonly string[];
-  readonly requiresInputIDs?: readonly string[];
   readonly serverStatus?: SessionSidebarProps["serverStatus"];
   readonly serverName?: string;
   readonly autoFocusClose?: boolean;
@@ -149,7 +148,6 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
             ? "ready"
             : "running"
         }
-        requiresInputForSession={(id) => options.requiresInputIDs?.includes(id) ?? false}
         showHeader={options.showHeader}
         autoFocusClose={options.autoFocusClose}
         serverName={options.serverName ?? "Local server"}
@@ -190,6 +188,14 @@ export const ExpandedDeepHierarchy = {
 };
 
 export const FilterableDeepHierarchy = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Visual and accessibility fixture with filtering available for manual exploration. Automated filtering and ancestor visibility are covered by SessionTree tests.",
+      },
+    },
+  },
   render: () =>
     interactiveSidebar(hierarchySessions, {
       selectedID: "level-5",
@@ -249,9 +255,8 @@ export const StatusGlyphs = {
       [
         updated(storySession("idle", "Idle session"), storyNow - day),
         updated(storySession("running", "Running session"), storyNow - 60 * 60 * 1000),
-        updated(storySession("input", "Requires input"), storyNow - 2 * 60 * 60 * 1000),
       ],
-      { runningIDs: ["running"], requiresInputIDs: ["input"] },
+      { runningIDs: ["running"] },
     ),
 };
 

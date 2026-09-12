@@ -24,7 +24,6 @@ export type SessionSidebarProps = {
   readonly canCreate: boolean;
   readonly canDelete: boolean;
   readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
-  readonly requiresInputForSession?: (sessionID: string) => boolean;
   readonly showHeader?: boolean;
   readonly autoFocusClose?: boolean;
   readonly secondaryAction?: JSX.Element;
@@ -116,7 +115,6 @@ export function SessionSidebar(props: SessionSidebarProps) {
           expandedIDs={props.expandedIDs}
           canDelete={props.canDelete}
           deletionStatusForSession={props.deletionStatusForSession}
-          requiresInputForSession={props.requiresInputForSession}
           query={filter()}
           onSelect={props.onSelect}
           onToggleExpanded={props.onToggleExpanded}

@@ -12,7 +12,6 @@ import "./SessionTreeItem.css";
 export type SessionTreeItemProps = {
   readonly session: SessionInfo;
   readonly status: DataSessionStatus;
-  readonly requiresInput?: boolean;
   readonly hasChildren: boolean;
   readonly selected: boolean;
   readonly expanded: boolean;
@@ -26,8 +25,7 @@ export type SessionTreeItemProps = {
 
 export function SessionTreeItem(props: SessionTreeItemProps) {
   const title = () => props.session.title?.trim() || "Untitled session";
-  const statusLabel = () =>
-    props.status === "running" ? "Running" : props.requiresInput ? "Requires input" : "Idle";
+  const statusLabel = () => (props.status === "running" ? "Running" : "Idle");
 
   return (
     <div class="shell-session-tree-item">
@@ -46,7 +44,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
           classList={{
             selected: props.selected,
             "has-children": props.hasChildren,
-            "has-status": props.status === "running" || props.requiresInput === true,
+            "has-status": props.status === "running",
           }}
         >
           <span class="shell-session-disclosure-slot">
@@ -80,15 +78,6 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
                 title={statusLabel()}
               >
                 <Loader width={14} height={14} aria-hidden="true" />
-              </span>
-            ) : props.requiresInput ? (
-              <span
-                class="shell-session-status"
-                data-status="requires-input"
-                aria-hidden="true"
-                title={statusLabel()}
-              >
-                <span class="shell-session-input-required" aria-hidden="true" />
               </span>
             ) : null}
             <IconButton

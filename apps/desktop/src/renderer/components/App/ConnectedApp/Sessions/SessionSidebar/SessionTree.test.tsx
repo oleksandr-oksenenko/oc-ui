@@ -119,30 +119,7 @@ describe("SessionTree", () => {
     dispose();
   });
 
-  it("keeps a session visible when its parent is absent", () => {
-    const host = document.createElement("div");
-    const dispose = render(
-      () => (
-        <SessionTree
-          sessions={[session("orphan", "Orphan", "missing")]}
-          statusForSession={() => "idle"}
-          expandedIDs={[]}
-          canDelete
-          deletionStatusForSession={() => "ready"}
-          onSelect={() => undefined}
-          onToggleExpanded={() => undefined}
-          onDelete={() => undefined}
-        />
-      ),
-      host,
-    );
-
-    expect(host.querySelector('[aria-label="Orphan, Idle"]')).not.toBeNull();
-
-    dispose();
-  });
-
-  it("preserves the ordered runtime list for roots and siblings", () => {
+  it("renders ordered roots and siblings while retaining an orphan", () => {
     const host = document.createElement("div");
     const dispose = render(
       () => (
@@ -151,6 +128,7 @@ describe("SessionTree", () => {
             session("new-root", "New root", undefined, 40),
             session("new-child", "New child", "new-root", 30),
             session("old-child", "Old child", "new-root", 20),
+            session("orphan", "Orphan", "missing", 15),
             session("old-root", "Old root", undefined, 10),
           ]}
           statusForSession={() => "idle"}
@@ -169,7 +147,7 @@ describe("SessionTree", () => {
       [...host.querySelectorAll<HTMLButtonElement>(".shell-session-main")].map(
         (button) => button.textContent,
       ),
-    ).toEqual(["New root", "New child", "Old child", "Old root"]);
+    ).toEqual(["New root", "New child", "Old child", "Orphan", "Old root"]);
 
     dispose();
   });
@@ -261,38 +239,6 @@ describe("SessionTree", () => {
     );
     expect(host.querySelector('[aria-label="Delete Running"]')?.parentElement?.className).toBe(
       "shell-session-row-end",
-    );
-
-    dispose();
-  });
-
-  it("places the future requires-input dot in the shared row-end slot", () => {
-    const host = document.createElement("div");
-    const dispose = render(
-      () => (
-        <SessionTreeItem
-          session={session("input", "Needs input")}
-          status="idle"
-          requiresInput
-          hasChildren={false}
-          selected={false}
-          expanded={false}
-          deleteDisabled={false}
-          onSelect={() => undefined}
-          onToggleExpanded={() => undefined}
-          onDelete={() => undefined}
-        />
-      ),
-      host,
-    );
-
-    const status = host.querySelector('[data-status="requires-input"]');
-    expect(status?.getAttribute("aria-hidden")).toBe("true");
-    expect(host.querySelector('[aria-label="Needs input, Requires input"]')).not.toBeNull();
-    expect(status?.querySelector(".shell-session-input-required")).not.toBeNull();
-    expect(status?.parentElement?.className).toBe("shell-session-row-end");
-    expect(host.querySelector('[aria-label="Delete Needs input"]')?.parentElement).toBe(
-      status?.parentElement,
     );
 
     dispose();
@@ -411,7 +357,7 @@ describe("SessionSidebar", () => {
     dispose();
   });
 
-  it("does not expose a requires-input state", () => {
+  it("labels idle and running sessions from runtime status", () => {
     const host = document.createElement("div");
     const dispose = render(
       () => (
@@ -425,29 +371,8 @@ describe("SessionSidebar", () => {
       host,
     );
 
-    expect(host.textContent).not.toContain("Requires input");
     expect(host.querySelector('[aria-label="Running, Running"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Idle, Idle"]')).not.toBeNull();
-
-    dispose();
-  });
-
-  it("renders requires-input state only when the view contract supplies it", () => {
-    const host = document.createElement("div");
-    const dispose = render(
-      () => (
-        <SessionSidebar
-          {...sidebarProps({
-            sessions: [session("input", "Needs input")],
-            requiresInputForSession: (id) => id === "input",
-          })}
-        />
-      ),
-      host,
-    );
-
-    expect(host.querySelector('[data-status="requires-input"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Needs input, Requires input"]')).not.toBeNull();
 
     dispose();
   });

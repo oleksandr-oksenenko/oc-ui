@@ -16,7 +16,6 @@ export type SessionTreeProps = {
   readonly expandedIDs: readonly string[];
   readonly canDelete: boolean;
   readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
-  readonly requiresInputForSession?: (sessionID: string) => boolean;
   readonly query?: string;
   readonly onSelect: (sessionID: string) => void;
   readonly onToggleExpanded: (sessionID: string) => void;
@@ -48,7 +47,6 @@ export function SessionTree(props: SessionTreeProps) {
           <SessionTreeItem
             session={session()}
             status={props.statusForSession(session().id)}
-            requiresInput={props.requiresInputForSession?.(session().id)}
             hasChildren={node.children.length > 0}
             selected={props.selectedID === session().id}
             expanded={filtering() || isExpanded(session().id)}

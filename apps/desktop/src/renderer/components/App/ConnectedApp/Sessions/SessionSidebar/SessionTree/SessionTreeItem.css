@@ -153,14 +153,6 @@
   color: inherit;
 }
 
-.shell-session-input-required {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--oc-radius-full);
-  background: var(--oc-selection);
-  box-shadow: 0 0 0 2px var(--oc-selection-ring);
-}
-
 .shell-session-delete[data-component="icon-button-v2"] {
   flex: 0 0 20px;
   width: 20px;
