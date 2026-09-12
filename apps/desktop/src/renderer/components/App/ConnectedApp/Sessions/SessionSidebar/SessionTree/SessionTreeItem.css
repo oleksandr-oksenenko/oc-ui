@@ -16,10 +16,6 @@
   color: var(--oc-text-muted);
 }
 
-.shell-session-row.has-status {
-  grid-template-columns: 20px minmax(0, 1fr) 40px;
-}
-
 .shell-session-row:hover {
   color: var(--oc-text-contrast);
 }
@@ -72,15 +68,10 @@
 }
 
 .shell-session-row-end {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  display: grid;
+  place-items: center;
   width: 20px;
   height: 29px;
-}
-
-.shell-session-row.has-status .shell-session-row-end {
-  width: 40px;
 }
 
 .shell-session-disclosure[data-slot="collapsible-trigger"] {
@@ -136,7 +127,7 @@
 }
 
 .shell-session-status {
-  flex: 0 0 20px;
+  grid-area: 1 / 1;
   display: grid;
   width: 20px;
   height: 29px;
@@ -154,7 +145,7 @@
 }
 
 .shell-session-delete[data-component="icon-button-v2"] {
-  flex: 0 0 20px;
+  grid-area: 1 / 1;
   width: 20px;
   height: 20px;
   color: var(--oc-text-faint);
@@ -165,6 +156,11 @@
 
 .shell-session-delete[data-component="icon-button-v2"]:disabled {
   color: var(--oc-text-faint);
+}
+
+.shell-session-row:hover .shell-session-status,
+.shell-session-row:focus-within .shell-session-status {
+  opacity: 0;
 }
 
 .shell-session-row:hover .shell-session-delete[data-component="icon-button-v2"],

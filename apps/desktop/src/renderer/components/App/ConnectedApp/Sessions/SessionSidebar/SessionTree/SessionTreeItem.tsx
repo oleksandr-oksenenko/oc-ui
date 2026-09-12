@@ -44,7 +44,6 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
           classList={{
             selected: props.selected,
             "has-children": props.hasChildren,
-            "has-status": props.status === "running",
           }}
         >
           <span class="shell-session-disclosure-slot">
