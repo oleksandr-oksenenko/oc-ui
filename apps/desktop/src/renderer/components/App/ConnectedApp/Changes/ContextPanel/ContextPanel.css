@@ -120,6 +120,7 @@
 .diff-comparison-select[data-component="select-v2"] {
   min-width: 134px;
   margin-right: auto;
+  font-family: var(--oc-font-sans);
 }
 
 .diff-summary-changes,
