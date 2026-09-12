@@ -7,69 +7,18 @@ const PROMPT = 'textarea[aria-label="Prompt"]';
 
 export async function verifyProviderFlows(): Promise<void> {
   await $('[aria-label="Model: Acceptance Stream"]').waitForClickable({ timeout: TIMEOUT });
-  await send("E2E_STREAM: show a streamed answer.");
-  await browser.waitUntil(
-    async () =>
-      (await $(".transcript-view").getText()).includes("Acceptance first streamed fragment."),
-    { timeout: TIMEOUT },
-  );
-  assert.equal(await $('[aria-label="Stop"]').isDisplayed(), true);
+  // Exercise the delivered worker/provider integration before destroying the renderer.
+  await send("E2E_PACKAGED: complete a request through the bundled server.");
   await waitForText("Acceptance completed with stream.");
   await idle();
   assert.equal(await $(PROMPT).getValue(), "");
 
-  // Model and agent switches use the real server mutation and surface their timeline entries.
-  await $('[aria-label^="Model:"]').click();
-  await $('input[placeholder="Search models"]').setValue("Acceptance Alternate");
-  await $(".composer-model-option=Acceptance Alternate").click();
-  await $('[aria-label="Model: Acceptance Alternate"]').waitForClickable({ timeout: TIMEOUT });
-  await waitForText("Model switched");
-  await send("E2E_ALTERNATE: use the selected model.");
-  await waitForText("Acceptance completed with alternate.");
-  await idle();
-  await $('[aria-label^="Agent:"]').click();
-  await $('[role="option"]*=acceptance-agent').click();
-  await $('[aria-label="Agent: acceptance-agent"]').waitForClickable({ timeout: TIMEOUT });
-  await waitForText("Agent switched");
-  await $('[aria-label^="Agent:"]').click();
-  await $('[role="option"]*=Build').click();
-  await $('[aria-label="Agent: Build"]').waitForClickable({ timeout: TIMEOUT });
-  await $('[aria-label^="Model:"]').click();
-  await $('input[placeholder="Search models"]').setValue("Acceptance Stream");
-  await $(".composer-model-option=Acceptance Stream").click();
-  await $('[aria-label="Model: Acceptance Stream"]').waitForClickable({ timeout: TIMEOUT });
-  // The selector updates before the server timeline; later transcript changes dismiss selection.
-  await waitForText("acceptance/alternate → acceptance/stream");
-  // Closing the picker restores focus asynchronously and dismisses any active annotation action.
-  await browser.waitUntil(() => $('[aria-label="Model: Acceptance Stream"]').isFocused(), {
-    timeout: TIMEOUT,
-    timeoutMsg: "Model picker did not restore focus before annotation selection",
-  });
-
-  await addAnnotation("Acceptance note to discard.");
-  await $('[aria-label="Discard 1 annotations"]').click();
-  await $('[aria-label="Discard 1 annotations"]').waitForExist({ reverse: true });
   await addAnnotation("Acceptance annotation reaches the provider.");
   await send("E2E_ANNOTATION: address my note.");
   await $(".transcript-annotation-trigger").waitForDisplayed({ timeout: TIMEOUT });
   await idle();
   await $(".transcript-annotation-trigger").click();
   await waitForText("Acceptance annotation reaches the provider.");
-  await $(".transcript-annotation-quote").click();
-  await $(".annotation-popover").waitForDisplayed();
-  assert.equal(await $('[aria-label="Remove comment"]').isExisting(), false);
-  await browser.keys("Escape");
-  await $(".annotation-popover").waitForExist({ reverse: true });
-
-  // Changing the selected session disposes its UI subscription, then reloads the persisted transcript.
-  const title = await $('.shell-session-main[aria-current="page"]').getText();
-  await $('.shell-session-main:not([aria-current="page"])').click();
-  await $(".transcript-empty-state").waitForDisplayed({ timeout: TIMEOUT });
-  await $('.shell-session-main:not([aria-current="page"])').click();
-  await waitForText("E2E_STREAM: show a streamed answer.");
-  assert.equal(await $('.shell-session-main[aria-current="page"]').getText(), title);
-  await $(".transcript-annotation-trigger").waitForDisplayed();
-
   const populatedTitle = await $(".titlebar-session-title").getText();
   const workerBeforeReload = await browser.electron.execute(
     (electron) =>
@@ -85,9 +34,11 @@ export async function verifyProviderFlows(): Promise<void> {
   const populatedSession = $(`.shell-session-main*=${populatedTitle}`);
   await populatedSession.waitForClickable({ timeout: TIMEOUT });
   await populatedSession.click();
-  await waitForText("E2E_STREAM: show a streamed answer.");
-  await waitForText("Acceptance completed with alternate.");
+  await waitForText("E2E_PACKAGED: complete a request through the bundled server.");
+  await waitForText("Acceptance completed with stream.");
   await $(".transcript-annotation-trigger").waitForDisplayed();
+  await $(".transcript-annotation-trigger").click();
+  await waitForText("Acceptance annotation reaches the provider.");
   assert.equal(
     await browser.electron.execute(
       (electron) =>
@@ -98,66 +49,20 @@ export async function verifyProviderFlows(): Promise<void> {
   );
   await $('[aria-label="Model: Acceptance Stream"]').waitForClickable({ timeout: TIMEOUT });
 
-  await send("E2E_QUESTION_SUBMIT: ask the real question tool.");
-  await $(".question-form").waitForDisplayed({ timeout: TIMEOUT });
-  await $("label*=Alpha").click();
-  await $('.question-form button[type="submit"]').click();
-  await $(".question-form").waitForExist({ reverse: true, timeout: TIMEOUT });
-  await waitForText("Acceptance question resolved:");
-  await idle();
-  assert.ok(
-    (await providerState()).requests.some(
-      (request) =>
-        request.prompt.includes("E2E_QUESTION_SUBMIT") &&
-        (JSON.stringify(request.toolReply) ?? "").includes("Alpha"),
-    ),
-  );
-
-  await send("E2E_QUESTION_CANCEL: dismiss the real question tool.");
-  await $(".question-form").waitForDisplayed({ timeout: TIMEOUT });
-  await $(".question-form").$("button=Cancel").click();
-  await $(".question-form").waitForExist({ reverse: true, timeout: TIMEOUT });
-  await idle();
-  // beta18866 deliberately ends the step on dismissal, so no provider continuation occurs.
-  // Its persisted tool error distinguishes cancellation from an unrelated session failure.
-  await $(".transcript-tool-error .transcript-tool-header").waitForClickable({ timeout: TIMEOUT });
-  await $(".transcript-tool-error .transcript-tool-header").click();
-  await waitForText("The user dismissed this question");
-
-  await send("E2E_PROVIDER_ERROR: expose the rejected request.");
-  await waitForText("Acceptance provider rejected this prompt");
-  await idle();
-  assert.equal(await $(".transcript-assistant-failed").isExisting(), true);
-
-  const previousCancelled = (await providerState()).cancelledStreams;
-  await send("E2E_STOP: keep streaming until I stop.");
-  await waitForText("Acceptance stream is waiting for cancellation.");
-  await $('[aria-label="Stop"]').waitForClickable();
-  await $('[aria-label="Stop"]').click();
-  await idle();
-  await browser.waitUntil(
-    async () => (await providerState()).cancelledStreams > previousCancelled,
-    { timeout: TIMEOUT, timeoutMsg: "Stop did not abort the provider HTTP stream" },
-  );
   const completedBeforeRecovery = await $$(".transcript-assistant-complete").length;
-  await send("E2E_RECOVER: send after stop and provider failure.");
+  await send("E2E_RECOVER: send after renderer reload.");
   await browser.waitUntil(
     async () => (await $$(".transcript-assistant-complete").length) > completedBeforeRecovery,
     { timeout: TIMEOUT },
   );
   await idle();
   const state = await providerState();
-  assert.ok(
-    state.requests.some(
-      (request) => request.model === "alternate" && request.prompt.includes("E2E_ALTERNATE"),
-    ),
-  );
+  assert.ok(state.requests.some((request) => request.prompt.includes("E2E_RECOVER")));
   assert.ok(
     state.requests.some((request) =>
       request.prompt.includes("Acceptance annotation reaches the provider."),
     ),
   );
-  assert.ok(state.requests.some((request) => request.prompt.includes("E2E_RECOVER")));
   await verifyTransportRecovery();
 }
 
@@ -183,7 +88,7 @@ async function addAnnotation(body: string): Promise<void> {
   await $('textarea[placeholder="Write a question or note…"]').setValue(body);
   await browser.keys("Enter");
   await $(".annotation-inline-editor").waitForExist({ reverse: true });
-  await browser.keys("Escape");
+  await $(PROMPT).click();
   await $(".annotation-popover").waitForExist({ reverse: true });
   await $('[aria-label="Discard 1 annotations"]').waitForDisplayed();
 }
@@ -208,8 +113,7 @@ async function waitForText(text: string): Promise<void> {
 }
 
 async function providerState(): Promise<{
-  cancelledStreams: number;
-  requests: { model: string; prompt: string; toolReply?: unknown }[];
+  requests: { prompt: string }[];
 }> {
   const url = process.env.OCUI_E2E_PROVIDER_URL;
   assert.ok(url, "Packaged runner must supply the local provider URL");

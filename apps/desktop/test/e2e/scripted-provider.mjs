@@ -78,11 +78,14 @@ export async function startScriptedProvider() {
       if (respondBrowser(prompt, toolReply, body, send, finish, requests.length)) return;
       if (respondTool(prompt, toolReply, body, send, finish, requests.length)) return;
       send({ content: "Acceptance first streamed fragment. " });
-      const complete = setTimeout(() => {
+      const complete = () => {
         send({ content: `Acceptance completed with ${body.model}.` });
         finish();
-      }, 1200);
-      response.once("close", () => clearTimeout(complete));
+      };
+      if (prompt.includes("E2E_STREAM")) {
+        const timer = setTimeout(complete, 1200);
+        response.once("close", () => clearTimeout(timer));
+      } else complete();
     } catch (cause) {
       console.error("Acceptance provider failed", cause);
       response.destroy(cause instanceof Error ? cause : undefined);

@@ -21,7 +21,7 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
     await $('[aria-label="Show context"]').click();
   }
   await expectFiles(["working.txt"]);
-  await verifyReviewRemount();
+  await verifyReviewReload();
 
   // This pinned server watches Git HEAD, not arbitrary workspace edits.
   await writeFile(join(projectDirectory, "watcher.txt"), "Watcher invalidation evidence\n");
@@ -41,13 +41,6 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   assert.ok(serverFiles.includes("watcher.txt"));
   await changeBranchAndObserveEvent(projectDirectory);
   await expectFiles(["watcher.txt", "working.txt"]);
-  await $(".diff-comparison-select").click();
-  await $("span=Changes vs main").click();
-  await expectFiles(["branch.txt", "watcher.txt", "working.txt"]);
-  await $(".diff-comparison-select").click();
-  await $("span=Working changes").click();
-  await expectFiles(["watcher.txt", "working.txt"]);
-
   await $('[aria-label="Create session"]').click();
   await $(".new-session-project-trigger").waitForClickable({ timeout: TIMEOUT });
   await $("span=Create a worktree").click();
@@ -73,16 +66,7 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   assert.ok((await git(projectDirectory, "worktree", "list", "--porcelain")).includes(worktree));
   await $("p=No working tree changes").waitForDisplayed({ timeout: TIMEOUT });
 
-  // Cancel must preserve both the session and worktree; reopening must still delete both.
   const deleteButton = ".shell-session-row.selected .shell-session-delete";
-  await $(".shell-session-row.selected").moveTo();
-  await $(deleteButton).waitForClickable({ timeout: TIMEOUT });
-  await $(deleteButton).click();
-  await $(".delete-session-dialog").waitForDisplayed();
-  await browser.keys("Escape");
-  await $(".delete-session-dialog").waitForExist({ reverse: true });
-  assert.equal((await sessions()).length, 3);
-  await access(worktree);
   await $(".shell-session-row.selected").moveTo();
   await $(deleteButton).waitForClickable({ timeout: TIMEOUT });
   await $(deleteButton).click();
@@ -141,7 +125,7 @@ async function expectFiles(files: readonly string[]): Promise<void> {
   assert.equal(await $(".diff-file-unavailable").isExisting(), false);
 }
 
-async function verifyReviewRemount(): Promise<void> {
+async function verifyReviewReload(): Promise<void> {
   const renderedDiff = $(".pierre-diff-host diffs-container");
   const gutter = renderedDiff.shadow$('[data-column-number="1"][data-line-type="change-addition"]');
   await gutter.waitForDisplayed({ timeout: TIMEOUT });
@@ -154,11 +138,6 @@ async function verifyReviewRemount(): Promise<void> {
   await $(editor).setValue(comment);
   await browser.keys("Escape");
   await $(".diff-review-text").waitForDisplayed();
-  await $('[aria-label="Hide context panel"]').click();
-  await $('[aria-label="Show context"]').click();
-  await $(".diff-review-text").waitForDisplayed();
-  assert.equal(await $(".diff-review-text").getText(), comment);
-
   const completedBefore = await browser.execute(
     () => document.querySelectorAll(".transcript-assistant-complete").length,
   );

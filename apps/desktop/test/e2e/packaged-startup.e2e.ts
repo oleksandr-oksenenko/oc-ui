@@ -35,7 +35,7 @@ const artifactDirectory = fileURLToPath(new URL("../../dist/wdio-artifacts/", im
 const projectDirectory = join(userDataPath, "acceptance-project");
 
 describe("packaged owned OpenCode", () => {
-  it("starts lazily and preserves session drafts through dialog and layout changes", async () => {
+  it("starts lazily and creates sessions in the bundled worker default directory", async () => {
     await mkdir(artifactDirectory, { recursive: true });
     const runtime = await browser.electron.execute((electron) => ({
       isPackaged: electron.app.isPackaged,
@@ -47,13 +47,6 @@ describe("packaged owned OpenCode", () => {
     assert.equal(runtime.userData, userDataPath);
     assert.equal(runtime.mockKeychain, true);
     assert.equal(runtime.databasePath, globalThis.process.env.OPENCODE_DB);
-    await Promise.all(
-      Array.from({ length: 24 }, (_, index) =>
-        mkdir(join(projectDirectory, `folder-${String(index).padStart(2, "0")}`), {
-          recursive: true,
-        }),
-      ),
-    );
     await prepareProjectFixture(projectDirectory);
     // The server's default location is its working directory; keep UI-created sessions isolated.
     await browser.electron.execute(
@@ -79,7 +72,7 @@ describe("packaged owned OpenCode", () => {
     await assert.rejects(access(join(userDataPath, "opencode", "service.json")), {
       code: "ENOENT",
     });
-    await verifySessionDrafts();
+    await createBundledSessions();
   });
 
   it("validates connections, saves encrypted credentials, reconnects, and forgets them", async () => {
@@ -87,7 +80,7 @@ describe("packaged owned OpenCode", () => {
     assert.deepEqual(await ownedWorkerPids(), [workerPids[0]]);
   });
 
-  it("runs prompts, selections, forms, cancellation, and transcript recovery", async () => {
+  it("recovers the bundled-server transcript across renderer reload and reconnect", async () => {
     await verifyProviderFlows();
     await browser.saveScreenshot(join(artifactDirectory, "provider-flows-complete.png"));
   });
@@ -183,91 +176,33 @@ describe("packaged owned OpenCode", () => {
   });
 });
 
-async function verifySessionDrafts(): Promise<void> {
+/** Supply the two sessions needed by later native-boundary checks. */
+async function createBundledSessions(): Promise<void> {
   const opener = '[aria-label="Create session"]';
   const submit = '.server-flow-dialog button[type="submit"]';
-  const prompt = 'textarea[aria-label="Prompt"]';
   await $(opener).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
   await $(opener).click();
-  await $('[aria-label="Close new session dialog"]').waitForDisplayed();
-  await browser.keys("Escape");
-  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
-  await browser.waitUntil(() => $(opener).isFocused());
-  await $(opener).click();
   await $("button=Add project").click();
   await $(submit).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
-  assert.equal(await $('.server-directory-browser[aria-busy="true"]').isExisting(), false);
-  const initialDirectory = await $(".server-directory-browser-path").getText();
-  assert.equal(initialDirectory, await realpath(projectDirectory));
-  await $('[aria-label="Browse directory folder-00/"]').click();
-  await browser.waitUntil(async () =>
-    (await $(".server-directory-browser-path").getText()).endsWith("/folder-00"),
+  // The main process sets cwd before starting its worker; browsing must receive that location.
+  assert.equal(
+    await $(".server-directory-browser-path").getText(),
+    await realpath(projectDirectory),
   );
+  await $(submit).click();
+  await $(".new-session-project-trigger").waitForClickable();
+  await $(submit).click();
+  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
+  await $(".transcript-empty-state").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
+  await $(opener).click();
   await $(submit).waitForClickable();
-  assert.equal(await $("p=No child directories.").isDisplayed(), true);
-  await $('[aria-label="Go to parent directory"]').click();
+  await $(submit).click();
+  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
   await browser.waitUntil(
-    async () => (await $(".server-directory-browser-path").getText()) === initialDirectory,
-  );
-  await $(submit).waitForClickable();
-  await resizeWindow(430, 600);
-  assert.equal(
-    await browser.execute(() => {
-      const entries = document.querySelector<HTMLElement>('[aria-label="Directories"]');
-      if (!entries) return false;
-      entries.scrollTop = entries.scrollHeight;
-      return entries.scrollTop > 0 && document.documentElement.scrollWidth <= window.innerWidth;
-    }),
-    true,
-  );
-  assert.equal(await $(submit).isClickable(), true);
-  await browser.saveScreenshot(join(artifactDirectory, "session-directory-narrow.png"));
-  await browser.keys("Escape");
-  await $('[aria-label="Close new session dialog"]').waitForDisplayed();
-  await browser.waitUntil(() => $("button=Add project").isFocused());
-  await $("button=Add project").click();
-  await $(submit).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
-  assert.equal(await $(".server-directory-browser-path").getText(), initialDirectory);
-  await $(submit).click();
-  await $(".new-session-project-trigger").waitForClickable();
-  await $(".new-session-project-trigger").click();
-  await $('input[placeholder="Search projects"]').waitForDisplayed();
-  await browser.keys("Escape");
-  await browser.waitUntil(() => $(".new-session-project-trigger").isFocused());
-  await $(submit).waitForClickable();
-  await $(submit).click();
-  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
-  await $(prompt).waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
-  await $(".transcript-empty-state").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
-  assert.equal(await $(".titlebar-session-title").getText(), "Untitled session");
-  assert.equal(await $('[aria-label="Send"]').isEnabled(), false);
-  const draft = "Keep this draft with its original session.";
-  await $(prompt).setValue(draft);
-  assert.equal(await $(prompt).getValue(), draft);
-  assert.equal(
-    await browser.execute(() => document.documentElement.scrollWidth <= window.innerWidth),
-    true,
-  );
-  await browser.saveScreenshot(join(artifactDirectory, "session-draft-narrow.png"));
-  await resizeWindow(1280, 860);
-  await $('[aria-label="Show sessions"]').click();
-
-  await $(opener).click();
-  await $("button=Add project").click();
-  await $(submit).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
-  await $(submit).click();
-  await $(".new-session-project-trigger").waitForClickable();
-  await $(submit).waitForClickable();
-  await $(submit).click();
-  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
-  await browser.waitUntil(async () => (await $(prompt).getValue()) === "");
-  await $(".transcript-empty-state").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
-  assert.equal(
-    await browser.execute(() => document.querySelectorAll(".shell-session-main").length),
-    2,
+    async () =>
+      (await browser.execute(() => document.querySelectorAll(".shell-session-main").length)) === 2,
   );
   await $('.shell-session-main:not([aria-current="page"])').click();
-  await browser.waitUntil(async () => (await $(prompt).getValue()) === draft);
 }
 
 async function ownedWorkerPids(): Promise<number[]> {

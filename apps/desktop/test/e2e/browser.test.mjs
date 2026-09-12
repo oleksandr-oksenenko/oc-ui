@@ -181,6 +181,57 @@ async function send(text) {
   await expect.poll(() => page.getByLabel("Prompt", { exact: true }).inputValue()).toBe("");
 }
 
+async function providerState() {
+  return (await fetch(`${provider.url}/_state`)).json();
+}
+
+async function sendCompleted(text) {
+  const selectedSession = await page
+    .locator('.shell-session-main[aria-current="page"]')
+    .elementHandle();
+  expect(selectedSession).not.toBeNull();
+  const title = await selectedSession.$eval(".shell-session-title", (node) => node.textContent);
+  const matchingSessions = (await api.session.list({ limit: 100 })).data.filter(
+    (session) => session.title === title,
+  );
+  expect(matchingSessions).toHaveLength(1);
+  const completed = page.locator(".transcript-assistant-complete");
+  const before = await completed.count();
+  const requestsBefore = (await providerState()).requests.length;
+  const admitted = page.waitForResponse(
+    (response) =>
+      /\/session\/[^/]+\/prompt$/u.test(new URL(response.url()).pathname) &&
+      response.request().method() === "POST",
+  );
+  await send(text);
+  const response = await admitted;
+  expect(response.ok(), await response.text()).toBe(true);
+  const sessionID = decodeURIComponent(new URL(response.url()).pathname.split("/").at(-2));
+  expect(sessionID).toBe(matchingSessions[0].id);
+  await expect.poll(() => completed.count()).toBeGreaterThan(before);
+  await expect.poll(() => completed.last().textContent()).toContain("Acceptance completed with");
+  await expect
+    .poll(async () =>
+      (await providerState()).requests
+        .slice(requestsBefore)
+        .some((request) => request.model !== "title" && request.prompt.includes(text)),
+    )
+    .toBe(true);
+  expect(await selectedSession.getAttribute("aria-current")).toBe("page");
+  const messageID = await completed.last().getAttribute("data-message-id");
+  await expect
+    .poll(async () =>
+      (await api.message.list({ sessionID })).data.some(
+        (message) =>
+          message.id === messageID &&
+          message.type === "assistant" &&
+          message.time.completed !== undefined,
+      ),
+    )
+    .toBe(true);
+  await idle();
+}
+
 async function idle() {
   await page.getByRole("button", { name: "Send", exact: true }).waitFor();
   await page.locator(".transcript-working").waitFor({ state: "hidden" });
@@ -264,6 +315,30 @@ function permissionCard(requestID) {
   return page.locator(`[data-permission-request-id="${requestID}"]`);
 }
 
+async function addAnnotation(body) {
+  const block = page.locator(".transcript-assistant-message [data-annotation-block]").first();
+  await block.scrollIntoViewIfNeeded();
+  // Scrolling dismisses selection, so let those events settle before selecting text.
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+  await block.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+  });
+  await page.locator(".annotation-selection-action button").click();
+  await page.getByPlaceholder("Write a question or note…").fill(body);
+  await page.keyboard.press("Enter");
+  await page.locator(".annotation-inline-editor").waitFor({ state: "hidden" });
+  await page.getByLabel("Prompt", { exact: true }).click();
+  await page.locator(".annotation-popover").waitFor({ state: "hidden" });
+  await page.getByLabel("Discard 1 annotations").waitFor();
+}
+
 async function selectSession(title) {
   const session = page.getByRole("button", { name: new RegExp(`^${title},`, "u") });
   await session.waitFor();
@@ -343,30 +418,56 @@ describe.sequential("production browser app", () => {
     await expect.poll(() => opener.evaluate((node) => node === document.activeElement)).toBe(true);
     await opener.click();
     await page.getByRole("button", { name: "Add project", exact: true }).click();
+    const directory = page.locator(".server-directory-browser-path");
+    await expect.poll(() => directory.textContent()).toBe(await realpath(project));
     await page.getByRole("button", { name: "Browse directory folder-00/", exact: true }).click();
     await page.getByText("No child directories.", { exact: true }).waitFor();
     await page.getByLabel("Go to parent directory").click();
+    await expect.poll(() => directory.textContent()).toBe(await realpath(project));
     await page.setViewportSize({ width: 430, height: 600 });
     await page.locator('[aria-label="Directories"]').evaluate((node) => {
       node.scrollTop = node.scrollHeight;
     });
+    expect(
+      await page.locator('[aria-label="Directories"]').evaluate((node) => node.scrollTop),
+    ).toBeGreaterThan(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
     await page.screenshot({ path: join(artifacts, "browser-directory-narrow.png") });
     await page.keyboard.press("Escape");
+    await expect
+      .poll(() =>
+        page
+          .getByRole("button", { name: "Add project", exact: true })
+          .evaluate((node) => node === document.activeElement),
+      )
+      .toBe(true);
     await page.getByRole("button", { name: "Add project", exact: true }).click();
+    await expect.poll(() => directory.textContent()).toBe(await realpath(project));
     await page.locator('.server-flow-dialog button[type="submit"]').click();
+    const projectPicker = page.locator(".new-session-project-trigger");
+    await projectPicker.click();
+    await page.getByPlaceholder("Search projects").waitFor();
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => projectPicker.evaluate((node) => node === document.activeElement))
+      .toBe(true);
     await page.locator('.server-flow-dialog button[type="submit"]').click();
     await page.getByLabel("Prompt", { exact: true }).waitFor();
     await page.locator(".transcript-empty-state").waitFor();
     expect(await page.getByRole("button", { name: "Send", exact: true }).isDisabled()).toBe(true);
+    expect(await page.locator(".titlebar-session-title").textContent()).toBe("Untitled session");
     await page.getByLabel("Prompt", { exact: true }).fill("Independent draft");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
     await page.setViewportSize({ width: 1280, height: 860 });
     await page.getByRole("button", { name: "Show sessions", exact: true }).click();
     await opener.click();
     await page.locator('.server-flow-dialog button[type="submit"]').click();
     await expect.poll(() => page.getByLabel("Prompt", { exact: true }).inputValue()).toBe("");
+    expect(await page.locator(".shell-session-main").count()).toBe(2);
     await page.locator('.shell-session-main:not([aria-current="page"])').click();
     await expect
       .poll(() => page.getByLabel("Prompt", { exact: true }).inputValue())
@@ -386,51 +487,98 @@ describe.sequential("production browser app", () => {
     await page.locator('.question-form button[type="submit"]').click();
     await transcript("Acceptance question resolved:");
     await idle();
+    expect(
+      (await providerState()).requests.some(
+        (request) =>
+          request.prompt.includes("E2E_QUESTION browser") &&
+          (JSON.stringify(request.toolReply) ?? "").includes("Alpha"),
+      ),
+    ).toBe(true);
+    await send("E2E_QUESTION_CANCEL browser");
+    await page.locator(".question-form").waitFor();
+    await page
+      .locator(".question-form")
+      .getByRole("button", { name: "Cancel", exact: true })
+      .click();
+    await page.locator(".question-form").waitFor({ state: "hidden" });
+    await idle();
+    await page.locator(".transcript-tool-error .transcript-tool-header").last().click();
+    await transcript("The user dismissed this question");
     await send("E2E_PROVIDER_ERROR browser");
     await transcript("Acceptance provider rejected this prompt");
     await idle();
+    expect(await page.locator(".transcript-assistant-failed").count()).toBeGreaterThan(0);
+    const previousCancelled = (await providerState()).cancelledStreams;
     await send("E2E_STOP browser");
     await transcript("Acceptance stream is waiting for cancellation.");
     await page.getByRole("button", { name: "Stop", exact: true }).click();
     await idle();
     await expect
       .poll(async () => (await (await fetch(`${provider.url}/_state`)).json()).cancelledStreams)
-      .toBeGreaterThan(0);
+      .toBeGreaterThan(previousCancelled);
     proxy.disconnect();
     await page.getByRole("button", { name: /Select server, .*Reconnecting/u }).waitFor();
     proxy.reconnect();
     await page.getByRole("button", { name: /Select server, .*Connected/u }).waitFor();
-    await send("E2E_RECOVER browser");
-    await transcript("E2E_RECOVER browser");
-    await idle();
+    await sendCompleted("E2E_RECOVER browser");
     expect(errors).toEqual([]);
   });
 
   it("submits annotations and reviews through the same server-backed workspace", async () => {
-    const block = page.locator(".transcript-assistant-message [data-annotation-block]").first();
-    await block.scrollIntoViewIfNeeded();
-    // Scrolling dismisses selection, so let those events settle before selecting text.
-    await page.evaluate(
-      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-    );
-    await block.evaluate((element) => {
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      document.dispatchEvent(new Event("selectionchange"));
-    });
-    await page.locator(".annotation-selection-action button").click();
+    await page.getByLabel(/^Model:/u).click();
+    await page.getByPlaceholder("Search models").fill("Acceptance Alternate");
+    await page
+      .locator(".composer-model-option")
+      .filter({ hasText: "Acceptance Alternate" })
+      .click();
+    await page.getByLabel("Model: Acceptance Alternate", { exact: true }).waitFor();
+    await transcript("Model switched");
+    await sendCompleted("E2E_ALTERNATE browser picker");
+    expect(
+      (await providerState()).requests.some(
+        (request) =>
+          request.model === "alternate" && request.prompt.includes("E2E_ALTERNATE browser picker"),
+      ),
+    ).toBe(true);
+    await page.getByLabel(/^Agent:/u).click();
+    await page.getByRole("option").filter({ hasText: "acceptance-agent" }).click();
+    await page.getByLabel("Agent: acceptance-agent", { exact: true }).waitFor();
+    await transcript("Agent switched");
+    await page.getByLabel(/^Agent:/u).click();
+    await page.getByRole("option", { name: "Build", exact: true }).click();
+    await page.getByLabel("Agent: Build", { exact: true }).waitFor();
+    await page.getByLabel(/^Model:/u).click();
+    await page.getByPlaceholder("Search models").fill("Acceptance Stream");
+    await page.locator(".composer-model-option").filter({ hasText: "Acceptance Stream" }).click();
+    await transcript("acceptance/alternate → acceptance/stream");
+    await expect
+      .poll(() =>
+        page
+          .getByLabel("Model: Acceptance Stream", { exact: true })
+          .evaluate((node) => node === document.activeElement),
+      )
+      .toBe(true);
+    await addAnnotation("Browser note to discard.");
+    await page.getByLabel("Discard 1 annotations").click();
+    await page.getByLabel("Discard 1 annotations").waitFor({ state: "hidden" });
     const annotation = "Browser annotation reaches the provider.";
-    await page.getByPlaceholder("Write a question or note…").fill(annotation);
-    await page.keyboard.press("Enter");
-    await page.keyboard.press("Escape");
-    await page.getByLabel("Discard 1 annotations").waitFor();
-    await send("E2E_ANNOTATION browser");
-    await idle();
+    await addAnnotation(annotation);
+    await sendCompleted("E2E_ANNOTATION browser");
     await page.locator(".transcript-annotation-trigger").click();
     await transcript(annotation);
+    await page.locator(".transcript-annotation-quote").click();
+    await page.locator(".annotation-popover").waitFor();
+    expect(await page.getByLabel("Remove comment", { exact: true }).count()).toBe(0);
+    await page.locator(".titlebar-session-title").click();
+    await page.locator(".annotation-popover").waitFor({ state: "hidden" });
+    const selectedLabel = await page
+      .locator('.shell-session-main[aria-current="page"]')
+      .getAttribute("aria-label");
+    await page.locator('.shell-session-main:not([aria-current="page"])').first().click();
+    await page.locator(".transcript-empty-state").waitFor();
+    await page.getByRole("button", { name: selectedLabel, exact: true }).click();
+    await transcript("E2E_STREAM browser");
+    await page.locator(".transcript-annotation-trigger").waitFor();
     if (await page.getByLabel("Show context", { exact: true }).count())
       await page.getByLabel("Show context", { exact: true }).click();
     const diff = page.locator(".pierre-diff-host diffs-container").first();
@@ -442,8 +590,7 @@ describe.sequential("production browser app", () => {
     await page.getByLabel("Hide context panel").click();
     await page.getByLabel("Show context").click();
     await expect.poll(() => page.locator(".diff-review-text").textContent()).toBe(review);
-    await send("E2E_REVIEW browser");
-    await idle();
+    await sendCompleted("E2E_REVIEW browser");
     await page.locator(".transcript-code-review-trigger").click();
     await expect
       .poll(() => page.locator(".transcript-code-review-content").textContent())
@@ -460,6 +607,13 @@ describe.sequential("production browser app", () => {
   it("refreshes external disk edits without watcher events and preserves unchanged collapsed files", async () => {
     if (await page.getByLabel("Show context", { exact: true }).count())
       await page.getByLabel("Show context", { exact: true }).click();
+    await page.locator(".diff-comparison-select").click();
+    await page.getByText("Changes vs main", { exact: true }).click();
+    await page.locator('.diff-file-name [title="branch.txt"]').waitFor();
+    await page.locator('.diff-file-name [title="working.txt"]').waitFor();
+    await page.locator(".diff-comparison-select").click();
+    await page.getByText("Working changes", { exact: true }).click();
+    await page.locator('.diff-file-name [title="branch.txt"]').waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Collapse working.txt", exact: true }).click();
     let release;
     const pending = new Promise((resolve) => {

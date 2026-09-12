@@ -9,6 +9,11 @@ const TIMEOUT = 30_000;
 export async function verifyTransportRecovery(): Promise<void> {
   const local = await browser.execute(() => window.desktop.localOpenCode.connect());
   if (local.status !== "connected") throw new Error(local.message);
+  const workerPID = await browser.electron.execute(
+    (electron) =>
+      electron.app.getAppMetrics().find((metric) => metric.name === "Ocui built-in OpenCode")?.pid,
+  );
+  assert.ok(workerPID);
   const title = await $(".titlebar-session-title").getText();
   const model = await $('[aria-label^="Model:"]').getAttribute("aria-label");
   const sockets = new Set<Socket>();
@@ -89,6 +94,11 @@ export async function verifyTransportRecovery(): Promise<void> {
       { timeout: TIMEOUT },
     );
     assert.ok((await $(".transcript-view").getText()).includes("E2E_RECOVER"));
+    const providerURL = process.env.OCUI_E2E_PROVIDER_URL;
+    assert.ok(providerURL);
+    const requestsBefore: { requests: unknown[] } = await (
+      await fetch(`${providerURL}/_state`)
+    ).json();
     const completed = await $$(".transcript-assistant-complete").length;
     await $('textarea[aria-label="Prompt"]').setValue(
       "E2E_TRANSPORT_RECOVER: send after the connection returns.",
@@ -100,6 +110,25 @@ export async function verifyTransportRecovery(): Promise<void> {
       { timeout: TIMEOUT },
     );
     await $('[aria-label="Send"]').waitForDisplayed({ timeout: TIMEOUT });
+    const state: { requests: { model: string; prompt: string }[] } = await (
+      await fetch(`${providerURL}/_state`)
+    ).json();
+    assert.ok(
+      state.requests
+        .slice(requestsBefore.requests.length)
+        .some(
+          (request) =>
+            request.model !== "title" && request.prompt.includes("E2E_TRANSPORT_RECOVER"),
+        ),
+    );
+    assert.equal(
+      await browser.electron.execute(
+        (electron) =>
+          electron.app.getAppMetrics().find((metric) => metric.name === "Ocui built-in OpenCode")
+            ?.pid,
+      ),
+      workerPID,
+    );
   } finally {
     offline = false;
     try {
