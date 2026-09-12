@@ -2,17 +2,11 @@
   min-width: 0;
 }
 
-.shell-session-entry {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
-  align-items: center;
-}
-
 .shell-session-row {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 20px;
+  grid-template-columns: 12px minmax(0, 1fr) 20px;
   align-items: center;
   width: 100%;
   height: 29px;
@@ -95,7 +89,7 @@
   line-height: 0;
 }
 
-.shell-session-entry
+.shell-session-row
   .shell-session-disclosure[data-slot="collapsible-trigger"]
   [data-slot="collapsible-arrow"] {
   display: grid;
