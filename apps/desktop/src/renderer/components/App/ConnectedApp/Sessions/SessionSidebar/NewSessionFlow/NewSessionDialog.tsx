@@ -4,7 +4,7 @@ import {
   DialogBody,
   DialogFooter,
   DialogHeader,
-  DialogTitleGroup,
+  DialogTitle,
 } from "@opencode-ai/ui/dialog";
 import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { Icon } from "@opencode-ai/ui/icon";
@@ -77,21 +77,6 @@ function projectSelectionUnavailable(state: NewSessionDialogState): boolean {
   );
 }
 
-function dispatchSubmit(props: NewSessionDialogProps, state: NewSessionDialogState): void {
-  const projectID = state.selectedProjectID;
-  if (!projectID) return;
-
-  if (state.error?.kind === "session") {
-    props.onRetry();
-    return;
-  }
-  if (state.mode === "worktree") {
-    props.onCreateWorktree();
-    return;
-  }
-  props.onUseProject(projectID);
-}
-
 function focusDialogState(
   error: NewSessionDialogError | undefined,
   projectPicker: HTMLElement | undefined,
@@ -133,7 +118,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
       return "Close";
     }
     if (currentError()?.kind === "session") return "Retry creating session";
-    return props.state.mode === "worktree" ? "Create worktree" : "Create session";
+    return "Start locally";
   };
 
   const primaryVariant = () => {
@@ -145,17 +130,35 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
     return "contrast" as const;
   };
 
-  const submit = (event: SubmitEvent) => {
-    event.preventDefault();
-    if (busy() || projectSelectionUnavailable(props.state) || submitted()) return;
-    if (!props.state.selectedProjectID) return;
-    setSubmitted(true);
-    if (props.state.error?.kind === "worktree") {
+  const submit = (mode: NewSessionLocationMode = "direct") => {
+    if (blocked() || projectSelectionUnavailable(props.state)) return;
+    const state = props.state;
+    const projectID = state.selectedProjectID;
+    if (!projectID) return;
+    if (state.error?.kind === "worktree") {
       dialog.close();
       return;
     }
-    dispatchSubmit(props, props.state);
+    if (state.error?.kind === "session") {
+      setSubmitted(true);
+      props.onRetry();
+      return;
+    }
+    if (
+      mode === "worktree" &&
+      state.projects.find((project) => project.id === projectID)?.vcs !== "git"
+    )
+      return;
+    props.onModeChange(mode);
+    setSubmitted(true);
+    if (mode === "worktree") props.onCreateWorktree();
+    else props.onUseProject(projectID);
   };
+
+  const canCreateWorktree = () =>
+    props.state.projects.find((project) => project.id === props.state.selectedProjectID)?.vcs ===
+    "git";
+  const recovery = () => currentError()?.kind === "session" || currentError()?.kind === "worktree";
 
   createEffect(() => {
     const nextError = currentError();
@@ -177,17 +180,27 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
   createEffect(() => props.onDismissBlockedChange?.(blocked()));
 
   return (
-    <Dialog size="large" containerClass="server-flow-dialog">
+    <Dialog size="normal" containerClass="server-flow-dialog new-session-dialog">
       <form
         class="server-flow-dialog-content"
         aria-busy={busy() ? "true" : undefined}
-        onSubmit={submit}
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
       >
         <DialogHeader closeLabel="Close new session dialog" hideClose={blocked()}>
-          <DialogTitleGroup
-            title="New session"
-            description="Choose a project and where its session should run."
-          />
+          <DialogTitle>New session</DialogTitle>
+          <Button
+            type="button"
+            size="small"
+            variant="outline"
+            disabled={blocked()}
+            onClick={props.onAddProject}
+          >
+            <Icon name="plus-small" />
+            Add project
+          </Button>
         </DialogHeader>
 
         <DialogBody class="server-flow-dialog-body">
@@ -198,9 +211,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
             onReady={(element) => {
               projectPicker = element;
             }}
-            onAddProject={props.onAddProject}
             onProjectChange={props.onProjectChange}
-            onModeChange={props.onModeChange}
             onRetryProjects={props.onRetryProjects}
           />
 
@@ -254,17 +265,39 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
               Cancel
             </Button>
           </Show>
-          <Button
-            type="submit"
-            size="normal"
-            variant={primaryVariant()}
-            disabled={blocked() || projectSelectionUnavailable(props.state)}
+          <Show
+            when={!busy() && !recovery()}
+            fallback={
+              <Button
+                type="submit"
+                size="normal"
+                variant={primaryVariant()}
+                disabled={blocked() || projectSelectionUnavailable(props.state)}
+              >
+                {primaryLabel()}
+              </Button>
+            }
           >
-            <Show when={busy()}>
-              <Loader width={16} height={16} />
-            </Show>
-            {primaryLabel()}
-          </Button>
+            <Button
+              type="submit"
+              size="normal"
+              variant="outline"
+              disabled={blocked() || projectSelectionUnavailable(props.state)}
+            >
+              Start locally
+            </Button>
+            <Button
+              type="button"
+              size="normal"
+              variant="contrast"
+              disabled={
+                blocked() || projectSelectionUnavailable(props.state) || !canCreateWorktree()
+              }
+              onClick={() => submit("worktree")}
+            >
+              Start in worktree
+            </Button>
+          </Show>
         </DialogFooter>
       </form>
     </Dialog>

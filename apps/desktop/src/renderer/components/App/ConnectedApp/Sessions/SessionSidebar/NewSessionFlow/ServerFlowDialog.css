@@ -57,42 +57,10 @@
   border-top: 1px solid var(--oc-border-base);
 }
 
-.new-session-project-picker,
-.new-session-location-choice {
+.new-session-project-picker {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-.new-session-project-picker [data-slot="radio-v2-label"],
-.new-session-location-choice [data-slot="radio-v2-label"] {
-  color: var(--oc-text-muted);
-}
-
-.new-session-project-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.new-session-project-heading h3,
-.new-session-project-heading p,
-.new-session-field-error {
-  margin: 0;
-}
-
-.new-session-project-heading h3 {
-  font-size: var(--oc-type-body-size);
-  font-weight: var(--oc-type-control-weight);
-  line-height: var(--oc-type-body-line-height);
-}
-
-.new-session-project-heading p {
-  margin-top: 2px;
-  font-size: var(--oc-type-metadata-size);
-  line-height: var(--oc-type-metadata-line-height);
-  color: var(--oc-text-muted);
 }
 
 .new-session-project-trigger {
@@ -296,6 +264,7 @@
 }
 
 .new-session-field-error {
+  margin: 0;
   color: var(--oc-status-danger);
   font-size: var(--oc-type-status-size);
   line-height: var(--oc-type-status-line-height);
@@ -327,12 +296,10 @@
     max-height: calc(100vh - 16px);
   }
 
-  .server-flow-dialog [data-slot="dialog-footer"],
-  .new-session-project-heading {
+  .server-flow-dialog [data-slot="dialog-footer"] {
     flex-wrap: wrap;
   }
 
-  .new-session-project-heading button,
   .server-flow-dialog [data-slot="dialog-footer"] button {
     flex: 1 1 160px;
     height: auto;
@@ -340,4 +307,20 @@
     padding-block: 5px;
     white-space: normal;
   }
+}
+
+[data-component="dialog-v2"] > [data-slot="dialog-container"].new-session-dialog {
+  width: min(480px, calc(100vw - 32px));
+  height: auto;
+  max-height: calc(100vh - 32px);
+}
+
+.new-session-dialog [data-slot="dialog-content"] [data-slot="dialog-header"] {
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.new-session-dialog [data-slot="dialog-footer"] {
+  flex-wrap: wrap;
 }

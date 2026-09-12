@@ -43,8 +43,7 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   await expectFiles(["watcher.txt", "working.txt"]);
   await $('[aria-label="Create session"]').click();
   await $(".new-session-project-trigger").waitForClickable({ timeout: TIMEOUT });
-  await $("span=Create a worktree").click();
-  await $('.server-flow-dialog button[type="submit"]').click();
+  await $("button=Start in worktree").click();
   await browser.waitUntil(async () => (await sessions()).length === 3, {
     timeout: TIMEOUT,
     timeoutMsg: "The UI did not create a real worktree session",

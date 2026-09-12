@@ -3,10 +3,9 @@ import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { List } from "@opencode-ai/ui/list";
 import { Loader } from "@opencode-ai/ui/loader";
-import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
 import { Show, createEffect, createMemo, createSignal, createUniqueId } from "solid-js";
 
-import type { NewSessionDialogState, NewSessionLocationMode } from "../NewSessionDialog.tsx";
+import type { NewSessionDialogState } from "../NewSessionDialog.tsx";
 
 type ProjectSelectionState = NewSessionDialogState;
 type ProjectOption = {
@@ -26,9 +25,7 @@ export type ProjectSelectionProps = {
   readonly disabled: boolean;
   readonly validationError?: string;
   readonly onReady: (element: HTMLElement) => void;
-  readonly onAddProject: () => void;
   readonly onProjectChange: (projectID: string) => void;
-  readonly onModeChange: (mode: NewSessionLocationMode) => void;
   readonly onRetryProjects: () => void;
 };
 
@@ -68,23 +65,6 @@ export function ProjectSelection(props: ProjectSelectionProps) {
   return (
     <>
       <section ref={(element) => props.onReady(element)} class="new-session-project-picker">
-        <div class="new-session-project-heading">
-          <div>
-            <h3>Project</h3>
-            <p>Projects are directories on the connected OpenCode server.</p>
-          </div>
-          <Button
-            type="button"
-            size="normal"
-            variant="outline"
-            disabled={props.disabled}
-            onClick={props.onAddProject}
-          >
-            <Icon name="plus-small" />
-            Add project
-          </Button>
-        </div>
-
         <Show when={props.state.projectsLoading}>
           <output class="server-directory-state">
             <Loader width={16} height={16} />
@@ -198,30 +178,6 @@ export function ProjectSelection(props: ProjectSelectionProps) {
           )}
         </Show>
       </section>
-
-      <Show when={selectedProject()?.vcs === "git"}>
-        <section class="new-session-location-choice">
-          <RadioGroup
-            label="Where should the session run?"
-            value={props.state.mode}
-            disabled={props.disabled}
-            onChange={(value) => {
-              if (value === "direct" || value === "worktree") props.onModeChange(value);
-            }}
-          >
-            <RadioItem
-              value="direct"
-              label="Use the project directory"
-              description="Commands and changes happen directly in the project directory."
-            />
-            <RadioItem
-              value="worktree"
-              label="Create a worktree"
-              description="Start an isolated worktree from origin's default branch."
-            />
-          </RadioGroup>
-        </section>
-      </Show>
     </>
   );
 }

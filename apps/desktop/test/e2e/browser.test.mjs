@@ -801,8 +801,7 @@ describe.sequential("production browser app", () => {
     await page.screenshot({ path: join(artifacts, "browser-connected.png") });
     const before = await git(project, "worktree", "list", "--porcelain");
     await page.getByLabel("Create session", { exact: true }).click();
-    await page.getByText("Create a worktree", { exact: true }).click();
-    await page.locator('.server-flow-dialog button[type="submit"]').click();
+    await page.getByRole("button", { name: "Start in worktree", exact: true }).click();
     await page.getByText("No working tree changes", { exact: true }).waitFor();
     const after = await git(project, "worktree", "list", "--porcelain");
     const worktree = after

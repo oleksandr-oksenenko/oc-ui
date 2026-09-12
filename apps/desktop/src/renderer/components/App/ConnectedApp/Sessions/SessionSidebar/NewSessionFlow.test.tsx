@@ -461,8 +461,7 @@ describe("NewSessionFlow", () => {
     const mounted = mount(fake.runtime);
     await flush();
 
-    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    submit(mounted.root);
+    clickButton(mounted.root, "Start in worktree");
     await flush();
     await vi.waitFor(() =>
       expect(mounted.root.textContent).toContain("/srv/worktrees/feature-one"),
@@ -476,7 +475,7 @@ describe("NewSessionFlow", () => {
     await flushDialogClose();
 
     expect(mounted.root.textContent).not.toContain("/srv/worktrees/feature-one");
-    expect(mounted.root.textContent).toContain("Create session");
+    expect(mounted.root.textContent).toContain("Start locally");
     submit(mounted.root);
     await flushDialogClose();
     expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-2");
@@ -707,8 +706,7 @@ describe("NewSessionFlow", () => {
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
     const mounted = mount(fake.runtime);
     await flush();
-    mounted.root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    submit(mounted.root);
+    clickButton(mounted.root, "Start in worktree");
     mounted.unmountFlow();
     pending.resolve({ location: { directory: "/srv/worktrees/late" } });
     await flushDialogClose();

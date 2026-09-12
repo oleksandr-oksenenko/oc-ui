@@ -128,15 +128,14 @@ export const ChooseProjectAndLocation: Story = {
     });
 
     await step("Choose a worktree and create the session", async () => {
-      await userEvent.click(dialogCanvas.getByRole("radio", { name: /^Create a worktree\b/ }));
-      await userEvent.click(await dialogCanvas.findByRole("button", { name: "Create worktree" }));
+      await userEvent.click(await dialogCanvas.findByRole("button", { name: "Start in worktree" }));
       await expect(createWorktree).toHaveBeenCalledOnce();
       await expect(createWorktree).toHaveBeenCalledWith();
     });
   },
 };
 
-export const WorktreeSelected = { render: () => interactiveProjectSelection("worktree") };
+export const Default = { render: () => interactiveProjectSelection() };
 
 export const NonGitProject = {
   render: () => staticDialog({ projects, selectedProjectID: "docs", mode: "direct" }),

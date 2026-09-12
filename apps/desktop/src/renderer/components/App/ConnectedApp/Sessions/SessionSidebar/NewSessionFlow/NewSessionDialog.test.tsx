@@ -90,7 +90,7 @@ async function flush(): Promise<void> {
 }
 
 describe("NewSessionDialog", () => {
-  it("reports project and mode changes and opens Add Project", async () => {
+  it("reports project changes and opens Add Project", async () => {
     const mounted = mount(() => ({
       projects,
       selectedProjectID: "oc-ui",
@@ -102,8 +102,6 @@ describe("NewSessionDialog", () => {
       .find((button) => button.textContent?.includes("Add project"))
       ?.click();
     expect(mounted.actions.onAddProject).toHaveBeenCalledOnce();
-    root.querySelector<HTMLInputElement>('input[value="worktree"]')?.click();
-    expect(mounted.actions.onModeChange).toHaveBeenCalledWith("worktree");
     root.querySelector<HTMLButtonElement>(".new-session-project-trigger")?.click();
     await flush();
     const picker = document.getElementById(
@@ -120,7 +118,7 @@ describe("NewSessionDialog", () => {
     const mounted = mount(() => ({
       projects,
       selectedProjectID: "oc-ui",
-      mode: "direct",
+      mode: "worktree",
     }));
     await flush();
     const form = mounted.root.querySelector("form");
@@ -135,11 +133,35 @@ describe("NewSessionDialog", () => {
     const mounted = mount(() => ({
       projects,
       selectedProjectID: "oc-ui",
-      mode: "worktree",
+      mode: "direct",
     }));
     await flush();
-    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    const worktree = [...mounted.root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Start in worktree",
+    );
+    worktree?.click();
+    worktree?.click();
+    expect(mounted.actions.onUseProject).not.toHaveBeenCalled();
+    expect(mounted.actions.onModeChange).toHaveBeenCalledWith("worktree");
     expect(mounted.actions.onCreateWorktree).toHaveBeenCalledOnce();
+    mounted.dispose();
+  });
+
+  it("disables worktree creation for non-Git projects while allowing local sessions", async () => {
+    const mounted = mount(() => ({
+      projects: [{ id: "docs", name: "Docs", location: { directory: "/srv/docs" } }],
+      selectedProjectID: "docs",
+      mode: "direct",
+    }));
+    await flush();
+    const worktree = [...mounted.root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Start in worktree",
+    );
+    expect(worktree?.disabled).toBe(true);
+    worktree?.click();
+    expect(mounted.actions.onCreateWorktree).not.toHaveBeenCalled();
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    expect(mounted.actions.onUseProject).toHaveBeenCalledWith("docs");
     mounted.dispose();
   });
 
