@@ -64,7 +64,11 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             variant="ghost-muted"
             aria-current={props.selected ? "page" : undefined}
             aria-label={`${title()}, ${statusLabel()}`}
-            onClick={() => props.onSelect(props.session.id)}
+            aria-expanded={props.hasChildren ? props.expanded : undefined}
+            onClick={() => {
+              if (props.hasChildren) props.onToggleExpanded(props.session.id);
+              props.onSelect(props.session.id);
+            }}
           >
             <span class="shell-session-title">{title()}</span>
           </Button>

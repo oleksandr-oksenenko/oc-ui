@@ -1,5 +1,7 @@
+/* oxlint-disable effecttsgo/async-function -- Storybook interaction tests use Promise APIs. */
 import { createSignal } from "solid-js";
 import type { SessionInfo } from "@opencode-ai/client";
+import { expect, userEvent, within } from "storybook/test";
 import type { Meta } from "storybook-solidjs-vite";
 
 import {
@@ -214,6 +216,24 @@ export const DisclosureGutterAlignment = {
       height: "320px",
       width: "220px",
     }),
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    const parent = canvas.getByRole("button", { name: "Casual check-in, Idle" });
+    await userEvent.click(parent);
+    await expect(parent).toHaveAttribute("aria-current", "page");
+    await expect(parent).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      canvas.queryByRole("button", { name: "Verify test change file, Idle" }),
+    ).not.toBeInTheDocument();
+    await userEvent.keyboard("{Enter}");
+    await expect(parent).toHaveAttribute("aria-expanded", "true");
+    const child = canvas.getByRole("button", { name: "Verify test change file, Idle" });
+    await expect(child).toBeVisible();
+    await userEvent.click(child);
+    await expect(child).toHaveAttribute("aria-current", "page");
+    await expect(child).toHaveAttribute("aria-expanded", "false");
+    await expect(parent).toHaveAttribute("aria-expanded", "true");
+  },
 };
 
 export const Loading = {

@@ -90,8 +90,9 @@ describe("SessionTree", () => {
     dispose();
   });
 
-  it("uses the OpenCode collapsible disclosure for nested sessions", () => {
+  it("selects a parent and toggles its children from the title", () => {
     const onToggleExpanded = vi.fn<(sessionID: string) => void>();
+    const onSelect = vi.fn<(sessionID: string) => void>();
     const { host, dispose } = mount(() => (
       <SessionTreeItem
         session={session("parent", "Parent")}
@@ -100,7 +101,7 @@ describe("SessionTree", () => {
         selected
         expanded
         deleteDisabled={false}
-        onSelect={() => undefined}
+        onSelect={onSelect}
         onToggleExpanded={onToggleExpanded}
         onDelete={() => undefined}
       >
@@ -108,13 +109,19 @@ describe("SessionTree", () => {
       </SessionTreeItem>
     ));
 
-    const disclosure = host.querySelector<HTMLButtonElement>('[aria-label="Collapse Parent"]');
-    expect(disclosure?.getAttribute("data-slot")).toBe("collapsible-trigger");
-    expect(disclosure?.querySelector('[data-slot="collapsible-arrow"]')).not.toBeNull();
+    const disclosure = host.querySelector<HTMLButtonElement>('[aria-label="Parent, Idle"]');
+    expect(disclosure?.getAttribute("aria-expanded")).toBe("true");
+
     expect(host.textContent).toContain("Child");
 
     disclosure?.click();
-    expect(onToggleExpanded).toHaveBeenCalledWith("parent");
+    expect(onToggleExpanded).toHaveBeenCalledExactlyOnceWith("parent");
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("parent");
+    onSelect.mockClear();
+    onToggleExpanded.mockClear();
+    host.querySelector<HTMLButtonElement>('[aria-label="Collapse Parent"]')?.click();
+    expect(onToggleExpanded).toHaveBeenCalledExactlyOnceWith("parent");
+    expect(onSelect).not.toHaveBeenCalled();
 
     dispose();
   });
@@ -206,7 +213,7 @@ describe("SessionTree", () => {
     dispose();
   });
 
-  it("reserves the disclosure gutter for leaf titles and shows runtime status", () => {
+  it("shows runtime status without an expansion control for leaf titles", () => {
     const host = document.createElement("div");
     const dispose = render(
       () => (
@@ -228,7 +235,9 @@ describe("SessionTree", () => {
     const row = host.querySelector(".shell-session-row");
     expect(row?.classList.contains("selected")).toBe(true);
     expect(row?.classList.contains("has-children")).toBe(false);
-    expect(host.querySelector(".shell-session-disclosure-slot")).not.toBeNull();
+    expect(
+      host.querySelector('[aria-label="Running, Running"]')?.hasAttribute("aria-expanded"),
+    ).toBe(false);
     expect(host.querySelector(".shell-session-disclosure")).toBeNull();
     expect(host.querySelector(".shell-session-status")?.getAttribute("data-status")).toBe(
       "running",
@@ -325,8 +334,12 @@ describe("SessionSidebar", () => {
     expect(host.querySelector('[aria-label="Deep MATCH result, Idle"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Personal notes, Idle"]')).toBeNull();
     expect(host.querySelector('[aria-label="Unrelated child, Idle"]')).toBeNull();
-    expect(host.querySelector('[aria-label="Collapse Project work"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Collapse Architecture notes"]')).not.toBeNull();
+    expect(
+      host.querySelector('[aria-label="Project work, Idle"]')?.getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(
+      host.querySelector('[aria-label="Architecture notes, Idle"]')?.getAttribute("aria-expanded"),
+    ).toBe("true");
 
     dispose();
   });
@@ -349,10 +362,14 @@ describe("SessionSidebar", () => {
 
     inputEvent(filter!, "matching");
     expect(host.querySelector('[aria-label="Matching child, Idle"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Collapse Root"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Root, Idle"]')?.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
 
     inputEvent(filter!, "");
-    expect(host.querySelector('[aria-label="Expand Root"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Root, Idle"]')?.getAttribute("aria-expanded")).toBe(
+      "false",
+    );
 
     dispose();
   });
