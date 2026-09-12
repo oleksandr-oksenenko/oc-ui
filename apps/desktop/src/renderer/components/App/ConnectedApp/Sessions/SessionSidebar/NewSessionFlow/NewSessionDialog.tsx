@@ -118,7 +118,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
       return "Close";
     }
     if (currentError()?.kind === "session") return "Retry creating session";
-    return "Start locally";
+    return "Use project folder";
   };
 
   const primaryVariant = () => {
@@ -264,7 +264,13 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
 
         <DialogFooter>
           <Show when={!blocked()}>
-            <Button type="button" size="normal" variant="outline" onClick={() => dialog.close()}>
+            <Button
+              class="new-session-cancel"
+              type="button"
+              size="normal"
+              variant="outline"
+              onClick={() => dialog.close()}
+            >
               Cancel
             </Button>
           </Show>
@@ -287,7 +293,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
               variant="outline"
               disabled={blocked() || projectSelectionUnavailable(props.state)}
             >
-              Start locally
+              Use project folder
             </Button>
             <Button
               type="button"

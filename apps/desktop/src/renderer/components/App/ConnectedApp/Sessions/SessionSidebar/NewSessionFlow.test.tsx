@@ -475,7 +475,7 @@ describe("NewSessionFlow", () => {
     await flushDialogClose();
 
     expect(mounted.root.textContent).not.toContain("/srv/worktrees/feature-one");
-    expect(mounted.root.textContent).toContain("Start locally");
+    expect(mounted.root.textContent).toContain("Use project folder");
     submit(mounted.root);
     await flushDialogClose();
     expect(mounted.onSessionCreated).toHaveBeenCalledWith("session-2");

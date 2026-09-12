@@ -310,7 +310,7 @@
 }
 
 [data-component="dialog-v2"] > [data-slot="dialog-container"].new-session-dialog {
-  width: min(480px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   height: auto;
   max-height: calc(100vh - 32px);
 }
@@ -325,17 +325,21 @@
   flex-wrap: wrap;
 }
 
+.new-session-cancel {
+  margin-right: auto;
+}
+
 .new-session-project-row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
 }
 
 .new-session-project-row .new-session-project-picker {
-  flex: 1;
   min-width: 0;
 }
 
 .new-session-add-project {
-  flex: none;
+  align-self: flex-start;
 }
