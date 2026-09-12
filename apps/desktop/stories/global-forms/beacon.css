@@ -31,7 +31,7 @@
   margin: 0;
   color: var(--oc-text-base);
   font-size: var(--oc-type-heading-size);
-  font-weight: 600;
+  font-weight: var(--oc-type-heading-weight);
 }
 
 .global-forms-beacon-home p {
@@ -39,7 +39,7 @@
   margin: 8px 0 0;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-metadata-size);
-  line-height: 1.5;
+  line-height: var(--oc-type-metadata-line-height);
 }
 
 .global-forms-beacon-home p.global-forms-beacon-story-note {
@@ -82,7 +82,7 @@
   max-width: 430px;
   color: var(--oc-text-faint);
   font-size: var(--oc-type-kicker-size);
-  line-height: 1.4;
+  line-height: var(--oc-type-kicker-line-height);
 }
 
 @media (width <= 520px) {

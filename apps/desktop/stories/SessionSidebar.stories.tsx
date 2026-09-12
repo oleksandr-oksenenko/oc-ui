@@ -129,7 +129,7 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
       style={{
         width: options.width ?? "220px",
         height: options.height ?? "560px",
-        background: "#090909",
+        background: "var(--oc-surface-raised)",
       }}
     >
       <SessionSidebar
@@ -237,7 +237,7 @@ export const RunningWithDelete = {
 
 export const HeaderHiddenMobile = {
   render: () => (
-    <div style={{ width: "320px", height: "640px", background: "#090909" }}>
+    <div style={{ width: "320px", height: "640px", background: "var(--oc-surface-raised)" }}>
       {interactiveSidebar(flatSessions, { showHeader: false })}
     </div>
   ),

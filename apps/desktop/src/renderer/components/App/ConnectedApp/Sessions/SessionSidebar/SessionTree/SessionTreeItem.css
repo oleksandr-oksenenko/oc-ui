@@ -13,7 +13,7 @@
   min-width: 0;
   padding: 0 3px 0 1px;
   border-radius: var(--oc-radius);
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
 }
 
 .shell-session-row.has-status {
@@ -25,7 +25,7 @@
 }
 
 .shell-session-row.selected {
-  color: var(--v2-text-text-contrast);
+  color: var(--oc-text-contrast);
   background: var(--oc-surface-selected);
 }
 
@@ -54,9 +54,6 @@
   font-size: var(--oc-type-control-size);
   text-align: left;
   cursor: pointer;
-
-  --v2-overlay-simple-overlay-hover: transparent;
-  --v2-overlay-simple-overlay-pressed: transparent;
 }
 
 .shell-session-main:hover {

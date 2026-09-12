@@ -32,7 +32,7 @@ const frameStyle: JSX.CSSProperties = {
   "justify-items": "center",
   overflow: "auto",
   padding: "32px",
-  background: "#050506",
+  background: "var(--oc-surface-subtle)",
 };
 
 const narrowFrameStyle: JSX.CSSProperties = {
@@ -175,7 +175,7 @@ export const NarrowLongContent: Story = {
       },
     },
   },
-  parameters: { viewport: { defaultViewport: "mobile" } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: (args) => (
     <main style={narrowFrameStyle}>
       <PermissionRequestCard {...args} />

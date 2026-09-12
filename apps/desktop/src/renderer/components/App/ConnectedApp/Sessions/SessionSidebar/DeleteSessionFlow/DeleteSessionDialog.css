@@ -1,4 +1,4 @@
-.delete-session-dialog [data-slot="dialog-container"] {
+.delete-session-dialog[data-slot="dialog-container"] {
   width: min(calc(100vw - 32px), 440px);
 }
 
@@ -12,9 +12,9 @@
 .delete-session-dialog-body {
   gap: 8px;
   padding: 0 16px 4px;
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
   font-size: var(--oc-type-body-size);
-  line-height: 20px;
+  line-height: var(--oc-type-body-line-height);
 }
 
 .delete-session-dialog-body p {
@@ -22,7 +22,7 @@
 }
 
 .delete-session-dialog-body code {
-  color: var(--v2-text-text-base);
+  color: var(--oc-text-base);
   font-family: var(--oc-font-mono);
   overflow-wrap: anywhere;
 }

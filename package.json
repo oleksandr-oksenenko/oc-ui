@@ -15,7 +15,7 @@
     "format": "vp fmt",
     "knip": "knip",
     "lint": "vp lint && pnpm lint:styles",
-    "lint:styles": "stylelint \"apps/**/*.css\"",
+    "lint:styles": "stylelint \"apps/**/*.css\" && node tools/check-inline-style-tokens.mjs",
     "opencode:server": "pnpm --filter desktop exec opencode2 serve",
     "opencode:version": "pnpm --filter desktop exec opencode2 --version",
     "prepare": "effect-tsgo patch --no-typescript --oxlint",

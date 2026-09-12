@@ -104,7 +104,7 @@
   padding: 12px;
   border: 1px solid var(--oc-border-muted);
   border-radius: var(--oc-radius);
-  background: var(--oc-surface-base);
+  background: var(--oc-surface-canvas);
 }
 
 .permissions-session h3,
@@ -164,7 +164,7 @@
 .permissions-values dt {
   color: var(--oc-text-faint);
   font-size: var(--oc-type-metadata-size);
-  font-weight: 600;
+  font-weight: var(--oc-type-heading-weight);
 }
 
 .permissions-values dd {
@@ -172,7 +172,7 @@
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--oc-text-base);
-  font-family: var(--font-mono);
+  font-family: var(--oc-font-mono);
   font-size: var(--oc-type-metadata-size);
   white-space: pre-wrap;
 }
@@ -215,6 +215,7 @@
 }
 
 .permissions-empty-project {
+  /* stylelint-disable-next-line declaration-no-important -- Override the project paragraph reset for this empty-state message. */
   margin-top: 10px !important;
 }
 

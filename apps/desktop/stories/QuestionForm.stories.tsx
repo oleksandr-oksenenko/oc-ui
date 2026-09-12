@@ -1,3 +1,5 @@
+/* oxlint-disable effecttsgo/async-function -- Storybook's interaction API is Promise-based. */
+
 import type {
   FormAnswer,
   FormInfo,
@@ -11,7 +13,7 @@ import { Field } from "@opencode-ai/ui/field";
 import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
 import { TextInput } from "@opencode-ai/ui/text-input";
 import { For, createSignal, type JSX } from "solid-js";
-import { fn } from "storybook/test";
+import { expect, fn, userEvent } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import { QuestionForm } from "../src/renderer/ui/QuestionForm.tsx";
@@ -207,7 +209,7 @@ const frameStyle: JSX.CSSProperties = {
   overflow: "auto",
   "box-sizing": "border-box",
   padding: "32px",
-  background: "#050506",
+  background: "var(--oc-surface-subtle)",
 };
 
 const narrowFrameStyle: JSX.CSSProperties = {
@@ -221,7 +223,7 @@ const defaultsFrameStyle: JSX.CSSProperties = {
   height: "100vh",
   overflow: "auto",
   padding: "32px",
-  background: "#050506",
+  background: "var(--oc-surface-subtle)",
 };
 
 const defaultsStackStyle: JSX.CSSProperties = {
@@ -245,7 +247,7 @@ const defaultsActionsStyle: JSX.CSSProperties = {
 const transcriptFrameStyle: JSX.CSSProperties = {
   height: "100vh",
   "min-height": "640px",
-  background: "#000",
+  background: "var(--oc-surface-canvas)",
 };
 
 export const SingleQuestion: Story = {};
@@ -258,7 +260,10 @@ export const InTranscript: Story = {
   args: { form: fullForm },
   render: (args) => (
     <main style={transcriptFrameStyle}>
-      <section class="transcript-view" aria-label="Transcript with a pending question form">
+      <section
+        class="transcript-view oc-scrollable"
+        aria-label="Transcript with a pending question form"
+      >
         <div class="transcript-document">
           <UserMessage message={transcriptUser} />
           <AssistantMessage message={transcriptAssistant} sessionStatus="idle" />
@@ -283,7 +288,10 @@ export const MultiplePendingInTranscript: Story = {
 
     return (
       <main style={transcriptFrameStyle}>
-        <section class="transcript-view" aria-label="Transcript with pending question forms">
+        <section
+          class="transcript-view oc-scrollable"
+          aria-label="Transcript with pending question forms"
+        >
           <div class="transcript-document">
             <UserMessage message={transcriptUser} />
             <AssistantMessage message={transcriptAssistant} sessionStatus="idle" />
@@ -411,11 +419,23 @@ export const SubmissionError: Story = {
 
 export const Disabled: Story = {
   args: { form: fullForm, disabled: true },
+  play: async ({ canvasElement }) => {
+    const choices = canvasElement.querySelectorAll<HTMLElement>(
+      '[data-disabled]:not([data-checked]):is([data-slot="radio-v2-item"], [data-component="checkbox"])',
+    );
+    await expect(choices.length).toBeGreaterThan(1);
+    for (const choice of choices) {
+      const before = getComputedStyle(choice).backgroundColor;
+      await userEvent.hover(choice);
+      await expect(getComputedStyle(choice).backgroundColor).toBe(before);
+      await userEvent.unhover(choice);
+    }
+  },
 };
 
 export const NarrowLayout: Story = {
   args: { form: fullForm },
-  parameters: { viewport: { defaultViewport: "mobile1" } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: (args) => (
     <main style={narrowFrameStyle}>
       <QuestionForm {...args} />

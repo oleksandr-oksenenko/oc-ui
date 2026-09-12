@@ -5,7 +5,7 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  color: var(--v2-text-text-base);
+  color: var(--oc-text-base);
   background: var(--oc-surface-raised);
 }
 

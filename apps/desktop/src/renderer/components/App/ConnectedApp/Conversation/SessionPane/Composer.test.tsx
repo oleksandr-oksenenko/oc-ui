@@ -517,9 +517,9 @@ describe("Composer", () => {
       />
     ));
 
-    const row = host.querySelector<HTMLElement>(".composer-v2-review-row");
+    const row = host.querySelector<HTMLElement>(".composer-review-row");
     expect(row?.textContent).toContain("Code review · 3 comments");
-    row?.querySelector<HTMLElement>(".composer-v2-review-label")?.click();
+    row?.querySelector<HTMLElement>(".composer-review-label")?.click();
     expect(discard).not.toHaveBeenCalled();
 
     const send = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
@@ -554,7 +554,7 @@ describe("Composer", () => {
       />
     ));
 
-    const countButton = host.querySelector<HTMLButtonElement>(".composer-v2-annotation-count");
+    const countButton = host.querySelector<HTMLButtonElement>(".composer-annotation-count");
     expect(countButton?.textContent).toContain("Annotations · 2 comments");
     countButton?.click();
     expect(open).toHaveBeenCalledWith(countButton);
@@ -600,7 +600,7 @@ describe("Composer", () => {
     if (!send) throw new Error("Composer did not render its send button");
     expect(send.disabled).toBe(false);
     send.click();
-    expect(host.querySelector(".composer-v2-annotation-row")).toBeNull();
+    expect(host.querySelector(".composer-annotation-row")).toBeNull();
     expect(send.disabled).toBe(true);
 
     dispose();

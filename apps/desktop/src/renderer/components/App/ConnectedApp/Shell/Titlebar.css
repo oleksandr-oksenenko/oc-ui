@@ -70,7 +70,7 @@
   overflow: hidden;
   color: var(--oc-text-base);
   font-size: var(--oc-type-metadata-size);
-  font-weight: 550;
+  font-weight: var(--oc-type-control-weight);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;

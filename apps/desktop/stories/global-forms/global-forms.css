@@ -22,7 +22,7 @@
   padding: 8px 10px 16px;
   color: var(--oc-text-base);
   font-size: var(--oc-type-metadata-size);
-  font-weight: 600;
+  font-weight: var(--oc-type-heading-weight);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }

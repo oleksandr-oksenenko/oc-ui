@@ -71,7 +71,7 @@ function selectionControls(
   props: Pick<ComposerProps, "action" | "agentSelection" | "modelSelection">,
 ) {
   return (
-    <div class="composer-v2-picker-row">
+    <div class="composer-picker-row">
       {props.agentSelection.state === "ready" ? (
         <AgentPicker
           placeholder="Default agent"
@@ -146,27 +146,27 @@ function selectionStatus(
   return (
     <>
       {props.error ? (
-        <p class="composer-v2-status composer-v2-status--error" role="alert">
+        <p class="composer-status composer-status--error" role="alert">
           {props.error}
         </p>
       ) : null}
       {props.agentSelection.switching ? (
-        <p class="composer-v2-status" role="status">
+        <p class="composer-status" role="status">
           Switching agent…
         </p>
       ) : null}
       {props.modelSelection.switching ? (
-        <p class="composer-v2-status" role="status">
+        <p class="composer-status" role="status">
           Switching selection…
         </p>
       ) : null}
       {props.modelSelection.error ? (
-        <p class="composer-v2-status composer-v2-status--error" role="alert">
+        <p class="composer-status composer-status--error" role="alert">
           {props.modelSelection.error}
         </p>
       ) : null}
       {props.agentSelection.error ? (
-        <p class="composer-v2-status composer-v2-status--error" role="alert">
+        <p class="composer-status composer-status--error" role="alert">
           {props.agentSelection.error}
         </p>
       ) : null}
@@ -219,14 +219,14 @@ export function Composer(props: ComposerProps) {
   };
 
   return (
-    <form class="composer-v2 oc-focus-container" aria-label="Message composer" onSubmit={submit}>
+    <form class="composer oc-focus-container" aria-label="Message composer" onSubmit={submit}>
       {review() ? (
-        <div class="composer-v2-review-row">
-          <span class="composer-v2-review-label">
+        <div class="composer-review-row">
+          <span class="composer-review-label">
             Code review · {review()!.count} {review()!.count === 1 ? "comment" : "comments"}
           </span>
           <IconButton
-            class="composer-v2-review-discard"
+            class="composer-review-discard"
             type="button"
             size="small"
             variant="ghost-muted"
@@ -241,9 +241,9 @@ export function Composer(props: ComposerProps) {
       ) : null}
       <Show when={annotations()}>
         {(annotation) => (
-          <div class="composer-v2-annotation-row">
+          <div class="composer-annotation-row">
             <Button
-              class="composer-v2-annotation-count"
+              class="composer-annotation-count"
               ref={annotation().ref}
               type="button"
               size="small"
@@ -255,7 +255,7 @@ export function Composer(props: ComposerProps) {
               Annotations · {annotation().count} {annotation().count === 1 ? "comment" : "comments"}
             </Button>
             <IconButton
-              class="composer-v2-annotation-discard"
+              class="composer-annotation-discard"
               disabled={props.disabled || props.action !== "send"}
               type="button"
               size="small"
@@ -271,10 +271,10 @@ export function Composer(props: ComposerProps) {
         )}
       </Show>
       <Show when={(props.files?.length ?? 0) > 0}>
-        <ul class="composer-v2-files" aria-label="Attached files">
+        <ul class="composer-files" aria-label="Attached files">
           {props.files?.map((file) => (
-            <li class="composer-v2-review-row">
-              <span class="composer-v2-review-label" title={file.name || "Pasted file"}>
+            <li class="composer-review-row">
+              <span class="composer-review-label" title={file.name || "Pasted file"}>
                 {file.name || "Pasted file"}
               </span>
               <IconButton
@@ -292,12 +292,12 @@ export function Composer(props: ComposerProps) {
           ))}
         </ul>
       </Show>
-      <div class="composer-v2-editor-row">
+      <div class="composer-editor-row">
         <textarea
           ref={(element) => {
             textarea = element;
           }}
-          class="composer-v2-input oc-focus-delegate"
+          class="composer-input oc-focus-delegate"
           aria-label="Prompt"
           disabled={false}
           placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}
@@ -318,10 +318,10 @@ export function Composer(props: ComposerProps) {
         />
       </div>
 
-      <div class="composer-v2-controls-row">
+      <div class="composer-controls-row">
         {selectionControls(props)}
         <button
-          class="composer-v2-action"
+          class="composer-action"
           type={props.action === "running" ? "button" : "submit"}
           aria-label={props.action === "running" ? "Stop" : "Send"}
           title={props.action === "running" ? "Stop" : "Send"}
@@ -342,7 +342,7 @@ export function Composer(props: ComposerProps) {
           {props.action === "running" ? (
             <Icon name="stop" size="small" aria-hidden="true" />
           ) : (
-            <span class="composer-v2-action-icon" aria-hidden="true">
+            <span class="composer-action-icon" aria-hidden="true">
               {props.action === "sending" ? (
                 <Loader width={16} height={16} />
               ) : (

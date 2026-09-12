@@ -16,7 +16,7 @@ export type ContextPanelProps = {
 
 export function ContextPanel(props: ContextPanelProps) {
   const diffContent = () => (
-    <div class="context-panel-body">
+    <div class="context-panel-body oc-scrollable">
       <Show
         when={props.diff}
         fallback={

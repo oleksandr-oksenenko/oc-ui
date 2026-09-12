@@ -28,7 +28,7 @@ export function SessionTree(props: SessionTreeProps) {
   const query = createMemo(() => props.query?.trim().toLowerCase() ?? "");
   const projection = createMemo(() => projectSessionTree(props.sessions, query(), props.now));
 
-  const renderSessions = (nodes: readonly SessionTreeNode[], depth: number) => (
+  const renderSessions = (nodes: readonly SessionTreeNode[]) => (
     <For each={nodes}>
       {(node) => {
         const session = () => node.session;
@@ -50,7 +50,6 @@ export function SessionTree(props: SessionTreeProps) {
             status={props.statusForSession(session().id)}
             requiresInput={props.requiresInputForSession?.(session().id)}
             hasChildren={node.children.length > 0}
-            depth={depth}
             selected={props.selectedID === session().id}
             expanded={filtering() || isExpanded(session().id)}
             deleteDisabled={deleteDisabledReason() !== undefined}
@@ -62,9 +61,7 @@ export function SessionTree(props: SessionTreeProps) {
             onDelete={props.onDelete}
           >
             {node.children.length > 0 ? (
-              <div class="shell-session-children" style={{ "--session-depth": `${depth + 1}` }}>
-                {renderSessions(node.children, depth + 1)}
-              </div>
+              <div class="shell-session-children">{renderSessions(node.children)}</div>
             ) : null}
           </SessionTreeItem>
         );
@@ -88,7 +85,7 @@ export function SessionTree(props: SessionTreeProps) {
                 aria-labelledby={`shell-session-group-${group.id}`}
               >
                 <h2 id={`shell-session-group-${group.id}`}>{group.label}</h2>
-                <div class="shell-session-group-tree">{renderSessions(group.roots, 0)}</div>
+                <div class="shell-session-group-tree">{renderSessions(group.roots)}</div>
               </section>
             )}
           </For>

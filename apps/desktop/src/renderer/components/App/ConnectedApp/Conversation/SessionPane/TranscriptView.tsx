@@ -54,7 +54,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
         scrollRef(element);
         detachAnnotations = props.annotationRootRef?.(element);
       }}
-      class="transcript-view"
+      class="transcript-view oc-scrollable"
       tabIndex={-1}
       aria-busy={props.loading === true}
       onScroll={handleScroll}

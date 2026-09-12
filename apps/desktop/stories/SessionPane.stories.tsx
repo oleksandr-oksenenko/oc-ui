@@ -12,7 +12,7 @@ const meta = {
   parameters: { layout: "fullscreen" },
   decorators: [
     (Story) => (
-      <div style={{ width: "100vw", height: "100vh", background: "#000" }}>
+      <div style={{ width: "100vw", height: "100vh", background: "var(--oc-surface-canvas)" }}>
         <Story />
       </div>
     ),

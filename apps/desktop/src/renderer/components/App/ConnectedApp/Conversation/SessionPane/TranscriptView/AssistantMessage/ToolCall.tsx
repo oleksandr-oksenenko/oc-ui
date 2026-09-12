@@ -69,13 +69,13 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
 function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
   switch (tool.state.status) {
     case "streaming":
-      return [<pre class="transcript-tool-output">{tool.state.input}</pre>];
+      return [<pre class="transcript-tool-output oc-scrollable">{tool.state.input}</pre>];
     case "running":
     case "completed":
     case "error":
       return [
         <pre
-          class="transcript-tool-output"
+          class="transcript-tool-output oc-scrollable"
           data-annotation-block={annotationBlock("tool", tool.id, "input")}
         >
           {formatObject(tool.state)}
@@ -96,7 +96,7 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
 function renderToolContent(content: ToolContent, toolID: string, index: number): JSX.Element {
   return content.type === "text" ? (
     <pre
-      class="transcript-tool-output"
+      class="transcript-tool-output oc-scrollable"
       data-annotation-block={annotationBlock("tool", toolID, "output", index, "text")}
     >
       {content.text}

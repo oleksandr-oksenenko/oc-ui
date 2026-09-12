@@ -210,7 +210,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const renderTranscript = (args: TranscriptViewProps) => (
-  <div style={{ height: "100vh", "min-height": "520px", background: "#121212" }}>
+  <div style={{ height: "100vh", "min-height": "520px", background: "var(--oc-surface-canvas)" }}>
     <TranscriptView {...args} />
   </div>
 );

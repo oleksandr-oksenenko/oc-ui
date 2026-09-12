@@ -12,9 +12,9 @@
 .shell-session-header h1 {
   min-width: 0;
   margin: 0;
-  color: var(--v2-text-text-contrast);
+  color: var(--oc-text-contrast);
   font-size: var(--oc-type-heading-size);
-  font-weight: 560;
+  font-weight: var(--oc-type-heading-weight);
   letter-spacing: -0.01em;
 }
 

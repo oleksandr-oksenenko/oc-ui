@@ -181,8 +181,8 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
     lineHoverHighlight: "both",
     unsafeCSS: `
       :host {
-        --diffs-font-size: 12px;
-        --diffs-line-height: 18px;
+        --diffs-font-size: var(--oc-type-code-size);
+        --diffs-line-height: var(--oc-type-code-line-height);
         --diffs-bg-selection-override: var(--oc-surface-selected);
       }
 

@@ -44,12 +44,12 @@ function ContentPage() {
         description="Source code scrolls horizontally; logs and command output wrap long lines."
       >
         <div class="design-system-control-column">
-          <pre class="design-system-code design-system-code-source">
+          <pre class="design-system-code oc-scrollable design-system-code-source">
             <code>{`const selected = projects.find(
   (project) => project.id === selectedProjectID,
 )`}</code>
           </pre>
-          <pre class="design-system-code design-system-code-output">
+          <pre class="design-system-code oc-scrollable design-system-code-output">
             <code>{`$ pnpm check
 Checked 953 nodes across 89 renderer files.
 This deliberately long log line wraps because command output favors continuity over preserving source columns.`}</code>
@@ -80,7 +80,7 @@ This deliberately long log line wraps because command output favors continuity o
         description="Product scroll regions share a quiet track and visible thumb; nested code keeps its own local axis."
       >
         <div
-          class="design-system-scroll-sample"
+          class="design-system-scroll-sample oc-scrollable"
           aria-label="Scrollable transcript sample"
           tabIndex={0}
         >

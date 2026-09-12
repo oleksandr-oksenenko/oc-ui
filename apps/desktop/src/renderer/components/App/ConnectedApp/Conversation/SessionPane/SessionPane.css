@@ -45,39 +45,6 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-color: var(--oc-scrollbar-thumb, var(--oc-border-base))
-    var(--oc-scrollbar-track, transparent);
-  scrollbar-width: var(--oc-scrollbar-width, thin);
-}
-
-.transcript-view::-webkit-scrollbar,
-.transcript-tool-output::-webkit-scrollbar,
-.transcript-markdown pre::-webkit-scrollbar,
-.transcript-markdown table::-webkit-scrollbar {
-  width: var(--oc-scrollbar-size, 8px);
-  height: var(--oc-scrollbar-size, 8px);
-}
-
-.transcript-view::-webkit-scrollbar-track,
-.transcript-tool-output::-webkit-scrollbar-track,
-.transcript-markdown pre::-webkit-scrollbar-track,
-.transcript-markdown table::-webkit-scrollbar-track {
-  background: var(--oc-scrollbar-track, transparent);
-}
-
-.transcript-view::-webkit-scrollbar-thumb,
-.transcript-tool-output::-webkit-scrollbar-thumb,
-.transcript-markdown pre::-webkit-scrollbar-thumb,
-.transcript-markdown table::-webkit-scrollbar-thumb {
-  border-radius: var(--oc-radius-full);
-  background: var(--oc-scrollbar-thumb, var(--oc-border-base));
-}
-
-.transcript-view::-webkit-scrollbar-thumb:hover,
-.transcript-tool-output::-webkit-scrollbar-thumb:hover,
-.transcript-markdown pre::-webkit-scrollbar-thumb:hover,
-.transcript-markdown table::-webkit-scrollbar-thumb:hover {
-  background: var(--oc-scrollbar-thumb-hover, var(--oc-border-strong));
 }
 
 .transcript-document {
@@ -149,7 +116,7 @@
   color: var(--oc-text-strong);
   background: var(--oc-surface-raised);
   font-size: var(--oc-type-body-relaxed-size);
-  line-height: 1.6;
+  line-height: var(--oc-type-body-relaxed-line-height);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -271,7 +238,7 @@
 .transcript-assistant-document {
   width: 100%;
   font-size: var(--oc-type-body-relaxed-size);
-  line-height: 1.48;
+  line-height: var(--oc-type-body-relaxed-line-height);
   overflow-wrap: anywhere;
 }
 
@@ -346,9 +313,6 @@
   border: 1px solid var(--oc-border-muted);
   border-radius: var(--oc-radius);
   background: var(--oc-surface-raised);
-  scrollbar-color: var(--oc-scrollbar-thumb, var(--oc-border-base))
-    var(--oc-scrollbar-track, transparent);
-  scrollbar-width: var(--oc-scrollbar-width, thin);
 }
 
 .transcript-markdown blockquote {
@@ -368,9 +332,6 @@
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
-  scrollbar-color: var(--oc-scrollbar-thumb, var(--oc-border-base))
-    var(--oc-scrollbar-track, transparent);
-  scrollbar-width: var(--oc-scrollbar-width, thin);
 }
 
 .transcript-markdown :is(th, td) {
@@ -403,6 +364,7 @@
   display: flex;
   align-items: center;
   width: 100%;
+  /* stylelint-disable-next-line declaration-no-important -- Preserve compact rows over the pinned Collapsible trigger height. */
   height: 26px !important;
   min-height: 26px;
   gap: 8px;
@@ -432,14 +394,14 @@
 .transcript-reasoning-label {
   color: var(--oc-text-strong);
   font-size: var(--oc-type-metadata-size);
-  font-weight: 600;
+  font-weight: var(--oc-type-heading-weight);
 }
 
 .transcript-reasoning-summary {
   margin: 0 0 6px 23px;
   color: var(--oc-text-base);
   font-size: var(--oc-type-metadata-size);
-  line-height: 1.45;
+  line-height: var(--oc-type-metadata-line-height);
 }
 
 .transcript-reasoning [data-slot="collapsible-content"] {
@@ -498,9 +460,6 @@
   font-weight: var(--oc-type-code-weight);
   line-height: var(--oc-type-code-line-height);
   white-space: pre-wrap;
-  scrollbar-color: var(--oc-scrollbar-thumb, var(--oc-border-base))
-    var(--oc-scrollbar-track, transparent);
-  scrollbar-width: var(--oc-scrollbar-width, thin);
 }
 
 .transcript-tool-call [data-slot="collapsible-content"] {
@@ -606,7 +565,7 @@
 
 .transcript-context-label {
   color: var(--oc-text-strong);
-  font-weight: 600;
+  font-weight: var(--oc-type-heading-weight);
 }
 
 .transcript-context-detail {

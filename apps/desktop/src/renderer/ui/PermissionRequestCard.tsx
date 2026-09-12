@@ -44,7 +44,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps): JSX.El
       <section class="permission-request-section" aria-labelledby={`${titleID}-resources`}>
         <h3 id={`${titleID}-resources`}>Resources</h3>
         <ul
-          class="permission-request-values"
+          class="permission-request-values oc-scrollable"
           data-permission-resources
           aria-label="Requested resources"
           tabIndex={0}
@@ -72,7 +72,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps): JSX.El
         <section class="permission-request-section" aria-labelledby={`${titleID}-saved-patterns`}>
           <h3 id={`${titleID}-saved-patterns`}>Always allow patterns</h3>
           <ul
-            class="permission-request-values"
+            class="permission-request-values oc-scrollable"
             data-permission-save-patterns
             aria-label="Always allow patterns"
             tabIndex={0}

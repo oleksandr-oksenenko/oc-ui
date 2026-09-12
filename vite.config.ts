@@ -194,6 +194,7 @@ export default defineConfig({
           "apps/desktop/wdio.conf.ts",
           "apps/desktop/test/e2e/**/*.{ts,mjs}",
           "apps/desktop/test/browser-inspection.test.mjs",
+          "apps/desktop/test/style-tokens.test.mjs",
         ],
         rules: {
           ...effectPromiseBoundaryRules,

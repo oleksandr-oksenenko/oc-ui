@@ -9,7 +9,10 @@
 :root [data-component="text-input-v2"],
 :root [data-component="select-v2"],
 :root [data-component="menu-v2-content"][data-slot="select-v2-content"],
-:root [data-component="dialog-v2"] [data-slot="dialog-container"] {
+:root [data-component="dialog-v2"] [data-slot="dialog-container"],
+:root [data-component="text-input-v2"] [data-slot="text-input-v2-icon-button"],
+:root [data-component="select-v2"] [data-slot="select-v2-chevron"],
+:root [data-component="dialog-v2"] [data-slot="dialog-close-button"] {
   border-radius: var(--oc-radius);
 }
 
@@ -41,12 +44,6 @@
   cursor: not-allowed;
 }
 
-:root [data-component="text-input-v2"] [data-slot="text-input-v2-icon-button"],
-:root [data-component="select-v2"] [data-slot="select-v2-chevron"],
-:root [data-component="dialog-v2"] [data-slot="dialog-close-button"] {
-  border-radius: var(--oc-radius);
-}
-
 /* The compact tab treatment is a rectangle with the same product radius,
  * despite the upstream variable's historical "pill" name. */
 :root [data-component="tabs"] {
@@ -69,4 +66,17 @@
 :root [data-slot="radio-v2-item"]:where([data-disabled]) [data-slot="radio-v2-item-label-text"],
 :root [data-slot="radio-v2-item"]:where([data-disabled]) [data-slot="radio-v2-item-description"] {
   cursor: not-allowed;
+}
+
+/* Session rows own their hover surface, including the upstream button overlay. */
+.shell-session-main {
+  --v2-overlay-simple-overlay-hover: transparent;
+  --v2-overlay-simple-overlay-pressed: transparent;
+}
+
+/* Diff counts use diff semantics, which are distinct from destructive actions. */
+.diff-summary-changes,
+.diff-file-stats {
+  --v2-state-fg-success: var(--oc-diff-addition);
+  --v2-state-fg-danger: var(--oc-diff-deletion);
 }

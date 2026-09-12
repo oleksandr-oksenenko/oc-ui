@@ -185,7 +185,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
             ref={(element: HTMLUListElement) => {
               entriesList = element;
             }}
-            class="server-directory-entries"
+            class="server-directory-entries oc-scrollable"
             aria-label="Directories"
           >
             <li>

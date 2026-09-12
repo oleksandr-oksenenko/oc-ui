@@ -13,7 +13,7 @@
 
 .server-directory-error,
 .server-directory-listing-error {
-  color: var(--v2-state-fg-danger);
+  color: var(--oc-status-danger);
 }
 
 .server-directory-entries button {
@@ -50,7 +50,7 @@
   font-family: var(--oc-font-mono);
   font-size: var(--oc-type-metadata-size);
   line-height: var(--oc-type-metadata-line-height);
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
 }
 
 .server-directory-entries {
@@ -61,27 +61,7 @@
   margin: 0;
   padding: 4px;
   overflow-y: auto;
-  scrollbar-color: var(--oc-scrollbar-thumb) var(--oc-scrollbar-track);
-  scrollbar-width: var(--oc-scrollbar-width);
   list-style: none;
-}
-
-.server-directory-entries::-webkit-scrollbar {
-  width: var(--oc-scrollbar-size);
-}
-
-.server-directory-entries::-webkit-scrollbar-track {
-  background: var(--oc-scrollbar-track);
-}
-
-.server-directory-entries::-webkit-scrollbar-thumb {
-  border: 2px solid var(--oc-surface-canvas);
-  border-radius: var(--oc-radius-full);
-  background: var(--oc-scrollbar-thumb);
-}
-
-.server-directory-entries::-webkit-scrollbar-thumb:hover {
-  background: var(--oc-scrollbar-thumb-hover);
 }
 
 .server-directory-entries li + li {
@@ -97,16 +77,16 @@
 }
 
 .server-directory-entry-name {
-  color: var(--v2-text-text-base);
+  color: var(--oc-text-base);
 }
 
 .server-directory-entry-name-hidden {
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
 }
 
 .server-directory-entry-chevron {
   flex-shrink: 0;
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
 }
 
 .server-directory-state {
@@ -120,5 +100,5 @@
   text-align: center;
   font-size: var(--oc-type-body-size);
   line-height: var(--oc-type-body-line-height);
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
 }

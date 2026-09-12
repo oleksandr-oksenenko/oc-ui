@@ -103,8 +103,7 @@
 }
 
 .question-form-choice-group [data-slot="radio-v2-item-control"] {
-  border: 1px solid var(--border-weak-base);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--oc-border-base);
   background: transparent;
   box-shadow: none;
 }
@@ -118,13 +117,13 @@
   top: 11px;
   left: 10px;
   z-index: 1;
-  color: var(--icon-base);
+  color: var(--oc-icon-base);
   opacity: 0;
   pointer-events: none;
   transform: scale(0.9);
   transition:
-    opacity 180ms var(--tool-motion-ease, cubic-bezier(0.22, 1, 0.36, 1)),
-    transform 220ms var(--tool-motion-ease, cubic-bezier(0.22, 1, 0.36, 1));
+    opacity 180ms var(--oc-motion-ease),
+    transform 220ms var(--oc-motion-ease);
 }
 
 .question-form-choice-group [data-slot="radio-v2-item"][data-checked] .question-form-radio-check {
@@ -135,11 +134,11 @@
 .question-form-choice-group
   [data-slot="radio-v2-item"][data-checked]
   [data-slot="radio-v2-item-control"] {
-  border-color: var(--border-base);
-  background: var(--surface-weak);
+  border-color: var(--oc-border-strong);
+  background: var(--oc-surface-selected);
 }
 
-.question-form-choice-group [data-slot="radio-v2-item"]:hover,
+.question-form-choice-group [data-slot="radio-v2-item"]:where(:not([data-disabled])):hover,
 .question-form-choice-group [data-slot="radio-v2-item"][data-checked] {
   border-color: var(--oc-border-strong);
   background: var(--oc-surface-control);
@@ -192,7 +191,7 @@
   content: "";
 }
 
-.question-form-options [data-component="checkbox"]:hover,
+.question-form-options [data-component="checkbox"]:where(:not([data-disabled])):hover,
 .question-form-options [data-component="checkbox"][data-checked] {
   border-color: var(--oc-border-strong);
   background: var(--oc-surface-control);

@@ -273,7 +273,7 @@ export const RecoveryBlocked = {
 };
 
 export const NarrowLongAndEmptyValues = {
-  parameters: { viewport: { defaultViewport: "mobile" } },
+  globals: { viewport: { value: "mobile", isRotated: false } },
   render: () =>
     dialogStory({
       entries: narrowEntries,

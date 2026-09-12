@@ -66,7 +66,7 @@
 
 .new-session-project-picker [data-slot="radio-v2-label"],
 .new-session-location-choice [data-slot="radio-v2-label"] {
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
 }
 
 .new-session-project-heading {
@@ -84,7 +84,7 @@
 
 .new-session-project-heading h3 {
   font-size: var(--oc-type-body-size);
-  font-weight: 530;
+  font-weight: var(--oc-type-control-weight);
   line-height: var(--oc-type-body-line-height);
 }
 
@@ -92,7 +92,7 @@
   margin-top: 2px;
   font-size: var(--oc-type-metadata-size);
   line-height: var(--oc-type-metadata-line-height);
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
 }
 
 .new-session-project-trigger {
@@ -106,7 +106,7 @@
   border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius);
   background: var(--oc-surface-canvas);
-  color: var(--v2-text-text-base);
+  color: var(--oc-text-base);
   text-align: left;
 }
 
@@ -116,7 +116,7 @@
 }
 
 .new-session-project-trigger:hover:not(:disabled) {
-  border-color: var(--v2-border-border-strong);
+  border-color: var(--oc-border-strong);
 }
 
 .new-session-project-trigger-value,
@@ -132,7 +132,7 @@
 .new-session-project-option strong {
   overflow: hidden;
   font-size: var(--oc-type-body-size);
-  font-weight: 530;
+  font-weight: var(--oc-type-control-weight);
   line-height: var(--oc-type-body-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -141,16 +141,17 @@
 .new-session-project-trigger-value span,
 .new-session-project-option span {
   overflow: hidden;
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
   font-family: var(--oc-font-mono);
   font-size: var(--oc-type-caption-size);
-  line-height: 15px;
+  line-height: var(--oc-type-caption-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .new-session-project-popover {
   z-index: 60;
+  /* stylelint-disable-next-line no-unknown-custom-properties -- Kobalte supplies the anchor width on its popper element. */
   width: var(--kb-popper-anchor-width);
   max-width: calc(100vw - 32px);
   padding: 4px;
@@ -216,7 +217,7 @@
   padding: 16px;
   border: 1px dashed var(--oc-border-base);
   border-radius: var(--oc-radius);
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
   font-size: var(--oc-type-body-size);
 }
 
@@ -228,8 +229,8 @@
   padding: 12px;
   border: 1px solid var(--oc-status-danger-border);
   border-radius: var(--oc-radius);
-  color: var(--v2-state-fg-danger);
-  background: var(--v2-state-bg-danger);
+  color: var(--oc-status-danger);
+  background: var(--oc-status-danger-surface);
   font-size: var(--oc-type-body-size);
   line-height: var(--oc-type-body-line-height);
 }
@@ -246,26 +247,17 @@
 
 .new-session-existing-worktree span {
   font-size: var(--oc-type-caption-size);
-  line-height: 14px;
-  color: var(--v2-text-text-muted);
+  line-height: var(--oc-type-caption-line-height);
+  color: var(--oc-text-muted);
 }
 
 .new-session-existing-worktree code {
   overflow-wrap: anywhere;
   font-family: var(--oc-font-mono);
   font-size: var(--oc-type-code-size);
-  font-weight: 440;
-  line-height: 17px;
-  color: var(--v2-text-text-base);
-}
-
-.new-session-guidance {
-  padding: 12px;
-  border-radius: var(--oc-radius);
-  background: var(--oc-surface-canvas);
-  font-size: var(--oc-type-body-size);
-  line-height: var(--oc-type-body-line-height);
-  color: var(--v2-text-text-muted);
+  font-weight: var(--oc-type-body-weight);
+  line-height: var(--oc-type-code-line-height);
+  color: var(--oc-text-base);
 }
 
 .server-flow-operation-error {
@@ -304,7 +296,7 @@
 }
 
 .new-session-field-error {
-  color: var(--v2-state-fg-danger);
+  color: var(--oc-status-danger);
   font-size: var(--oc-type-status-size);
   line-height: var(--oc-type-status-line-height);
 }
@@ -316,7 +308,7 @@
   gap: 8px;
   min-height: 72px;
   font-size: var(--oc-type-body-size);
-  color: var(--v2-text-text-muted);
+  color: var(--oc-text-muted);
 }
 
 @media (width <= 520px) {

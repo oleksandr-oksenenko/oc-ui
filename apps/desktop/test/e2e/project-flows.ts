@@ -178,7 +178,7 @@ async function verifyReviewRemount(): Promise<void> {
   await $(".transcript-code-review-trigger").click();
   await $(".transcript-code-review-content").waitForDisplayed({ timeout: TIMEOUT });
   assert.ok((await $(".transcript-code-review-content").getText()).includes(comment));
-  assert.equal(await $(".composer-v2-review-row").isExisting(), false);
+  assert.equal(await $(".composer-review-row").isExisting(), false);
   assert.equal(await $(".diff-review-text").isExisting(), false);
   const providerUrl = process.env.OCUI_E2E_PROVIDER_URL;
   assert.ok(providerUrl);
@@ -223,7 +223,7 @@ async function verifyReviewRemount(): Promise<void> {
   await $(".transcript-code-review-trigger").click();
   await $(".transcript-code-review-content").waitForDisplayed({ timeout: TIMEOUT });
   assert.ok((await $(".transcript-code-review-content").getText()).includes(comment));
-  assert.equal(await $(".composer-v2-review-row").isExisting(), false);
+  assert.equal(await $(".composer-review-row").isExisting(), false);
   if (await $('[aria-label="Show context"]').isExisting()) {
     await $('[aria-label="Show context"]').click();
   }

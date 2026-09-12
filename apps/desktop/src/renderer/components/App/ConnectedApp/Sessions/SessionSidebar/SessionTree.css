@@ -16,7 +16,7 @@
 .shell-session-group h2 {
   margin: 0;
   padding: 8px 7px 7px;
-  color: var(--v2-text-text-faint);
+  color: var(--oc-text-faint);
   font-size: var(--oc-type-kicker-size);
   font-weight: var(--oc-type-kicker-weight);
   letter-spacing: var(--oc-type-kicker-letter-spacing);
@@ -35,7 +35,7 @@
 
 .shell-session-no-match {
   margin: 12px 8px;
-  color: var(--v2-text-text-faint);
+  color: var(--oc-text-faint);
   font-size: var(--oc-type-caption-size);
-  line-height: 1.5;
+  line-height: var(--oc-type-caption-line-height);
 }

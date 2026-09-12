@@ -14,7 +14,6 @@ export type SessionTreeItemProps = {
   readonly status: DataSessionStatus;
   readonly requiresInput?: boolean;
   readonly hasChildren: boolean;
-  readonly depth: number;
   readonly selected: boolean;
   readonly expanded: boolean;
   readonly deleteDisabled: boolean;
@@ -31,7 +30,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
     props.status === "running" ? "Running" : props.requiresInput ? "Requires input" : "Idle";
 
   return (
-    <div class="shell-session-tree-item" style={{ "--session-depth": `${props.depth}` }}>
+    <div class="shell-session-tree-item">
       <Collapsible
         class="shell-session-collapsible"
         variant="ghost"

@@ -81,8 +81,6 @@
   padding: 0;
   overflow: auto;
   list-style: none;
-  scrollbar-color: var(--oc-scrollbar-thumb, var(--oc-border-base)) transparent;
-  scrollbar-width: thin;
 }
 
 .permission-request-values li {
@@ -96,7 +94,7 @@
 .permission-request-values code,
 .permission-request-source code {
   color: var(--oc-text-base);
-  font-family: var(--font-mono);
+  font-family: var(--oc-font-mono);
   font-size: var(--oc-type-metadata-size);
   line-height: var(--oc-type-metadata-line-height);
   overflow-wrap: anywhere;

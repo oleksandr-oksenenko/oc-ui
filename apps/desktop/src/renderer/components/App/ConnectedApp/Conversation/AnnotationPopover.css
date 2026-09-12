@@ -1,7 +1,7 @@
 .annotation-selection-action {
   position: fixed;
   z-index: 20;
-  border-radius: var(--radius-md);
+  border-radius: var(--oc-radius);
   background: var(--oc-surface-raised);
 }
 

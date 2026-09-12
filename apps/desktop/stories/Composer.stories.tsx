@@ -29,7 +29,7 @@ type Story = StoryObj;
 const frameStyle = {
   width: "min(760px, 90vw)",
   padding: "32px",
-  background: "#050506",
+  background: "var(--oc-surface-subtle)",
 };
 const idleOnSubmit = fn<() => void>();
 const idleOnSelectModel = fn<(id: string) => void>();

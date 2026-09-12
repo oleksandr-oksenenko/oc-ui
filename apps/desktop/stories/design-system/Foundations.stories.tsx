@@ -21,6 +21,7 @@ const tokenGroups: Array<{ title: string; tokens: Token[] }> = [
       { name: "--oc-surface-control", label: "Control surface", swatch: true },
       { name: "--oc-surface-selected", label: "Selected surface", swatch: true },
       { name: "--oc-surface-hover", label: "Hover surface", swatch: true },
+      { name: "--oc-surface-elevated", label: "Highest raised surface", swatch: true },
     ],
   },
   {

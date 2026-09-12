@@ -97,7 +97,6 @@ describe("SessionTree", () => {
         session={session("parent", "Parent")}
         status="idle"
         hasChildren
-        depth={0}
         selected
         expanded
         deleteDisabled={false}
@@ -237,7 +236,6 @@ describe("SessionTree", () => {
           session={session("running", "Running")}
           status="running"
           hasChildren={false}
-          depth={0}
           selected
           expanded={false}
           deleteDisabled={false}
@@ -277,7 +275,6 @@ describe("SessionTree", () => {
           status="idle"
           requiresInput
           hasChildren={false}
-          depth={0}
           selected={false}
           expanded={false}
           deleteDisabled={false}

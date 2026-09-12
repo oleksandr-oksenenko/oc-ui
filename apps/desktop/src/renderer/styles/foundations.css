@@ -9,6 +9,9 @@
   --oc-surface-control: #111;
   --oc-surface-selected: #171717;
   --oc-surface-hover: #1c1c1c;
+  --oc-surface-elevated: #1f1f1f;
+  --oc-overlay-hover: rgb(255 255 255 / 6%);
+  --oc-overlay-pressed: rgb(255 255 255 / 10%);
   --oc-content-code-surface: var(--oc-surface-raised);
   --oc-border-muted: #1a1a1a;
   --oc-border-base: #242424;
@@ -48,6 +51,7 @@
      circles and pills. */
   --oc-radius: 4px;
   --oc-radius-full: 9999px;
+  --oc-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --oc-scrollbar-thumb: var(--oc-border-strong);
   --oc-scrollbar-thumb-hover: var(--oc-border-emphasis);
   --oc-scrollbar-track: transparent;
@@ -97,17 +101,17 @@
   --oc-type-diff-stat-line-height: 14px;
   --oc-type-diff-stat-weight: 400;
 
-  /* One legacy consumer uses Tailwind's short alias directly. */
-  --font-mono: var(--oc-font-mono);
-
-  /* Legacy OpenCode primitives still consume this published token family.
-     Keep it bridged to the same product semantics until upstream removes it. */
+  /* OpenCode integration: both published token families use the product roles
+     above. App and story styles consume --oc-* directly; these names belong
+     to the dependency and must remain available to its components. */
   --background-stronger: var(--oc-surface-canvas);
   --background-base: var(--oc-surface-canvas);
   --background-weak: var(--oc-surface-canvas);
   --surface-raised-base: var(--oc-surface-raised);
   --border-weaker-base: var(--oc-border-muted);
   --border-weak-base: var(--oc-border-base);
+  --border-base: var(--oc-border-strong);
+  --surface-weak: var(--oc-surface-selected);
   --border-selected: var(--oc-selection);
   --border-weak-selected: var(--oc-selection-ring);
   --border-interactive-base: var(--oc-border-emphasis);
@@ -126,7 +130,7 @@
   --text-diff-add-base: var(--oc-diff-addition);
   --text-diff-delete-base: var(--oc-diff-deletion);
 
-  /* Published OpenCode tokens are the bridge into every upstream primitive. */
+  /* Newer OpenCode components use versioned names for the same app roles. */
   --v2-text-text-base: var(--oc-text-base);
   --v2-text-text-muted: var(--oc-text-muted);
   --v2-text-text-faint: var(--oc-text-faint);
@@ -136,7 +140,7 @@
   --v2-background-bg-layer-01: var(--oc-surface-raised);
   --v2-background-bg-layer-02: var(--oc-surface-control);
   --v2-background-bg-layer-03: var(--oc-surface-selected);
-  --v2-background-bg-layer-04: #1f1f1f;
+  --v2-background-bg-layer-04: var(--oc-surface-elevated);
   --v2-background-bg-button-neutral: var(--oc-surface-raised);
   --v2-background-bg-contrast: var(--oc-selection);
   --v2-background-bg-accent: var(--oc-selection);
@@ -147,13 +151,14 @@
   --v2-border-border-base: var(--oc-border-base);
   --v2-border-border-strong: var(--oc-border-strong);
   --v2-border-border-focus: var(--oc-focus-ring);
-  --v2-overlay-simple-overlay-hover: rgb(255 255 255 / 6%);
-  --v2-overlay-simple-overlay-pressed: rgb(255 255 255 / 10%);
+  --v2-overlay-simple-overlay-hover: var(--oc-overlay-hover);
+  --v2-overlay-simple-overlay-pressed: var(--oc-overlay-pressed);
   --v2-elevation-floating: var(--oc-shadow-floating);
   --v2-state-fg-success: var(--oc-status-success);
   --v2-state-fg-warning: var(--oc-status-warning);
   --v2-state-fg-danger: var(--oc-status-danger);
   --v2-state-border-danger: var(--oc-status-danger-border);
+  --v2-state-bg-danger: var(--oc-status-danger-surface);
 
   /* Upstream's published radius family remains available, but all five
      legacy names resolve to the same product radius. */
