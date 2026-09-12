@@ -191,29 +191,32 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
       >
         <DialogHeader closeLabel="Close new session dialog" hideClose={blocked()}>
           <DialogTitle>New session</DialogTitle>
-          <Button
-            type="button"
-            size="small"
-            variant="outline"
-            disabled={blocked()}
-            onClick={props.onAddProject}
-          >
-            <Icon name="plus-small" />
-            Add project
-          </Button>
         </DialogHeader>
 
         <DialogBody class="server-flow-dialog-body">
-          <ProjectSelection
-            state={props.state}
-            disabled={blocked()}
-            validationError={validationError()}
-            onReady={(element) => {
-              projectPicker = element;
-            }}
-            onProjectChange={props.onProjectChange}
-            onRetryProjects={props.onRetryProjects}
-          />
+          <div class="new-session-project-row">
+            <ProjectSelection
+              state={props.state}
+              disabled={blocked()}
+              validationError={validationError()}
+              onReady={(element) => {
+                projectPicker = element;
+              }}
+              onProjectChange={props.onProjectChange}
+              onRetryProjects={props.onRetryProjects}
+            />
+            <Button
+              class="new-session-add-project"
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              disabled={blocked()}
+              onClick={props.onAddProject}
+            >
+              <Icon name="plus-small" />
+              Add project
+            </Button>
+          </div>
 
           <Show when={currentError() && currentError()?.kind !== "validation"}>
             <section

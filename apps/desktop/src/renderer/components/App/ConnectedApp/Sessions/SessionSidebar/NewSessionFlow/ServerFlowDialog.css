@@ -324,3 +324,18 @@
 .new-session-dialog [data-slot="dialog-footer"] {
   flex-wrap: wrap;
 }
+
+.new-session-project-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-session-project-row .new-session-project-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.new-session-add-project {
+  flex: none;
+}
