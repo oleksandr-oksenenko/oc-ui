@@ -49,6 +49,19 @@ beforeAll(async () => {
   ]);
   acceptanceConfig = JSON.stringify({
     ...provider.config,
+    providers: {
+      ...provider.config.providers,
+      acceptance: {
+        ...provider.config.providers.acceptance,
+        models: {
+          ...provider.config.providers.acceptance.models,
+          alternate: {
+            ...provider.config.providers.acceptance.models.alternate,
+            variants: [{ id: "high", settings: { reasoningEffort: "high" } }],
+          },
+        },
+      },
+    },
     agents: {
       ...provider.config.agents,
       "permission-review": {
@@ -576,6 +589,55 @@ describe.sequential("production browser app", () => {
       .not.toContain(worktree);
     await expect(access(worktree)).rejects.toHaveProperty("code", "ENOENT");
     await access(join(project, "working.txt"));
+  });
+
+  it("inherits the latest session's agent, model, and variant after viewing an older session", async () => {
+    const opener = page.getByLabel("Create session", { exact: true });
+    await opener.click();
+    await page.locator('.server-flow-dialog button[type="submit"]').click();
+    await page.locator(".transcript-empty-state").waitFor();
+    await expect.poll(() => opener.evaluate((node) => node === document.activeElement)).toBe(true);
+    await page.getByRole("button", { name: /^Agent:/u }).click();
+    await page.getByRole("option", { name: "acceptance-agent", exact: true }).click();
+    await page.getByLabel("Agent: acceptance-agent", { exact: true }).waitFor();
+    await page.getByRole("button", { name: /^Model:/u }).click();
+    await page.getByPlaceholder("Search models").fill("Acceptance Alternate");
+    await page
+      .locator(".composer-model-option")
+      .filter({ hasText: "Acceptance Alternate" })
+      .click();
+    await page.getByLabel("Model: Acceptance Alternate", { exact: true }).waitFor();
+    await page.getByRole("button", { name: /^Variant:/u }).click();
+    await page.getByRole("option", { name: "high", exact: true }).click();
+    await page.getByLabel("Variant: high", { exact: true }).waitFor();
+    await send("E2E_ALTERNATE inherited choices");
+    await transcript("Acceptance completed with alternate.");
+    await idle();
+    await page.locator('.shell-session-main:not([aria-current="page"])').first().click();
+    await page.getByLabel("Create session", { exact: true }).click();
+    await page.locator('.server-flow-dialog button[type="submit"]').click();
+    await page.locator(".transcript-empty-state").waitFor();
+    for (const label of [
+      "Agent: acceptance-agent",
+      "Model: Acceptance Alternate",
+      "Variant: high",
+    ]) {
+      await page.getByLabel(label, { exact: true }).waitFor();
+    }
+    const latest = (await api.session.list({ order: "desc", limit: 100 })).data
+      .filter((session) => !session.parentID)
+      .toSorted((left, right) => right.time.created - left.time.created)[0];
+    expect(latest).toMatchObject({
+      agent: "acceptance-agent",
+      model: { providerID: "acceptance", id: "alternate", variant: "high" },
+    });
+    await page.locator('.shell-session-main:not([aria-current="page"])').first().click();
+    await page.getByRole("button", { name: /^Create session$/u }).waitFor();
+    await page.locator(".shell-session-main").first().click();
+    await page.getByLabel("Variant: high", { exact: true }).waitFor();
+    await send("E2E_ALTERNATE copied choices");
+    await transcript("Acceptance completed with alternate.");
+    await idle();
   });
 
   it("loads, preserves, and replies to real pinned-server permission requests", async () => {

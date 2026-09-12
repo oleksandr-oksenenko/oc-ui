@@ -87,6 +87,51 @@ function mount(fixture: ReturnType<typeof setup>, clearDraft: (sessionID: string
 }
 
 describe("createSessionFlows", () => {
+  it("creates with the newest root session's options and retains them across a failed attempt", async () => {
+    const fixture = setup();
+    const model = { providerID: "provider", id: "model", variant: "high" };
+    fixture.records.splice(
+      0,
+      fixture.records.length,
+      { ...session("older"), agent: "old-agent", time: { created: 1, updated: 100 } },
+      { ...session("newest"), agent: "chosen-agent", model, time: { created: 2, updated: 2 } },
+      { ...session("child", "newest"), agent: "child-agent", time: { created: 3, updated: 3 } },
+    );
+    vi.spyOn(fixture.runtime.data.project, "list").mockReturnValue([
+      {
+        id: "project",
+        canonical: "/srv/worktree",
+        time: { created: 1, updated: 1 },
+        sandboxes: [],
+      },
+    ]);
+    const create = vi.spyOn(fixture.runtime.api.session, "create");
+    create.mockRejectedValueOnce(new Error("failed")).mockResolvedValueOnce(session("created"));
+    vi.spyOn(fixture.runtime.data.session, "sync").mockResolvedValue(undefined);
+    const { flows, dispose } = mount(fixture, vi.fn());
+    flows.openNewSession();
+    await vi.waitFor(() => expect(flows.newSession()?.state().projectsLoading).toBe(false));
+    const flow = flows.newSession()!;
+    flow.useProject("project");
+    await vi.waitFor(() => expect(flow.state().error?.kind).toBe("session"));
+    fixture.records.push({
+      ...session("later"),
+      agent: "later-agent",
+      time: { created: 4, updated: 4 },
+    });
+    flow.retry();
+    await vi.waitFor(() => expect(flows.newSession()).toBeUndefined());
+    expect(create).toHaveBeenCalledTimes(2);
+    for (const [input] of create.mock.calls) {
+      expect(input).toMatchObject({
+        agent: "chosen-agent",
+        model,
+        location: { directory: "/srv/worktree" },
+      });
+    }
+    dispose();
+  });
+
   it("releases status mounts whenever creation and deletion flows are dismissed", async () => {
     const fixture = setup();
     const registry = fixture.runtime.effects.registry;

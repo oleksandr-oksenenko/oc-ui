@@ -66,9 +66,16 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
     if (newSession()) return;
     newSessionOpener =
       document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    const previous = input.workspace
+      .sessions()
+      .filter((session) => !session.parentID)
+      .toSorted(
+        (left, right) => right.time.created - left.time.created || right.id.localeCompare(left.id),
+      )[0];
     setNewSession(
       createNewSessionFlow({
         runtime: input.runtime,
+        selection: { agent: previous?.agent, model: previous?.model },
         onSessionCreated: input.onSessionCreated,
         onDismiss: dismissNewSession,
       }),

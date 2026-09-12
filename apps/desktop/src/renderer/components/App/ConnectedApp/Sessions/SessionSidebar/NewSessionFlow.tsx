@@ -51,6 +51,7 @@ export type NewSessionFlowRuntime = {
 
 export type CreateNewSessionFlowInput = {
   readonly runtime: NewSessionFlowRuntime;
+  readonly selection?: Pick<SessionInfo, "agent" | "model">;
   readonly onDismiss: () => void;
   readonly onSessionCreated: (sessionID: string) => void;
 };
@@ -170,7 +171,11 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     worktreeLocation?: LocationRef,
   ) {
     update({ mutation: "creating-session", error: undefined });
-    const created = props.runtime.data.session.create({ projectID: project.id, location });
+    const created = props.runtime.data.session.create({
+      ...props.selection,
+      projectID: project.id,
+      location,
+    });
     const reconcile = Effect.gen(function* () {
       const result = yield* effects.request(() => created.request).pipe(Effect.result);
       if (Result.isFailure(result)) {
