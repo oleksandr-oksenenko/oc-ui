@@ -39,13 +39,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
           }
         }}
       >
-        <div
-          class="shell-session-row"
-          classList={{
-            selected: props.selected,
-            "has-children": props.hasChildren,
-          }}
-        >
+        <div class="shell-session-entry">
           <span class="shell-session-disclosure-slot">
             {props.hasChildren ? (
               <Collapsible.Trigger
@@ -57,40 +51,48 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               </Collapsible.Trigger>
             ) : null}
           </span>
-          <Button
-            class="shell-session-main oc-focus-inset"
-            type="button"
-            size="small"
-            variant="ghost-muted"
-            aria-current={props.selected ? "page" : undefined}
-            aria-label={`${title()}, ${statusLabel()}`}
-            onClick={() => props.onSelect(props.session.id)}
+          <div
+            class="shell-session-row"
+            classList={{
+              selected: props.selected,
+              "has-children": props.hasChildren,
+            }}
           >
-            <span class="shell-session-title">{title()}</span>
-          </Button>
-          <span class="shell-session-row-end">
-            {props.status === "running" ? (
-              <span
-                class="shell-session-status"
-                data-status={props.status}
-                aria-hidden="true"
-                title={statusLabel()}
-              >
-                <Loader width={14} height={14} aria-hidden="true" />
-              </span>
-            ) : null}
-            <IconButton
-              class="shell-session-delete"
+            <Button
+              class="shell-session-main oc-focus-inset"
               type="button"
               size="small"
               variant="ghost-muted"
-              disabled={props.deleteDisabled}
-              aria-label={`Delete ${title()}`}
-              title={props.deleteDisabledReason ?? `Delete ${title()}`}
-              icon={<Icon name="trash" size="small" aria-hidden="true" />}
-              onClick={(event) => props.onDelete(props.session.id, event.currentTarget)}
-            />
-          </span>
+              aria-current={props.selected ? "page" : undefined}
+              aria-label={`${title()}, ${statusLabel()}`}
+              onClick={() => props.onSelect(props.session.id)}
+            >
+              <span class="shell-session-title">{title()}</span>
+            </Button>
+            <span class="shell-session-row-end">
+              {props.status === "running" ? (
+                <span
+                  class="shell-session-status"
+                  data-status={props.status}
+                  aria-hidden="true"
+                  title={statusLabel()}
+                >
+                  <Loader width={14} height={14} aria-hidden="true" />
+                </span>
+              ) : null}
+              <IconButton
+                class="shell-session-delete"
+                type="button"
+                size="small"
+                variant="ghost-muted"
+                disabled={props.deleteDisabled}
+                aria-label={`Delete ${title()}`}
+                title={props.deleteDisabledReason ?? `Delete ${title()}`}
+                icon={<Icon name="trash" size="small" aria-hidden="true" />}
+                onClick={(event) => props.onDelete(props.session.id, event.currentTarget)}
+              />
+            </span>
+          </div>
         </div>
         <Collapsible.Content>{props.children}</Collapsible.Content>
       </Collapsible>

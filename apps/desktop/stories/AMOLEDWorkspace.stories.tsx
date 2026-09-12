@@ -20,6 +20,8 @@ import { workspaceQuestionForm } from "./question-form-fixtures.ts";
 
 const sessions = [
   storySession("compact-ledger", "Compact Ledger Transcript"),
+  storySession("ledger-layout", "Review transcript layout", "compact-ledger"),
+  storySession("ledger-spacing", "Adjust message spacing", "compact-ledger"),
   storySession("refactor-utils", "Refactor Utils"),
   storySession("rename-helpers", "Rename Helpers", "refactor-utils"),
   storySession("extract-hooks", "Extract Hooks", "refactor-utils"),
@@ -141,6 +143,7 @@ function WorkspaceShowcaseFixture() {
   const contextTabsId = "showcase-workspace-context";
   const panelState = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   const [expandedSessions, setExpandedSessions] = createSignal<readonly string[]>([
+    "compact-ledger",
     "refactor-utils",
     "investigate-bug",
     "trace-root-cause",
