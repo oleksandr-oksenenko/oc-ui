@@ -84,8 +84,9 @@
 }
 
 .question-form-choice-group [data-slot="radio-v2-item"] {
+  align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 5px;
   border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius);
   background: var(--oc-surface-canvas);
@@ -114,13 +115,13 @@
 
 .question-form-radio-check {
   position: absolute;
-  top: 11px;
-  left: 10px;
+  top: 50%;
+  left: 5px;
   z-index: 1;
   color: var(--oc-icon-base);
   opacity: 0;
   pointer-events: none;
-  transform: scale(0.9);
+  transform: translateY(-50%) scale(0.9);
   transition:
     opacity 180ms var(--oc-motion-ease),
     transform 220ms var(--oc-motion-ease);
@@ -128,7 +129,7 @@
 
 .question-form-choice-group [data-slot="radio-v2-item"][data-checked] .question-form-radio-check {
   opacity: 1;
-  transform: scale(1);
+  transform: translateY(-50%) scale(1);
 }
 
 .question-form-choice-group
@@ -174,7 +175,7 @@
   --checkbox-offset: 1px;
 
   position: relative;
-  padding: 9px 10px;
+  padding: 5px;
   border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius);
   background: var(--oc-surface-canvas);
