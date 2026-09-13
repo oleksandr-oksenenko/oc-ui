@@ -98,8 +98,14 @@
   min-height: 0;
 }
 
-.transcript-message {
-  margin: 0 0 14px;
+.transcript-document > *,
+.transcript-assistant-document > * {
+  margin: 0 0 4px;
+}
+
+.transcript-document > :last-child,
+.transcript-assistant-document > :last-child {
+  margin-bottom: 0;
 }
 
 .transcript-user-message {
@@ -127,13 +133,22 @@
   border: 0;
 }
 
+.transcript-tool-header,
+.transcript-context-trigger,
+.transcript-code-review-trigger {
+  /* stylelint-disable-next-line declaration-no-important -- Override the pinned Collapsible trigger height. */
+  height: auto !important;
+  min-height: 22px;
+  padding-block: 2px;
+  line-height: var(--oc-type-body-line-height);
+}
+
 .transcript-code-review-trigger {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 28px;
   gap: 8px;
-  padding: 5px 0 4px;
+  padding-inline: 0;
   border: 0;
   color: var(--oc-text-base);
   background: transparent;
@@ -238,13 +253,8 @@
   overflow-wrap: anywhere;
 }
 
-.transcript-assistant-document > :first-child {
-  margin-top: 0;
-}
-
 .transcript-markdown {
   max-width: 700px;
-  margin: 0 0 5px;
 }
 
 .transcript-markdown > :first-child {
@@ -349,7 +359,6 @@
 }
 
 .transcript-tool-call {
-  margin: 8px 0;
   border: 0;
 }
 
@@ -357,15 +366,13 @@
   display: flex;
   align-items: center;
   width: 100%;
-  /* stylelint-disable-next-line declaration-no-important -- Preserve compact rows over the pinned Collapsible trigger height. */
-  height: 26px !important;
-  min-height: 26px;
   gap: 8px;
-  padding: 4px 0;
+  padding-inline: 0;
   border: 0;
   color: var(--oc-text-base);
   background: transparent;
   font: inherit;
+  line-height: var(--oc-type-body-line-height);
   text-align: left;
 }
 
@@ -378,10 +385,10 @@
 }
 
 .transcript-reasoning {
+  padding-block: 2px;
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin: 8px 0;
   color: var(--oc-text-muted);
 }
 
@@ -494,14 +501,14 @@
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 26px;
   gap: 8px;
-  padding: 4px 0;
+  padding-inline: 0;
   border: 0;
   color: var(--oc-text-base);
   background: transparent;
   font: inherit;
   font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
   text-align: left;
 }
 
