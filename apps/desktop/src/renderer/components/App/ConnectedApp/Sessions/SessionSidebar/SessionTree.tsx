@@ -1,3 +1,4 @@
+import type { SessionAttention } from "../createSessionAttention.ts";
 import { ScrollView } from "@opencode-ai/ui/scroll-view";
 import type { SessionInfo } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
@@ -9,6 +10,7 @@ import { SessionTreeItem } from "./SessionTree/SessionTreeItem.tsx";
 import "./SessionTree.css";
 
 export type SessionTreeProps = {
+  readonly attentionForSession?: (sessionID: string) => SessionAttention | undefined;
   readonly sessions: readonly SessionInfo[];
   readonly now?: number;
   readonly statusForSession: (sessionID: string) => DataSessionStatus;
@@ -47,6 +49,7 @@ export function SessionTree(props: SessionTreeProps) {
           <SessionTreeItem
             session={session()}
             status={props.statusForSession(session().id)}
+            attention={props.attentionForSession?.(session().id)}
             hasChildren={node.children.length > 0}
             selected={props.selectedID === session().id}
             expanded={filtering() || isExpanded(session().id)}

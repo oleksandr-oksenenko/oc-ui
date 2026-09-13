@@ -16,6 +16,7 @@ import { createPermissions } from "./Permissions/createPermissions.ts";
 import { createGlobalForms } from "./GlobalForms/createGlobalForms.ts";
 import { createReviewFlow } from "./Review/ReviewRegion.tsx";
 import { createSessionFlows } from "./Sessions/createSessionFlows.ts";
+import { createSessionAttention } from "./Sessions/createSessionAttention.ts";
 import { createSessionWorkspace } from "./Sessions/createSessionWorkspace.ts";
 import { createShellPanelState } from "./Shell/createShellPanelState.ts";
 import { createConnectedLifecycle } from "./createConnectedLifecycle.ts";
@@ -45,6 +46,14 @@ export function createWorkspaceModel(
     runtime,
     connected,
     bootstrapped,
+  });
+  const attentionForSession = createSessionAttention({
+    listLocations: runtime.api.debug.location.list,
+    sessionIDs: runtime.sessions.ids,
+    connected,
+    effects: runtime.effects,
+    data: runtime.data,
+    selectedID: sessions.selectedID,
   });
   const browser = createSessionBrowser(
     runtime,
@@ -158,6 +167,7 @@ export function createWorkspaceModel(
   });
 
   return {
+    attentionForSession,
     browser,
     panels,
     connected,

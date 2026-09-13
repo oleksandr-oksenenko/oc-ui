@@ -152,6 +152,8 @@ function WorkspaceShowcaseFixture() {
     "ui-polish",
     "update-tests",
   ]);
+  const [questionPending, setQuestionPending] = createSignal(true);
+  const [readCompleted, setReadCompleted] = createSignal(false);
   const [draft, setDraft] = createSignal("");
   const [diffComparison, setDiffComparison] = createSignal("working");
 
@@ -187,6 +189,15 @@ function WorkspaceShowcaseFixture() {
             sidebar={
               <SessionSidebar
                 sessions={sessions}
+                attentionForSession={(id) =>
+                  id === "extract-hooks" && !readCompleted()
+                    ? "completed"
+                    : id === "rename-helpers"
+                      ? "permission"
+                      : id === "collect-logs" || (id === "compact-ledger" && questionPending())
+                        ? "question"
+                        : undefined
+                }
                 statusForSession={(id) =>
                   [
                     "refactor-utils",
@@ -209,7 +220,8 @@ function WorkspaceShowcaseFixture() {
                 autoFocusClose={panelState.mobile()}
                 serverName="Local server"
                 serverStatus="connected"
-                onSelect={() => {
+                onSelect={(id) => {
+                  if (id === "extract-hooks") setReadCompleted(true);
                   if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
                 }}
                 onToggleExpanded={toggle}
@@ -232,16 +244,18 @@ function WorkspaceShowcaseFixture() {
                     messages={transcript}
                     sessionStatus="idle"
                     pendingInteraction={
-                      <article
-                        class="transcript-message transcript-assistant-message transcript-pending-interaction"
-                        data-message-id="workspace-question-form"
-                      >
-                        <QuestionForm
-                          form={workspaceQuestionForm}
-                          onSubmit={() => undefined}
-                          onCancel={() => undefined}
-                        />
-                      </article>
+                      <Show when={questionPending()}>
+                        <article
+                          class="transcript-message transcript-assistant-message transcript-pending-interaction"
+                          data-message-id="workspace-question-form"
+                        >
+                          <QuestionForm
+                            form={workspaceQuestionForm}
+                            onSubmit={() => setQuestionPending(false)}
+                            onCancel={() => setQuestionPending(false)}
+                          />
+                        </article>
+                      </Show>
                     }
                   />
                 }

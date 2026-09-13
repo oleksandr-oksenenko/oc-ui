@@ -1,3 +1,4 @@
+import type { SessionAttention } from "../../createSessionAttention.ts";
 import { Collapsible } from "@opencode-ai/ui/collapsible";
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
@@ -11,6 +12,7 @@ import "./SessionTreeItem.css";
 
 export type SessionTreeItemProps = {
   readonly session: SessionInfo;
+  readonly attention?: SessionAttention;
   readonly status: DataSessionStatus;
   readonly hasChildren: boolean;
   readonly selected: boolean;
@@ -25,7 +27,16 @@ export type SessionTreeItemProps = {
 
 export function SessionTreeItem(props: SessionTreeItemProps) {
   const title = () => props.session.title?.trim() || "Untitled session";
-  const statusLabel = () => (props.status === "running" ? "Running" : "Idle");
+  const statusLabel = () =>
+    props.attention === "permission"
+      ? "Permission required"
+      : props.attention === "question"
+        ? "Question awaiting answer"
+        : props.attention === "completed"
+          ? "Turn completed"
+          : props.status === "running"
+            ? "Running"
+            : "Idle";
 
   return (
     <div class="shell-session-tree-item">
@@ -73,14 +84,18 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             <span class="shell-session-title">{title()}</span>
           </Button>
           <span class="shell-session-row-end">
-            {props.status === "running" ? (
+            {props.attention || props.status === "running" ? (
               <span
                 class="shell-session-status"
-                data-status={props.status}
+                data-status={props.attention ?? props.status}
                 aria-hidden="true"
                 title={statusLabel()}
               >
-                <Loader width={14} height={14} aria-hidden="true" />
+                {props.attention ? (
+                  <span class="shell-session-attention-dot" />
+                ) : (
+                  <Loader width={14} height={14} aria-hidden="true" />
+                )}
               </span>
             ) : null}
             <IconButton

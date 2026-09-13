@@ -179,3 +179,10 @@
   width: 12px;
   height: 12px;
 }
+
+.shell-session-attention-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--oc-radius-full);
+  background: var(--oc-status-info);
+}

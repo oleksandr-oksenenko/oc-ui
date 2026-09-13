@@ -430,3 +430,29 @@ describe("SessionSidebar", () => {
     dispose();
   });
 });
+
+describe("session attention indicators", () => {
+  it("shows an accessible blue-dot state in place of the spinner for pending input", () => {
+    const { host, dispose } = mount(() => (
+      <SessionTreeItem
+        session={session("waiting", "Waiting")}
+        status="running"
+        attention="permission"
+        hasChildren={false}
+        selected={false}
+        expanded={false}
+        deleteDisabled
+        onSelect={() => undefined}
+        onToggleExpanded={() => undefined}
+        onDelete={() => undefined}
+      />
+    ));
+    expect(host.querySelector('[aria-label="Waiting, Permission required"]')).not.toBeNull();
+    expect(host.querySelector(".shell-session-attention-dot")).not.toBeNull();
+    expect(host.querySelector('[data-component="loader-v2"]')).toBeNull();
+    expect(host.querySelector(".shell-session-status")?.parentElement?.className).toBe(
+      "shell-session-row-end",
+    );
+    dispose();
+  });
+});

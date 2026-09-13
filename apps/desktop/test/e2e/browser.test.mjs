@@ -483,9 +483,15 @@ describe.sequential("production browser app", () => {
     await idle();
     await send("E2E_QUESTION browser");
     await page.locator(".question-form").waitFor();
+    await expect
+      .poll(() => page.locator('.shell-session-row.selected [data-status="question"]').count())
+      .toBe(1);
     await page.locator(".question-form label").filter({ hasText: "Alpha" }).click();
     await page.locator('.question-form button[type="submit"]').click();
     await transcript("Acceptance question resolved:");
+    await expect
+      .poll(() => page.locator(".shell-session-row.selected .shell-session-attention-dot").count())
+      .toBe(0);
     await idle();
     expect(
       (await providerState()).requests.some(
@@ -594,6 +600,35 @@ describe.sequential("production browser app", () => {
     expect(steerIndex).toBeGreaterThan(0);
     expect(middleIndex).toBeGreaterThan(steerIndex);
     expect(queueIndex).toBeGreaterThan(middleIndex);
+  });
+
+  it("marks completed background turns until their session is opened", async () => {
+    const previousTitle = await page.locator(".titlebar-session-title").textContent();
+    const background = await createPermissionSession("Attention background");
+    const navigation = await createPermissionSession("Attention navigation");
+    await selectSession("Attention background");
+    await send("E2E_STREAM attention");
+    await transcript("Acceptance first streamed fragment.");
+    await selectSession("Attention navigation");
+    const finished = page.getByRole("button", {
+      name: "Attention background, Turn completed",
+      exact: true,
+    });
+    await finished.waitFor();
+    await finished.click();
+    await expect
+      .poll(() => page.locator(".shell-session-row.selected .shell-session-attention-dot").count())
+      .toBe(0);
+    await transcript("Acceptance completed with stream.");
+    await idle();
+    await selectSession(previousTitle);
+    await api.session.remove({ sessionID: background.id });
+    await api.session.remove({ sessionID: navigation.id });
+    await expect
+      .poll(() =>
+        page.getByRole("button", { name: /^Attention (background|navigation),/u }).count(),
+      )
+      .toBe(0);
   });
 
   it("submits annotations and reviews through the same server-backed workspace", async () => {
@@ -895,6 +930,10 @@ describe.sequential("production browser app", () => {
     await selectSession(title);
     const preexistingCard = permissionCard(beforeConnect);
     await preexistingCard.waitFor();
+    const attentionRow = page.locator(".shell-session-row").filter({
+      has: page.getByRole("button", { name: `${title}, Permission required`, exact: true }),
+    });
+    await expect.poll(() => attentionRow.locator(".shell-session-attention-dot").count()).toBe(1);
     await expect.poll(() => preexistingCard.textContent()).toContain("acceptance.preexisting");
     await expect.poll(() => preexistingCard.textContent()).toContain("/acceptance/preexisting/one");
     await expect.poll(() => preexistingCard.textContent()).toContain("/acceptance/preexisting/two");
@@ -902,11 +941,17 @@ describe.sequential("production browser app", () => {
 
     await selectSession(navigationTitle);
     expect(await preexistingCard.count()).toBe(0);
+    expect(await attentionRow.locator(".shell-session-attention-dot").count()).toBe(1);
     await selectSession(title);
     const allowOnce = preexistingCard.getByRole("button", { name: "Allow once", exact: true });
     await allowOnce.focus();
     await page.keyboard.press("Enter");
     await expectPermissionSettled(permissionSession.id, beforeConnect);
+    await expect
+      .poll(() =>
+        page.getByRole("button", { name: `${title}, Permission required`, exact: true }).count(),
+      )
+      .toBe(0);
     await expect
       .poll(() =>
         page

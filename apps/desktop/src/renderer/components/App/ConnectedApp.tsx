@@ -66,6 +66,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
         }
         sidebar={
           <SessionsRegion
+            attentionForSession={props.model.attentionForSession}
             runtime={runtime}
             workspace={sessions}
             flows={flows}

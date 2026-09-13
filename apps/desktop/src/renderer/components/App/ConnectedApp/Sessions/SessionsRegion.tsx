@@ -1,3 +1,4 @@
+import type { SessionAttention } from "./createSessionAttention.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import type { JSX } from "solid-js";
 
@@ -6,6 +7,7 @@ import type { SessionWorkspace } from "./createSessionWorkspace.ts";
 import type { SessionFlows } from "./createSessionFlows.ts";
 
 export type SessionsRegionProps = {
+  readonly attentionForSession?: (sessionID: string) => SessionAttention | undefined;
   readonly runtime: ConnectedRuntime;
   readonly workspace: SessionWorkspace;
   readonly flows: SessionFlows;
@@ -23,6 +25,7 @@ export function SessionsRegion(props: SessionsRegionProps) {
 
   return (
     <SessionSidebar
+      attentionForSession={props.attentionForSession}
       sessions={props.workspace.sessions()}
       statusForSession={(sessionID) => props.runtime.data.session.status(sessionID)}
       selectedID={props.workspace.selectedID()}

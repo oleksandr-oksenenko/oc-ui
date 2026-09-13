@@ -1,3 +1,4 @@
+import type { SessionAttention } from "./createSessionAttention.ts";
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
@@ -14,6 +15,7 @@ import "./SessionSidebar.css";
 type SessionSidebarStatus = "connected" | "reconnecting" | "failed";
 
 export type SessionSidebarProps = {
+  readonly attentionForSession?: (sessionID: string) => SessionAttention | undefined;
   readonly sessions: readonly SessionInfo[];
   readonly now?: number;
   readonly statusForSession: (sessionID: string) => DataSessionStatus;
@@ -108,6 +110,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
 
       <Show when={props.sessions.length > 0 && !props.error}>
         <SessionTree
+          attentionForSession={props.attentionForSession}
           sessions={props.sessions}
           now={props.now}
           statusForSession={props.statusForSession}
