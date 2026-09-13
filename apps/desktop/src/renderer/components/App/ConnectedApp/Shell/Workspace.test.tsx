@@ -70,10 +70,10 @@ describe("Workspace", () => {
     rightSeparator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
 
     expect(leftSeparator.getAttribute("aria-valuenow")).toBe("236");
-    expect(rightSeparator.getAttribute("aria-valuenow")).toBe("536");
+    expect(rightSeparator.getAttribute("aria-valuenow")).toBe("376");
     const shell = host.querySelector<HTMLElement>(".app-shell-v2");
     expect(shell?.style.getPropertyValue("--shell-left-sidebar-width")).toBe("236px");
-    expect(shell?.style.getPropertyValue("--shell-right-panel-width")).toBe("536px");
+    expect(shell?.style.getPropertyValue("--shell-right-panel-width")).toBe("376px");
 
     dispose();
   });
@@ -116,7 +116,7 @@ describe("Workspace", () => {
       host
         .querySelector<HTMLElement>(".app-shell-v2")
         ?.style.getPropertyValue("--shell-right-panel-width"),
-    ).toBe("560px");
+    ).toBe("400px");
     window.dispatchEvent(pointerEvent("pointerup", { pointerID: 8, clientX: 600 }));
 
     left.dispatchEvent(pointerEvent("pointerdown", { pointerID: 9, clientX: 260 }));
@@ -129,6 +129,33 @@ describe("Workspace", () => {
     window.dispatchEvent(pointerEvent("pointercancel", { pointerID: 9, clientX: 260 }));
     expect(workspace.classList.contains("resizing")).toBe(false);
 
+    dispose();
+  });
+
+  it("starts pointer and keyboard resizing from the rendered panel width", () => {
+    const { host, dispose } = mount(() => (
+      <main class="app-shell-v2">
+        <Workspace
+          leftSidebarOpen={false}
+          rightPanelOpen
+          main={<div>Transcript</div>}
+          context={<div>Context</div>}
+        />
+      </main>
+    ));
+    const panel = host.querySelector<HTMLElement>(".shell-right-panel")!;
+    const handle = host.querySelector<HTMLElement>(".shell-right-resize-handle")!;
+    const shell = host.querySelector<HTMLElement>(".app-shell-v2")!;
+    Object.defineProperty(panel, "offsetWidth", { configurable: true, value: 400 });
+
+    handle.dispatchEvent(pointerEvent("pointerdown", { pointerID: 1, clientX: 800 }));
+    window.dispatchEvent(pointerEvent("pointermove", { pointerID: 1, clientX: 790 }));
+    expect(shell.style.getPropertyValue("--shell-right-panel-width")).toBe("410px");
+    window.dispatchEvent(pointerEvent("pointerup", { pointerID: 1, clientX: 790 }));
+
+    Object.defineProperty(panel, "offsetWidth", { configurable: true, value: 380 });
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(shell.style.getPropertyValue("--shell-right-panel-width")).toBe("396px");
     dispose();
   });
 

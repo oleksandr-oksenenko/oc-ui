@@ -18,7 +18,7 @@ const LEFT_MAX = 420;
 const LEFT_DEFAULT = 220;
 const RIGHT_MIN = 280;
 const RIGHT_MAX = 840;
-const RIGHT_DEFAULT = 520;
+const RIGHT_DEFAULT = 360;
 const MAIN_MIN = 420;
 const KEYBOARD_STEP = 16;
 
@@ -71,16 +71,24 @@ export function Workspace(props: WorkspaceProps) {
     window.removeEventListener("pointercancel", finishResize);
   }
 
+  const currentWidth = (side: ResizeSide) => {
+    const selector = side === "left" ? ".shell-left-sidebar" : ".shell-right-panel";
+    return (
+      workspace?.querySelector<HTMLElement>(selector)?.offsetWidth ||
+      (side === "left" ? leftWidth() : rightWidth())
+    );
+  };
+
   const widthBounds = (side: ResizeSide) => {
     const minimum = side === "left" ? LEFT_MIN : RIGHT_MIN;
     const configuredMaximum = side === "left" ? LEFT_MAX : RIGHT_MAX;
     const otherWidth =
       side === "left"
         ? contextOpen()
-          ? rightWidth()
+          ? currentWidth("right")
           : 0
         : props.leftSidebarOpen && sidebarPresent
-          ? leftWidth()
+          ? currentWidth("left")
           : 0;
     const workspaceWidth = workspace?.clientWidth ?? 0;
     const availableMaximum =
@@ -111,7 +119,7 @@ export function Workspace(props: WorkspaceProps) {
       pointerID: event.pointerId,
       side,
       startX: event.clientX,
-      startWidth: side === "left" ? leftWidth() : rightWidth(),
+      startWidth: currentWidth(side),
     };
     setResizing(side);
     removePointerListeners();
@@ -136,14 +144,14 @@ export function Workspace(props: WorkspaceProps) {
   onCleanup(removePointerListeners);
 
   const resizeWithKeyboard = (side: ResizeSide, event: KeyboardEvent) => {
-    const currentWidth = side === "left" ? leftWidth() : rightWidth();
+    const width = currentWidth(side);
     const direction = side === "left" ? 1 : -1;
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      setWidth(side, currentWidth - KEYBOARD_STEP * direction);
+      setWidth(side, width - KEYBOARD_STEP * direction);
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
-      setWidth(side, currentWidth + KEYBOARD_STEP * direction);
+      setWidth(side, width + KEYBOARD_STEP * direction);
     } else if (event.key === "Home") {
       event.preventDefault();
       setWidth(side, widthBounds(side).minimum);
