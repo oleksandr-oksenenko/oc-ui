@@ -313,15 +313,21 @@
   line-height: var(--oc-type-control-line-height);
 }
 
-.question-form-custom-choice .question-form-custom-answer[data-component="text-input-v2"] {
+.question-form-custom-choice .question-form-custom-answer[data-component="textarea-v2"] {
   flex: 1;
   min-width: 0;
-  height: 20px;
+  min-height: 20px;
   padding: 0;
   background: transparent;
   box-shadow: none;
 }
 
-.question-form-custom-answer[data-component="text-input-v2"] [data-slot="text-input-v2-input"] {
+.question-form-custom-answer[data-component="textarea-v2"] [data-slot="textarea-v2-textarea"] {
+  min-height: 20px;
+  max-height: 160px;
+  height: auto;
+  field-sizing: content;
+  resize: none;
+  line-height: var(--oc-type-control-line-height);
   padding: 0;
 }

@@ -112,7 +112,7 @@
   outline-offset: var(--oc-focus-ring-inset-offset) !important;
 }
 
-.question-form-custom-choice [data-component="text-input-v2"] {
+.question-form-custom-choice [data-component="textarea-v2"] {
   outline: none !important;
   box-shadow: none !important;
 }

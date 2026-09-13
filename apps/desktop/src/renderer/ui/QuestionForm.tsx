@@ -5,6 +5,7 @@ import {
   ItemIndicator,
   ItemLabel,
 } from "@kobalte/core/radio-group";
+import { Textarea } from "@opencode-ai/ui/textarea";
 import type { FormAnswer, FormField, FormInfo, FormValue } from "@opencode-ai/client";
 import { Button } from "@opencode-ai/ui/button";
 import { Card } from "@opencode-ai/ui/card";
@@ -287,7 +288,7 @@ export function QuestionForm(props: QuestionFormProps) {
               queueMicrotask(() =>
                 fieldRoots
                   .get(field.key)
-                  ?.querySelector<HTMLInputElement>("[data-question-form-custom-input]")
+                  ?.querySelector<HTMLTextAreaElement>("[data-question-form-custom-input]")
                   ?.focus(),
               );
               return;
@@ -325,7 +326,8 @@ export function QuestionForm(props: QuestionFormProps) {
                 when={selected() === CUSTOM_TOKEN}
                 fallback={<ItemLabel data-slot="radio-v2-item-label">Custom answer</ItemLabel>}
               >
-                <TextInput
+                <Textarea
+                  rows={1}
                   class="question-form-custom-answer"
                   aria-label="Custom answer"
                   aria-describedby={error ? errorID : undefined}

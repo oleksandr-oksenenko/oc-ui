@@ -92,16 +92,18 @@ describe("QuestionForm", () => {
     expect(custom?.checked).toBe(true);
     expect(current?.checked).toBe(false);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
-    const input = mounted.host.querySelector<HTMLInputElement>(
+    const input = mounted.host.querySelector<HTMLTextAreaElement>(
       "[data-question-form-custom-input]",
     )!;
     expect(input.closest('[data-slot="radio-v2-item"]')).toBe(custom?.parentElement);
     expect(document.activeElement).toBe(input);
-    input.value = "Another workspace";
+    input.value = "Another workspace\nwith a second line";
     input.dispatchEvent(new InputEvent("input", { bubbles: true }));
     expect(custom?.checked).toBe(true);
     submit(mounted.host);
-    expect(mounted.onSubmit).toHaveBeenCalledWith({ workspace: "Another workspace" });
+    expect(mounted.onSubmit).toHaveBeenCalledWith({
+      workspace: "Another workspace\nwith a second line",
+    });
 
     mounted.host.querySelector<HTMLInputElement>('input[value="option:0"]')?.click();
     expect(mounted.host.querySelector<HTMLInputElement>('input[value="custom"]')?.checked).toBe(
@@ -138,7 +140,7 @@ describe("QuestionForm", () => {
     submit(mounted.host);
 
     expect(mounted.onSubmit).toHaveBeenCalledWith({ answer: "custom" });
-    expect(mounted.host.querySelector('input[placeholder="Type your answer"]')).toBeNull();
+    expect(mounted.host.querySelector('textarea[placeholder="Type your answer"]')).toBeNull();
     mounted.dispose();
   });
 
@@ -164,7 +166,7 @@ describe("QuestionForm", () => {
     submit(mounted.host);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
 
-    const customInput = mounted.host.querySelector<HTMLInputElement>(
+    const customInput = mounted.host.querySelector<HTMLTextAreaElement>(
       "[data-question-form-custom-input]",
     );
     expect(customInput).not.toBeNull();
