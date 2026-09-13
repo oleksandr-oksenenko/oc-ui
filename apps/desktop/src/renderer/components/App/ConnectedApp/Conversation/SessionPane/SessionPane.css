@@ -354,8 +354,7 @@
 
 .transcript-tool-call {
   margin: 8px 0;
-  border-top: 1px solid var(--oc-border-muted);
-  border-bottom: 1px solid var(--oc-border-muted);
+  border: 0;
 }
 
 .transcript-tool-header {
@@ -380,10 +379,6 @@
 
 .transcript-tool-header:not(:disabled):hover {
   color: var(--oc-text-strong);
-}
-
-.transcript-tool-header > [data-slot="collapsible-arrow"] {
-  margin-left: auto;
 }
 
 .transcript-reasoning {
