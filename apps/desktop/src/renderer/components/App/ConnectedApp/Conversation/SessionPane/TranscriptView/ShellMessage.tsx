@@ -31,9 +31,7 @@ export function ShellMessage(props: { readonly message: SessionMessageShell }): 
           >
             <Loader width={14} height={14} aria-hidden="true" />
           </Show>
-          <span classList={{ "sr-only": shellSemanticStatus(props.message) === "success" }}>
-            {shellStatus(props.message)}
-          </span>
+          <span class="sr-only">{shellStatus(props.message)}</span>
         </span>
       </Collapsible.Trigger>
       <Collapsible.Content>

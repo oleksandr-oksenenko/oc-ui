@@ -48,7 +48,7 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
               aria-hidden="true"
             />
           </Show>
-          <span classList={{ "sr-only": status() === "completed" }}>{statusLabel()}</span>
+          <span class="sr-only">{statusLabel()}</span>
         </span>
       </Collapsible.Trigger>
       <Collapsible.Content>

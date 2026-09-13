@@ -42,7 +42,7 @@ export function CompactionMessage(props: {
           >
             <Loader width={14} height={14} aria-hidden="true" />
           </Show>
-          <span classList={{ "sr-only": props.message.status === "completed" }}>
+          <span class="sr-only">
             {props.message.status === "completed"
               ? "Completed"
               : props.message.status === "failed"
