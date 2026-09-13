@@ -242,9 +242,7 @@
   color: var(--oc-text-muted);
 }
 
-.composer-model-list
-  [data-slot="list-search-input"][data-component="input"]
-  [data-slot="input-input"] {
+.composer-model-list [data-slot="list-search"] [data-component="input"] [data-slot="input-input"] {
   height: 26px;
   padding: 0;
   color: var(--oc-text-contrast);
@@ -255,7 +253,8 @@
 }
 
 .composer-model-list
-  [data-slot="list-search-input"][data-component="input"]
+  [data-slot="list-search"]
+  [data-component="input"]
   [data-slot="input-input"]::placeholder {
   color: var(--oc-text-muted);
 }
