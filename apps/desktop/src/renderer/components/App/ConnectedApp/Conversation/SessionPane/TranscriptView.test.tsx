@@ -288,8 +288,12 @@ describe("TranscriptView", () => {
             : element.textContent,
       ),
     ).toEqual(["Before", "reasoning", "tool", "After"]);
-    expect(host.querySelector(".transcript-reasoning-summary")?.textContent).toBe("Think");
-    expect(host.querySelector(".transcript-reasoning button")).toBeNull();
+    const reasoningTrigger = host.querySelector<HTMLButtonElement>(
+      ".transcript-reasoning .transcript-context-trigger",
+    );
+    expect(reasoningTrigger?.getAttribute("aria-expanded")).toBe("false");
+    expect(reasoningTrigger?.textContent).toBe("Reasoning");
+    expect(host.querySelector(".transcript-reasoning-summary")).toBeNull();
     expect(
       [...host.querySelectorAll<HTMLElement>('[data-slot="collapsible-trigger"]')].every(
         (trigger) => trigger.getAttribute("aria-expanded") === "false",
@@ -298,11 +302,90 @@ describe("TranscriptView", () => {
     expect(
       [
         ...host.querySelectorAll<HTMLElement>(
-          ".transcript-tool-call, .transcript-shell-message, .transcript-skill-message, .transcript-compaction, .transcript-context-message",
+          ".transcript-reasoning, .transcript-tool-call, .transcript-shell-message, .transcript-skill-message, .transcript-compaction, .transcript-context-message",
         ),
       ].every((element) => element.dataset.component === "collapsible"),
     ).toBe(true);
     expect(host.querySelector(".transcript-reasoning svg")).not.toBeNull();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("collapses reasoning by default and reveals its text on demand", () => {
+    stubResizeObserver();
+    const messages: readonly SessionMessageInfo[] = [
+      {
+        id: "assistant-reasoning",
+        time: base,
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "p", id: "m" },
+        content: [
+          {
+            type: "reasoning",
+            text: "Working through it",
+            time: { created: 1_000, completed: 4_000 },
+          },
+        ],
+      },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const trigger = host.querySelector<HTMLButtonElement>(
+      ".transcript-reasoning .transcript-context-trigger",
+    )!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.textContent).toBe("Reasoning");
+    expect(host.querySelector(".transcript-reasoning-summary")).toBeNull();
+
+    trigger.click();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector(".transcript-reasoning-summary")?.textContent).toBe(
+      "Working through it",
+    );
+    expect(
+      host.querySelector(".transcript-reasoning-summary")?.getAttribute("data-annotation-block"),
+    ).toBe('["content",0,"reasoning"]');
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps expanded reasoning open while streamed text arrives", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
+      {
+        id: "assistant-reasoning",
+        time: base,
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "p", id: "m" },
+        content: [{ type: "reasoning", text: "First thought" }],
+      },
+    ]);
+    const [status, setStatus] = createSignal<"running" | "idle">("running");
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
+    ));
+    const trigger = host.querySelector<HTMLButtonElement>(
+      ".transcript-reasoning .transcript-context-trigger",
+    )!;
+    trigger.click();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    setMessages(0, "content", 0, { type: "reasoning", text: "First thought and more" });
+    expect(host.querySelector(".transcript-reasoning .transcript-context-trigger")).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector(".transcript-reasoning-summary")?.textContent).toBe(
+      "First thought and more",
+    );
+
+    setMessages(0, "content", 1, { type: "text", text: "Done" });
+    setStatus("idle");
+    expect(host.querySelector(".transcript-reasoning .transcript-context-trigger")).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
     dispose();
     vi.unstubAllGlobals();
   });
@@ -354,9 +437,11 @@ describe("TranscriptView", () => {
         button.getAttribute("aria-expanded"),
       ),
     ).toEqual(["false", "false", "false", "false", "false"]);
-    expect(host.querySelector(".transcript-reasoning-summary")?.textContent).toBe(
-      "Working through it",
-    );
+    expect(
+      host
+        .querySelector(".transcript-reasoning .transcript-context-trigger")
+        ?.getAttribute("aria-expanded"),
+    ).toBe("false");
     expect(
       host
         .querySelector(".transcript-compaction-running .transcript-context-trigger")
@@ -366,6 +451,9 @@ describe("TranscriptView", () => {
     host
       .querySelectorAll<HTMLButtonElement>(".transcript-tool-header, .transcript-context-trigger")
       .forEach((button) => button.click());
+    expect(host.querySelector(".transcript-reasoning-summary")?.textContent).toBe(
+      "Working through it",
+    );
     expect(host.querySelector(".transcript-tool-streaming")).not.toBeNull();
     expect(host.querySelector(".transcript-tool-running")).not.toBeNull();
     expect(host.querySelector(".transcript-tool-completed")).not.toBeNull();
