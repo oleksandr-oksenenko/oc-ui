@@ -129,7 +129,7 @@ function renderMessage(
       return (
         <TimelineRow
           id={message.id}
-          icon="prompt"
+          icon="subagent"
           label="Agent switched"
           detail={`${message.previous ? `${message.previous} → ` : ""}${message.agent}`}
         />
@@ -138,7 +138,7 @@ function renderMessage(
       return (
         <TimelineRow
           id={message.id}
-          icon="outline-dots"
+          icon="models"
           label="Model switched"
           detail={`${message.previous ? `${modelName(message.previous)} → ` : ""}${modelName(message.model)}`}
         />
@@ -159,6 +159,7 @@ function renderMessage(
       return (
         <ContextMessage
           id={message.id}
+          icon={message.type === "system" ? "settings-gear" : "align-right"}
           label={message.type === "system" ? "System context" : "Context"}
           text={message.text}
           description={message.description}

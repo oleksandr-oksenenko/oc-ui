@@ -17,7 +17,7 @@ export function CompactionMessage(props: {
       defaultOpen={false}
     >
       <Collapsible.Trigger class="transcript-context-trigger">
-        <Icon name="outline-dots" size="small" aria-hidden="true" />
+        <Icon name="collapse" size="small" aria-hidden="true" />
         <span class="transcript-context-label">Compaction</span>
         <span class="transcript-context-detail">{props.message.reason}</span>
         <span

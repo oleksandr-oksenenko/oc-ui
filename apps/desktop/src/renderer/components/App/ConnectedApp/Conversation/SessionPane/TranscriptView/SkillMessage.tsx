@@ -13,7 +13,7 @@ export function SkillMessage(props: { readonly message: SessionMessageSkill }): 
       defaultOpen={false}
     >
       <Collapsible.Trigger class="transcript-context-trigger">
-        <Icon name="prompt" size="small" aria-hidden="true" />
+        <Icon name="post-skill" size="small" aria-hidden="true" />
         <span class="transcript-context-label">Skill: {props.message.name}</span>
       </Collapsible.Trigger>
       <Collapsible.Content>

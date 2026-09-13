@@ -6,6 +6,7 @@ import { annotationBlock } from "../../annotation-source.ts";
 
 export function ContextMessage(props: {
   readonly id: string;
+  readonly icon: string;
   readonly label: string;
   readonly text: string;
   readonly description?: string;
@@ -17,7 +18,7 @@ export function ContextMessage(props: {
       defaultOpen={false}
     >
       <Collapsible.Trigger class="transcript-context-trigger">
-        <Icon name="outline-dots" size="small" aria-hidden="true" />
+        <Icon name={props.icon} size="small" aria-hidden="true" />
         <span class="transcript-context-label">{props.label}</span>
         <Show when={props.description}>
           <span class="transcript-context-detail">{props.description}</span>

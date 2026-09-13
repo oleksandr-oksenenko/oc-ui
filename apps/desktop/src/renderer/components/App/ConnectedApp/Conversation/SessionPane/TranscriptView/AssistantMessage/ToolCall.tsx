@@ -154,13 +154,15 @@ function formatObject(
 function renderToolIcon(name: string): JSX.Element {
   const normalized = name.toLowerCase();
   const icon = normalized.includes("read")
-    ? "file-tree"
-    : normalized.includes("search")
+    ? "open-file"
+    : normalized.includes("search") || normalized.includes("grep") || normalized.includes("glob")
       ? "magnifying-glass"
-      : normalized.includes("shell") ||
-          normalized.includes("command") ||
-          normalized.includes("bash")
-        ? "terminal"
-        : "outline-dots";
+      : normalized.includes("edit") || normalized.includes("write") || normalized.includes("patch")
+        ? "pencil-line"
+        : normalized.includes("shell") ||
+            normalized.includes("command") ||
+            normalized.includes("bash")
+          ? "terminal"
+          : "code";
   return <Icon name={icon} size="small" aria-hidden="true" />;
 }
