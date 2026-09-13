@@ -43,6 +43,9 @@ export function Markdown(props: MarkdownProps): JSX.Element {
   const [blocks, setBlocks] = createSignal<{ host: HTMLDivElement; text: string }[]>([]);
   createEffect(() => {
     root.innerHTML = renderMarkdown(props.text);
+    for (const region of root.querySelectorAll<HTMLElement>("pre, table")) {
+      region.tabIndex = 0;
+    }
     setBlocks(
       [...root.querySelectorAll("pre")].map((pre) => {
         const host = document.createElement("div");

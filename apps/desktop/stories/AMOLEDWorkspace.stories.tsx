@@ -1,4 +1,6 @@
-import { Show, createSignal } from "solid-js";
+/* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
+import { Show, For, createSignal } from "solid-js";
+import { expect, screen, userEvent, within } from "storybook/test";
 import type { Meta } from "storybook-solidjs-vite";
 
 import { AppShell } from "../src/renderer/components/App/ConnectedApp/Shell/AppShell.tsx";
@@ -13,7 +15,26 @@ import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Convers
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { QuestionForm } from "../src/renderer/ui/QuestionForm.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
-import { storyTranscript as transcript } from "./transcript-fixtures.ts";
+import type { SessionMessageInfo } from "@opencode-ai/client";
+import { useDialog } from "@opencode-ai/ui/context/dialog";
+import { richItems, markdownAssistant, streamingAssistant } from "./transcript-catalog-fixtures.ts";
+import { GlobalFormsRegion } from "../src/renderer/components/App/ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
+import { createFakeGlobalForms } from "./global-forms/global-form-fixtures.ts";
+import { PermissionsRegion } from "../src/renderer/components/App/ConnectedApp/Permissions/PermissionsRegion.tsx";
+import { PermissionRequestCard } from "../src/renderer/ui/PermissionRequestCard.tsx";
+import {
+  NewSessionDialog,
+  type NewSessionLocationMode,
+} from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/NewSessionFlow/NewSessionDialog.tsx";
+import { DeleteSessionDialog } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/DeleteSessionFlow/DeleteSessionDialog.tsx";
+import {
+  createSessionPrompt,
+  readSessionPromptMetadata,
+} from "../src/renderer/opencode/session-prompt.ts";
+import { reviewPrompt } from "./transcript-catalog-fixtures.ts";
+import { WorkspaceAddProject } from "./workspace-showcase/WorkspaceAddProject.tsx";
+import { WorkspaceBrowser } from "./workspace-showcase/WorkspaceBrowser.tsx";
+import { createWorkspacePermissions } from "./workspace-showcase/permission-fixture.ts";
 import { storySession } from "./session-fixtures.ts";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
 import { workspaceQuestionForm } from "./question-form-fixtures.ts";
@@ -140,6 +161,114 @@ const meta = {
 export default meta;
 
 function WorkspaceShowcaseFixture() {
+  const dialog = useDialog();
+  let nextID = 0;
+  const globalForms = createFakeGlobalForms();
+  const permissions = createWorkspacePermissions();
+  const [sessionItems, setSessionItems] = createSignal(sessions);
+  const [selectedID, setSelectedID] = createSignal("compact-ledger");
+  const selectedTitle = () =>
+    sessionItems().find((item) => item.id === selectedID())?.title ?? "New session";
+  const [sentMessages, setSentMessages] = createSignal<
+    Record<string, readonly SessionMessageInfo[]>
+  >({});
+  const [model, setModel] = createSignal("openai/gpt-5");
+  const [variant, setVariant] = createSignal("deep");
+  const [agent, setAgent] = createSignal("build");
+  const [stopped, setStopped] = createSignal<readonly string[]>([]);
+  const running = (id: string) =>
+    [
+      "refactor-utils",
+      "config-option",
+      "auth-layer",
+      "typography",
+      "update-tests",
+      "unit-tests",
+      "integrate-stripe",
+    ].includes(id) && !stopped().includes(id);
+  const [files, setFiles] = createSignal<readonly File[]>([]);
+  const [reviewCount, setReviewCount] = createSignal(2);
+  const [project, setProject] = createSignal("oc-ui");
+  const [mode, setMode] = createSignal<NewSessionLocationMode>("worktree");
+  const [projects, setProjects] = createSignal([
+    { id: "oc-ui", name: "oc-ui", location: { directory: "/srv/projects/oc-ui" }, vcs: "git" },
+    {
+      id: "opencode",
+      name: "OpenCode",
+      location: { directory: "/srv/projects/opencode" },
+      vcs: "git",
+    },
+  ]);
+  const createSession = (worktree: boolean) => {
+    const id = `showcase-${++nextID}`;
+    setSessionItems((items) => [
+      storySession(id, `${project()} · ${worktree ? "worktree" : "project folder"}`),
+      ...items,
+    ]);
+    setSelectedID(id);
+    setDraft("");
+    setFiles([]);
+    setReviewCount(0);
+    dialog.close();
+  };
+  const newSession = () =>
+    void dialog.show(() => (
+      <NewSessionDialog
+        state={{ projects: projects(), selectedProjectID: project(), mode: mode() }}
+        onProjectChange={setProject}
+        onModeChange={setMode}
+        onAddProject={() =>
+          void dialog.push(() => (
+            <WorkspaceAddProject
+              onAddProject={(location) => {
+                const id = location.directory;
+                setProjects((items) =>
+                  items.some((item) => item.id === id)
+                    ? items
+                    : [
+                        ...items,
+                        {
+                          id,
+                          name:
+                            location.directory.split("/").filter(Boolean).at(-1) ??
+                            location.directory,
+                          location,
+                          vcs: "git",
+                        },
+                      ],
+                );
+                setProject(id);
+                dialog.close();
+              }}
+            />
+          ))
+        }
+        onUseProject={() => createSession(false)}
+        onCreateWorktree={() => createSession(true)}
+        onRetryProjects={() => undefined}
+        onRetry={() => undefined}
+      />
+    ));
+  const deleteSession = (id: string) => {
+    const removed = new Set([id]);
+    for (let count = -1; count !== removed.size;) {
+      count = removed.size;
+      for (const item of sessionItems())
+        if (item.parentID && removed.has(item.parentID)) removed.add(item.id);
+    }
+    void dialog.show(() => (
+      <DeleteSessionDialog
+        title={sessionItems().find((item) => item.id === id)?.title ?? "Session"}
+        descendantCount={removed.size - 1}
+        deleting={false}
+        onDelete={() => {
+          setSessionItems((items) => items.filter((item) => !removed.has(item.id)));
+          if (removed.has(selectedID())) setSelectedID(sessionItems()[0]?.id ?? "");
+          dialog.close();
+        }}
+      />
+    ));
+  };
   const contextTabsId = "showcase-workspace-context";
   const panelState = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   const [expandedSessions, setExpandedSessions] = createSignal<readonly string[]>([
@@ -167,10 +296,16 @@ function WorkspaceShowcaseFixture() {
       <AppShell
         titlebar={
           <Titlebar
-            selectedTitle="Compact Ledger Transcript"
+            selectedTitle={selectedTitle()}
+            globalControls={<GlobalFormsRegion controller={globalForms.controller} />}
             rightControls={
               <Show when={!panelState.mobile()}>
-                <ContextTitlebarRegion onClose={() => panelState.setRightPanelOpen(false)} />
+                <ContextTitlebarRegion
+                  browserAvailable
+                  view={panelState.contextView()}
+                  onViewChange={panelState.setContextView}
+                  onClose={() => panelState.setRightPanelOpen(false)}
+                />
               </Show>
             }
             mobile={panelState.mobile()}
@@ -188,30 +323,25 @@ function WorkspaceShowcaseFixture() {
             rightPanelOpen={panelState.rightPanelOpen()}
             sidebar={
               <SessionSidebar
-                sessions={sessions}
+                sessions={sessionItems()}
+                secondaryAction={
+                  <PermissionsRegion
+                    controller={permissions}
+                    connected={() => true}
+                    onOpenSession={setSelectedID}
+                  />
+                }
                 attentionForSession={(id) =>
                   id === "extract-hooks" && !readCompleted()
                     ? "completed"
-                    : id === "rename-helpers"
+                    : id === "rename-helpers" && permissions.pending()
                       ? "permission"
                       : id === "collect-logs" || (id === "compact-ledger" && questionPending())
                         ? "question"
                         : undefined
                 }
-                statusForSession={(id) =>
-                  [
-                    "refactor-utils",
-                    "config-option",
-                    "auth-layer",
-                    "typography",
-                    "update-tests",
-                    "unit-tests",
-                    "integrate-stripe",
-                  ].includes(id)
-                    ? "running"
-                    : "idle"
-                }
-                selectedID="compact-ledger"
+                statusForSession={(id) => (running(id) ? "running" : "idle")}
+                selectedID={selectedID()}
                 expandedIDs={expandedSessions()}
                 loading={false}
                 canCreate
@@ -221,12 +351,16 @@ function WorkspaceShowcaseFixture() {
                 serverName="Local server"
                 serverStatus="connected"
                 onSelect={(id) => {
+                  setSelectedID(id);
+                  setDraft("");
+                  setFiles([]);
+                  setReviewCount(0);
                   if (id === "extract-hooks") setReadCompleted(true);
                   if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
                 }}
                 onToggleExpanded={toggle}
-                onDelete={() => undefined}
-                onCreate={() => undefined}
+                onDelete={deleteSession}
+                onCreate={newSession}
                 onRetry={() => undefined}
                 onHide={
                   panelState.mobile() ? () => panelState.setLeftSidebarOpen(false) : undefined
@@ -236,26 +370,57 @@ function WorkspaceShowcaseFixture() {
             }
             main={
               <SessionPane
-                selected
-                title="Compact Ledger Transcript"
+                selected={selectedID() !== ""}
+                title={selectedTitle()}
                 transcript={
                   <TranscriptView
-                    sessionID="amoled-workspace"
-                    messages={transcript}
-                    sessionStatus="idle"
+                    sessionID={selectedID()}
+                    messages={[
+                      ...(selectedID() === "compact-ledger"
+                        ? [...richItems, markdownAssistant]
+                        : []),
+                      ...(running(selectedID()) ? [streamingAssistant] : []),
+                      ...(sentMessages()[selectedID()] ?? []),
+                    ]}
+                    sessionStatus={running(selectedID()) ? "running" : "idle"}
                     pendingInteraction={
-                      <Show when={questionPending()}>
-                        <article
-                          class="transcript-message transcript-assistant-message transcript-pending-interaction"
-                          data-message-id="workspace-question-form"
+                      <>
+                        <Show
+                          when={
+                            (selectedID() === "compact-ledger" ||
+                              selectedID() === "collect-logs") &&
+                            questionPending()
+                          }
                         >
-                          <QuestionForm
-                            form={workspaceQuestionForm}
-                            onSubmit={() => setQuestionPending(false)}
-                            onCancel={() => setQuestionPending(false)}
-                          />
-                        </article>
-                      </Show>
+                          <article
+                            class="transcript-message transcript-assistant-message transcript-pending-interaction"
+                            data-message-id="workspace-question-form"
+                          >
+                            <QuestionForm
+                              form={workspaceQuestionForm}
+                              onSubmit={() => setQuestionPending(false)}
+                              onCancel={() => setQuestionPending(false)}
+                            />
+                          </article>
+                        </Show>
+                        <For
+                          each={permissions
+                            .requests()
+                            .filter((request) => request.sessionID === selectedID())}
+                        >
+                          {(request) => (
+                            <article
+                              class="transcript-message transcript-pending-interaction"
+                              data-message-id={request.id}
+                            >
+                              <PermissionRequestCard
+                                request={request}
+                                onReply={(reply) => void permissions.reply(request.id, reply)}
+                              />
+                            </article>
+                          )}
+                        </For>
+                      </>
                     }
                   />
                 }
@@ -263,33 +428,115 @@ function WorkspaceShowcaseFixture() {
                   <Composer
                     value={draft()}
                     disabled={false}
-                    action="running"
-                    modelSelection={composerModelSelection()}
-                    agentSelection={composerAgentSelection()}
+                    action={running(selectedID()) ? "running" : "send"}
+                    files={files()}
+                    onPasteFiles={(added) => setFiles((items) => [...items, ...added])}
+                    onRemoveFile={(file) =>
+                      setFiles((items) => items.filter((item) => item !== file))
+                    }
+                    review={
+                      reviewCount()
+                        ? { count: reviewCount(), onDiscard: () => setReviewCount(0) }
+                        : undefined
+                    }
+                    modelSelection={composerModelSelection({
+                      selectedModelID: model(),
+                      selectedVariantID: variant(),
+                      onSelectModel: setModel,
+                      onSelectVariant: setVariant,
+                    })}
+                    agentSelection={composerAgentSelection({
+                      selectedAgentID: agent(),
+                      onSelectAgent: setAgent,
+                    })}
                     onInput={setDraft}
-                    onSubmit={() => setDraft("")}
-                    onStop={() => undefined}
+                    onSubmit={() => {
+                      const id = `message-${++nextID}`;
+                      const prompt = createSessionPrompt({
+                        instruction: draft(),
+                        annotations: [],
+                        reviewComments: reviewCount()
+                          ? (readSessionPromptMetadata(reviewPrompt.metadata)?.reviewComments ?? [])
+                          : [],
+                      });
+                      const user: SessionMessageInfo = {
+                        id,
+                        type: "user",
+                        time: { created: nextID + 20 },
+                        text: prompt.text,
+                        metadata: prompt.metadata,
+
+                        files: files().map((file) => ({
+                          name: file.name,
+                          mime: file.type || "application/octet-stream",
+                          data: "fixture",
+                          source: { type: "inline" },
+                        })),
+                      };
+                      setSentMessages((items) => ({
+                        ...items,
+                        [selectedID()]: [
+                          ...(items[selectedID()] ?? []),
+                          user,
+                          {
+                            id: `reply-${id}`,
+                            type: "assistant",
+                            time: { created: nextID + 21, completed: nextID + 22 },
+                            agent: agent(),
+                            model: { providerID: "openai", id: "gpt-5" },
+                            finish: "stop",
+                            content: [
+                              {
+                                type: "text",
+                                text: "This is a simulated Storybook response. Your prompt was added to this session; no server request was sent.",
+                              },
+                            ],
+                          },
+                        ],
+                      }));
+                      setDraft("");
+                      setFiles([]);
+                      setReviewCount(0);
+                    }}
+                    onStop={() => setStopped((items) => [...items, selectedID()])}
                   />
                 }
               />
             }
             context={
-              <ContextPanel
-                onClose={() => panelState.setRightPanelOpen(false)}
-                showTabs={panelState.mobile()}
-                autoFocusClose={panelState.mobile()}
-                tabsIdBase={contextTabsId}
-                diff={{
-                  files: diff,
-                  loading: false,
-                  comparison: diffComparison(),
-                  comparisonOptions: [
-                    { value: "working", label: "Working changes" },
-                    { value: "branch", label: "Changes vs main" },
-                  ],
-                  onComparisonChange: setDiffComparison,
-                }}
-              />
+              <div class="workspace-context-body">
+                <Show when={panelState.mobile()}>
+                  <ContextTitlebarRegion
+                    browserAvailable
+                    view={panelState.contextView()}
+                    onViewChange={panelState.setContextView}
+                    onClose={() => panelState.setRightPanelOpen(false)}
+                  />
+                </Show>
+                <Show
+                  when={panelState.contextView() === "browser"}
+                  fallback={
+                    <ContextPanel
+                      onClose={() => panelState.setRightPanelOpen(false)}
+                      showTabs={false}
+                      autoFocusClose={panelState.mobile()}
+                      tabsIdBase={contextTabsId}
+                      diff={{
+                        files: diff,
+                        loading: false,
+                        comparison: diffComparison(),
+                        comparisonOptions: [
+                          { value: "working", label: "Working changes" },
+                          { value: "branch", label: "Changes vs main" },
+                        ],
+                        onComparisonChange: setDiffComparison,
+                      }}
+                    />
+                  }
+                >
+                  <WorkspaceBrowser />
+                </Show>
+              </div>
             }
           />
         }
@@ -300,4 +547,53 @@ function WorkspaceShowcaseFixture() {
 
 export const WorkspaceShowcase = {
   render: () => <WorkspaceShowcaseFixture />,
+};
+
+// Keep the default story untouched for visual work; exercise local callbacks here.
+export const InteractiveWorkspace = {
+  render: () => <WorkspaceShowcaseFixture />,
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Browser" }));
+    await expect(canvas.getByRole("textbox", { name: "Browser address" })).toHaveValue(
+      "http://localhost:3000",
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "New browser tab" }));
+    await expect(canvas.getByRole("button", { name: "Close New tab" })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Diff" }));
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Rename Helpers, Permission required" }),
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "Allow once" }));
+    await expect(canvas.getByRole("button", { name: "Rename Helpers, Idle" })).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "Permissions, 0 pending permission requests" }),
+    ).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Refactor Utils, Running" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Stop" }));
+    await expect(canvas.getByRole("button", { name: "Refactor Utils, Idle" })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Create session" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Use project folder" }));
+    await expect(
+      canvas.getByRole("region", { name: "oc-ui · project folder" }),
+    ).toBeInTheDocument();
+    await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "Check this fixture");
+    await userEvent.click(canvas.getByRole("button", { name: "Send" }));
+    await expect(canvas.getByText("Check this fixture", { exact: true })).toBeInTheDocument();
+    await expect(canvas.getByText(/This is a simulated Storybook response/)).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "oc-ui · project folder, Idle" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Delete oc-ui · project folder" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Delete session" }));
+    await expect(
+      canvas.queryByRole("button", { name: "oc-ui · project folder, Idle" }),
+    ).not.toBeInTheDocument();
+  },
+};
+export const NarrowWorkspace = {
+  render: () => <WorkspaceShowcaseFixture />,
+  globals: { viewport: { value: "narrow", isRotated: false } },
+};
+export const MobileWorkspace = {
+  render: () => <WorkspaceShowcaseFixture />,
+  globals: { viewport: { value: "mobile", isRotated: false } },
 };
