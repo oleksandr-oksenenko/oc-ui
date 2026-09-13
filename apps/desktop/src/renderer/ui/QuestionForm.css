@@ -313,7 +313,7 @@
   line-height: var(--oc-type-control-line-height);
 }
 
-.question-form-custom-answer[data-component="text-input-v2"] {
+.question-form-custom-choice .question-form-custom-answer[data-component="text-input-v2"] {
   flex: 1;
   min-width: 0;
   height: 20px;

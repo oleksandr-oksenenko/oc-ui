@@ -105,3 +105,14 @@
   ):is(:focus-visible, :has(:focus-visible), [data-state="focus"], [data-focus]) {
   outline-offset: var(--oc-focus-ring-inset-offset) !important;
 }
+
+/* Inline custom answers share their radio row's focus frame. */
+.question-form-custom-choice:has([data-question-form-custom-input]:focus-visible) {
+  outline: var(--oc-focus-ring-outline) !important;
+  outline-offset: var(--oc-focus-ring-inset-offset) !important;
+}
+
+.question-form-custom-choice [data-component="text-input-v2"] {
+  outline: none !important;
+  box-shadow: none !important;
+}
