@@ -303,6 +303,10 @@
   margin-top: 3px;
 }
 
+.transcript-view a[href] {
+  cursor: pointer;
+}
+
 .transcript-markdown a {
   color: var(--oc-accent);
   text-decoration: underline;
