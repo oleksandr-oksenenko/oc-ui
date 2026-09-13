@@ -8,6 +8,7 @@ import { Session } from "@opencode-ai/schema/session";
 import { SessionInbox } from "@opencode-ai/schema/session-inbox";
 import { SessionMessage } from "@opencode-ai/schema/session-message";
 import { Tool } from "@opencode-ai/schema/tool";
+import { Workspace } from "@opencode-ai/schema/workspace";
 import { Worktree } from "@opencode-ai/schema/worktree";
 import { DateTime, Deferred, Effect, Exit, Fiber, Result, Schema, Scope } from "effect";
 import { TestClock } from "effect/testing";
@@ -53,7 +54,11 @@ function fixture() {
     Effect.succeed({
       ...caller,
       id: input?.id ?? Session.ID.create(),
-      location: input?.location ?? caller.location,
+      // The server's session store materializes workspaceID even when undefined.
+      location: Location.Ref.make({
+        directory: input?.location?.directory ?? caller.location.directory,
+        workspaceID: input?.location?.workspaceID,
+      }),
       model: input?.model,
       agent: input?.agent,
     }),
@@ -108,6 +113,49 @@ describe("session_create", () => {
       expect(tool.input["~standard"].jsonSchema.input({ target: "draft-07" })).toHaveProperty(
         "properties.prompt",
       );
+    }),
+  );
+
+  it.effect("returns the JSON location shape the host validates and records", () =>
+    Effect.gen(function* () {
+      const tool = yield* makeSessionTool(fixture().ctx);
+      const result = yield* tool.execute({ prompt: "Task" }, toolContext);
+      expect(Schema.isSchema(tool.output)).toBe(false);
+      // The host's Standard Schema output branch decodes the execute result.
+      const validated = yield* Effect.promise(() =>
+        Promise.resolve(tool.output["~standard"].validate(result.output)),
+      );
+      expect(validated).toEqual({ value: result.output });
+      expect(Object.hasOwn(result.output.location, "workspaceID")).toBe(false);
+      expect(
+        tool.output["~standard"].jsonSchema.output({ target: "draft-2020-12" }),
+      ).toHaveProperty("properties.sessionID");
+      // The host records the result metadata inside a JSON event.
+      yield* Schema.encodeUnknownEffect(Schema.Record(Schema.String, Schema.Json))(
+        result.metadata ?? {},
+      );
+    }),
+  );
+
+  it.effect("reports the server's location and preserves a defined workspace ID", () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      const directory = Location.Ref.fields.directory.make("/worktrees/canonical");
+      const workspaceID = Workspace.ID.create();
+      f.ctx.session = {
+        ...f.ctx.session,
+        create: (input) =>
+          Effect.succeed({
+            ...caller,
+            id: input?.id ?? Session.ID.create(),
+            location: Location.Ref.make({ directory, workspaceID }),
+            model: input?.model,
+            agent: input?.agent,
+          }),
+      };
+      const tool = yield* makeSessionTool(f.ctx);
+      const result = yield* tool.execute({ prompt: "Task" }, toolContext);
+      expect(result.output.location).toEqual({ directory, workspaceID });
     }),
   );
 
@@ -206,6 +254,13 @@ describe("session_create", () => {
         .execute({ prompt: "Review", variant: "unsupported" }, toolContext)
         .pipe(Effect.result);
       expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) {
+        expect(Object.hasOwn(result.failure.metadata ?? {}, "location")).toBe(false);
+        expect(Object.hasOwn(result.failure.metadata ?? {}, "sessionID")).toBe(false);
+        yield* Schema.encodeUnknownEffect(Schema.Record(Schema.String, Schema.Json))(
+          result.failure.metadata ?? {},
+        );
+      }
       expect(f.worktree).not.toHaveBeenCalled();
       expect(f.create).not.toHaveBeenCalled();
     }),
@@ -236,6 +291,12 @@ describe("session_create", () => {
           )
           .pipe(Effect.result);
         expect(Result.isFailure(result)).toBe(true);
+        if (Result.isFailure(result)) {
+          expect(Object.hasOwn(result.failure.metadata ?? {}, "sessionID")).toBe(false);
+          yield* Schema.encodeUnknownEffect(Schema.Record(Schema.String, Schema.Json))(
+            result.failure.metadata ?? {},
+          );
+        }
         expect(f.create).not.toHaveBeenCalled();
       }
     }),
@@ -250,13 +311,17 @@ describe("session_create", () => {
       const tool = yield* makeSessionTool(f.ctx);
       const result = yield* tool.execute({ prompt: "Task" }, toolContext).pipe(Effect.result);
       expect(Result.isFailure(result)).toBe(true);
-      if (Result.isFailure(result))
+      if (Result.isFailure(result)) {
         expect(result.failure.metadata).toMatchObject({
           stage: "prompt",
           uncertain: true,
           sessionID: f.create.mock.calls[0]?.[0]?.id,
           location: { directory: destination.directory },
         });
+        yield* Schema.encodeUnknownEffect(Schema.Record(Schema.String, Schema.Json))(
+          result.failure.metadata ?? {},
+        );
+      }
       expect(f.prompt).toHaveBeenCalledOnce();
       expect(f.create).toHaveBeenCalledOnce();
     }),
@@ -270,9 +335,13 @@ describe("session_create", () => {
       );
       const tool = yield* makeSessionTool(f.ctx);
       const result = yield* tool.execute({ prompt: "Task" }, toolContext).pipe(Effect.result);
-      if (Result.isFailure(result))
+      if (Result.isFailure(result)) {
         expect(result.failure.metadata).toMatchObject({ stage: "worktree", uncertain: true });
-      else throw new Error("Expected failure");
+        expect(Object.hasOwn(result.failure.metadata ?? {}, "sessionID")).toBe(false);
+        yield* Schema.encodeUnknownEffect(Schema.Record(Schema.String, Schema.Json))(
+          result.failure.metadata ?? {},
+        );
+      } else throw new Error("Expected failure");
       expect(f.create).not.toHaveBeenCalled();
     }),
   );

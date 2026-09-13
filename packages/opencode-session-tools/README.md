@@ -103,10 +103,13 @@ no custom permission dialog or approval mechanism.
 
 The source uses the supported Effect plugin API. A single `build.ts` recipe serves
 standalone installation and desktop packaging. It bundles OpenCode's
-extensionless ESM imports and retains the exact Effect runtime dependency. Standard
-Schema isolates decoding when the server embeds its own Effect copy. The desktop
-build produces the same standalone plugin beside its server worker, outside ASAR,
-and passes its absolute file URL through the built-in launch configuration.
+extensionless ESM imports and retains the exact Effect runtime dependency.
+Standard Schema wrappers keep tool input and output parsing inside this plugin
+instead of the host's own Effect copy, which the standalone CLI embeds. Because
+the host decodes outputs and records result metadata as JSON, the tool returns
+the encoded (JSON) location shape. The desktop build produces the same
+standalone plugin beside its server worker, outside ASAR, and passes its absolute
+file URL through the built-in launch configuration.
 OpenCode packages are build dependencies; remote installations need only Effect
 at runtime. Root checks type-check the source; no declaration build is needed
 for the executable plugin.

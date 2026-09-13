@@ -198,10 +198,13 @@ a parent, and submits only the supplied prompt. Creation survives caller
 interruption; plugin shutdown owns cleanup. Mutations are never retried and
 partial failures retain resources with diagnostic metadata.
 
-The pinned standalone CLI embeds its own Effect copy, so tool input/output use
-Standard Schema wrappers without Effect AST fields. This avoids private parser
-sentinels crossing runtime copies. New locations can briefly expose an empty agent
-catalog; the tool repeats only that read for up to five seconds before failing.
+The pinned standalone CLI embeds its own Effect copy, so tool input and output use
+Standard Schema wrappers that keep parsing inside the plugin. The host validates
+outputs by decoding them and records result metadata as JSON, so the tool returns
+the encoded (JSON) location shape: the session store materializes
+`workspaceID: undefined`, which both the encoded schema and JSON reject. New
+locations can briefly expose an empty agent catalog; the tool repeats only that
+read for up to five seconds before failing.
 
 Desktop builds emit the plugin beside the worker. The packaging resource map
 copies it outside ASAR, and launch configuration supplies its absolute directory

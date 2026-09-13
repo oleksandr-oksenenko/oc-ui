@@ -40,8 +40,10 @@ const Output = Schema.Struct({
   promptAccepted: Schema.Literal(true),
 });
 
-// The CLI embeds its own Effect copy. Standard Schema keeps optional-field
-// decoding in this plugin instead of sharing Effect's private parser sentinels.
+// The host validates Standard Schema outputs by decoding them, so the value the
+// tool returns must be valid on the encoded (JSON) side. The wrapper also keeps
+// parsing in this plugin instead of the host's own Effect copy, which the
+// standalone CLI embeds.
 const ToolInput = {
   "~standard": Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(Input))["~standard"],
 };
@@ -129,7 +131,13 @@ const createSession = Effect.fn("SessionTools.createSession")(function* (
   let location: Location.Ref | undefined;
   let sessionID: Session.ID | undefined;
   let uncertain = false;
-  const metadata = () => ({ stage, location, sessionID, uncertain });
+  // The host records failure metadata inside a JSON event, which rejects
+  // explicit undefined values, so omit fields that are not known yet.
+  const metadata = () => {
+    const base = { stage, uncertain };
+    if (location === undefined) return base;
+    return sessionID === undefined ? { ...base, location } : { ...base, location, sessionID };
+  };
 
   const run = Effect.gen(function* () {
     const caller = yield* ctx.session.get({ sessionID: tool.sessionID });
@@ -193,7 +201,14 @@ const createSession = Effect.fn("SessionTools.createSession")(function* (
       return yield* new Tool.Error({
         message: "The server did not create the requested independent session.",
       });
-    location = created.location;
+    // The host decodes Standard Schema outputs and records the result metadata
+    // as JSON. The session store materializes `workspaceID: undefined`, which the
+    // encoded schema and the JSON record both reject, so omit the key.
+    const { directory, workspaceID } = created.location;
+    location =
+      workspaceID === undefined
+        ? Location.Ref.make({ directory })
+        : Location.Ref.make({ directory, workspaceID });
 
     stage = "prompt";
     uncertain = true;
