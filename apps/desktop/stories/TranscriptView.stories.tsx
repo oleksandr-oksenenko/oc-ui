@@ -1,5 +1,5 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import {
@@ -18,6 +18,7 @@ import {
   compactionStates,
 } from "./transcript-catalog-fixtures.ts";
 import { TranscriptPendingFixture } from "./transcript-catalog/TranscriptPendingFixture.tsx";
+import { TranscriptUpdatesFixture } from "./transcript-catalog/TranscriptUpdatesFixture.tsx";
 
 const meta = {
   title: "Transcript/TranscriptView",
@@ -37,6 +38,61 @@ const renderTranscript = (args: TranscriptViewProps) => (
 export const Rich: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
   render: renderTranscript,
+};
+
+const settle = () =>
+  // oxlint-disable-next-line effecttsgo/new-promise -- Browser layout frames are owned and awaited by the story.
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
+export const ScrollPreservation: Story = {
+  args: { messages: [], sessionStatus: "running" },
+  render: () => <TranscriptUpdatesFixture />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    const tool = canvas.getByRole("button", { name: "read Running" });
+    const rows = [...canvasElement.querySelectorAll(".transcript-message")];
+    const distanceFromBottom = () =>
+      viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+    await waitFor(() => expect(distanceFromBottom()).toBeLessThan(2));
+    tool.click();
+    await settle();
+    viewport.scrollTop +=
+      tool.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 60;
+    viewport.dispatchEvent(new Event("scroll"));
+    await settle();
+    const readingPosition = tool.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+    await expect(viewport.scrollTop).toBeGreaterThan(0);
+    await expect(distanceFromBottom()).toBeGreaterThan(viewport.clientHeight);
+
+    // DOM clicks avoid moving focus/scroll to the fixture controls during a server-like update.
+    canvas.getByRole("button", { name: "Advance response" }).click();
+    await settle();
+    canvas.getByRole("button", { name: "Finish turn" }).click();
+    await settle();
+    await expect(canvas.getByRole("button", { name: "read Completed" })).toBe(tool);
+    await expect(tool).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      Math.abs(
+        tool.getBoundingClientRect().top - viewport.getBoundingClientRect().top - readingPosition,
+      ),
+    ).toBeLessThan(2);
+    const updatedRows = [...canvasElement.querySelectorAll(".transcript-message")];
+    for (const [index, row] of rows.entries()) {
+      await expect(updatedRows[index]).toBe(row);
+    }
+
+    viewport.scrollTop = viewport.scrollHeight;
+    viewport.dispatchEvent(new Event("scroll"));
+    canvas.getByRole("button", { name: "Advance response" }).click();
+    await settle();
+    canvas.getByRole("button", { name: "Finish turn" }).click();
+    await settle();
+    await waitFor(() => expect(distanceFromBottom()).toBeLessThan(2));
+    await expect(tool).toHaveAttribute("aria-expanded", "true");
+  },
 };
 export const Markdown: Story = {
   args: { messages: [markdownAssistant], sessionStatus: "idle", loading: false },

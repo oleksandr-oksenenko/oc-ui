@@ -4,7 +4,7 @@ import { Button } from "@opencode-ai/ui/button";
 import { createAutoScroll } from "@opencode-ai/ui/hooks";
 import { Icon } from "@opencode-ai/ui/icon";
 import { Loader } from "@opencode-ai/ui/loader";
-import { createEffect, onCleanup, Show, type JSX } from "solid-js";
+import { createEffect, For, onCleanup, Show, type JSX } from "solid-js";
 
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
 import { CompactionMessage } from "./TranscriptView/CompactionMessage.tsx";
@@ -93,9 +93,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
       <Show when={props.messages.length > 0 || working() || props.pendingInteraction !== undefined}>
         <div ref={contentRef} class="transcript-document">
-          {props.messages.map((message) =>
-            renderMessage(message, props.sessionStatus, props.onOpenAnnotation),
-          )}
+          <For each={props.messages}>{(message) => renderMessage(message, props)}</For>
 
           {props.pendingInteraction}
 
@@ -113,14 +111,13 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
 function renderMessage(
   message: SessionMessageInfo,
-  sessionStatus: DataSessionStatus,
-  onOpenAnnotation: UserMessageProps["onOpenAnnotation"],
+  props: Pick<TranscriptViewProps, "sessionStatus" | "onOpenAnnotation">,
 ): JSX.Element {
   switch (message.type) {
     case "user":
-      return <UserMessage message={message} onOpenAnnotation={onOpenAnnotation} />;
+      return <UserMessage message={message} onOpenAnnotation={props.onOpenAnnotation} />;
     case "assistant":
-      return <AssistantMessage message={message} sessionStatus={sessionStatus} />;
+      return <AssistantMessage message={message} sessionStatus={props.sessionStatus} />;
     case "shell":
       return <ShellMessage message={message} />;
     case "skill":

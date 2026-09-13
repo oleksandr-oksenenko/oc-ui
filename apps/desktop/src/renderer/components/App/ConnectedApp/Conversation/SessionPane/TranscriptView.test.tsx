@@ -1,4 +1,5 @@
 import type {
+  SessionMessageAssistant,
   SessionMessageAssistantTool,
   SessionMessageInfo,
   SessionMessageUser,
@@ -51,6 +52,53 @@ function renderUserMessage(message: SessionMessageUser) {
 }
 
 describe("TranscriptView", () => {
+  it("preserves message rows and expanded tools across appends and status changes", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
+      {
+        id: "response",
+        time: base,
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "test", id: "test" },
+        content: [assistant("tool", "running")],
+      },
+    ]);
+    const [status, setStatus] = createSignal<"running" | "idle">("running");
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
+    ));
+    const row = host.querySelector('[data-message-id="response"]')!;
+    const trigger = host.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
+    trigger.click();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    setMessages(0, "content", 0, assistant("tool", "completed"));
+    expect(row.textContent).toContain("passed");
+    setMessages(messages.length, {
+      id: "next",
+      agent: "build",
+      model: { providerID: "test", id: "test" },
+      time: base,
+      type: "assistant",
+      content: [{ type: "text", text: "Done" }],
+    });
+    expect(host.querySelector('[data-message-id="response"]')).toBe(row);
+    expect(host.querySelector(".transcript-tool-header")).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    setStatus("idle");
+    expect(host.querySelector('[data-message-id="response"]')).toBe(row);
+    expect(row.getAttribute("data-state")).toBe("complete");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    setStatus("running");
+    expect(row.getAttribute("data-state")).toBe("streaming");
+    expect(host.querySelectorAll(".transcript-message")).toHaveLength(2);
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
   it("releases annotation listeners when the transcript unmounts", () => {
     stubResizeObserver();
     const detach = vi.fn<() => void>();
