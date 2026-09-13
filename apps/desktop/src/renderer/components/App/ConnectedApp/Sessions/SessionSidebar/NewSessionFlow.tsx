@@ -273,7 +273,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     if (created.fetchError)
       showToast({
         title: "Could not update from origin.",
-        description: "Using the last fetched default branch.",
+        description: "Using local main.",
         persistent: true,
       });
     yield* createSessionAt(project, created.location, created.location);

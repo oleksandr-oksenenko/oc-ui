@@ -913,6 +913,10 @@ describe.sequential("production browser app", () => {
   });
 
   it("creates and removes an isolated server worktree with cancel and reopen", async () => {
+    await git(project, "commit", "--allow-empty", "-m", "local worktree base");
+    await git(project, "branch", "-f", "main", "HEAD");
+    const localMain = await git(project, "rev-parse", "refs/heads/main");
+    expect(localMain).not.toBe(await git(project, "rev-parse", "origin/main"));
     await page.screenshot({ path: join(artifacts, "browser-connected.png") });
     const before = await git(project, "worktree", "list", "--porcelain");
     await page.getByLabel("Create session", { exact: true }).click();
@@ -926,9 +930,7 @@ describe.sequential("production browser app", () => {
     expect(worktree.startsWith(`${await realpath(profile.paths.data)}/opencode/worktree/`)).toBe(
       true,
     );
-    expect(await git(worktree, "rev-parse", "HEAD")).toBe(
-      await git(project, "rev-parse", "origin/main"),
-    );
+    expect(await git(worktree, "rev-parse", "HEAD")).toBe(localMain);
     const row = page.locator(".shell-session-row.selected");
     await row.hover();
     await row.locator(".shell-session-delete").click();

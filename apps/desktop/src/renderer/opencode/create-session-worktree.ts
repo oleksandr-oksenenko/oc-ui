@@ -114,7 +114,7 @@ const prepareWorktree = Effect.fn("createSessionWorktree.prepareWorktree")(funct
   const run = yield* runShell(input, location, prepareScript);
   const records = run.output.split(/\r?\n/).filter((line) => line.startsWith("OCUI1\t"));
   const completed = run.event.data.status === "exited" && run.event.data.exit === 0;
-  // The first record is the pre-fetch snapshot; only a completed command may use the final one.
+  // The first record snapshots local main; only a completed command may use the final one.
   const record = completed && records.length === 2 ? records[1] : records[0];
   const failure =
     run.event.data.status === "timeout"

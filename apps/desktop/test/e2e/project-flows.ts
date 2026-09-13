@@ -60,7 +60,7 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   assert.ok(worktree.startsWith(`${await realpath(dataHome)}/opencode/worktree/`));
   assert.equal(
     await git(worktree, "rev-parse", "HEAD"),
-    await git(projectDirectory, "rev-parse", "origin/main"),
+    await git(projectDirectory, "rev-parse", "refs/heads/main"),
   );
   assert.ok((await git(projectDirectory, "worktree", "list", "--porcelain")).includes(worktree));
   await $("p=No working tree changes").waitForDisplayed({ timeout: TIMEOUT });

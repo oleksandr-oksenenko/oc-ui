@@ -46,10 +46,12 @@ session directly in its canonical directory. A Git project offers:
 - **Create a worktree**: prepare an isolated detached Git worktree automatically.
   There are no directory or name fields.
 
-`createSessionWorktree` reads the connected server's XDG data location and cached
-origin-default commit through the shell API, then discovers and fetches origin's
-default branch. A confirmed fetch failure shows a persistent error and uses the
-previously cached commit; without a cache, creation stops.
+`createSessionWorktree` reads the connected server's XDG data location and local
+`refs/heads/main` commit through the shell API, then discovers and fetches origin's
+default branch. After fetching, it captures the latest local `main` commit as the
+worktree base. A confirmed fetch failure or timeout shows a persistent error and
+uses the pre-fetch local `main` snapshot. A missing local `main` stops creation.
+Fetching updates remote-tracking refs; it does not pull or move local `main`.
 
 The helper calls `worktree.create` with strategy `git`, the registered source
 root as `from`, the automatic XDG parent, and the captured commit ID as `branch`.

@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -214,7 +214,7 @@ describe("createSessionWorktree", () => {
     expect(fake.api.worktree.create).not.toHaveBeenCalled();
   });
 
-  it("buffers an early zsh completion and creates at the fetched immutable commit", async () => {
+  it("buffers an early zsh completion and creates at the final local main commit", async () => {
     const fake = fixture();
     const result = await createSessionWorktree(fake.input, { directory: root });
 
@@ -234,7 +234,7 @@ describe("createSessionWorktree", () => {
   });
 
   it.skipIf(platform() === "win32")(
-    "fetches a rewritten default branch without changing the source checkout",
+    "fetches a rewritten remote default but creates from local main, preserving a dirty detached source",
     async () => {
       const directory = mkdtempSync(join(tmpdir(), "ocui-fetch-test-"));
       const source = join(directory, "source");
@@ -246,6 +246,11 @@ describe("createSessionWorktree", () => {
         git(directory, "clone", "--bare", source, origin);
         git(directory, "clone", origin, checkout);
         const original = git(checkout, "rev-parse", "HEAD");
+        git(checkout, "checkout", "-b", "main");
+        git(checkout, "commit", "--allow-empty", "-m", "local only");
+        const localMain = git(checkout, "rev-parse", "HEAD");
+        git(checkout, "checkout", "--detach", original);
+        writeFileSync(join(checkout, "dirty.txt"), "keep me");
         git(source, "commit", "--amend", "--allow-empty", "-m", "rewritten");
         git(source, "push", "--force", origin, "HEAD:refs/heads/trunk");
         const rewritten = git(source, "rev-parse", "HEAD");
@@ -262,13 +267,20 @@ describe("createSessionWorktree", () => {
         });
 
         expect(output).toBe(
-          record(dataHome + "/opencode/worktree", original) +
-            record(dataHome + "/opencode/worktree", rewritten),
+          record(dataHome + "/opencode/worktree", localMain) +
+            record(dataHome + "/opencode/worktree", localMain),
         );
         expect(git(checkout, "rev-parse", "refs/remotes/origin/HEAD")).toBe(rewritten);
         expect(git(checkout, "rev-parse", "HEAD")).toBe(original);
+        expect(git(checkout, "status", "--short")).toBe("?? dirty.txt");
+        const online = fixture({ preparationOutput: output });
+        await createSessionWorktree(online.input, { directory: root });
+        expect(online.api.worktree.create).toHaveBeenCalledWith(
+          expect.objectContaining({ branch: localMain }),
+          expect.objectContaining({ signal: expect.any(AbortSignal) }),
+        );
 
-        // The combined script preserves the cached default after origin becomes unavailable.
+        // Local main remains the base when origin becomes unavailable.
         git(checkout, "remote", "set-url", "origin", join(directory, "missing-origin"));
         const offline = execFileSync("/bin/sh", ["-c", command], {
           cwd: checkout,
@@ -281,17 +293,29 @@ describe("createSessionWorktree", () => {
         expect(replay.api.worktree.create).toHaveBeenCalledWith(
           expect.objectContaining({
             directory: dataHome + "/opencode/worktree",
-            branch: rewritten,
+            branch: localMain,
           }),
           expect.objectContaining({ signal: expect.any(AbortSignal) }),
         );
+        git(checkout, "branch", "-D", "main");
+        const missing = spawnSync("/bin/sh", ["-c", command], {
+          cwd: checkout,
+          encoding: "utf8",
+          env: { ...process.env, XDG_DATA_HOME: dataHome },
+        });
+        expect(missing.status).toBe(1);
+        const noMain = fixture({ preparationOutput: missing.stdout });
+        await expect(createSessionWorktree(noMain.input, { directory: root })).rejects.toThrow(
+          "The project has no local main branch.",
+        );
+        expect(noMain.api.worktree.create).not.toHaveBeenCalled();
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
     },
   );
 
-  it("uses the cached commit after a confirmed fetch failure and reports the failure", async () => {
+  it("uses the local main snapshot after a confirmed fetch failure and reports the failure", async () => {
     const fake = fixture({ fetchFails: true });
     const result = await createSessionWorktree(fake.input, { directory: root });
 
@@ -333,7 +357,7 @@ describe("createSessionWorktree", () => {
     },
   );
 
-  it("uses the published cache after a confirmed preparation timeout", async () => {
+  it("uses the local main snapshot after a confirmed preparation timeout", async () => {
     const fake = fixture({ fetchTimeout: true });
     const result = await createSessionWorktree(fake.input, { directory: root });
     expect(result.fetchError).toContain("timed out");
@@ -355,7 +379,7 @@ describe("createSessionWorktree", () => {
     );
   });
 
-  it("does not create after a preparation timeout without a cached commit", async () => {
+  it("does not create after a preparation timeout without a local main snapshot", async () => {
     const fake = fixture({ fetchTimeout: true, withoutCache: true });
     await expect(createSessionWorktree(fake.input, { directory: root })).rejects.toThrow(
       "timed out",
@@ -394,7 +418,7 @@ describe("createSessionWorktree", () => {
     expect(fake.api.worktree.create).toHaveBeenCalledOnce();
   });
 
-  it("does not create a worktree when fetch fails without a cached commit", async () => {
+  it("does not create a worktree when fetch fails without a local main snapshot", async () => {
     const fake = fixture({ fetchFails: true, withoutCache: true });
 
     await expect(createSessionWorktree(fake.input, { directory: root })).rejects.toMatchObject({

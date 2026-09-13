@@ -25,25 +25,16 @@ if [ -z "$parent" ]; then
   exit 1
 fi
 
-cached=
-cached_ref=$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null) || cached_ref=
-case "$cached_ref" in
-  refs/remotes/origin/*)
-    cached=$(git rev-parse --verify "$cached_ref^{commit}" 2>/dev/null) || cached=
-    case "$cached" in
-      ''|*[!0123456789abcdefABCDEF]*) cached= ;;
-    esac
-    if [ -n "$cached" ] && [ "${#cached}" -lt 40 ]; then
-      cached=
-    fi
-    ;;
-esac
+local_main=$(git rev-parse --verify 'refs/heads/main^{commit}' 2>/dev/null) || {
+  result "" 'The project has no local main branch.'
+  exit 1
+}
 
-# Publish the cached commit before fetching so a confirmed timeout can use it.
-result "$cached" ""
+# Publish local main before fetching so a confirmed timeout can use it.
+result "$local_main" ""
 
 fail() {
-  result "$cached" "${1:-Origin discovery or fetch failed.}"
+  result "$local_main" "${1:-Origin discovery or fetch failed.}"
   exit 0
 }
 
@@ -61,18 +52,12 @@ fi
 fetch_output=$(git fetch --no-tags origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" 2>&1) ||
   fail "$fetch_output"
 
-commit=$(git rev-parse --verify "refs/remotes/origin/${branch}^{commit}" 2>&1) || fail "$commit"
-
-case "$commit" in
-  ''|*[!0123456789abcdefABCDEF]*)
-    fail "The fetched origin branch did not resolve to an immutable commit."
-    ;;
-esac
-if [ "${#commit}" -lt 40 ]; then
-  fail "The fetched origin branch did not resolve to an immutable commit."
-fi
-
-# Refresh the local default-branch hint; failure does not invalidate the fetched commit.
+# Refresh the remote default-branch hint independently of the local base.
 git symbolic-ref refs/remotes/origin/HEAD "refs/remotes/origin/${branch}" >/dev/null 2>&1 || :
 
+# Capture the latest local main after fetching; never use a remote ref as the base.
+commit=$(git rev-parse --verify 'refs/heads/main^{commit}' 2>/dev/null) || {
+  result "" 'The project has no local main branch.'
+  exit 0
+}
 result "$commit" ""

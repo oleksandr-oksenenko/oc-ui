@@ -1,5 +1,18 @@
 # Automatic worktrees
 
+## Current base policy — 2026-09-13
+
+New Session worktrees now start from local `refs/heads/main`. The shell script
+still discovers and fetches origin's default branch before creation, then captures
+local `main` as an immutable commit. Fetch failure or confirmed timeout uses the
+pre-fetch local `main` snapshot and shows "Could not update from origin. Using
+local main." Missing local `main` stops creation. Fetch never pulls or moves the
+local branch. Existing ownership, cancellation, and retained-worktree recovery
+remain in the New Session flow and workspace scope.
+
+This supersedes the origin-only base and cached-origin fallback policy in the
+original design and historical verification below.
+
 Status: Implemented for OpenCode `0.0.0-beta-18866`, 2026-09-02. Dependency
 upgrade committed as `ee1735a`; feature verification is recorded below.
 
