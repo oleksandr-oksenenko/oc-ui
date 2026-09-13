@@ -117,6 +117,14 @@
   padding-left: 0;
 }
 
+/* Continue the sidebar surface and divider through the titlebar so the column
+   reads as one piece. Surface matches `.shell-session-sidebar`; divider
+   matches `.shell-left-sidebar`. */
+.shell-titlebar.left-sidebar-open .titlebar-left-region {
+  border-right: 1px solid var(--oc-border-base);
+  background: var(--oc-surface-raised);
+}
+
 [data-host="desktop"][data-platform="macos"]
   .shell-titlebar:not(.left-sidebar-open)
   .titlebar-left-region {
