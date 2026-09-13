@@ -88,13 +88,9 @@ export function createWorkspaceModel(
   });
   const permissions = createPermissions({
     effects: runtime.effects,
-    api: runtime.api,
     data: runtime.data,
     selectedID: sessions.selectedID,
     connected,
-    defaultLocation: runtime.defaultLocation,
-    sessions: sessions.sessions,
-    catalogState: runtime.sessions.state,
   });
   createConnectedLifecycle({
     effects: runtime.effects,

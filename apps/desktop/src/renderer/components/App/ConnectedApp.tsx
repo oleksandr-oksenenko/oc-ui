@@ -6,7 +6,6 @@ import { ChangesRegion } from "./ConnectedApp/Changes/ChangesRegion.tsx";
 import { ContextTitlebarRegion } from "./ConnectedApp/Shell/ContextTitlebarRegion.tsx";
 import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegion.tsx";
 import { GlobalFormsRegion } from "./ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
-import { PermissionsRegion } from "./ConnectedApp/Permissions/PermissionsRegion.tsx";
 import { ReviewRegion } from "./ConnectedApp/Review/ReviewRegion.tsx";
 import { SessionFlowsRegion } from "./ConnectedApp/Sessions/SessionFlowsRegion.tsx";
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
@@ -75,16 +74,6 @@ export function ConnectedApp(props: ConnectedAppProps) {
             onHide={panels.mobile() ? closeLeftSidebarOnMobile : undefined}
             onSessionOpened={closeLeftSidebarOnMobile}
             onChangeServer={props.onChangeServer}
-            secondaryAction={
-              <PermissionsRegion
-                controller={permissions}
-                connected={connected}
-                onOpenSession={(sessionID) => {
-                  sessions.select(sessionID);
-                  closeLeftSidebarOnMobile();
-                }}
-              />
-            }
           />
         }
         main={

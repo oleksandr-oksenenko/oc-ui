@@ -5,7 +5,7 @@ import { Loader } from "@opencode-ai/ui/loader";
 import { TextInput } from "@opencode-ai/ui/text-input";
 import type { SessionInfo } from "@opencode-ai/client";
 import type { DataSessionStatus } from "@opencode-ai/client/solid";
-import { Show, createSignal, type JSX } from "solid-js";
+import { Show, createSignal } from "solid-js";
 
 import { SessionHeader } from "./SessionSidebar/SessionHeader.tsx";
 import { SessionTree } from "./SessionSidebar/SessionTree.tsx";
@@ -28,7 +28,6 @@ export type SessionSidebarProps = {
   readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
   readonly showHeader?: boolean;
   readonly autoFocusClose?: boolean;
-  readonly secondaryAction?: JSX.Element;
   readonly serverName: string;
   readonly serverStatus: SessionSidebarStatus;
   readonly onSelect: (sessionID: string) => void;
@@ -55,7 +54,6 @@ export function SessionSidebar(props: SessionSidebarProps) {
         <SessionHeader
           canCreate={props.canCreate}
           autoFocusClose={props.autoFocusClose}
-          secondaryAction={props.secondaryAction}
           onCreate={props.onCreate}
           onHide={props.onHide}
         />

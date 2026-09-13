@@ -32,7 +32,7 @@ project, and can resolve other matching pending requests. “Reject all” rejec
 other pending requests in the same session; explain this next to the controls.
 These behaviors come from the pinned core permission service, not UI policy.
 Saved-rule management and a cross-session permission inbox were deferred from this
-first phase and are covered by the [management design](permissions-management-design.md).
+first phase. The later [management feature](permissions-management-design.md) has been retired; requests are answered inside sessions.
 Agent configuration remains outside scope; opening a session loads its pending requests.
 
 The existing titlebar launcher counts global forms only. Label it “global forms”

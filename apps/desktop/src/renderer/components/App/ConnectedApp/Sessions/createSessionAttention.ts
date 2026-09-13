@@ -16,7 +16,12 @@ export function createSessionAttention(input: {
   readonly data: Pick<Data, "on"> & {
     readonly session: {
       readonly get: Data["session"]["get"];
-      readonly permission: Pick<Data["session"]["permission"], "list">;
+      readonly permission: Pick<Data["session"]["permission"], "sync" | "invalidate"> & {
+        // The SDK returns undefined until this session cache is hydrated.
+        readonly list: (
+          sessionID: string,
+        ) => ReturnType<Data["session"]["permission"]["list"]> | undefined;
+      };
       readonly form: Pick<Data["session"]["form"], "list" | "sync" | "invalidate">;
     };
   };
@@ -66,7 +71,10 @@ export function createSessionAttention(input: {
         }
         const reconnecting = previous?.[0] === false;
         const missing = (ids ? ids.split("\0") : []).filter(
-          (id) => reconnecting || input.data.session.form.list(id) === undefined,
+          (id) =>
+            reconnecting ||
+            input.data.session.form.list(id) === undefined ||
+            input.data.session.permission.list(id) === undefined,
         );
         refresh.run(
           Effect.gen(function* () {
@@ -81,23 +89,31 @@ export function createSessionAttention(input: {
             });
             yield* Effect.forEach(
               active,
-              (id) => {
-                if (reconnecting) input.data.session.form.invalidate(id);
-                return input.effects
-                  .request(() => input.data.session.form.sync(id))
-                  .pipe(
-                    Effect.catch(() =>
-                      Effect.logWarning("Pending questions could not be refreshed", {
-                        sessionID: id,
-                      }),
-                    ),
-                  );
-              },
+              (id) =>
+                Effect.forEach(
+                  ["form", "permission"] as const,
+                  (kind) => {
+                    const cache = input.data.session[kind];
+                    if (!reconnecting && cache.list(id) !== undefined) return Effect.void;
+                    if (reconnecting) cache.invalidate(id);
+                    return input.effects
+                      .request(() => cache.sync(id))
+                      .pipe(
+                        Effect.catch(() =>
+                          Effect.logWarning("Pending session requests could not be refreshed", {
+                            sessionID: id,
+                            kind,
+                          }),
+                        ),
+                      );
+                  },
+                  { discard: true },
+                ),
               { concurrency: 4, discard: true },
             );
           }).pipe(
             Effect.catch(() =>
-              Effect.logWarning("Active locations could not be read for pending questions"),
+              Effect.logWarning("Active locations could not be read for pending session requests"),
             ),
           ),
         );

@@ -1,9 +1,17 @@
 # Permission inbox and saved approvals
 
-Status: implemented and independently reviewed; final verification recorded below.
-Builds on `b87343d` and targets OpenCode
-`0.0.0-beta-18866`. The previous request cards and their concurrency safeguards
-remain the only reply surface.
+Status: retired. The permission launcher, cross-session inbox, saved-approval
+management UI, and their exclusive controller logic were removed. The pinned
+OpenCode API exposes session permission requests and project-scoped saved rules,
+not a separate global permission request type. Resolve permission requests in
+their sessions; global forms remain a separate feature.
+
+Session reply/recovery logic remains in `Permissions/createPermissions`.
+`Sessions/createSessionAttention` hydrates pending permissions alongside questions
+for blue dots in unopened sessions. “Always allow” still saves rules on the server;
+this change removes the app's saved-rule browsing/revocation UI, not stored rules.
+
+The remainder is the historical design for the removed management feature.
 
 ## Caller-facing API
 

@@ -14,13 +14,17 @@ function setup(unloaded = false) {
     const [selectedID, select] = createSignal<string | undefined>("viewed");
     const [permissions, setPermissions] = createSignal<
       ReturnType<Input["data"]["session"]["permission"]["list"]>
-    >([]);
+    >(unloaded ? undefined : []);
     const [forms, setForms] = createSignal<ReturnType<Input["data"]["session"]["form"]["list"]>>(
       unloaded ? undefined : [],
     );
     const [connected, setConnected] = createSignal(true);
     const sync = vi.fn<Input["data"]["session"]["form"]["sync"]>(() => Promise.resolve());
     const invalidate = vi.fn<Input["data"]["session"]["form"]["invalidate"]>();
+    const permissionSync = vi.fn<Input["data"]["session"]["permission"]["sync"]>(() =>
+      Promise.resolve(),
+    );
+    const permissionInvalidate = vi.fn<Input["data"]["session"]["permission"]["invalidate"]>();
     const attention = createSessionAttention({
       sessionIDs: () => ["viewed", "background", "dormant"],
       listLocations: () => Promise.resolve([{ directory: "/project" }]),
@@ -35,13 +39,15 @@ function setup(unloaded = false) {
               id,
               location: { directory: id === "dormant" ? "/dormant" : "/project" },
             }),
-          permission: { list: permissions },
+          permission: { list: permissions, sync: permissionSync, invalidate: permissionInvalidate },
           form: { list: forms, sync, invalidate },
         },
       },
     });
     return {
       sync,
+      permissionSync,
+      permissionInvalidate,
       invalidate,
       setConnected,
       attention,
@@ -100,16 +106,21 @@ describe("session attention", () => {
     expect(state.attention("viewed")).toBeUndefined();
   });
 
-  it("loads questions for unopened sessions and refreshes cached lists after reconnect", async () => {
+  it("loads questions and permissions for unopened sessions and refreshes cached lists after reconnect", async () => {
     const state = setup(true);
     await expect.poll(() => state.sync.mock.calls.length).toBe(2);
     expect(state.sync).toHaveBeenCalledWith("background");
     expect(state.sync).not.toHaveBeenCalledWith("dormant");
+    expect(state.permissionSync).toHaveBeenCalledWith("background");
+    expect(state.permissionSync).not.toHaveBeenCalledWith("dormant");
     state.setForms([]);
+    state.setPermissions([]);
     state.setConnected(false);
     state.setConnected(true);
     await expect.poll(() => state.sync.mock.calls.length).toBe(4);
     expect(state.invalidate).toHaveBeenCalledWith("background");
+    await expect.poll(() => state.permissionSync.mock.calls.length).toBe(4);
+    expect(state.permissionInvalidate).toHaveBeenCalledWith("background");
   });
 
   it("clears old completion markers when another execution starts or the session is deleted", () => {

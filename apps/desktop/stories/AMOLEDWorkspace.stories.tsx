@@ -20,7 +20,6 @@ import { useDialog } from "@opencode-ai/ui/context/dialog";
 import { richItems, markdownAssistant, streamingAssistant } from "./transcript-catalog-fixtures.ts";
 import { GlobalFormsRegion } from "../src/renderer/components/App/ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
 import { createFakeGlobalForms } from "./global-forms/global-form-fixtures.ts";
-import { PermissionsRegion } from "../src/renderer/components/App/ConnectedApp/Permissions/PermissionsRegion.tsx";
 import { PermissionRequestCard } from "../src/renderer/ui/PermissionRequestCard.tsx";
 import {
   NewSessionDialog,
@@ -324,13 +323,7 @@ function WorkspaceShowcaseFixture() {
             sidebar={
               <SessionSidebar
                 sessions={sessionItems()}
-                secondaryAction={
-                  <PermissionsRegion
-                    controller={permissions}
-                    connected={() => true}
-                    onOpenSession={setSelectedID}
-                  />
-                }
+
                 attentionForSession={(id) =>
                   id === "extract-hooks" && !readCompleted()
                     ? "completed"
@@ -566,16 +559,13 @@ export const InteractiveWorkspace = {
     );
     await userEvent.click(canvas.getByRole("button", { name: "Allow once" }));
     await expect(canvas.getByRole("button", { name: "Rename Helpers, Idle" })).toBeInTheDocument();
-    await expect(
-      canvas.getByRole("button", { name: "Permissions, 0 pending permission requests" }),
-    ).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Refactor Utils, Running" }));
     await userEvent.click(canvas.getByRole("button", { name: "Stop" }));
     await expect(canvas.getByRole("button", { name: "Refactor Utils, Idle" })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Create session" }));
     await userEvent.click(await screen.findByRole("button", { name: "Use project folder" }));
     await expect(
-      canvas.getByRole("region", { name: "oc-ui · project folder" }),
+      await canvas.findByRole("region", { name: "oc-ui · project folder" }),
     ).toBeInTheDocument();
     await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "Check this fixture");
     await userEvent.click(canvas.getByRole("button", { name: "Send" }));
@@ -584,6 +574,7 @@ export const InteractiveWorkspace = {
     await userEvent.click(canvas.getByRole("button", { name: "oc-ui · project folder, Idle" }));
     await userEvent.click(canvas.getByRole("button", { name: "Delete oc-ui · project folder" }));
     await userEvent.click(await screen.findByRole("button", { name: "Delete session" }));
+    await canvas.findByRole("button", { name: "Create session" });
     await expect(
       canvas.queryByRole("button", { name: "oc-ui · project folder, Idle" }),
     ).not.toBeInTheDocument();

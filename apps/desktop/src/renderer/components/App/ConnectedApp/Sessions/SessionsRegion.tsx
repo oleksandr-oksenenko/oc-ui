@@ -1,6 +1,5 @@
 import type { SessionAttention } from "./createSessionAttention.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
-import type { JSX } from "solid-js";
 
 import { SessionSidebar } from "./SessionSidebar.tsx";
 import type { SessionWorkspace } from "./createSessionWorkspace.ts";
@@ -16,7 +15,6 @@ export type SessionsRegionProps = {
   readonly onHide?: () => void;
   readonly onSessionOpened: (sessionID: string) => void;
   readonly onChangeServer: () => void;
-  readonly secondaryAction?: JSX.Element;
 };
 
 /** Renders the controlled session sidebar. */
@@ -36,7 +34,6 @@ export function SessionsRegion(props: SessionsRegionProps) {
       canDelete={connected() && props.runtime.sessions.state() === "ready"}
       deletionStatusForSession={props.flows.deletionStatusForSession}
       autoFocusClose={props.mobile}
-      secondaryAction={props.secondaryAction}
       serverName={friendlyServerName(props.serverUrl)}
       serverStatus={connected() ? "connected" : "reconnecting"}
       onSelect={(sessionID) => {

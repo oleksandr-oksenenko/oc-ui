@@ -1,7 +1,6 @@
 import type { PermissionRequest } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
-import type { PermissionsController } from "../../src/renderer/components/App/ConnectedApp/Permissions/createPermissions.ts";
-import { storySession } from "../session-fixtures.ts";
+import type { SessionPermissionsController } from "../../src/renderer/components/App/ConnectedApp/Permissions/createPermissions.ts";
 
 const sync = () => Promise.resolve();
 
@@ -15,7 +14,7 @@ export function createWorkspacePermissions() {
       save: ["pnpm check"],
     },
   ]);
-  const controller: PermissionsController = {
+  const controller: SessionPermissionsController = {
     requests,
     state: () => "ready",
     error: () => undefined,
@@ -27,30 +26,6 @@ export function createWorkspacePermissions() {
     reply: (id) => {
       setRequests((items) => items.filter((item) => item.id !== id));
       return Promise.resolve();
-    },
-    inbox: {
-      entries: () =>
-        requests().length
-          ? [
-              {
-                session: storySession("rename-helpers", "Rename Helpers", "refactor-utils"),
-                requests: requests(),
-              },
-            ]
-          : [],
-      state: () => "ready",
-      error: () => undefined,
-      sync,
-    },
-    saved: {
-      rules: () => [],
-      projects: () => [],
-      state: () => "ready",
-      error: () => undefined,
-      removing: () => false,
-      errorFor: () => undefined,
-      sync,
-      remove: sync,
     },
   };
   return controller;

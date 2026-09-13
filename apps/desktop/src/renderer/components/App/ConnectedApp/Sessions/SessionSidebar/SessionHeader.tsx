@@ -1,13 +1,12 @@
 import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
-import { Show, type JSX } from "solid-js";
+import { Show } from "solid-js";
 
 import "./SessionHeader.css";
 
 export type SessionHeaderProps = {
   readonly canCreate: boolean;
   readonly autoFocusClose?: boolean;
-  readonly secondaryAction?: JSX.Element;
   readonly onCreate: () => void;
   readonly onHide?: () => void;
 };
@@ -17,7 +16,6 @@ export function SessionHeader(props: SessionHeaderProps) {
     <div class="shell-session-header" classList={{ "has-close": props.onHide !== undefined }}>
       <h1>Sessions</h1>
       <div class="shell-session-header-actions">
-        {props.secondaryAction}
         <IconButton
           class="shell-create-session"
           type="button"

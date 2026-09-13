@@ -1005,7 +1005,7 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
-  it("discovers permissions across locations and revokes a saved approval", async () => {
+  it("keeps background permission dots across locations and answers requests inside sessions", async () => {
     // Build the unavailable-location fixture without a live UI reloading its services.
     await page.goto("about:blank");
     const primaryDirectory = await warmPermissionLocation(project);
@@ -1040,230 +1040,64 @@ describe.sequential("production browser app", () => {
     await expect(access(historicalDirectory)).rejects.toHaveProperty("code", "ENOENT");
     await access(movedHistoricalProject);
     await ensureConnected();
-    const primaryTitle = "Primary permission inbox";
-    const secondaryTitle = "Secondary permission inbox";
+    const primaryTitle = "Primary pending permission";
+    const secondaryTitle = "Secondary pending permission";
     const primarySession = await createPermissionSession(primaryTitle, primaryDirectory);
     const secondarySession = await createPermissionSession(secondaryTitle, secondaryDirectory);
-    expect(primarySession.projectID).not.toBe(secondarySession.projectID);
-    const primaryAction = "acceptance.management.saved";
-    const secondaryAction = "acceptance.management.once";
-    const primaryResource = "/acceptance/management/current";
-    const secondaryResource = "/acceptance/management/secondary";
-    const savedPattern = "/acceptance/management/**/raw pattern";
+    const savedPattern = "/acceptance/session-permissions/**";
+    const primaryAction = "acceptance.session.saved";
     const primaryRequest = await createPermission(primarySession.id, primaryAction, {
       directory: primaryDirectory,
-      resources: [primaryResource],
+      resources: ["/acceptance/session-permissions/primary"],
       save: [savedPattern],
     });
-    const secondaryRequest = await createPermission(secondarySession.id, secondaryAction, {
-      directory: secondaryDirectory,
-      resources: [secondaryResource],
-    });
-
-    const primaryLocationRequests = await api.permission.request.list({
-      location: { directory: primaryDirectory },
-    });
-    const secondaryLocationRequests = await api.permission.request.list({
-      location: { directory: secondaryDirectory },
-    });
-    expect(primaryLocationRequests.data.map((request) => request.id)).toContain(primaryRequest);
-    expect(primaryLocationRequests.data.map((request) => request.id)).not.toContain(
-      secondaryRequest,
+    const secondaryRequest = await createPermission(
+      secondarySession.id,
+      "acceptance.session.once",
+      {
+        directory: secondaryDirectory,
+        resources: ["/acceptance/session-permissions/secondary"],
+      },
     );
-    expect(secondaryLocationRequests.data.map((request) => request.id)).toContain(secondaryRequest);
-    expect(secondaryLocationRequests.data.map((request) => request.id)).not.toContain(
-      primaryRequest,
-    );
-
-    let inventorySeen = false;
-    const permissionDiscovery = [];
-    const observeDiscovery = (request) => {
-      const url = new URL(request.url());
-      if (request.method() !== "GET") return;
-      if (url.pathname === "/api/debug/location") {
-        inventorySeen = true;
-        return;
-      }
-      if (url.pathname !== "/api/permission/request") return;
-      permissionDiscovery.push({
-        afterInventory: inventorySeen,
-        directory: url.searchParams.get("location[directory]"),
-      });
-    };
     await changeServer();
-    page.on("request", observeDiscovery);
     await connect();
     await page.getByRole("button", { name: new RegExp(`^${historicalTitle},`, "u") }).waitFor();
-    const launcher = page.getByRole("button", {
-      name: /^Permissions, 2 pending permission requests/u,
-    });
-    await launcher.waitFor();
-    await launcher.click();
-    let dialog = page.getByRole("dialog", { name: "Permissions", exact: true });
-    await dialog.waitFor();
-    const primaryGroup = dialog.getByRole("group", {
-      name: `Permissions for ${primaryTitle}`,
+    expect(await page.getByRole("button", { name: /^Permissions,/u }).count()).toBe(0);
+    await page
+      .getByRole("button", { name: `${primaryTitle}, Permission required`, exact: true })
+      .waitFor();
+    const secondaryRow = page.getByRole("button", {
+      name: `${secondaryTitle}, Permission required`,
       exact: true,
     });
-    const secondaryGroup = dialog.getByRole("group", {
-      name: `Permissions for ${secondaryTitle}`,
-      exact: true,
-    });
-    await primaryGroup.waitFor();
-    await secondaryGroup.waitFor();
-    await expect.poll(() => primaryGroup.textContent()).toContain(primaryDirectory);
-    await expect.poll(() => primaryGroup.textContent()).toContain(primaryAction);
-    await expect.poll(() => primaryGroup.textContent()).toContain(primaryResource);
-    await expect.poll(() => secondaryGroup.textContent()).toContain(secondaryDirectory);
-    await expect.poll(() => secondaryGroup.textContent()).toContain(secondaryAction);
-    await expect.poll(() => secondaryGroup.textContent()).toContain(secondaryResource);
-    await dialog.getByRole("button", { name: "Refresh pending permissions", exact: true }).click();
-    await dialog
-      .getByText("Loading pending permissions…", { exact: true })
-      .waitFor({ state: "hidden" });
-    await expect
-      .poll(
-        () =>
-          permissionDiscovery.some((request) => request.directory === primaryDirectory) &&
-          permissionDiscovery.some((request) => request.directory === secondaryDirectory),
-      )
-      .toBe(true);
-    expect(permissionDiscovery.every((request) => request.afterInventory)).toBe(true);
-    expect(permissionDiscovery.some((request) => request.directory === historicalDirectory)).toBe(
-      false,
-    );
-    page.off("request", observeDiscovery);
-    await secondaryGroup
-      .getByRole("button", { name: `Open session ${secondaryTitle}`, exact: true })
+    await secondaryRow.waitFor();
+    await secondaryRow.click();
+    await permissionCard(secondaryRequest)
+      .getByRole("button", { name: "Allow once", exact: true })
       .click();
-
-    const secondaryCard = permissionCard(secondaryRequest);
-    await secondaryCard.waitFor();
-    await secondaryCard.getByRole("button", { name: "Allow once", exact: true }).click();
     await expectPermissionSettled(secondarySession.id, secondaryRequest, secondaryDirectory);
-    await expect
-      .poll(async () =>
-        (
-          await api.permission.request.list({ location: { directory: secondaryDirectory } })
-        ).data.some((request) => request.id === secondaryRequest),
-      )
-      .toBe(false);
-
-    await page.getByRole("button", { name: /^Permissions, 1 pending permission request/u }).click();
-    dialog = page.getByRole("dialog", { name: "Permissions", exact: true });
-    await dialog.waitFor();
-    expect(
-      await dialog
-        .getByRole("group", { name: `Permissions for ${secondaryTitle}`, exact: true })
-        .count(),
-    ).toBe(0);
-    await dialog
-      .getByRole("group", { name: `Permissions for ${primaryTitle}`, exact: true })
-      .getByRole("button", { name: `Open session ${primaryTitle}`, exact: true })
+    await page.getByRole("button", { name: `${secondaryTitle}, Idle`, exact: true }).waitFor();
+    await page
+      .getByRole("button", { name: `${primaryTitle}, Permission required`, exact: true })
       .click();
-
-    const primaryCard = permissionCard(primaryRequest);
-    await primaryCard.waitFor();
-    await primaryCard.getByRole("button", { name: "Always allow", exact: true }).click();
+    await permissionCard(primaryRequest)
+      .getByRole("button", { name: "Always allow", exact: true })
+      .click();
     await expectPermissionSettled(primarySession.id, primaryRequest, primaryDirectory);
-    let savedRuleID;
-    await expect
-      .poll(async () => {
-        const saved = await api.permission.saved.list({ projectID: primarySession.projectID });
-        const rule = saved.find(
-          (candidate) => candidate.action === primaryAction && candidate.resource === savedPattern,
-        );
-        savedRuleID = rule?.id;
-        return rule === undefined ? "" : `${rule.action}\u0000${rule.resource}`;
-      })
-      .toBe(`${primaryAction}\u0000${savedPattern}`);
-    expect(await api.permission.saved.list({ projectID: secondarySession.projectID })).toEqual([]);
-
-    const emptyLauncher = page.getByRole("button", {
-      name: /^Permissions, 0 pending permission requests/u,
-    });
-    await emptyLauncher.click();
-    dialog = page.getByRole("dialog", { name: "Permissions", exact: true });
-    await dialog.getByRole("tab", { name: "Saved approvals", exact: true }).click();
-    let savedRule = dialog
-      .getByRole("group")
-      .filter({ hasText: primaryAction })
-      .filter({ hasText: savedPattern });
-    await savedRule.waitFor();
-    await expect.poll(() => dialog.textContent()).toContain(primaryDirectory);
-    await expect.poll(() => dialog.textContent()).toContain(primarySession.projectID);
-    const revokeLabel = `Revoke saved approval for ${primaryAction} and ${savedPattern}`;
-
-    await savedRule.getByRole("button", { name: revokeLabel, exact: true }).click();
-    const escapeCancel = savedRule.getByRole("button", { name: "Cancel", exact: true });
-    await escapeCancel.focus();
-    await page.keyboard.press("Escape");
-    await savedRule.getByRole("button", { name: revokeLabel, exact: true }).waitFor();
-    expect(
-      (await api.permission.saved.list({ projectID: primarySession.projectID })).some(
-        (rule) => rule.id === savedRuleID,
-      ),
-    ).toBe(true);
-
-    await savedRule.getByRole("button", { name: revokeLabel, exact: true }).click();
-    await savedRule.getByRole("button", { name: "Cancel", exact: true }).click();
-    expect(
-      (await api.permission.saved.list({ projectID: primarySession.projectID })).some(
-        (rule) => rule.id === savedRuleID,
-      ),
-    ).toBe(true);
-
-    await savedRule.getByRole("button", { name: revokeLabel, exact: true }).click();
-    const confirmRevoke = savedRule.getByRole("button", {
-      name: "Confirm revoke",
-      exact: true,
-    });
-    await confirmRevoke.focus();
-    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: `${primaryTitle}, Idle`, exact: true }).waitFor();
     await expect
       .poll(async () =>
         (await api.permission.saved.list({ projectID: primarySession.projectID })).some(
-          (rule) => rule.id === savedRuleID,
+          (rule) => rule.action === primaryAction && rule.resource === savedPattern,
         ),
       )
-      .toBe(false);
-    await savedRule.waitFor({ state: "hidden" });
-    await expect
-      .poll(() =>
-        page.evaluate(() => {
-          const active = document.activeElement;
-          if (!(active instanceof HTMLElement)) return false;
-          if (active.getAttribute("aria-label") === "Saved approvals") return true;
-          if (active.textContent?.trim() === "Refresh saved approvals") return true;
-          return (
-            active.getAttribute("aria-label")?.startsWith("Revoke saved approval for ") ?? false
-          );
-        }),
-      )
       .toBe(true);
-
-    await dialog.getByLabel("Close permissions dialog", { exact: true }).click();
-    await expect
-      .poll(() => emptyLauncher.evaluate((node) => node === document.activeElement))
-      .toBe(true);
-    await emptyLauncher.click();
-    dialog = page.getByRole("dialog", { name: "Permissions", exact: true });
-    await dialog.getByRole("tab", { name: "Saved approvals", exact: true }).click();
-    await dialog.getByRole("button", { name: "Refresh saved approvals", exact: true }).click();
-    await dialog
-      .getByText("Loading saved approvals…", { exact: true })
-      .waitFor({ state: "hidden" });
-    savedRule = dialog
-      .getByRole("group")
-      .filter({ hasText: primaryAction })
-      .filter({ hasText: savedPattern });
-    await expect.poll(() => savedRule.count()).toBe(0);
+    // Cold-cache hydration must not reopen the evicted, unavailable historical location.
     expect(
-      (await api.permission.saved.list({ projectID: primarySession.projectID })).some(
-        (rule) => rule.id === savedRuleID,
+      (await api.debug.location.list()).some(
+        (location) => location.directory === historicalDirectory,
       ),
     ).toBe(false);
-    await dialog.getByLabel("Close permissions dialog", { exact: true }).click();
     expect(errors).toEqual([]);
   });
 
