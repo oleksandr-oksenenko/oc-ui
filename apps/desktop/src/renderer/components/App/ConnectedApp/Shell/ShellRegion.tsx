@@ -18,14 +18,23 @@ export type ShellRegionProps = {
 };
 
 export function ShellRegion(props: ShellRegionProps): JSX.Element {
+  // Slots are fixed for the lifetime of a mounted shell. Resolve them once so
+  // the effective panel visibility below does not recreate live children, and
+  // the titlebar and workspace share one definition of an open panel.
+  const sidebar = props.sidebar;
+  const main = props.main;
+  const context = props.context;
+  const leftSidebarOpen = () => props.panels.leftSidebarOpen() && sidebar != null;
+  const rightPanelOpen = () => props.panels.rightPanelOpen() && context != null;
+
   return (
     <AppShell
       titlebar={
         <Titlebar
           selectedTitle={props.selectedTitle()}
           globalControls={props.globalControls}
-          leftSidebarOpen={props.panels.leftSidebarOpen()}
-          rightPanelOpen={props.panels.rightPanelOpen()}
+          leftSidebarOpen={leftSidebarOpen()}
+          rightPanelOpen={rightPanelOpen()}
           rightPanelAvailable
           rightControls={<Show when={!props.panels.mobile()}>{props.rightControls}</Show>}
           mobile={props.panels.mobile()}
@@ -35,12 +44,12 @@ export function ShellRegion(props: ShellRegionProps): JSX.Element {
       }
       workspace={
         <Workspace
-          leftSidebarOpen={props.panels.leftSidebarOpen()}
-          rightPanelOpen={props.panels.rightPanelOpen()}
+          leftSidebarOpen={leftSidebarOpen()}
+          rightPanelOpen={rightPanelOpen()}
           mobile={props.panels.mobile()}
-          sidebar={props.sidebar}
-          main={props.main}
-          context={props.context}
+          sidebar={sidebar}
+          main={main}
+          context={context}
         />
       }
     />
