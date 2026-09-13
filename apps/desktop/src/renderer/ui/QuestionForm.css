@@ -307,10 +307,13 @@
   }
 }
 
-.question-form-custom-choice > [data-slot="radio-v2-item-label"] {
+.question-form-choice-group [data-slot="radio-v2-item-label-text"],
+.question-form-custom-choice > [data-slot="radio-v2-item-label"],
+.question-form-custom-answer[data-component="textarea-v2"] [data-slot="textarea-v2-textarea"] {
   color: var(--oc-text-base);
-  font-size: var(--oc-type-control-size);
-  line-height: var(--oc-type-control-line-height);
+  font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-body-weight);
+  line-height: var(--oc-type-body-line-height);
 }
 
 .question-form-custom-choice .question-form-custom-answer[data-component="textarea-v2"] {
@@ -328,6 +331,5 @@
   height: auto;
   field-sizing: content;
   resize: none;
-  line-height: var(--oc-type-control-line-height);
   padding: 0;
 }
