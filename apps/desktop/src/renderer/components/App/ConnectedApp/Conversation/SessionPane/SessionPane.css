@@ -124,7 +124,7 @@
 .transcript-code-review-card {
   min-width: min(100%, 320px);
   margin-top: 8px;
-  border-top: 1px solid var(--oc-border-muted);
+  border: 0;
 }
 
 .transcript-code-review-trigger {
@@ -146,10 +146,6 @@
 
 .transcript-code-review-trigger:hover {
   color: var(--oc-text-strong);
-}
-
-.transcript-code-review-trigger > [data-slot="collapsible-arrow"] {
-  margin-left: auto;
 }
 
 .transcript-code-review-content {
@@ -491,8 +487,7 @@
 .transcript-skill-message,
 .transcript-shell-message,
 .transcript-compaction {
-  border-top: 1px solid var(--oc-border-muted);
-  border-bottom: 1px solid var(--oc-border-muted);
+  border: 0;
 }
 
 .transcript-context-trigger {
@@ -518,10 +513,6 @@
   color: var(--oc-text-strong);
 }
 
-.transcript-context-trigger > [data-slot="collapsible-arrow"] {
-  margin-left: auto;
-}
-
 .transcript-context-status {
   display: inline-flex;
   flex: none;
@@ -530,10 +521,6 @@
   margin-left: auto;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-status-size);
-}
-
-.transcript-context-status + [data-slot="collapsible-arrow"] {
-  margin-left: 0;
 }
 
 .transcript-context-status svg,

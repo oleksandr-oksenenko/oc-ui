@@ -20,7 +20,6 @@ export function CodeReviewCard(props: CodeReviewCardProps): JSX.Element {
         <span>
           Code review · {count()} {count() === 1 ? "comment" : "comments"}
         </span>
-        <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content class="transcript-code-review-content">
         {props.comments.map((comment, index) => (

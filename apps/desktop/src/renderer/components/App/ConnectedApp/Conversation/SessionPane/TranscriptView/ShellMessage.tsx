@@ -31,11 +31,10 @@ export function ShellMessage(props: { readonly message: SessionMessageShell }): 
           >
             <Loader width={14} height={14} aria-hidden="true" />
           </Show>
-          <span>{shellStatus(props.message)}</span>
+          <span classList={{ "sr-only": shellSemanticStatus(props.message) === "success" }}>
+            {shellStatus(props.message)}
+          </span>
         </span>
-        <Show when={hasDetails}>
-          <Collapsible.Arrow />
-        </Show>
       </Collapsible.Trigger>
       <Collapsible.Content>
         <div class="transcript-shell-details">

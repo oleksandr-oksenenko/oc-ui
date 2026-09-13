@@ -19,7 +19,6 @@ export function AnnotationCard(props: {
           Annotations · {props.annotations.length}{" "}
           {props.annotations.length === 1 ? "comment" : "comments"}
         </span>
-        <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content class="transcript-annotation-content">
         <For each={props.annotations}>

@@ -22,7 +22,6 @@ export function ContextMessage(props: {
         <Show when={props.description}>
           <span class="transcript-context-detail">{props.description}</span>
         </Show>
-        <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content>
         <pre data-annotation-block={annotationBlock("body")} class="transcript-context-text">

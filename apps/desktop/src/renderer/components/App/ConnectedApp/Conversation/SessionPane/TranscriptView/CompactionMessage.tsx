@@ -42,7 +42,7 @@ export function CompactionMessage(props: {
           >
             <Loader width={14} height={14} aria-hidden="true" />
           </Show>
-          <span>
+          <span classList={{ "sr-only": props.message.status === "completed" }}>
             {props.message.status === "completed"
               ? "Completed"
               : props.message.status === "failed"
@@ -50,7 +50,6 @@ export function CompactionMessage(props: {
                 : "Running"}
           </span>
         </span>
-        <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content>
         <p

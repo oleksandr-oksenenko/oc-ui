@@ -15,7 +15,6 @@ export function SkillMessage(props: { readonly message: SessionMessageSkill }): 
       <Collapsible.Trigger class="transcript-context-trigger">
         <Icon name="prompt" size="small" aria-hidden="true" />
         <span class="transcript-context-label">Skill: {props.message.name}</span>
-        <Collapsible.Arrow />
       </Collapsible.Trigger>
       <Collapsible.Content>
         <pre data-annotation-block={annotationBlock("body")} class="transcript-context-text">
