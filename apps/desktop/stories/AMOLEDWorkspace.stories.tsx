@@ -39,18 +39,32 @@ import { composerAgentSelection, composerModelSelection } from "./composer-fixtu
 import { workspaceQuestionForm } from "./question-form-fixtures.ts";
 
 const sessions = [
-  storySession("compact-ledger", "Compact Ledger Transcript"),
-  storySession("ledger-layout", "Review transcript layout", "compact-ledger"),
+  storySession(
+    "compact-ledger",
+    "Compact Ledger Transcript with a Long-Running Read-Only Investigation",
+  ),
+  storySession(
+    "ledger-layout",
+    "Review transcript layout and preserve readable spacing in narrow workspaces",
+    "compact-ledger",
+  ),
   storySession("ledger-spacing", "Adjust message spacing", "compact-ledger"),
   storySession("refactor-utils", "Refactor Utils"),
   storySession("rename-helpers", "Rename Helpers", "refactor-utils"),
-  storySession("extract-hooks", "Extract Hooks", "refactor-utils"),
+  storySession(
+    "extract-hooks",
+    "Extract shared hooks for session navigation and background turn completion",
+    "refactor-utils",
+  ),
   storySession("investigate-bug", "Investigate Bug"),
   storySession("reproduce-issue", "Reproduce Issue", "investigate-bug"),
   storySession("trace-root-cause", "Trace Root Cause", "investigate-bug"),
   storySession("collect-logs", "Collect Logs", "trace-root-cause"),
   storySession("analyze-stack", "Analyze Stack", "trace-root-cause"),
-  storySession("config-option", "Add Config Option"),
+  storySession(
+    "config-option",
+    "Add configuration options for remote development server connections",
+  ),
   storySession("prototype-api", "Prototype API"),
   storySession("design-schema", "Design Schema", "prototype-api"),
   storySession("implement-endpoints", "Implement Endpoints", "prototype-api"),
@@ -572,7 +586,11 @@ export const InteractiveWorkspace = {
     await expect(canvas.getByText("Check this fixture", { exact: true })).toBeInTheDocument();
     await expect(canvas.getByText(/This is a simulated Storybook response/)).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "oc-ui · project folder, Idle" }));
-    await userEvent.click(canvas.getByRole("button", { name: "Delete oc-ui · project folder" }));
+    await userEvent.tab();
+    await expect(
+      canvas.getByRole("button", { name: "Delete oc-ui · project folder" }),
+    ).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
     await userEvent.click(await screen.findByRole("button", { name: "Delete session" }));
     await canvas.findByRole("button", { name: "Create session" });
     await expect(

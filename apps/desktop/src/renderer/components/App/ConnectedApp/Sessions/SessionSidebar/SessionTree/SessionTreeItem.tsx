@@ -106,7 +106,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               disabled={props.deleteDisabled}
               aria-label={`Delete ${title()}`}
               title={props.deleteDisabledReason ?? `Delete ${title()}`}
-              icon={<Icon name="trash" size="small" aria-hidden="true" />}
+              icon={<Icon name="close" size="small" aria-hidden="true" />}
               onClick={(event) => props.onDelete(props.session.id, event.currentTarget)}
             />
           </span>
