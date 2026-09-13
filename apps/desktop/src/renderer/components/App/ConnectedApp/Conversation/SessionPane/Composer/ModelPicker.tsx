@@ -70,7 +70,7 @@ export function ModelPicker(props: ModelPickerProps) {
           triggerProps={{
             type: "button",
             disabled: props.disabled,
-            class: "composer-model-trigger",
+            class: "composer-model-trigger oc-dropdown-trigger",
             "aria-label": `Model: ${selected()?.label ?? "Select model"}`,
           }}
           trigger={

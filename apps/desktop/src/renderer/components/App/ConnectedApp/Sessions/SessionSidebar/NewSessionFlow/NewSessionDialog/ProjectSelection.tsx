@@ -115,7 +115,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
               as="button"
               type="button"
               role="combobox"
-              class="new-session-project-trigger"
+              class="new-session-project-trigger oc-dropdown-trigger"
               disabled={props.disabled}
               aria-label={`Project: ${selectedOption()?.name ?? "Select a project"}`}
               aria-haspopup="dialog"

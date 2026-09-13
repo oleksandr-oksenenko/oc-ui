@@ -80,3 +80,15 @@
   --v2-state-fg-success: var(--oc-diff-addition);
   --v2-state-fg-danger: var(--oc-diff-deletion);
 }
+
+/* Select spacing follows the foundation, including the inline appearance.
+ * Remove upstream label inset so the shared horizontal padding is not doubled. */
+:root [data-component="select-v2"],
+:root [data-component="select-v2"][data-appearance] {
+  padding: var(--oc-dropdown-padding-block) var(--oc-dropdown-padding-inline);
+}
+
+:root [data-component="select-v2"] [data-slot="select-v2-value-text"],
+:root [data-component="select-v2"][data-appearance] [data-slot="select-v2-value-text"] {
+  padding: 0;
+}

@@ -49,6 +49,8 @@
 
   /* Ordinary controls share one compact radius; reserve full rounding for
      circles and pills. */
+  --oc-dropdown-padding-block: 2px;
+  --oc-dropdown-padding-inline: 5px;
   --oc-radius: 4px;
   --oc-radius-full: 9999px;
   --oc-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -173,4 +175,10 @@
   background: var(--oc-surface-canvas);
   font-synthesis: none;
   text-rendering: optimizelegibility;
+}
+
+/* Shared spacing for native and custom dropdown triggers. */
+:root select,
+:root .oc-dropdown-trigger {
+  padding: var(--oc-dropdown-padding-block) var(--oc-dropdown-padding-inline);
 }
