@@ -41,6 +41,22 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
   let sourceSignature = "";
   const ranges = new Map<string, Range>();
   const highlightName = `oc-ui-transcript-annotations-${++instanceNumber}`;
+  let suppressScroll = false;
+  let suppressScrollFrame: number | undefined;
+
+  /**
+   * Ignores scroll notifications until the next animation frame so scroll events
+   * queued before an interaction opened cannot dismiss it immediately. Scrolls
+   * delivered after that frame still dismiss.
+   */
+  const suppressPendingScroll = (): void => {
+    if (suppressScroll) return;
+    suppressScroll = true;
+    suppressScrollFrame = requestAnimationFrame(() => {
+      suppressScroll = false;
+      suppressScrollFrame = undefined;
+    });
+  };
 
   const findSource = (
     source: Pick<TranscriptAnnotation["source"], "messageID" | "block">,
@@ -74,7 +90,9 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
       return;
     }
 
-    input.onSelection(readSelection(root, native));
+    const selection = readSelection(root, native);
+    if (selection) suppressPendingScroll();
+    input.onSelection(selection);
   };
 
   const readSelection = (root: HTMLElement, native: Selection): AnnotationSelection | undefined => {
@@ -228,6 +246,7 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
   };
 
   const onScroll = (event: Event): void => {
+    if (suppressScroll) return;
     if (event.target instanceof Element && event.target.closest(".annotation-popover")) return;
     input.onDismiss();
   };
@@ -277,6 +296,11 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
       revision += 1;
       mountedRoot = undefined;
       pointer = undefined;
+      suppressScroll = false;
+      if (suppressScrollFrame !== undefined) {
+        cancelAnimationFrame(suppressScrollFrame);
+        suppressScrollFrame = undefined;
+      }
       input.onDismiss();
       detach = undefined;
     };
@@ -310,6 +334,7 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     validSelection,
     findSource,
     root: () => mountedRoot,
+    suppressPendingScroll,
   };
 }
 

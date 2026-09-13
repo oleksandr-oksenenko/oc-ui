@@ -99,6 +99,7 @@ export function createTranscriptAnnotations(input: {
   function openComments(keys: readonly string[], target: HTMLElement, anchor: DOMRect) {
     if (!keys.length) return;
     close();
+    highlights.suppressPendingScroll();
     opener = target;
     focusSource = comments().find((item) => item.key === keys[0])?.annotation.source;
     setInteraction({ kind: "comments", keys, anchor });
@@ -146,6 +147,7 @@ export function createTranscriptAnnotations(input: {
         opener = current.selection.block;
         focusSource = current.selection.source;
         window.getSelection()?.removeAllRanges();
+        highlights.suppressPendingScroll();
         setInteraction({
           kind: "comments",
           keys: [key],

@@ -1,11 +1,13 @@
-import { createSignal } from "solid-js";
+import type { SessionMessageInfo } from "@opencode-ai/client";
+import { createSignal, type Accessor } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createAnnotationDraftStore } from "../../../../domain/annotation-drafts.ts";
+import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
 import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { createTranscriptAnnotations } from "./createTranscriptAnnotations.ts";
 
-function setup() {
+function setup(messages: Accessor<readonly SessionMessageInfo[]> = () => []) {
   const host = document.createElement("div");
   host.innerHTML =
     '<article data-message-id="message"><p data-annotation-block="text">A useful passage.</p></article>';
@@ -16,7 +18,7 @@ function setup() {
     const controller = createTranscriptAnnotations({
       sessionID,
       drafts,
-      messages: () => [],
+      messages,
       enabled: () => true,
     });
     controller.attach(host);
@@ -86,6 +88,8 @@ describe("createTranscriptAnnotations", () => {
         await root.controller.openCandidate();
         const draft = root.drafts.get("first")[0]!;
         root.controller.updateBody(draft.id, "Keep this note.");
+        if (event === "scroll")
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         window.dispatchEvent(new Event(event));
         expect(root.controller.state().kind).toBe("closed");
         expect(root.drafts.get("first")[0]?.body).toBe("Keep this note.");
@@ -94,6 +98,52 @@ describe("createTranscriptAnnotations", () => {
       }
     },
   );
+
+  it("keeps a newly opened sent annotation through a scroll delivered before the next frame", async () => {
+    const prompt = createSessionPrompt({
+      instruction: "Review the transcript.",
+      reviewComments: [],
+      annotations: [
+        {
+          id: "annotation-1",
+          source: {
+            messageID: "message",
+            block: "text",
+            textDigest: "a".repeat(64),
+            start: 0,
+            end: 6,
+          },
+          quote: "A useful passage.",
+          body: "Explain this.",
+        },
+      ],
+    });
+    const root = setup(() => [
+      {
+        id: "sent-1",
+        time: { created: 1 },
+        type: "user",
+        text: prompt.text,
+        metadata: prompt.metadata,
+      },
+    ]);
+    const quote = document.createElement("button");
+    document.body.append(quote);
+    try {
+      root.controller.openSent("sent-1", "annotation-1", quote);
+      expect(root.controller.state().kind).toBe("comments");
+      // Scroll notifications queued before the popover opened arrive after it
+      // appears; they must not dismiss it. A later scroll still does.
+      window.dispatchEvent(new Event("scroll"));
+      expect(root.controller.state().kind).toBe("comments");
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      window.dispatchEvent(new Event("scroll"));
+      expect(root.controller.state().kind).toBe("closed");
+    } finally {
+      quote.remove();
+      root.dispose();
+    }
+  });
 
   it("removes empty drafts when editing finishes or the popup closes", async () => {
     const root = setup();
