@@ -10,6 +10,16 @@ const model = (name) => ({
 // Scenarios are selected by the latest user turn, so transcript history cannot retrigger them.
 export async function startScriptedProvider() {
   const requests = [];
+  const held = new Set();
+  const completeResponse = (prompt, response, complete) => {
+    if (prompt.includes("E2E_QUEUE_HOLD")) {
+      held.add(complete);
+      response.once("close", () => held.delete(complete));
+    } else if (prompt.includes("E2E_STREAM")) {
+      const timer = setTimeout(() => complete(), 1200);
+      response.once("close", () => clearTimeout(timer));
+    } else complete();
+  };
   let cancelledStreams = 0;
   const server = createServer(async (request, response) => {
     if (serveBrowserFixture(request, response)) return;
@@ -82,10 +92,7 @@ export async function startScriptedProvider() {
         send({ content: `Acceptance completed with ${body.model}.` });
         finish();
       };
-      if (prompt.includes("E2E_STREAM")) {
-        const timer = setTimeout(complete, 1200);
-        response.once("close", () => clearTimeout(timer));
-      } else complete();
+      completeResponse(prompt, response, complete);
     } catch (cause) {
       console.error("Acceptance provider failed", cause);
       response.destroy(cause instanceof Error ? cause : undefined);
@@ -98,6 +105,10 @@ export async function startScriptedProvider() {
   const url = `http://127.0.0.1:${server.address().port}`;
   return {
     url,
+    releaseHeld: () => {
+      for (const complete of held) complete();
+      held.clear();
+    },
     config: {
       model: "acceptance/stream",
       default_agent: "build",

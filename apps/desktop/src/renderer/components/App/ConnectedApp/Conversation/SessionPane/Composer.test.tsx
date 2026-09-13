@@ -58,13 +58,13 @@ describe("Composer", () => {
     dispose();
   });
 
-  it("replaces Send with Stop while running", () => {
+  it("stops an empty running composer without accidentally submitting", () => {
     const [action, setAction] = createSignal<ComposerProps["action"]>("running");
     const stop = vi.fn<() => void>(() => setAction("send"));
     const submit = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        value="Keep this draft after stopping"
+        value=""
         disabled={false}
         action={action()}
         modelSelection={unavailableSelection}

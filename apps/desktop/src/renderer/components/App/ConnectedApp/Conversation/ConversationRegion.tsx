@@ -11,6 +11,8 @@ import type { SessionAgentSelectionController } from "./createSessionAgentSelect
 import type { SessionComposerController } from "./createSessionComposer.ts";
 import type { SessionFormsController } from "./createSessionForms.ts";
 import type { SessionPermissionsController } from "../Permissions/createPermissions.ts";
+import { PendingMessages } from "./SessionPane/PendingMessages.tsx";
+import type { SessionInboxController } from "./createSessionInbox.ts";
 import { Composer } from "./SessionPane/Composer.tsx";
 import { QuestionForm } from "../../../../ui/QuestionForm.tsx";
 import { PermissionRequestCard } from "../../../../ui/PermissionRequestCard.tsx";
@@ -22,6 +24,7 @@ export type ConversationRegionProps = {
   readonly workspace: SessionWorkspace;
   readonly annotationDrafts: AnnotationDraftStore;
   readonly composer: SessionComposerController;
+  readonly inbox: SessionInboxController;
   readonly modelSelection: ModelSelection;
   readonly agentSelection: SessionAgentSelectionController;
   readonly forms: SessionFormsController;
@@ -38,10 +41,14 @@ const permissionRenderKey = (request: {
 }): string => `${request.sessionID}\u0000${request.id}`;
 
 export function ConversationRegion(props: ConversationRegionProps): JSX.Element {
+  const visibleTranscript = createMemo(() => {
+    const pending = new Set(props.inbox.messages().map((item) => item.id));
+    return props.workspace.transcript().filter((message) => !pending.has(message.id));
+  });
   let annotationButton: HTMLButtonElement | undefined;
   const annotationUI = createTranscriptAnnotations({
     sessionID: props.workspace.selectedID,
-    messages: props.workspace.transcript,
+    messages: visibleTranscript,
     drafts: props.annotationDrafts,
     fallbackFocus: () => annotationButton,
     enabled: () => !props.composer.disabled(),
@@ -51,7 +58,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
     return sessionID === undefined ? 0 : props.annotationDrafts.get(sessionID).length;
   };
   const composerAction = () =>
-    props.workspace.running() ? "running" : props.composer.submitting() ? "sending" : "send";
+    props.composer.submitting() ? "sending" : props.workspace.running() ? "running" : "send";
   const formKeys = createMemo(() => props.forms.sessionForms().map(formRenderKey), undefined, {
     equals: (previous, next) =>
       previous.length === next.length && previous.every((key, index) => key === next[index]),
@@ -238,7 +245,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               sessionID={props.workspace.selectedID()!}
               annotationRootRef={annotationUI.attach}
               onOpenAnnotation={annotationUI.openSent}
-              messages={props.workspace.transcript()}
+              messages={visibleTranscript()}
               sessionStatus={props.workspace.transcriptStatus()}
               loading={props.workspace.transcriptLoading()}
               error={props.workspace.transcriptError()}
@@ -252,15 +259,26 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
         }
         composer={
           <Show when={props.workspace.selectedSession()}>
+            <PendingMessages
+              messages={props.inbox.messages()}
+              disabled={
+                !props.connected() ||
+                props.inbox.busy() ||
+                props.composer.submitting() ||
+                props.workspace.transcriptLoading()
+              }
+              error={props.inbox.error()}
+              onRefresh={props.inbox.refresh}
+              onCancel={props.inbox.cancel}
+              onSteer={props.inbox.steer}
+            />
             <Composer
               value={props.composer.value()}
               files={props.composer.files()}
               onPasteFiles={props.composer.pasteFiles}
               onRemoveFile={props.composer.removeFile}
               action={composerAction()}
-              disabled={
-                composerAction() === "running" ? !props.connected() : props.composer.disabled()
-              }
+              disabled={props.composer.disabled()}
               error={props.workspace.stopError() ?? props.composer.error()}
               review={props.composer.review()}
               annotations={
@@ -301,7 +319,11 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
                 annotationUI.close();
                 void props.composer.submit();
               }}
-              onStop={() => void props.workspace.stop()}
+              onQueue={() => {
+                annotationUI.close();
+                void props.composer.submit("queue");
+              }}
+              onStop={props.connected() ? () => void props.workspace.stop() : undefined}
             />
           </Show>
         }

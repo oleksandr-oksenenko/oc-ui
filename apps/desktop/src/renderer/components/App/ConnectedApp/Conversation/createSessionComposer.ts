@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-solid";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
+import type { SessionInboxDelivery } from "@opencode-ai/client";
 import { SessionMessage } from "@opencode-ai/schema";
 import { createSessionDraftStore } from "../../../../domain/index.ts";
 import type {
@@ -27,6 +28,7 @@ type SubmissionRequest = {
   readonly id: string;
   readonly prompt: SessionPrompt;
   readonly text: string;
+  readonly delivery: SessionInboxDelivery;
   readonly files: readonly File[];
   readonly reviewSnapshot: ReturnType<ReviewDraftStore["capture"]> | undefined;
   readonly annotations: AnnotationDraftSnapshot;
@@ -42,7 +44,6 @@ type SessionComposerOptions = {
     };
   };
   readonly selectedID: Accessor<string | undefined>;
-  readonly running: Accessor<boolean>;
   readonly transcriptLoading: Accessor<boolean>;
   readonly transcriptError: Accessor<string | undefined>;
   readonly connected: Accessor<boolean>;
@@ -69,7 +70,7 @@ export type SessionComposerController = {
   readonly error: Accessor<string | undefined>;
   readonly review: Accessor<ComposerReview | undefined>;
   readonly input: (value: string) => void;
-  readonly submit: () => Promise<void>;
+  readonly submit: (delivery?: SessionInboxDelivery) => Promise<void>;
   readonly clear: (sessionID: string) => void;
 };
 
@@ -138,7 +139,6 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       options.transcriptLoading() ||
       options.transcriptError() !== undefined ||
       state().active !== undefined ||
-      options.running() ||
       options.selectionSwitching(),
   );
 
@@ -195,7 +195,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     return { text, reviewSnapshot, reviewComments, annotationComments, attached };
   };
 
-  const submit = (): Promise<void> => {
+  const submit = (delivery: SessionInboxDelivery = "steer"): Promise<void> => {
     const sessionID = options.selectedID();
     if (!isSubmissionAllowed(sessionID)) return Promise.resolve();
     const captured = captureDraft(sessionID);
@@ -210,6 +210,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     });
     const retrying =
       retry !== undefined &&
+      retry.delivery === delivery &&
       samePrompt(candidatePrompt, retry.prompt) &&
       attached.length === retry.files.length &&
       attached.every((file, index) => file === retry.files[index]);
@@ -221,6 +222,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       id: retrying ? retry.id : SessionMessage.ID.create(),
       prompt: retrying ? retry.prompt : candidatePrompt,
       text,
+      delivery,
       files: attached,
       reviewSnapshot,
       annotations: annotationSnapshot,
@@ -236,6 +238,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
             options.runtime.data.session.prompt({
               sessionID,
               id: request.id,
+              delivery: request.delivery,
               ...request.prompt,
               files: encodedFiles.length > 0 ? encodedFiles : undefined,
             }),

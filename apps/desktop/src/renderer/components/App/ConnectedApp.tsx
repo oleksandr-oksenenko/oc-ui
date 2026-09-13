@@ -36,6 +36,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
     permissions,
     changes,
     composer,
+    inbox,
     flows,
   } = props.model;
 
@@ -89,6 +90,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
           <ConversationRegion
             workspace={sessions}
             composer={composer}
+            inbox={inbox}
             annotationDrafts={annotationDrafts}
             modelSelection={modelSelection}
             agentSelection={agentSelection}

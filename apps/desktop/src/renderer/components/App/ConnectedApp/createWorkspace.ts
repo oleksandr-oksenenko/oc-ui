@@ -9,6 +9,7 @@ import { createModelSelection } from "../../../opencode/index.ts";
 import type { ConnectedRuntime } from "../../../opencode/runtime.ts";
 import { createWorkspaceChanges } from "./Changes/createWorkspaceChanges.ts";
 import { createSessionAgentSelection } from "./Conversation/createSessionAgentSelection.ts";
+import { createSessionInbox } from "./Conversation/createSessionInbox.ts";
 import { createSessionComposer } from "./Conversation/createSessionComposer.ts";
 import { createSessionForms } from "./Conversation/createSessionForms.ts";
 import { createPermissions } from "./Permissions/createPermissions.ts";
@@ -115,11 +116,17 @@ export function createWorkspaceModel(
       });
     },
   });
+  const inbox = createSessionInbox({
+    effects: runtime.effects,
+    data: runtime.data,
+    api: runtime.api,
+    selectedID: sessions.selectedID,
+    connected,
+  });
   const composer = createSessionComposer({
     effects: runtime.effects,
     runtime,
     selectedID: sessions.selectedID,
-    running: sessions.running,
     transcriptLoading: sessions.transcriptLoading,
     transcriptError: sessions.transcriptError,
     annotations: annotationDrafts,
@@ -164,6 +171,7 @@ export function createWorkspaceModel(
     permissions,
     changes,
     composer,
+    inbox,
     flows,
   };
 }

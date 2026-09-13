@@ -43,7 +43,7 @@ const annotationInput = {
 function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptResult(input)))) {
   return withTestWorkspace((effects, dispose) => {
     const [selectedID, setSelectedID] = createSignal<string>();
-    const [running, setRunning] = createSignal(false);
+    const [, setRunning] = createSignal(false);
     const [transcriptLoading, setTranscriptLoading] = createSignal(false);
     const [transcriptError, setTranscriptError] = createSignal<string>();
     const [connected, setConnected] = createSignal(true);
@@ -78,7 +78,6 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
           },
         },
         selectedID,
-        running,
         transcriptLoading,
         transcriptError,
         annotations: annotationDrafts,
@@ -124,6 +123,23 @@ function seedReview(
 }
 
 describe("createSessionComposer", () => {
+  it("preserves delivery on retry and creates a new ID when delivery changes", async () => {
+    const prompt = vi.fn<Prompt>().mockRejectedValue(new Error("offline"));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.setRunning(true);
+    root.composer.input("Next task");
+    await root.composer.submit("queue");
+    const first = prompt.mock.calls[0]![0];
+    expect(first.delivery).toBe("queue");
+    await root.composer.submit("queue");
+    expect(prompt.mock.calls[1]![0].id).toBe(first.id);
+    await root.composer.submit();
+    expect(prompt.mock.calls[2]![0].delivery).toBe("steer");
+    expect(prompt.mock.calls[2]![0].id).not.toBe(first.id);
+    root.dispose();
+  });
+
   it("keeps pasted files per session and retries attachment-only sends with the same ID", async () => {
     const prompt = vi
       .fn<Prompt>()
@@ -355,7 +371,7 @@ describe("createSessionComposer", () => {
     root.setConnected(true);
     root.setRunning(true);
     await root.composer.submit();
-    expect(prompt).not.toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledOnce();
 
     root.setRunning(false);
     root.setTranscriptLoading(true);

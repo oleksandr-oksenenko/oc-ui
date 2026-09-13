@@ -186,7 +186,6 @@ function TranscriptAnnotationsContent(
       },
     },
     selectedID,
-    running,
     transcriptLoading: () => false,
     transcriptError: () => undefined,
     connected: () => true,

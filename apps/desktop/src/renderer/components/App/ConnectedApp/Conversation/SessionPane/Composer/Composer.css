@@ -431,3 +431,15 @@
     flex-wrap: wrap;
   }
 }
+
+.composer:has(+ .composer-shortcuts) {
+  margin-bottom: 6px;
+}
+
+.composer-shortcuts {
+  margin: 0 16px 12px;
+  text-align: center;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}

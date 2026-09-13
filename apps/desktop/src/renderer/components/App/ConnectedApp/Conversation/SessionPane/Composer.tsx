@@ -32,9 +32,9 @@ export type ComposerProps = {
   readonly files?: readonly File[];
   readonly onPasteFiles?: (files: readonly File[]) => void;
   readonly onRemoveFile?: (file: File) => void;
-  /** The one action represented by the composer button. */
+  /** Session execution and prompt admission state. */
   readonly action: "send" | "sending" | "running";
-  /** Disables the action currently represented by the composer button. */
+  /** Disables submission. Omit onStop when stopping is unavailable. */
   readonly disabled: boolean;
   readonly error?: string;
   /** Omitted review state is equivalent to an empty review attachment. */
@@ -64,6 +64,8 @@ export type ComposerProps = {
   };
   readonly onInput: (value: string) => void;
   readonly onSubmit: () => void;
+  /** When supplied, Cmd+Enter submits with queued delivery. */
+  readonly onQueue?: () => void;
   readonly onStop?: () => void;
 };
 
@@ -198,9 +200,11 @@ export function Composer(props: ComposerProps) {
     props.value.trim() !== "" ||
     (props.files?.length ?? 0) > 0;
 
+  const stopping = () => props.action === "running" && !sendable();
+
   const canSubmit = () =>
     !props.disabled &&
-    props.action === "send" &&
+    props.action !== "sending" &&
     !props.modelSelection.switching &&
     !props.agentSelection.switching &&
     sendable();
@@ -215,145 +219,157 @@ export function Composer(props: ComposerProps) {
     if (event.isComposing || event.keyCode === 229 || event.key !== "Enter" || event.shiftKey)
       return;
     event.preventDefault();
+    if (event.metaKey && props.onQueue) {
+      if (canSubmit()) props.onQueue();
+      return;
+    }
     submit();
   };
 
   return (
-    <form class="composer oc-focus-container" aria-label="Message composer" onSubmit={submit}>
-      {review() ? (
-        <div class="composer-review-row">
-          <span class="composer-review-label">
-            Code review · {review()!.count} {review()!.count === 1 ? "comment" : "comments"}
-          </span>
-          <IconButton
-            class="composer-review-discard"
-            type="button"
-            size="small"
-            variant="ghost-muted"
-            aria-label={`Discard ${review()!.count} code review comments`}
-            title={`Discard ${review()!.count} code review comments`}
-            icon={<Icon name="close" size="small" aria-hidden="true" />}
-            onClick={(event) => {
-              review()?.onDiscard(event.currentTarget);
-            }}
-          />
-        </div>
-      ) : null}
-      <Show when={annotations()}>
-        {(annotation) => (
-          <div class="composer-annotation-row">
-            <Button
-              class="composer-annotation-count"
-              ref={annotation().ref}
-              type="button"
-              size="small"
-              variant="ghost-muted"
-              onClick={(event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
-                annotation().onOpen(event.currentTarget);
-              }}
-            >
-              Annotations · {annotation().count} {annotation().count === 1 ? "comment" : "comments"}
-            </Button>
+    <>
+      <form class="composer oc-focus-container" aria-label="Message composer" onSubmit={submit}>
+        {review() ? (
+          <div class="composer-review-row">
+            <span class="composer-review-label">
+              Code review · {review()!.count} {review()!.count === 1 ? "comment" : "comments"}
+            </span>
             <IconButton
-              class="composer-annotation-discard"
-              disabled={props.disabled || props.action !== "send"}
+              class="composer-review-discard"
               type="button"
               size="small"
               variant="ghost-muted"
-              aria-label={`Discard ${annotation().count} annotations`}
-              title={`Discard ${annotation().count} annotations`}
+              aria-label={`Discard ${review()!.count} code review comments`}
+              title={`Discard ${review()!.count} code review comments`}
               icon={<Icon name="close" size="small" aria-hidden="true" />}
               onClick={(event) => {
-                annotation().onDiscard(event.currentTarget);
+                review()?.onDiscard(event.currentTarget);
               }}
             />
           </div>
-        )}
-      </Show>
-      <Show when={(props.files?.length ?? 0) > 0}>
-        <ul class="composer-files" aria-label="Attached files">
-          {props.files?.map((file) => (
-            <li class="composer-review-row">
-              <span class="composer-review-label" title={file.name || "Pasted file"}>
-                {file.name || "Pasted file"}
-              </span>
-              <IconButton
+        ) : null}
+        <Show when={annotations()}>
+          {(annotation) => (
+            <div class="composer-annotation-row">
+              <Button
+                class="composer-annotation-count"
+                ref={annotation().ref}
                 type="button"
                 size="small"
                 variant="ghost-muted"
-                aria-label={`Remove ${file.name || "Pasted file"}`}
+                onClick={(event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
+                  annotation().onOpen(event.currentTarget);
+                }}
+              >
+                Annotations · {annotation().count}{" "}
+                {annotation().count === 1 ? "comment" : "comments"}
+              </Button>
+              <IconButton
+                class="composer-annotation-discard"
+                disabled={props.disabled || props.action === "sending"}
+                type="button"
+                size="small"
+                variant="ghost-muted"
+                aria-label={`Discard ${annotation().count} annotations`}
+                title={`Discard ${annotation().count} annotations`}
                 icon={<Icon name="close" size="small" aria-hidden="true" />}
-                onClick={() => {
-                  props.onRemoveFile?.(file);
-                  textarea?.focus();
+                onClick={(event) => {
+                  annotation().onDiscard(event.currentTarget);
                 }}
               />
-            </li>
-          ))}
-        </ul>
-      </Show>
-      <div class="composer-editor-row">
-        <textarea
-          ref={(element) => {
-            textarea = element;
-          }}
-          class="composer-input oc-focus-delegate"
-          aria-label="Prompt"
-          disabled={false}
-          placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}
-          rows={1}
-          value={props.value}
-          onInput={(event) => {
-            props.onInput(event.currentTarget.value);
-            resizeTextarea();
-          }}
-          onKeyDown={keyDown}
-          onPaste={(event) => {
-            if (!props.onPasteFiles || !event.clipboardData) return;
-            const files = Array.from(event.clipboardData.files);
-            if (files.length === 0) return;
-            event.preventDefault();
-            props.onPasteFiles(files);
-          }}
-        />
-      </div>
-
-      <div class="composer-controls-row">
-        {selectionControls(props)}
-        <button
-          class="composer-action"
-          type={props.action === "running" ? "button" : "submit"}
-          aria-label={props.action === "running" ? "Stop" : "Send"}
-          title={props.action === "running" ? "Stop" : "Send"}
-          disabled={
-            props.disabled ||
-            props.action === "sending" ||
-            (props.action === "running" && props.onStop === undefined) ||
-            (props.action === "send" &&
-              (props.modelSelection.switching || props.agentSelection.switching || !sendable()))
-          }
-          onClick={(event) => {
-            if (props.action !== "running") return;
-            // Stopping may synchronously turn this same button into a submit button.
-            event.preventDefault();
-            props.onStop?.();
-          }}
-        >
-          {props.action === "running" ? (
-            <Icon name="stop" size="small" aria-hidden="true" />
-          ) : (
-            <span class="composer-action-icon" aria-hidden="true">
-              {props.action === "sending" ? (
-                <Loader width={16} height={16} />
-              ) : (
-                <Icon name="arrow-up" />
-              )}
-            </span>
+            </div>
           )}
-        </button>
-      </div>
+        </Show>
+        <Show when={(props.files?.length ?? 0) > 0}>
+          <ul class="composer-files" aria-label="Attached files">
+            {props.files?.map((file) => (
+              <li class="composer-review-row">
+                <span class="composer-review-label" title={file.name || "Pasted file"}>
+                  {file.name || "Pasted file"}
+                </span>
+                <IconButton
+                  type="button"
+                  size="small"
+                  variant="ghost-muted"
+                  aria-label={`Remove ${file.name || "Pasted file"}`}
+                  icon={<Icon name="close" size="small" aria-hidden="true" />}
+                  onClick={() => {
+                    props.onRemoveFile?.(file);
+                    textarea?.focus();
+                  }}
+                />
+              </li>
+            ))}
+          </ul>
+        </Show>
+        <div class="composer-editor-row">
+          <textarea
+            ref={(element) => {
+              textarea = element;
+            }}
+            class="composer-input oc-focus-delegate"
+            aria-label="Prompt"
+            placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}
+            rows={1}
+            value={props.value}
+            onInput={(event) => {
+              props.onInput(event.currentTarget.value);
+              resizeTextarea();
+            }}
+            onKeyDown={keyDown}
+            onPaste={(event) => {
+              if (!props.onPasteFiles || !event.clipboardData) return;
+              const files = Array.from(event.clipboardData.files);
+              if (files.length === 0) return;
+              event.preventDefault();
+              props.onPasteFiles(files);
+            }}
+          />
+        </div>
 
-      {selectionStatus(props)}
-    </form>
+        <div class="composer-controls-row">
+          {selectionControls(props)}
+          <button
+            class="composer-action"
+            type={stopping() ? "button" : "submit"}
+            aria-label={stopping() ? "Stop" : "Send"}
+            title={
+              stopping()
+                ? "Stop"
+                : props.action === "running"
+                  ? "Send steering message (Enter)"
+                  : "Send"
+            }
+            disabled={stopping() ? props.onStop === undefined : !canSubmit()}
+            onClick={(event) => {
+              if (!stopping()) return;
+              // Stopping may synchronously turn this same button into a submit button.
+              event.preventDefault();
+              props.onStop?.();
+            }}
+          >
+            {stopping() ? (
+              <Icon name="stop" size="small" aria-hidden="true" />
+            ) : (
+              <span class="composer-action-icon" aria-hidden="true">
+                {props.action === "sending" ? (
+                  <Loader width={16} height={16} />
+                ) : (
+                  <Icon name="arrow-up" />
+                )}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {selectionStatus(props)}
+      </form>
+      <Show when={props.onQueue}>
+        <p class="composer-shortcuts">
+          {props.action === "running" ? "Enter to steer" : "Enter to send"} · ⌘ Enter to queue ·
+          Shift Enter for a new line
+        </p>
+      </Show>
+    </>
   );
 }

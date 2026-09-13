@@ -524,6 +524,78 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
+  it("queues, cancels, steers and restores server-owned pending messages after reload", async () => {
+    const before = (await providerState()).requests.length;
+    const admitted = page.waitForResponse(
+      (response) =>
+        /\/session\/[^/]+\/prompt$/u.test(new URL(response.url()).pathname) &&
+        response.request().method() === "POST",
+    );
+    await send("E2E_QUEUE_HOLD browser");
+    const sessionID = decodeURIComponent(
+      new URL((await admitted).url()).pathname.split("/").at(-2),
+    );
+    await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    const pending = page.getByRole("region", { name: "Pending messages" });
+    for (const text of [
+      "First queued task",
+      "Remove this task",
+      "Middle queued task",
+      "Last queued task",
+    ]) {
+      await prompt.fill(text);
+      await prompt.press("Meta+Enter");
+      await expect.poll(() => prompt.inputValue()).toBe("");
+      await pending.getByText(text, { exact: true }).waitFor();
+    }
+    expect(
+      (await api.session.inbox.list({ sessionID })).filter((item) => item.type === "user"),
+    ).toHaveLength(4);
+    expect(await page.locator(".transcript-view").textContent()).not.toContain("First queued task");
+    await pending
+      .getByRole("button", { name: "Cancel message: Remove this task", exact: true })
+      .click();
+    await pending.getByText("Remove this task", { exact: true }).waitFor({ state: "hidden" });
+    await page.reload();
+    await connect();
+    await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
+    await pending.getByText("First queued task", { exact: true }).waitFor();
+    await pending
+      .locator("li")
+      .filter({ hasText: "First queued task" })
+      .getByRole("button", { name: "Steer now" })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (await api.session.inbox.list({ sessionID })).find(
+            (item) => item.type === "user" && item.payload.text === "First queued task",
+          )?.delivery,
+      )
+      .toBe("steer");
+    await prompt.fill("Direct steering task");
+    await prompt.press("Enter");
+    await expect.poll(() => prompt.inputValue()).toBe("");
+    await pending.getByText("Direct steering task", { exact: true }).waitFor();
+    provider.releaseHeld();
+    await pending.waitFor({ state: "hidden" });
+    await idle();
+    await transcript("First queued task");
+    await transcript("Direct steering task");
+    await transcript("Last queued task");
+    const requests = (await providerState()).requests
+      .slice(before)
+      .filter((item) => item.model !== "title");
+    expect(requests.some((item) => item.prompt.includes("Remove this task"))).toBe(false);
+    const steerIndex = requests.findIndex((item) => item.prompt.includes("Direct steering task"));
+    const middleIndex = requests.findIndex((item) => item.prompt.includes("Middle queued task"));
+    const queueIndex = requests.findIndex((item) => item.prompt.includes("Last queued task"));
+    expect(steerIndex).toBeGreaterThan(0);
+    expect(middleIndex).toBeGreaterThan(steerIndex);
+    expect(queueIndex).toBeGreaterThan(middleIndex);
+  });
+
   it("submits annotations and reviews through the same server-backed workspace", async () => {
     await page.getByLabel(/^Model:/u).click();
     await page.getByPlaceholder("Search models").fill("Acceptance Alternate");

@@ -1,0 +1,80 @@
+.pending-messages {
+  width: min(calc(100% - 32px), 820px);
+  max-height: 240px;
+  margin: 0 auto 8px;
+  overflow-y: auto;
+  border: 1px solid var(--oc-border-strong);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+}
+
+.pending-messages ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pending-messages li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 9px;
+}
+
+.pending-messages li + li {
+  border-top: 1px solid var(--oc-border-strong);
+}
+
+.pending-message {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pending-label {
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.pending-message p {
+  min-width: 0;
+  margin: 0;
+  color: var(--oc-text-contrast);
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.pending-remove[data-component="icon-button-v2"] {
+  color: var(--oc-status-danger);
+}
+
+.pending-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 9px;
+  color: var(--oc-status-danger);
+  font-size: var(--oc-type-caption-size);
+}
+
+@media (width <= 620px) {
+  .pending-messages {
+    width: calc(100% - 20px);
+  }
+}

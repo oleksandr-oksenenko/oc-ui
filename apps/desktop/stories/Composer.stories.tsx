@@ -250,7 +250,7 @@ export const RunningDraft: Story = {
     runningOnStop.mockClear();
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    const stop = canvas.getByRole("button", { name: "Stop" });
+    const send = canvas.getByRole("button", { name: "Send" });
     const pickers = canvasElement.querySelectorAll<HTMLElement>('[data-component="select-v2"]');
     const model = canvas.getByRole("button", { name: "Model: GPT-5" });
 
@@ -264,13 +264,14 @@ export const RunningDraft: Story = {
     });
 
     await step("Keep live-run controls available", async () => {
-      await expect(stop).toBeEnabled();
+      await expect(send).toBeEnabled();
       await expect(model).toBeEnabled();
       await expect(pickers).toHaveLength(2);
       for (const picker of pickers) {
         await expect(picker).not.toHaveAttribute("data-disabled");
       }
-      await userEvent.click(stop);
+      await userEvent.clear(prompt);
+      await userEvent.click(canvas.getByRole("button", { name: "Stop" }));
       await expect(runningOnStop).toHaveBeenCalledOnce();
     });
   },

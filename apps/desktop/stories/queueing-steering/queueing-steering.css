@@ -1,0 +1,4 @@
+.queue-prototype {
+  height: 100vh;
+  background: var(--oc-surface-canvas);
+}

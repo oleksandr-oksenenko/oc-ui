@@ -142,6 +142,14 @@ function setup(
         annotationDrafts={createAnnotationDraftStore(effects)}
         workspace={workspace}
         composer={composer}
+        inbox={{
+          messages: () => [],
+          busy: () => false,
+          error: () => undefined,
+          cancel: async () => undefined,
+          steer: async () => undefined,
+          refresh: async () => undefined,
+        }}
         modelSelection={modelSelection}
         agentSelection={agentSelection}
         forms={formsController}
