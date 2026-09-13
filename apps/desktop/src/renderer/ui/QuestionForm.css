@@ -306,3 +306,22 @@
     grid-template-columns: 1fr;
   }
 }
+
+.question-form-custom-choice > [data-slot="radio-v2-item-label"] {
+  color: var(--oc-text-base);
+  font-size: var(--oc-type-control-size);
+  line-height: var(--oc-type-control-line-height);
+}
+
+.question-form-custom-answer[data-component="text-input-v2"] {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.question-form-custom-answer[data-component="text-input-v2"] [data-slot="text-input-v2-input"] {
+  padding: 0;
+}

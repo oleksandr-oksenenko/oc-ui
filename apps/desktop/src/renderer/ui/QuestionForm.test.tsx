@@ -64,7 +64,7 @@ function submit(host: HTMLElement): void {
 }
 
 describe("QuestionForm", () => {
-  it("keeps the custom string option selected before an answer is typed", () => {
+  it("edits and submits a custom answer inline while retaining its radio", async () => {
     const form = {
       id: "frm_custom_string",
       sessionID: "ses_test",
@@ -91,7 +91,25 @@ describe("QuestionForm", () => {
 
     expect(custom?.checked).toBe(true);
     expect(current?.checked).toBe(false);
-    expect(mounted.host.querySelector('input[placeholder="Type your answer"]')).not.toBeNull();
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    const input = mounted.host.querySelector<HTMLInputElement>(
+      "[data-question-form-custom-input]",
+    )!;
+    expect(input.closest('[data-slot="radio-v2-item"]')).toBe(custom?.parentElement);
+    expect(document.activeElement).toBe(input);
+    input.value = "Another workspace";
+    input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    expect(custom?.checked).toBe(true);
+    submit(mounted.host);
+    expect(mounted.onSubmit).toHaveBeenCalledWith({ workspace: "Another workspace" });
+
+    mounted.host.querySelector<HTMLInputElement>('input[value="option:0"]')?.click();
+    expect(mounted.host.querySelector<HTMLInputElement>('input[value="custom"]')?.checked).toBe(
+      false,
+    );
+    expect(mounted.host.querySelector("[data-question-form-custom-input]")).toBeNull();
+    submit(mounted.host);
+    expect(mounted.onSubmit).toHaveBeenLastCalledWith({ workspace: "current" });
     mounted.dispose();
   });
 

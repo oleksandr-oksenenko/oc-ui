@@ -1,3 +1,10 @@
+import {
+  Item as RadioChoice,
+  ItemInput,
+  ItemControl,
+  ItemIndicator,
+  ItemLabel,
+} from "@kobalte/core/radio-group";
 import type { FormAnswer, FormField, FormInfo, FormValue } from "@opencode-ai/client";
 import { Button } from "@opencode-ai/ui/button";
 import { Card } from "@opencode-ai/ui/card";
@@ -277,6 +284,12 @@ export function QuestionForm(props: QuestionFormProps) {
                   ? String(existing)
                   : undefined,
               );
+              queueMicrotask(() =>
+                fieldRoots
+                  .get(field.key)
+                  ?.querySelector<HTMLInputElement>("[data-question-form-custom-input]")
+                  ?.focus(),
+              );
               return;
             }
             const optionIndex = options.findIndex((_, index) => optionToken(index) === value);
@@ -296,29 +309,38 @@ export function QuestionForm(props: QuestionFormProps) {
             )}
           </For>
           <Show when={field.custom}>
-            <RadioItem value={CUSTOM_TOKEN} label={radioLabel("Custom answer")} />
+            <RadioChoice
+              value={CUSTOM_TOKEN}
+              data-slot="radio-v2-item"
+              class="question-form-custom-choice"
+            >
+              <ItemInput data-slot="radio-v2-item-input" aria-label="Custom answer" />
+              <div data-slot="radio-v2-item-control-stack">
+                <ItemControl data-slot="radio-v2-item-control">
+                  <ItemIndicator data-slot="radio-v2-item-indicator" />
+                </ItemControl>
+              </div>
+              <Icon class="question-form-radio-check" name="check-small" />
+              <Show
+                when={selected() === CUSTOM_TOKEN}
+                fallback={<ItemLabel data-slot="radio-v2-item-label">Custom answer</ItemLabel>}
+              >
+                <TextInput
+                  class="question-form-custom-answer"
+                  aria-label="Custom answer"
+                  aria-describedby={error ? errorID : undefined}
+                  aria-invalid={error !== undefined}
+                  value={answerText(answer()[field.key])}
+                  placeholder={field.placeholder ?? "Type your answer"}
+                  data-question-form-custom-input
+                  disabled={unavailable()}
+                  invalid={error !== undefined}
+                  onInput={(event) => setAnswer(field.key, event.currentTarget.value || undefined)}
+                />
+              </Show>
+            </RadioChoice>
           </Show>
         </RadioGroup>
-        <Show when={field.custom && selected() === CUSTOM_TOKEN}>
-          <Field invalid={error !== undefined}>
-            <Field.Label>Custom answer</Field.Label>
-            <Field.Control>
-              <TextInput
-                class="question-form-input"
-                appearance="large"
-                value={answerText(answer()[field.key])}
-                placeholder={field.placeholder ?? "Type your answer"}
-                data-question-form-custom-input
-                disabled={unavailable()}
-                invalid={error !== undefined}
-                onInput={(event) => setAnswer(field.key, event.currentTarget.value || undefined)}
-              />
-            </Field.Control>
-            <Show when={error}>
-              {(message) => <Field.Suffix class="sr-only">{message()}</Field.Suffix>}
-            </Show>
-          </Field>
-        </Show>
         <Show when={error}>
           {(message) => (
             <p id={errorID} class="question-form-field-error">
