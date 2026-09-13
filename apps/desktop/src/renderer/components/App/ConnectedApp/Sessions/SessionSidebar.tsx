@@ -11,6 +11,7 @@ import { SessionHeader } from "./SessionSidebar/SessionHeader.tsx";
 import { SessionTree } from "./SessionSidebar/SessionTree.tsx";
 import type { SessionDeletionStatus } from "./createSessionFlows.ts";
 import "./SessionSidebar.css";
+import { ThemeToggle } from "../../../../ui/ThemeToggle.tsx";
 
 type SessionSidebarStatus = "connected" | "reconnecting" | "failed";
 
@@ -124,6 +125,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
       </Show>
 
       <div class="shell-sidebar-footer">
+        <ThemeToggle />
         <Button
           class="shell-server-selector oc-focus-inset"
           type="button"

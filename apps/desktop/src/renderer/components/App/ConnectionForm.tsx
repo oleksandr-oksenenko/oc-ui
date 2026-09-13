@@ -4,6 +4,7 @@ import { Loader } from "@opencode-ai/ui/loader";
 import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
 import { TextInput } from "@opencode-ai/ui/text-input";
 import { Show } from "solid-js";
+import { ThemeToggle } from "../../ui/ThemeToggle.tsx";
 
 import "./ConnectionForm.css";
 
@@ -54,6 +55,7 @@ export function ConnectionForm(props: ConnectionFormProps) {
   return (
     <main class="connection-form-page">
       <section class="connection-form-column" aria-labelledby="connection-form-title">
+        <ThemeToggle />
         <header class="connection-form-heading">
           <p class="connection-form-eyebrow">Ocui</p>
           <h1 id="connection-form-title">Connect to OpenCode</h1>

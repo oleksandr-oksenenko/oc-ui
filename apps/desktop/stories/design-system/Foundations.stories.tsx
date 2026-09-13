@@ -1,9 +1,10 @@
 /* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- The scrollable catalog needs keyboard focus. */
 
-import { For, onMount, Show, createSignal } from "solid-js";
+import { For, createEffect, Show, createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
 import "./design-system.css";
+import { useTheme } from "../../src/renderer/ui/ThemeProvider.tsx";
 
 type Token = {
   name: string;
@@ -40,6 +41,7 @@ const tokenGroups: Array<{ title: string; tokens: Token[] }> = [
     title: "Text and icons",
     tokens: [
       { name: "--oc-text-contrast", label: "Highest contrast text", swatch: true },
+      { name: "--oc-text-on-selection", label: "Text on blue actions", swatch: true },
       { name: "--oc-text-strong", label: "Strong text", swatch: true },
       { name: "--oc-text-base", label: "Default text", swatch: true },
       { name: "--oc-text-muted", label: "Muted text", swatch: true },
@@ -89,9 +91,11 @@ const meta = {
 export default meta;
 
 function TokenRow(props: { token: Token }) {
+  const { theme } = useTheme();
   const [value, setValue] = createSignal("reading token…");
 
-  onMount(() => {
+  createEffect(() => {
+    theme();
     setValue(
       getComputedStyle(document.documentElement).getPropertyValue(props.token.name).trim() ||
         "not defined",
@@ -131,9 +135,8 @@ function FoundationsPage() {
           <p class="design-system-kicker">Review catalog</p>
           <h1 class="design-system-title">Foundations</h1>
           <p class="design-system-intro">
-            The values below are read from the active dark/AMOLED document at runtime. This page is
-            a compact reference for the tokens that shape oc-ui surfaces, hierarchy, feedback, and
-            density.
+            The values below are read from the active theme at runtime. This page is a compact
+            reference for the tokens that shape oc-ui surfaces, hierarchy, feedback, and density.
           </p>
         </header>
 

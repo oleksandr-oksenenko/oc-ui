@@ -25,7 +25,7 @@ export default meta;
 async function ring(element: Element, offset = "0px") {
   await waitFor(async () => {
     const style = getComputedStyle(element);
-    await expect(style.outlineColor).toBe("rgb(104, 104, 104)");
+    await expect(style.outlineColor).toBe("rgb(119, 119, 119)");
     await expect(style.outlineStyle).toBe("solid");
     await expect(style.outlineWidth).toBe("1px");
     await expect(style.outlineOffset).toBe(offset);
@@ -124,7 +124,7 @@ export const SharedTreatment: StoryObj = {
     const invalid = canvas.getByRole("textbox", { name: "Focus invalid field" });
     const invalidFrame = invalid.closest('[data-component="text-input-v2"]')!;
     await ring(invalidFrame);
-    await expect(getComputedStyle(invalidFrame).boxShadow).toContain("rgb(255, 93, 102)");
+    await expect(getComputedStyle(invalidFrame).boxShadow).toContain("rgb(192, 37, 48)");
     await expect(canvas.getByRole("textbox", { name: "Focus disabled field" })).toBeDisabled();
     await expect(canvas.getByRole("button", { name: "Focus disabled action" })).toBeDisabled();
 

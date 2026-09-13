@@ -556,6 +556,11 @@ export const WorkspaceShowcase = {
   render: () => <WorkspaceShowcaseFixture />,
 };
 
+export const DarkWorkspace = {
+  render: () => <WorkspaceShowcaseFixture />,
+  globals: { theme: "dark" },
+};
+
 // Keep the default story untouched for visual work; exercise local callbacks here.
 export const InteractiveWorkspace = {
   render: () => <WorkspaceShowcaseFixture />,

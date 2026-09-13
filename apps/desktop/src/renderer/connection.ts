@@ -5,6 +5,7 @@ import { createComponent, createRoot, getOwner, runWithOwner, untrack } from "so
 
 import type { OpenCodeTarget } from "../shared/desktop-api.ts";
 import type { AppHost } from "../shared/app-host.ts";
+import { Appearance, makeAppearance, type Theme } from "./appearance.ts";
 import { OpenCodeConnectionError, verifyServer } from "./opencode/index.ts";
 import type { VerifiedServer } from "./opencode/index.ts";
 import { createConnectedRuntime, type ConnectedRuntime } from "./opencode/runtime.ts";
@@ -307,12 +308,24 @@ class Connection extends Context.Service<
 /** One runtime and registry per window, composed before rendering views. */
 export function createRenderer(host: AppHost) {
   const registry = AtomRegistry.make();
-  const runtime = ManagedRuntime.make(Layer.effect(Connection, makeConnection(host, registry)));
+  const runtime = ManagedRuntime.make(
+    Layer.merge(
+      Layer.effect(Connection, makeConnection(host, registry)),
+      Layer.effect(Appearance, makeAppearance(registry)),
+    ),
+  );
   const connection = runtime.runSync(Connection);
+  const appearance = runtime.runSync(Appearance);
   let closing: Promise<void> | undefined;
   return {
     registry,
     connection,
+    appearance: {
+      state: appearance.state,
+      setTheme: (theme: Theme) => {
+        if (!closing) runtime.runSync(appearance.setTheme(theme));
+      },
+    },
     dispose: () =>
       (closing ??= Effect.runPromise(runtime.disposeEffect.pipe(Effect.uninterruptible)).finally(
         () => registry.dispose(),

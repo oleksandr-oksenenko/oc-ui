@@ -485,6 +485,36 @@ describe.sequential("production browser app", () => {
     expect(await page.evaluate(() => document.documentElement.dataset.host)).toBe("browser");
   });
 
+  it("switches palettes without replacing the workspace and restores the choice after reload", async () => {
+    const prompt = await page.getByLabel("Prompt", { exact: true }).elementHandle();
+    await page.getByRole("button", { name: "Switch to dark theme" }).click();
+    await expect.poll(() => page.locator("html").getAttribute("data-color-scheme")).toBe("dark");
+    expect(
+      await page.locator("html").evaluate((node) => getComputedStyle(node).backgroundColor),
+    ).toBe("rgb(0, 0, 0)");
+    expect(await prompt.evaluate((node) => node.isConnected)).toBe(true);
+    expect(await page.getByLabel("Prompt", { exact: true }).textContent()).toBe(
+      "Independent draft",
+    );
+    const second = await context.newPage();
+    try {
+      await second.goto(uiUrl);
+      await second.getByRole("button", { name: "Switch to light theme" }).waitFor();
+      await second.reload();
+      await second.getByRole("button", { name: "Switch to light theme" }).click();
+      await second.reload();
+      await second.getByRole("button", { name: "Switch to dark theme" }).waitFor();
+      expect(await second.locator("html").getAttribute("data-color-scheme")).toBe("light");
+    } finally {
+      await second.close();
+    }
+    const toggle = page.getByRole("button", { name: "Switch to light theme" });
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => page.locator("html").getAttribute("data-color-scheme")).toBe("light");
+    expect(await prompt.evaluate((node) => node.isConnected)).toBe(true);
+  });
+
   it("streams prompts, resolves questions, stops real provider work, and reconnects after transport loss", async () => {
     await send("E2E_STREAM browser");
     await transcript("Acceptance first streamed fragment.");
@@ -724,6 +754,15 @@ describe.sequential("production browser app", () => {
     const review = "Browser review survives panel remount.";
     await page.getByLabel("Comment on working.txt").fill(review);
     await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Switch to dark theme" }).click();
+    await expect
+      .poll(() => diff.evaluate((node) => getComputedStyle(node).colorScheme))
+      .toBe("dark");
+    await expect.poll(() => page.locator(".diff-review-text").textContent()).toBe(review);
+    await page.getByRole("button", { name: "Switch to light theme" }).click();
+    await expect
+      .poll(() => diff.evaluate((node) => getComputedStyle(node).colorScheme))
+      .toBe("light");
     await page.getByLabel("Hide context panel").click();
     await page.getByLabel("Show context").click();
     await expect.poll(() => page.locator(".diff-review-text").textContent()).toBe(review);

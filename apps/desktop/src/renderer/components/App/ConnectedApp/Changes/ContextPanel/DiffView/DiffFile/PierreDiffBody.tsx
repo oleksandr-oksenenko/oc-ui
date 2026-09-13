@@ -10,6 +10,7 @@ import { createEffect, createMemo, createSignal, on, onCleanup, untrack } from "
 import type { DiffFileReview, ReviewComment } from "../diff-render-data.ts";
 import { getAnnotationTarget, getSelectedCode } from "../diff-render-data.ts";
 import type { DiffRenderData } from "../diff-render-data.ts";
+import { useTheme } from "../../../../../../../ui/ThemeProvider.tsx";
 
 type AnnotationMetadata = { readonly commentID: string };
 
@@ -136,6 +137,7 @@ function syncGutterCommentIcons(container: HTMLElement): void {
 }
 
 export function PierreDiffBody(props: PierreDiffBodyProps) {
+  const { theme } = useTheme();
   const [host, setHost] = createSignal<HTMLDivElement>();
   const renderer = new PierreFileDiff<AnnotationMetadata>();
 
@@ -169,8 +171,8 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
     diff: DiffRenderData,
     review: DiffFileReview | undefined,
   ): FileDiffOptions<AnnotationMetadata> => ({
-    theme: "github-dark-high-contrast",
-    themeType: "dark",
+    theme: { light: "github-light-high-contrast", dark: "github-dark-high-contrast" },
+    themeType: theme(),
     diffStyle: "unified",
     expandUnchanged: false,
     disableFileHeader: true,
@@ -251,7 +253,7 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
 
   createEffect(
     on(
-      renderSignature,
+      [renderSignature, theme],
       () => {
         const currentHost = host();
         if (!currentHost) return;

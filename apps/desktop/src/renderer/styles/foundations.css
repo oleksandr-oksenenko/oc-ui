@@ -1,51 +1,52 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* oc-ui's product palette. OpenCode remains the component system; these
-     semantic values are the single AMOLED theme applied to its public tokens. */
-  --oc-surface-canvas: #000;
-  --oc-surface-subtle: #050505;
-  --oc-surface-raised: #0a0a0a;
-  --oc-surface-control: #111;
-  --oc-surface-selected: #171717;
-  --oc-surface-hover: #1c1c1c;
-  --oc-surface-elevated: #1f1f1f;
-  --oc-overlay-hover: rgb(255 255 255 / 6%);
-  --oc-overlay-pressed: rgb(255 255 255 / 10%);
+  /* Default light palette. The AMOLED override below shares all aliases,
+     component mappings, typography, and geometry with this theme. */
+  --oc-surface-canvas: #fff;
+  --oc-surface-subtle: #fafafa;
+  --oc-surface-raised: #f5f5f5;
+  --oc-surface-control: #eee;
+  --oc-surface-selected: #e8e8e8;
+  --oc-surface-hover: #e3e3e3;
+  --oc-surface-elevated: #e0e0e0;
+  --oc-overlay-hover: rgb(0 0 0 / 6%);
+  --oc-overlay-pressed: rgb(0 0 0 / 10%);
   --oc-content-code-surface: var(--oc-surface-raised);
-  --oc-border-muted: #1a1a1a;
-  --oc-border-base: #242424;
-  --oc-border-strong: #343434;
-  --oc-border-emphasis: #686868;
+  --oc-border-muted: #e5e5e5;
+  --oc-border-base: #dbdbdb;
+  --oc-border-strong: #cbcbcb;
+  --oc-border-emphasis: #777;
   --oc-content-divider: var(--oc-border-muted);
-  --oc-text-strong: #f2f2f2;
-  --oc-text-contrast: #f5f5f5;
-  --oc-text-base: #d0d0d0;
-  --oc-text-muted: #888;
-  --oc-text-faint: #7f7f7f;
-  --oc-icon-faint: #6f6f6f;
-  --oc-icon-base: #a5a5a5;
-  --oc-accent: #74a7ff;
+  --oc-text-strong: #0d0d0d;
+  --oc-text-contrast: #0a0a0a;
+  --oc-text-on-selection: #f5f5f5;
+  --oc-text-base: #2f2f2f;
+  --oc-text-muted: #606060;
+  --oc-text-faint: #666;
+  --oc-icon-faint: #707070;
+  --oc-icon-base: #5a5a5a;
+  --oc-accent: #075ebd;
   --oc-focus-ring: var(--oc-border-emphasis);
   --oc-focus-ring-width: 1px;
   --oc-focus-ring-offset: 0px;
   --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
   --oc-focus-ring-inset-offset: calc(-1 * var(--oc-focus-ring-width));
-  --oc-status-info: #5598f6;
-  --oc-status-success: #7ee787;
-  --oc-status-warning: #f5b942;
-  --oc-status-danger: #ff5d66;
-  --oc-status-danger-muted: #e6aab1;
+  --oc-status-info: #075ebd;
+  --oc-status-success: #176f2c;
+  --oc-status-warning: #855600;
+  --oc-status-danger: #c02530;
+  --oc-status-danger-muted: #9b454e;
   --oc-status-danger-border: var(--oc-status-danger);
-  --oc-status-danger-surface: rgb(255 93 102 / 10%);
+  --oc-status-danger-surface: rgb(192 37 48 / 10%);
   --oc-selection: #0969da;
   --oc-selection-hover: #075ebd;
   --oc-selection-pressed: #064f9d;
   --oc-selection-ring: rgb(9 105 218 / 14%);
   --oc-diff-addition: var(--oc-status-success);
-  --oc-diff-deletion: #ff7b72;
-  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 72%), 0 0 0 1px #29292f;
-  --oc-shadow-popover: 0 8px 24px rgb(0 0 0 / 55%);
+  --oc-diff-deletion: #b42318;
+  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 12%), 0 0 0 1px var(--oc-border-base);
+  --oc-shadow-popover: 0 8px 24px rgb(0 0 0 / 10%);
 
   /* Ordinary controls share one compact radius; reserve full rounding for
      circles and pills. */
@@ -136,7 +137,7 @@
   --v2-text-text-base: var(--oc-text-base);
   --v2-text-text-muted: var(--oc-text-muted);
   --v2-text-text-faint: var(--oc-text-faint);
-  --v2-text-text-contrast: var(--oc-text-contrast);
+  --v2-text-text-contrast: var(--oc-text-on-selection);
   --v2-background-bg-base: var(--oc-surface-canvas);
   --v2-background-bg-deep: var(--oc-surface-canvas);
   --v2-background-bg-layer-01: var(--oc-surface-raised);
@@ -175,6 +176,41 @@
   background: var(--oc-surface-canvas);
   font-synthesis: none;
   text-rendering: optimizelegibility;
+}
+
+:root[data-color-scheme="dark"] {
+  color-scheme: dark;
+
+  --oc-surface-canvas: #000;
+  --oc-surface-subtle: #050505;
+  --oc-surface-raised: #0a0a0a;
+  --oc-surface-control: #111;
+  --oc-surface-selected: #171717;
+  --oc-surface-hover: #1c1c1c;
+  --oc-surface-elevated: #1f1f1f;
+  --oc-overlay-hover: rgb(255 255 255 / 6%);
+  --oc-overlay-pressed: rgb(255 255 255 / 10%);
+  --oc-border-muted: #1a1a1a;
+  --oc-border-base: #242424;
+  --oc-border-strong: #343434;
+  --oc-border-emphasis: #686868;
+  --oc-text-strong: #f2f2f2;
+  --oc-text-contrast: #f5f5f5;
+  --oc-text-base: #d0d0d0;
+  --oc-text-muted: #888;
+  --oc-text-faint: #7f7f7f;
+  --oc-icon-faint: #6f6f6f;
+  --oc-icon-base: #a5a5a5;
+  --oc-accent: #74a7ff;
+  --oc-status-info: #5598f6;
+  --oc-status-success: #7ee787;
+  --oc-status-warning: #f5b942;
+  --oc-status-danger: #ff5d66;
+  --oc-status-danger-muted: #e6aab1;
+  --oc-status-danger-surface: rgb(255 93 102 / 10%);
+  --oc-diff-deletion: #ff7b72;
+  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 72%), 0 0 0 1px #29292f;
+  --oc-shadow-popover: 0 8px 24px rgb(0 0 0 / 55%);
 }
 
 /* Shared spacing for native and custom dropdown triggers. */

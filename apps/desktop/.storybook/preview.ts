@@ -1,10 +1,12 @@
 import type { Preview } from "storybook-solidjs-vite";
-import { createComponent } from "solid-js";
+import { createComponent, createEffect, createSignal } from "solid-js";
 
 import "@opencode-ai/ui/styles";
 import "@opencode-ai/ui/styles/tokens";
 import "../src/renderer/styles.css";
 import { ServerFlowDialogProvider } from "../src/renderer/ui/ServerFlowDialogProvider.tsx";
+import { ThemeProvider } from "../src/renderer/ui/ThemeProvider.tsx";
+import type { Theme } from "../src/renderer/appearance.ts";
 
 const viewports = {
   desktop: {
@@ -28,27 +30,45 @@ const viewports = {
 // Keep that layout path covered in Storybook without drawing fake window controls.
 document.documentElement.dataset.platform = "macos";
 document.documentElement.dataset.host = "desktop";
-document.documentElement.dataset.colorScheme = "dark";
 
 const preview: Preview = {
   decorators: [
-    (Story) =>
-      createComponent(ServerFlowDialogProvider, {
+    (Story, context) => {
+      const [theme, setTheme] = createSignal<Theme>("light");
+      createEffect(() => setTheme(context.globals.theme === "dark" ? "dark" : "light"));
+      return createComponent(ThemeProvider, {
+        theme,
+        onChange: setTheme,
         get children() {
-          return Story();
+          return createComponent(ServerFlowDialogProvider, {
+            get children() {
+              return Story();
+            },
+          });
         },
-      }),
+      });
+    },
   ],
+  globalTypes: {
+    theme: {
+      description: "Application theme",
+      toolbar: {
+        dynamicTitle: true,
+        items: [
+          { value: "light", title: "Light" },
+          { value: "dark", title: "Dark (AMOLED)" },
+        ],
+      },
+    },
+  },
   parameters: {
     layout: "fullscreen",
     a11y: { test: "error" },
-    backgrounds: {
-      default: "dark",
-      values: [{ name: "dark", value: "#000000" }],
-    },
+    backgrounds: { disable: true },
     viewport: { options: viewports },
   },
   initialGlobals: {
+    theme: "light",
     viewport: { value: "desktop", isRotated: false },
   },
 };
