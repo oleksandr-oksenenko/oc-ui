@@ -240,11 +240,8 @@ describe("TranscriptView", () => {
             : element.textContent,
       ),
     ).toEqual(["Before", "reasoning", "tool", "After"]);
-    expect(
-      host
-        .querySelector('[data-message-id="assistant"] .transcript-reasoning-toggle')
-        ?.getAttribute("aria-expanded"),
-    ).toBe("false");
+    expect(host.querySelector(".transcript-reasoning-summary")?.textContent).toBe("Think");
+    expect(host.querySelector(".transcript-reasoning button")).toBeNull();
     expect(
       [...host.querySelectorAll<HTMLElement>('[data-slot="collapsible-trigger"]')].every(
         (trigger) => trigger.getAttribute("aria-expanded") === "false",
@@ -253,13 +250,11 @@ describe("TranscriptView", () => {
     expect(
       [
         ...host.querySelectorAll<HTMLElement>(
-          ".transcript-reasoning, .transcript-tool-call, .transcript-shell-message, .transcript-skill-message, .transcript-compaction, .transcript-context-message",
+          ".transcript-tool-call, .transcript-shell-message, .transcript-skill-message, .transcript-compaction, .transcript-context-message",
         ),
       ].every((element) => element.dataset.component === "collapsible"),
     ).toBe(true);
-    expect(
-      host.querySelector('.transcript-reasoning [data-slot="collapsible-arrow-icon"]'),
-    ).not.toBeNull();
+    expect(host.querySelector(".transcript-reasoning svg")).not.toBeNull();
     dispose();
     vi.unstubAllGlobals();
   });
@@ -311,8 +306,8 @@ describe("TranscriptView", () => {
         button.getAttribute("aria-expanded"),
       ),
     ).toEqual(["false", "false", "false", "false", "false"]);
-    expect(host.querySelector(".transcript-reasoning-toggle")?.getAttribute("aria-expanded")).toBe(
-      "false",
+    expect(host.querySelector(".transcript-reasoning-summary")?.textContent).toBe(
+      "Working through it",
     );
     expect(
       host
@@ -321,9 +316,7 @@ describe("TranscriptView", () => {
     ).toBe("false");
 
     host
-      .querySelectorAll<HTMLButtonElement>(
-        ".transcript-tool-header, .transcript-reasoning-toggle, .transcript-context-trigger",
-      )
+      .querySelectorAll<HTMLButtonElement>(".transcript-tool-header, .transcript-context-trigger")
       .forEach((button) => button.click());
     expect(host.querySelector(".transcript-tool-streaming")).not.toBeNull();
     expect(host.querySelector(".transcript-tool-running")).not.toBeNull();
