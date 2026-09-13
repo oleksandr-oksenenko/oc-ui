@@ -1,0 +1,22 @@
+.skills-story-frame {
+  width: min(760px, calc(100vw - 32px));
+  padding-top: 300px;
+  color: var(--oc-text-contrast);
+}
+
+.skills-story-intro {
+  margin: 0 16px 12px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+}
+
+.skills-story-preview {
+  margin: 24px 16px;
+  font-size: var(--oc-type-body-size);
+  white-space: pre-wrap;
+}
+
+.skills-story-preview > span {
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+}

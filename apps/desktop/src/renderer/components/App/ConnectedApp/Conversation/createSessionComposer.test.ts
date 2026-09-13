@@ -666,3 +666,60 @@ describe("createSessionComposer", () => {
     root.dispose();
   });
 });
+
+describe("skill attachments", () => {
+  const skills = [
+    { id: "review-id", name: "review", mention: { start: 2, end: 8, text: "review" } },
+  ];
+  it("preserves skills per session and retries the identical payload with the same message ID", async () => {
+    const prompt = vi
+      .fn<Prompt>()
+      .mockRejectedValueOnce(new Error("lost response"))
+      .mockImplementation((input) => Promise.resolve(promptResult(input)));
+    const root = setup(prompt);
+    root.setSelectedID("one");
+    root.composer.input("  review", skills);
+    root.setSelectedID("two");
+    expect(root.composer.skills()).toEqual([]);
+    root.setSelectedID("one");
+    expect(root.composer.skills()).toEqual(skills);
+    await root.composer.submit("queue");
+    expect(root.composer.skills()).toEqual(skills);
+    await root.composer.submit("queue");
+    expect(prompt.mock.calls[0]![0].skills).toEqual(skills);
+    expect(prompt.mock.calls[1]![0].id).toBe(prompt.mock.calls[0]![0].id);
+    expect(root.composer.skills()).toEqual([]);
+    root.dispose();
+  });
+  it("keeps a changed skill selection when admission succeeds with identical text", async () => {
+    let resolve!: (value: PromptResult) => void;
+    const prompt = vi.fn<Prompt>(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const root = setup(prompt);
+    root.setSelectedID("one");
+    root.composer.input("  review", skills);
+    const sending = root.composer.submit();
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    const newer = [{ ...skills[0]!, id: "other-review" }];
+    root.composer.input("  review", newer);
+    resolve(promptResult(prompt.mock.calls[0]![0]));
+    await sending;
+    expect(root.composer.value()).toBe("  review");
+    expect(root.composer.skills()).toEqual(newer);
+    root.dispose();
+  });
+  it("adjusts mention offsets when review formatting trims leading whitespace", async () => {
+    const root = setup();
+    seedReview(root);
+    root.composer.input("  review", skills);
+    await root.composer.submit();
+    expect(vi.mocked(root.prompt).mock.calls[0]![0].skills).toEqual([
+      { ...skills[0], mention: { start: 0, end: 6, text: "review" } },
+    ]);
+    root.dispose();
+  });
+});

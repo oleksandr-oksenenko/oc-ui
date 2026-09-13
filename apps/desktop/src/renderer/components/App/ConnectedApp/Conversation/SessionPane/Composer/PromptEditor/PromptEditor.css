@@ -1,0 +1,94 @@
+.prompt-skill-chip {
+  box-sizing: border-box;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 1px 0 5px;
+  border: 1px solid var(--oc-border-strong);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-control);
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.prompt-skill-label {
+  text-box: trim-both ex alphabetic;
+}
+
+.prompt-skill-status button {
+  border: 0;
+  color: var(--oc-text-contrast);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.prompt-skill-chip [data-component="icon-button-v2"] {
+  width: 16px;
+  height: 16px;
+}
+
+.prompt-skill-menu {
+  z-index: 10;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  box-sizing: border-box;
+  width: min(420px, 100%);
+  padding: 4px;
+  border: 1px solid var(--oc-border-strong);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+  box-shadow: var(--oc-shadow-popover);
+}
+
+.prompt-skill-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+}
+
+.prompt-skill-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  white-space: normal;
+  text-align: left;
+}
+
+.prompt-skill-status {
+  padding: 16px 8px;
+  font-size: var(--oc-type-body-size);
+}
+
+.prompt-skill-option span + span {
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+}
+
+.prompt-editor {
+  position: relative;
+  width: 100%;
+}
+
+.prompt-editor-input {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+}
+
+.prompt-editor-input[data-empty="true"]::before {
+  position: absolute;
+  content: attr(data-placeholder);
+  color: var(--oc-text-muted);
+  pointer-events: none;
+}
+
+.prompt-editor-input p {
+  margin: 0;
+}

@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-solid";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
-import type { SessionInboxDelivery } from "@opencode-ai/client";
+import type { SessionInboxDelivery, PromptSkillAttachment } from "@opencode-ai/client";
 import { SessionMessage } from "@opencode-ai/schema";
 import { createSessionDraftStore } from "../../../../domain/index.ts";
 import type {
@@ -28,6 +28,7 @@ type SubmissionRequest = {
   readonly id: string;
   readonly prompt: SessionPrompt;
   readonly text: string;
+  readonly skills: readonly PromptSkillAttachment[];
   readonly delivery: SessionInboxDelivery;
   readonly files: readonly File[];
   readonly reviewSnapshot: ReturnType<ReviewDraftStore["capture"]> | undefined;
@@ -62,6 +63,7 @@ type SessionComposerOptions = {
 
 export type SessionComposerController = {
   readonly value: Accessor<string>;
+  readonly skills: Accessor<readonly PromptSkillAttachment[]>;
   readonly files: Accessor<readonly File[]>;
   readonly pasteFiles: (files: readonly File[]) => void;
   readonly removeFile: (file: File) => void;
@@ -69,7 +71,7 @@ export type SessionComposerController = {
   readonly submitting: Accessor<boolean>;
   readonly error: Accessor<string | undefined>;
   readonly review: Accessor<ComposerReview | undefined>;
-  readonly input: (value: string) => void;
+  readonly input: (value: string, skills?: readonly PromptSkillAttachment[]) => void;
   readonly submit: (delivery?: SessionInboxDelivery) => Promise<void>;
   readonly clear: (sessionID: string) => void;
 };
@@ -165,10 +167,10 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     return { count: comments.length, onDiscard: discard };
   });
 
-  const input = (nextValue: string): void => {
+  const input = (nextValue: string, skills: readonly PromptSkillAttachment[] = []): void => {
     const sessionID = options.selectedID();
     if (sessionID === undefined) return;
-    drafts.set(sessionID, nextValue);
+    drafts.set(sessionID, nextValue, skills);
   };
 
   const isSubmissionAllowed = (sessionID: string | undefined): sessionID is string =>
@@ -176,6 +178,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
   const captureDraft = (sessionID: string) => {
     const text = drafts.get(sessionID);
+    const skills = drafts.skills(sessionID);
     const key = activeReviewKey();
     const reviewCapture = key === undefined ? undefined : options.review.drafts.capture(key);
     const reviewComments = reviewCapture?.comments ?? [];
@@ -192,7 +195,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     ) {
       return undefined;
     }
-    return { text, reviewSnapshot, reviewComments, annotationComments, attached };
+    return { text, skills, reviewSnapshot, reviewComments, annotationComments, attached };
   };
 
   const submit = (delivery: SessionInboxDelivery = "steer"): Promise<void> => {
@@ -200,13 +203,14 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     if (!isSubmissionAllowed(sessionID)) return Promise.resolve();
     const captured = captureDraft(sessionID);
     if (captured === undefined) return Promise.resolve();
-    const { text, reviewSnapshot, reviewComments, annotationComments, attached } = captured;
+    const { text, skills, reviewSnapshot, reviewComments, annotationComments, attached } = captured;
 
     const retry = failedRequest(sessionID);
     const candidatePrompt = createSessionPrompt({
       instruction: text,
       reviewComments,
       annotations: annotationComments,
+      skills,
     });
     const retrying =
       retry !== undefined &&
@@ -222,6 +226,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       id: retrying ? retry.id : SessionMessage.ID.create(),
       prompt: retrying ? retry.prompt : candidatePrompt,
       text,
+      skills,
       delivery,
       files: attached,
       reviewSnapshot,
@@ -294,6 +299,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
   return {
     value,
+    skills: () => drafts.skills(options.selectedID() ?? ""),
     files,
     pasteFiles,
     removeFile,
@@ -313,7 +319,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     if (failedRequest(request.sessionID) === request) {
       options.annotations.clearIfUnchanged(request.annotations);
     }
-    drafts.clearIfUnchanged(request.sessionID, request.text);
+    drafts.clearIfUnchanged(request.sessionID, request.text, request.skills);
     setFiles(
       request.sessionID,
       (effects.registry.get(fileDrafts)[request.sessionID] ?? []).filter(
@@ -337,7 +343,11 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     return (
       message?.type === "user" &&
       message.text === request.prompt.text &&
-      sameValue(message.metadata, request.prompt.metadata)
+      sameValue(message.metadata, request.prompt.metadata) &&
+      sameValue(
+        (message.skills ?? []).map(({ id, mention }) => ({ id, mention })),
+        (request.prompt.skills ?? []).map(({ id, mention }) => ({ id, mention })),
+      )
     );
   }
 
@@ -356,7 +366,11 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 }
 
 function samePrompt(left: SessionPrompt, right: SessionPrompt): boolean {
-  return left.text === right.text && sameValue(left.metadata, right.metadata);
+  return (
+    left.text === right.text &&
+    sameValue(left.metadata, right.metadata) &&
+    sameValue(left.skills, right.skills)
+  );
 }
 
 function sameValue<T>(left: T, right: T): boolean {

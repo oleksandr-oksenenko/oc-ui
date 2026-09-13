@@ -104,6 +104,7 @@ function setup(
   };
   const composer: SessionComposerController = {
     files: () => [],
+    skills: () => [],
     pasteFiles: () => undefined,
     removeFile: () => undefined,
     value: () => "",
@@ -364,7 +365,7 @@ describe("ConversationRegion session permissions", () => {
     await Promise.resolve();
 
     expect(document.activeElement).toBe(
-      mounted.host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]'),
+      mounted.host.querySelector<HTMLDivElement>('[aria-label="Prompt"]'),
     );
     mounted.dispose();
   });
@@ -385,14 +386,14 @@ describe("ConversationRegion session permissions", () => {
     await Promise.resolve();
 
     expect(document.activeElement).toBe(
-      mounted.host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]'),
+      mounted.host.querySelector<HTMLDivElement>('[aria-label="Prompt"]'),
     );
     mounted.dispose();
   });
 
   it("does not move focus on session navigation or when another control held focus", async () => {
     const mounted = setup([], [permission("per_first", "read files")]);
-    const prompt = mounted.host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]');
+    const prompt = mounted.host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
     prompt?.focus();
     mounted.setPermissions([]);
     await Promise.resolve();

@@ -1,4 +1,4 @@
-import type { JsonValue } from "@opencode-ai/client";
+import type { JsonValue, PromptSkillAttachment } from "@opencode-ai/client";
 import { Schema } from "effect";
 
 import {
@@ -17,6 +17,7 @@ import { renderFence } from "./prompt-format.ts";
 export const SESSION_PROMPT_METADATA_KEY = "oc-ui/session-prompt" as const;
 
 export type SessionPromptInput = {
+  readonly skills?: readonly PromptSkillAttachment[];
   readonly instruction: string;
   readonly reviewComments: readonly SentReviewComment[];
   readonly annotations: readonly TranscriptAnnotation[];
@@ -24,6 +25,7 @@ export type SessionPromptInput = {
 
 export type SessionPrompt = {
   readonly text: string;
+  readonly skills?: PromptSkillAttachment[];
   readonly metadata?: Record<string, JsonValue>;
 };
 
@@ -47,7 +49,18 @@ const decodeSessionPromptMetadata = Schema.decodeUnknownSync(SessionPromptMetada
 export function createSessionPrompt(input: SessionPromptInput): SessionPrompt {
   const instruction = input.instruction.trim();
   const hasComments = input.reviewComments.length > 0 || input.annotations.length > 0;
-  if (!hasComments) return { text: input.instruction };
+  const offset = hasComments ? input.instruction.length - input.instruction.trimStart().length : 0;
+  const skills = input.skills?.length
+    ? input.skills.map(({ id, name, mention }) => ({
+        id,
+        name,
+        mention: mention
+          ? { ...mention, start: mention.start - offset, end: mention.end - offset }
+          : undefined,
+      }))
+    : undefined;
+  if (!hasComments)
+    return skills ? { text: input.instruction, skills } : { text: input.instruction };
 
   const sections = [
     ...(instruction ? [instruction, ""] : []),
@@ -63,6 +76,7 @@ export function createSessionPrompt(input: SessionPromptInput): SessionPrompt {
   };
   return {
     text: sections.join("\n"),
+    skills,
     metadata: {
       [SESSION_PROMPT_METADATA_KEY]: toJsonSessionPromptMetadata(envelope),
     },

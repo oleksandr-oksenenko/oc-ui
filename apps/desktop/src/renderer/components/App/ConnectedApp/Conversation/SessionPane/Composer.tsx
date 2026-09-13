@@ -1,8 +1,10 @@
+import type { PromptSkillAttachment, SkillInfo } from "@opencode-ai/client";
+import { PromptEditor } from "./Composer/PromptEditor.tsx";
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Loader } from "@opencode-ai/ui/loader";
-import { Show, createEffect } from "solid-js";
+import { Show } from "solid-js";
 
 import "./Composer/Composer.css";
 import { AgentPicker } from "./Composer/AgentPicker.tsx";
@@ -11,9 +13,6 @@ import { ModelPicker } from "./Composer/ModelPicker.tsx";
 import type { ModelPickerOption } from "./Composer/ModelPicker.tsx";
 import { VariantPicker } from "./Composer/VariantPicker.tsx";
 import type { VariantPickerOption } from "./Composer/VariantPicker.tsx";
-
-const COMPOSER_MIN_HEIGHT = 40;
-const COMPOSER_MAX_HEIGHT = 168;
 
 export type ComposerReview = {
   readonly count: number;
@@ -29,6 +28,13 @@ type ComposerAnnotations = {
 
 export type ComposerProps = {
   readonly value: string;
+  readonly sessionID?: string;
+  readonly skills?: readonly PromptSkillAttachment[];
+  readonly skillCatalog?: {
+    readonly state: "loading" | "ready" | "failed";
+    readonly items: readonly Pick<SkillInfo, "id" | "name" | "description">[];
+    readonly onRetry: () => void;
+  };
   readonly files?: readonly File[];
   readonly onPasteFiles?: (files: readonly File[]) => void;
   readonly onRemoveFile?: (file: File) => void;
@@ -62,7 +68,7 @@ export type ComposerProps = {
     readonly error?: string;
     readonly onSelectAgent: (id: string) => void;
   };
-  readonly onInput: (value: string) => void;
+  readonly onInput: (value: string, skills?: readonly PromptSkillAttachment[]) => void;
   readonly onSubmit: () => void;
   /** When supplied, Cmd+Enter submits with queued delivery. */
   readonly onQueue?: () => void;
@@ -177,23 +183,9 @@ function selectionStatus(
 }
 
 export function Composer(props: ComposerProps) {
-  let textarea: HTMLTextAreaElement | undefined;
+  let editor: HTMLDivElement | undefined;
   const review = () => props.review;
   const annotations = () => ((props.annotations?.count ?? 0) > 0 ? props.annotations : undefined);
-  const resizeTextarea = () => {
-    if (!textarea) return;
-    textarea.style.height = "0px";
-    const scrollHeight = textarea.scrollHeight;
-    const height = Math.max(COMPOSER_MIN_HEIGHT, Math.min(COMPOSER_MAX_HEIGHT, scrollHeight));
-    textarea.style.height = `${height}px`;
-    textarea.style.overflowY = scrollHeight > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
-  };
-
-  createEffect(() => {
-    void props.value;
-    resizeTextarea();
-  });
-
   const sendable = () =>
     review() !== undefined ||
     annotations() !== undefined ||
@@ -295,7 +287,7 @@ export function Composer(props: ComposerProps) {
                   icon={<Icon name="close" size="small" aria-hidden="true" />}
                   onClick={() => {
                     props.onRemoveFile?.(file);
-                    textarea?.focus();
+                    editor?.focus();
                   }}
                 />
               </li>
@@ -303,27 +295,18 @@ export function Composer(props: ComposerProps) {
           </ul>
         </Show>
         <div class="composer-editor-row">
-          <textarea
+          <PromptEditor
             ref={(element) => {
-              textarea = element;
+              editor = element;
             }}
-            class="composer-input oc-focus-delegate"
-            aria-label="Prompt"
-            placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}
-            rows={1}
             value={props.value}
-            onInput={(event) => {
-              props.onInput(event.currentTarget.value);
-              resizeTextarea();
-            }}
+            skills={props.skills}
+            skillCatalog={props.skillCatalog}
+            sessionID={props.sessionID}
+            onInput={props.onInput}
+            onPasteFiles={props.onPasteFiles}
             onKeyDown={keyDown}
-            onPaste={(event) => {
-              if (!props.onPasteFiles || !event.clipboardData) return;
-              const files = Array.from(event.clipboardData.files);
-              if (files.length === 0) return;
-              event.preventDefault();
-              props.onPasteFiles(files);
-            }}
+            placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}
           />
         </div>
 

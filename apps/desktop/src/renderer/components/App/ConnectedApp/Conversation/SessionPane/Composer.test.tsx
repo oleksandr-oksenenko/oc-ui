@@ -24,7 +24,7 @@ const unavailableAgentSelection = {
 };
 
 describe("Composer", () => {
-  it("attaches pasted files without intercepting ordinary text paste", () => {
+  it("attaches pasted files and inserts ordinary text paste", () => {
     const paste = vi.fn<(files: readonly File[]) => void>();
     const remove = vi.fn<(file: File) => void>();
     const screenshot = new File(["image"], "screenshot.png", { type: "image/png" });
@@ -42,16 +42,20 @@ describe("Composer", () => {
         onSubmit={() => undefined}
       />
     ));
-    const input = host.querySelector("textarea")!;
+    const input = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]')!;
     const event = new Event("paste", { bubbles: true, cancelable: true });
-    Object.defineProperty(event, "clipboardData", { value: { files: [screenshot] } });
+    Object.defineProperty(event, "clipboardData", {
+      value: { files: [screenshot], getData: () => "" },
+    });
     input.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     expect(paste).toHaveBeenCalledWith([screenshot]);
     const textPaste = new Event("paste", { bubbles: true, cancelable: true });
-    Object.defineProperty(textPaste, "clipboardData", { value: { files: [] } });
+    Object.defineProperty(textPaste, "clipboardData", {
+      value: { files: [], getData: () => "hello" },
+    });
     input.dispatchEvent(textPaste);
-    expect(textPaste.defaultPrevented).toBe(false);
+    expect(textPaste.defaultPrevented).toBe(true);
     expect(host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.disabled).toBe(false);
     host.querySelector<HTMLButtonElement>('[aria-label="Remove screenshot.png"]')!.click();
     expect(remove).toHaveBeenCalledWith(screenshot);
@@ -562,7 +566,7 @@ describe("Composer", () => {
 
     const send = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
     expect(send?.disabled).toBe(false);
-    const textarea = host.querySelector<HTMLTextAreaElement>("textarea");
+    const textarea = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
     if (!textarea) throw new Error("Composer did not render a textarea");
     textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(submit).toHaveBeenCalledOnce();
@@ -680,7 +684,7 @@ describe("Composer", () => {
         onSubmit={submit}
       />
     ));
-    const textarea = host.querySelector("textarea");
+    const textarea = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
     if (!textarea) throw new Error("Composer did not render a textarea");
 
     textarea.dispatchEvent(
@@ -689,46 +693,6 @@ describe("Composer", () => {
     expect(submit).not.toHaveBeenCalled();
     textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(submit).toHaveBeenCalledOnce();
-    dispose();
-  });
-
-  it("grows with multiline input, caps its height, and shrinks with controlled value", () => {
-    const [value, setValue] = createSignal("One line");
-    const { host, dispose } = mount(() => (
-      <Composer
-        value={value()}
-        disabled={false}
-        action="send"
-        modelSelection={unavailableSelection}
-        agentSelection={unavailableAgentSelection}
-        onInput={setValue}
-        onSubmit={() => undefined}
-      />
-    ));
-    const textarea = host.querySelector("textarea");
-    if (!textarea) throw new Error("Composer did not render a textarea");
-    let scrollHeight = 76;
-    Object.defineProperty(textarea, "scrollHeight", {
-      configurable: true,
-      get: () => scrollHeight,
-    });
-
-    textarea.value = "One\nTwo\nThree";
-    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    expect(textarea.style.height).toBe("76px");
-    expect(textarea.style.overflowY).toBe("hidden");
-
-    scrollHeight = 240;
-    textarea.value = Array.from({ length: 20 }, (_, index) => `Line ${index}`).join("\n");
-    textarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    expect(textarea.style.height).toBe("168px");
-    expect(textarea.style.overflowY).toBe("auto");
-
-    scrollHeight = 24;
-    setValue("Short again");
-    expect(textarea.style.height).toBe("40px");
-    expect(textarea.style.overflowY).toBe("hidden");
-
     dispose();
   });
 });

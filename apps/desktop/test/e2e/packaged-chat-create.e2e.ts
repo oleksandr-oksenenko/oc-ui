@@ -121,14 +121,14 @@ describe("packaged chat create", () => {
 
       let messageIDs: Awaited<ReturnType<typeof waitForChatMessageIDs>>;
       try {
-        const prompt = $("textarea[aria-label=Prompt]");
+        const prompt = $("[aria-label=Prompt]");
         await prompt.setValue(CHAT_PROMPT.split("\n")[0]);
         await browser.keys(["Shift", "Enter"]);
         await prompt.addValue(CHAT_PROMPT.split("\n")[1]);
-        assert.equal(await prompt.getValue(), CHAT_PROMPT);
+        assert.equal(await prompt.getText(), CHAT_PROMPT);
         await $("button[aria-label=Send]").waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
         await $("button[aria-label=Send]").click();
-        await browser.waitUntil(async () => (await prompt.getValue()) === "", {
+        await browser.waitUntil(async () => (await prompt.getText()) === "", {
           timeout: STARTUP_TIMEOUT_MS,
           interval: POLL_INTERVAL_MS,
         });
@@ -281,15 +281,15 @@ async function assertIdleAndComposerReady(sessionTitle: string): Promise<void> {
   assert.equal(await transcriptElementCount(".transcript-pending-interaction"), 0);
   assert.equal(await transcriptElementCount(".transcript-tool-call"), 0);
   assert.equal(await transcriptElementCount(".transcript-message-failure"), 0);
-  const prompt = $("textarea[aria-label=Prompt]");
-  assert.equal(await prompt.getValue(), "");
+  const prompt = $("[aria-label=Prompt]");
+  assert.equal(await prompt.getText(), "");
   await prompt.setValue("Unsent composer readiness check");
   try {
     await $("button[aria-label=Send]").waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
   } finally {
     await prompt.clearValue();
   }
-  assert.equal(await prompt.getValue(), "");
+  assert.equal(await prompt.getText(), "");
 }
 
 async function findTranscriptMessage(id: string) {

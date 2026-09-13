@@ -140,7 +140,7 @@ async function verifyReviewReload(): Promise<void> {
   const completedBefore = await browser.execute(
     () => document.querySelectorAll(".transcript-assistant-complete").length,
   );
-  await $('textarea[aria-label="Prompt"]').setValue("E2E_REVIEW: address this code review.");
+  await $('[aria-label="Prompt"]').setValue("E2E_REVIEW: address this code review.");
   await $('[aria-label="Send"]').waitForClickable({ timeout: TIMEOUT });
   await $('[aria-label="Send"]').click();
   await browser.waitUntil(

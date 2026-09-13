@@ -31,6 +31,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
     sessions,
     modelSelection,
     agentSelection,
+    skillCatalog,
     forms,
     permissions,
     changes,
@@ -84,6 +85,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
             annotationDrafts={annotationDrafts}
             modelSelection={modelSelection}
             agentSelection={agentSelection}
+            skillCatalog={skillCatalog}
             forms={forms}
             permissions={permissions}
             connected={connected}

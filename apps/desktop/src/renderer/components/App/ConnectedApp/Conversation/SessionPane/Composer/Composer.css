@@ -76,17 +76,11 @@
   padding: 10px 2px;
   border: 0;
   border-radius: var(--oc-radius);
-  resize: none;
-  overflow-y: hidden;
   color: var(--oc-text-contrast);
   background: transparent;
   font-family: inherit;
   font-size: var(--oc-type-body-size);
   line-height: var(--oc-type-body-line-height);
-}
-
-.composer-input::placeholder {
-  color: var(--oc-text-muted);
 }
 
 .composer-action {

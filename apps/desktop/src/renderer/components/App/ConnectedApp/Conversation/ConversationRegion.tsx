@@ -13,7 +13,7 @@ import type { SessionFormsController } from "./createSessionForms.ts";
 import type { SessionPermissionsController } from "../Permissions/createPermissions.ts";
 import { PendingMessages } from "./SessionPane/PendingMessages.tsx";
 import type { SessionInboxController } from "./createSessionInbox.ts";
-import { Composer } from "./SessionPane/Composer.tsx";
+import { Composer, type ComposerProps } from "./SessionPane/Composer.tsx";
 import { QuestionForm } from "../../../../ui/QuestionForm.tsx";
 import { PermissionRequestCard } from "../../../../ui/PermissionRequestCard.tsx";
 import { SessionPane } from "./SessionPane.tsx";
@@ -24,6 +24,7 @@ export type ConversationRegionProps = {
   readonly workspace: SessionWorkspace;
   readonly annotationDrafts: AnnotationDraftStore;
   readonly composer: SessionComposerController;
+  readonly skillCatalog?: ComposerProps["skillCatalog"];
   readonly inbox: SessionInboxController;
   readonly modelSelection: ModelSelection;
   readonly agentSelection: SessionAgentSelectionController;
@@ -152,9 +153,9 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
                     (card) => card.dataset.permissionRequestId === nextRequest.id,
                   )
                 : undefined;
-              (
-                nextCard ?? pane.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')
-              )?.focus({ preventScroll: true });
+              (nextCard ?? pane.querySelector<HTMLDivElement>('[aria-label="Prompt"]'))?.focus({
+                preventScroll: true,
+              });
             });
           });
           return (
@@ -274,6 +275,9 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
             />
             <Composer
               value={props.composer.value()}
+              skills={props.composer.skills()}
+              skillCatalog={props.skillCatalog}
+              sessionID={props.workspace.selectedID()}
               files={props.composer.files()}
               onPasteFiles={props.composer.pasteFiles}
               onRemoveFile={props.composer.removeFile}

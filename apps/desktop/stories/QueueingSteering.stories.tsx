@@ -53,7 +53,7 @@ export const KeyboardAndActions: Story = {
       await expect(canvas.queryByRole("button", { name: "Stop" })).toBeNull();
       await expect(canvas.getByRole("button", { name: "Send" })).toBeEnabled();
       await userEvent.keyboard("{Enter}");
-      await expect(input).toHaveValue("");
+      await expect(input).toHaveTextContent("");
       await expect(pendingText()).toEqual([
         "Use the existing icons.",
         ...pending.map((message) => message.payload.text),
@@ -65,9 +65,12 @@ export const KeyboardAndActions: Story = {
       await userEvent.type(input, "Check mobile.");
       await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
       await userEvent.type(input, "Then desktop.");
-      await expect(input).toHaveValue("Check mobile.\nThen desktop.");
+      await expect(Array.from(input.querySelectorAll("p"), (line) => line.textContent)).toEqual([
+        "Check mobile.",
+        "Then desktop.",
+      ]);
       await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
-      await expect(input).toHaveValue("");
+      await expect(input).toHaveTextContent("");
       await expect(canvas.getAllByText("Queued")).toHaveLength(3);
     });
     await step("Steer now changes delivery and the red cross removes a message", async () => {

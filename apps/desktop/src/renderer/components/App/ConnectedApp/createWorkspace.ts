@@ -1,3 +1,4 @@
+import { createSkillCatalog } from "./Conversation/createSkillCatalog.ts";
 import type { BrowserApi } from "../../../../shared/browser-api.ts";
 import { createSessionBrowser } from "./Browser/createSessionBrowser.ts";
 import { useAtomValue } from "@effect/atom-solid";
@@ -128,6 +129,12 @@ export function createWorkspaceModel(
     selectedID: sessions.selectedID,
     connected,
   });
+  const skillCatalog = createSkillCatalog({
+    effects: runtime.effects,
+    source: runtime.data.location.skill,
+    location: () => sessions.selectedSession()?.location,
+    connected,
+  });
   const composer = createSessionComposer({
     effects: runtime.effects,
     runtime,
@@ -173,6 +180,7 @@ export function createWorkspaceModel(
     sessions,
     modelSelection,
     agentSelection,
+    skillCatalog,
     forms,
     permissions,
     changes,

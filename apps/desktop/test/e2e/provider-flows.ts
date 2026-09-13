@@ -3,7 +3,7 @@ import { $, $$, browser } from "@wdio/globals";
 import { verifyTransportRecovery } from "./transport-flows.ts";
 
 const TIMEOUT = 30_000;
-const PROMPT = 'textarea[aria-label="Prompt"]';
+const PROMPT = '[aria-label="Prompt"]';
 
 export async function verifyProviderFlows(): Promise<void> {
   await $('[aria-label="Model: Acceptance Stream"]').waitForClickable({ timeout: TIMEOUT });
@@ -11,7 +11,7 @@ export async function verifyProviderFlows(): Promise<void> {
   await send("E2E_PACKAGED: complete a request through the bundled server.");
   await waitForText("Acceptance completed with stream.");
   await idle();
-  assert.equal(await $(PROMPT).getValue(), "");
+  assert.equal(await $(PROMPT).getText(), "");
 
   await addAnnotation("Acceptance annotation reaches the provider.");
   await send("E2E_ANNOTATION: address my note.");
@@ -97,7 +97,7 @@ async function send(text: string): Promise<void> {
   await $(PROMPT).setValue(text);
   await $('[aria-label="Send"]').waitForClickable({ timeout: TIMEOUT });
   await $('[aria-label="Send"]').click();
-  await browser.waitUntil(async () => (await $(PROMPT).getValue()) === "", { timeout: TIMEOUT });
+  await browser.waitUntil(async () => (await $(PROMPT).getText()) === "", { timeout: TIMEOUT });
 }
 
 async function idle(): Promise<void> {

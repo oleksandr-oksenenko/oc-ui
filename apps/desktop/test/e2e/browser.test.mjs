@@ -47,6 +47,16 @@ beforeAll(async () => {
     prepareProjectFixture(project),
     preparePermissionProject(secondaryProject, "Secondary permission project"),
   ]);
+  for (const name of ["review", "testing"]) {
+    const directory = join(project, ".agents", "skills", name);
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      join(directory, "SKILL.md"),
+      `---\nname: ${name}\ndescription: Acceptance ${name} skill\n---\nAcceptance ${name} instructions.\n`,
+    );
+  }
+  await git(project, "add", ".agents/skills");
+  await git(project, "commit", "-m", "Add acceptance skill fixtures");
   acceptanceConfig = JSON.stringify({
     ...provider.config,
     providers: {
@@ -178,7 +188,7 @@ async function transcript(text) {
 async function send(text) {
   await page.getByRole("textbox", { name: "Prompt", exact: true }).fill(text);
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect.poll(() => page.getByLabel("Prompt", { exact: true }).inputValue()).toBe("");
+  await expect.poll(() => page.getByLabel("Prompt", { exact: true }).textContent()).toBe("");
 }
 
 async function providerState() {
@@ -466,11 +476,11 @@ describe.sequential("production browser app", () => {
     await page.getByRole("button", { name: "Show sessions", exact: true }).click();
     await opener.click();
     await page.locator('.server-flow-dialog button[type="submit"]').click();
-    await expect.poll(() => page.getByLabel("Prompt", { exact: true }).inputValue()).toBe("");
+    await expect.poll(() => page.getByLabel("Prompt", { exact: true }).textContent()).toBe("");
     expect(await page.locator(".shell-session-main").count()).toBe(2);
     await page.locator('.shell-session-main:not([aria-current="page"])').click();
     await expect
-      .poll(() => page.getByLabel("Prompt", { exact: true }).inputValue())
+      .poll(() => page.getByLabel("Prompt", { exact: true }).textContent())
       .toBe("Independent draft");
     expect(await page.evaluate(() => document.documentElement.dataset.host)).toBe("browser");
   });
@@ -545,20 +555,29 @@ describe.sequential("production browser app", () => {
     const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
     const pending = page.getByRole("region", { name: "Pending messages" });
     for (const text of [
-      "First queued task",
+      "First queued review",
       "Remove this task",
       "Middle queued task",
       "Last queued task",
     ]) {
-      await prompt.fill(text);
+      if (text === "First queued review") {
+        await prompt.fill("First queued ");
+        await prompt.press("End");
+        await prompt.pressSequentially("/rev");
+        await page.getByRole("button", { name: /\/review Acceptance review/ }).waitFor();
+        await prompt.press("Enter");
+        await prompt.press("Backspace");
+      } else await prompt.fill(text);
       await prompt.press("Meta+Enter");
-      await expect.poll(() => prompt.inputValue()).toBe("");
+      await expect.poll(() => prompt.textContent()).toBe("");
       await pending.getByText(text, { exact: true }).waitFor();
     }
     expect(
       (await api.session.inbox.list({ sessionID })).filter((item) => item.type === "user"),
     ).toHaveLength(4);
-    expect(await page.locator(".transcript-view").textContent()).not.toContain("First queued task");
+    expect(await page.locator(".transcript-view").textContent()).not.toContain(
+      "First queued review",
+    );
     await pending
       .getByRole("button", { name: "Cancel message: Remove this task", exact: true })
       .click();
@@ -566,28 +585,28 @@ describe.sequential("production browser app", () => {
     await page.reload();
     await connect();
     await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
-    await pending.getByText("First queued task", { exact: true }).waitFor();
+    await pending.getByText("First queued review", { exact: true }).waitFor();
     await pending
       .locator("li")
-      .filter({ hasText: "First queued task" })
+      .filter({ hasText: "First queued review" })
       .getByRole("button", { name: "Steer now" })
       .click();
     await expect
       .poll(
         async () =>
           (await api.session.inbox.list({ sessionID })).find(
-            (item) => item.type === "user" && item.payload.text === "First queued task",
+            (item) => item.type === "user" && item.payload.text === "First queued review",
           )?.delivery,
       )
       .toBe("steer");
     await prompt.fill("Direct steering task");
     await prompt.press("Enter");
-    await expect.poll(() => prompt.inputValue()).toBe("");
+    await expect.poll(() => prompt.textContent()).toBe("");
     await pending.getByText("Direct steering task", { exact: true }).waitFor();
     provider.releaseHeld();
     await pending.waitFor({ state: "hidden" });
     await idle();
-    await transcript("First queued task");
+    await transcript("First queued review");
     await transcript("Direct steering task");
     await transcript("Last queued task");
     const requests = (await providerState()).requests
@@ -597,6 +616,17 @@ describe.sequential("production browser app", () => {
     const steerIndex = requests.findIndex((item) => item.prompt.includes("Direct steering task"));
     const middleIndex = requests.findIndex((item) => item.prompt.includes("Middle queued task"));
     const queueIndex = requests.findIndex((item) => item.prompt.includes("Last queued task"));
+    const messages = await api.message.list({ sessionID });
+    const selected = messages.data.find(
+      (message) => message.type === "user" && message.text === "First queued review",
+    );
+    expect(selected.skills).toEqual([
+      expect.objectContaining({
+        name: "review",
+        mention: { start: 13, end: 19, text: "review" },
+        text: expect.stringContaining("Acceptance review instructions."),
+      }),
+    ]);
     expect(steerIndex).toBeGreaterThan(0);
     expect(middleIndex).toBeGreaterThan(steerIndex);
     expect(queueIndex).toBeGreaterThan(middleIndex);
@@ -769,6 +799,56 @@ describe.sequential("production browser app", () => {
     } finally {
       await unlink(path).catch(() => undefined);
     }
+  });
+
+  it("restores inline skills across sessions and sends server-resolved attachments with mention offsets", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const available = await api.skill.list({ location });
+    expect(available.data.map((skill) => skill.name)).toEqual(
+      expect.arrayContaining(["review", "testing"]),
+    );
+    const session = await api.session.create({ title: "Skill attachments", location });
+    const other = await api.session.create({ title: "Skill other", location });
+    await selectSession(session.title);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    await prompt.fill("Use ");
+    await prompt.press("End");
+    await prompt.pressSequentially("/rev");
+    await page.getByRole("button", { name: /\/review Acceptance review/ }).waitFor();
+    await prompt.press("Enter");
+    await page.getByRole("button", { name: "Remove review skill" }).waitFor();
+    await prompt.pressSequentially("and /test");
+    await page.getByRole("button", { name: /\/testing Acceptance testing/ }).waitFor();
+    await prompt.press("Enter");
+    await selectSession(other.title);
+    expect(await page.locator(".prompt-skill-chip").count()).toBe(0);
+    await selectSession(session.title);
+    await page.getByRole("button", { name: "Remove testing skill" }).waitFor();
+    expect(await page.locator(".prompt-skill-chip").count()).toBe(2);
+    const admitted = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/session/${session.id}/prompt`) &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    const response = await admitted;
+    expect(response.ok(), await response.text()).toBe(true);
+    await expect.poll(() => prompt.textContent()).toBe("");
+    await idle();
+    const messages = await api.message.list({ sessionID: session.id });
+    const message = messages.data.find((item) => item.type === "user");
+    expect(message.text).toBe("Use review and testing ");
+    expect(message.skills.map((skill) => ({ name: skill.name, mention: skill.mention }))).toEqual([
+      { name: "review", mention: { start: 4, end: 10, text: "review" } },
+      { name: "testing", mention: { start: 15, end: 22, text: "testing" } },
+    ]);
+    expect(message.skills[0].text).toContain("Acceptance review instructions.");
+    expect(message.skills[1].text).toContain("Acceptance testing instructions.");
+    await expect
+      .poll(() => page.locator(".transcript-skill-chip").allTextContents())
+      .toEqual(["review", "testing"]);
+    expect(await page.getByRole("list", { name: "Attachments", exact: true }).count()).toBe(0);
   });
 
   it("pastes screenshot and document attachments, preserves drafts across navigation, and sends their bytes", async () => {

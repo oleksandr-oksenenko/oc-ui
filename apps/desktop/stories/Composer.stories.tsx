@@ -81,7 +81,7 @@ export const Idle: Story = {
       await expect(getComputedStyle(frame).outlineWidth).toBe("1px");
       await expect(getComputedStyle(prompt).outlineStyle).toBe("none");
       await userEvent.keyboard("{Enter}");
-      await expect(prompt).toHaveValue("");
+      await expect(prompt).toHaveTextContent("");
       await expect(idleOnSubmit).toHaveBeenCalledOnce();
     });
 
@@ -258,7 +258,7 @@ export const RunningDraft: Story = {
       await expect(prompt).not.toBeDisabled();
       await userEvent.click(prompt);
       await userEvent.type(prompt, " Add a follow-up.");
-      await expect(prompt).toHaveValue(
+      await expect(prompt).toHaveTextContent(
         "This draft remains editable while the run is active. Add a follow-up.",
       );
     });
@@ -315,13 +315,13 @@ export const AdmissionError: Story = {
       await expect(canvas.getByRole("alert")).toHaveTextContent(
         "The server could not admit this prompt. Try again.",
       );
-      await expect(prompt).toHaveValue("The draft is preserved after admission fails.");
+      await expect(prompt).toHaveTextContent("The draft is preserved after admission fails.");
     });
 
     await step("Allow the preserved draft to be edited", async () => {
       await userEvent.click(prompt);
       await userEvent.type(prompt, " Edit and retry.");
-      await expect(prompt).toHaveValue(
+      await expect(prompt).toHaveTextContent(
         "The draft is preserved after admission fails. Edit and retry.",
       );
     });
@@ -400,7 +400,7 @@ export const PromptFocused: Story = {
     />
   ),
   play: ({ canvasElement }) => {
-    canvasElement.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')?.focus();
+    canvasElement.querySelector<HTMLDivElement>('[aria-label="Prompt"]')?.focus();
   },
 };
 

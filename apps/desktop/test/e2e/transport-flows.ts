@@ -100,7 +100,7 @@ export async function verifyTransportRecovery(): Promise<void> {
       await fetch(`${providerURL}/_state`)
     ).json();
     const completed = await $$(".transcript-assistant-complete").length;
-    await $('textarea[aria-label="Prompt"]').setValue(
+    await $('[aria-label="Prompt"]').setValue(
       "E2E_TRANSPORT_RECOVER: send after the connection returns.",
     );
     await $('[aria-label="Send"]').waitForClickable({ timeout: TIMEOUT });

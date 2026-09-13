@@ -648,3 +648,10 @@
   object-fit: contain;
   border-radius: var(--oc-radius);
 }
+
+.transcript-skill-chip {
+  padding: 0 5px;
+  border: 1px solid var(--oc-border-strong);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-control);
+}

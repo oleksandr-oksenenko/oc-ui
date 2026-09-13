@@ -17,9 +17,7 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
     electron.app.focus({ steal: true });
   });
   // No Browser-tab click or enable action: the agent must be ready in the conversation.
-  await $('textarea[aria-label="Prompt"]').setValue(
-    `E2E_BROWSER: exercise ${provider}/browser-test`,
-  );
+  await $('[aria-label="Prompt"]').setValue(`E2E_BROWSER: exercise ${provider}/browser-test`);
   await $('[aria-label="Send"]').click();
   let reply = "";
   await browser.waitUntil(
@@ -150,7 +148,7 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
   const session = $(`.shell-session-main*=${title}`);
   await session.waitForClickable({ timeout: TIMEOUT });
   await session.click();
-  await $('textarea[aria-label="Prompt"]').waitForDisplayed({ timeout: TIMEOUT });
+  await $('[aria-label="Prompt"]').waitForDisplayed({ timeout: TIMEOUT });
 }
 
 async function nativePages() {

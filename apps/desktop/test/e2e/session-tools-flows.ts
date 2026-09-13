@@ -36,7 +36,7 @@ export async function verifySessionTools(project: string): Promise<void> {
     timeout: 30_000,
   });
   await $(".shell-session-main*=Packaged session tool caller").click();
-  await $('textarea[aria-label="Prompt"]').setValue("E2E_CREATE_SESSION packaged");
+  await $('[aria-label="Prompt"]').setValue("E2E_CREATE_SESSION packaged");
   await $('button[aria-label="Send"]').click();
   await browser.waitUntil(
     async () => (await $(".transcript-view").getText()).includes("Acceptance session created:"),

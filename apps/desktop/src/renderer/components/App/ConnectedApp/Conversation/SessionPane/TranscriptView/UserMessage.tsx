@@ -29,10 +29,38 @@ export function UserMessage(props: UserMessageProps): JSX.Element {
   });
   const reviewComments = () => prompt()?.reviewComments ?? [];
   const annotations = () => prompt()?.annotations ?? [];
+  const inlineSkills = createMemo(() => {
+    const text = instruction() ?? "";
+    let end = 0;
+    return (props.message.skills ?? []).filter((skill) => {
+      const mention = skill.mention;
+      if (!mention || mention.start < end || text.slice(mention.start, mention.end) !== skill.name)
+        return false;
+      end = mention.end;
+      return true;
+    });
+  });
+  const instructionContent = () => {
+    const text = instruction() ?? "";
+    const parts: JSX.Element[] = [];
+    let end = 0;
+    for (const skill of inlineSkills()) {
+      const mention = skill.mention!;
+      parts.push(
+        text.slice(end, mention.start),
+        <span class="transcript-skill-chip">{skill.name}</span>,
+      );
+      end = mention.end;
+    }
+    parts.push(text.slice(end));
+    return parts;
+  };
   const attachments = () => [
     ...(props.message.files?.flatMap((file) => (file.name ? [file.name] : [])) ?? []),
     ...(props.message.agents?.map((agent) => agent.name) ?? []),
-    ...(props.message.skills?.map((skill) => skill.name) ?? []),
+    ...(props.message.skills
+      ?.filter((skill) => !inlineSkills().includes(skill))
+      .map((skill) => skill.name) ?? []),
   ];
   const showBubble = () =>
     instruction() !== undefined || reviewComments().length > 0 || attachments().length > 0;
@@ -41,7 +69,9 @@ export function UserMessage(props: UserMessageProps): JSX.Element {
       {showBubble() && (
         <div class="transcript-user-bubble">
           {instruction() !== undefined && (
-            <div data-annotation-block={annotationBlock("user", "text")}>{instruction()}</div>
+            <div data-annotation-block={annotationBlock("user", "text")}>
+              {instructionContent()}
+            </div>
           )}
           {reviewComments().length > 0 && <CodeReviewCard comments={reviewComments()} />}
           {attachments().length > 0 && (
