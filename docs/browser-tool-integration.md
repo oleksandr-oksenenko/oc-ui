@@ -47,6 +47,9 @@ An `ask` rule does not supply per-action protection in this version.
 - Subscribe before server attach. The matching `attached` event marks readiness;
   setup has a 15-second deadline. Acknowledged tab state precedes command results
   so the server recognizes newly returned tab IDs.
+- The renderer surfaces tab focus only for the selected session. A background
+  session's retained tabs keep updating through state events, but its focus events
+  cannot replace the session the user is viewing.
 - Serialize conflicting commands. Stop and Close may release a waiting navigation.
   Forward cancellation, retain native operations until settlement, and await
   cleanup before deleting temporary files. Never replay uncertain mutations.

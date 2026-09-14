@@ -44,7 +44,11 @@ export function createSessionBrowser(
     );
     if (!match) return;
     const [id] = match;
-    if (event.type === "focus") return onFocus(id);
+    // Background tab activity must not replace the session the user is viewing.
+    if (event.type === "focus") {
+      if (id === selectedID()) onFocus(id);
+      return;
+    }
     update(id, {
       bindingID: event.status === "connected" ? event.bindingID : undefined,
       status: event.status === "closed" ? "failed" : event.status,

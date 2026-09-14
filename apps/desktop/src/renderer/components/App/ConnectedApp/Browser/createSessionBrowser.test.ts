@@ -103,6 +103,47 @@ describe("session browser ownership", () => {
     expect(fixture.stopEvents).toHaveBeenCalledTimes(1);
   });
 
+  it("forwards tab focus only for the session the user is viewing", async () => {
+    const fixture = setup();
+    const inputs = () => fixture.attach.mock.calls.map(([input]) => input);
+    await vi.waitFor(() => expect(inputs()).toHaveLength(1));
+    const tab = {
+      id: Browser.TabID.make("tab_00000000-0000-4000-8000-000000000001"),
+      url: "http://server/page",
+      title: "Page",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      generation: 0,
+    };
+    const publishConnected = (bindingID: string) =>
+      fixture.emit({
+        bindingID,
+        type: "state",
+        status: "connected",
+        state: { tabs: [tab], focusedTabID: tab.id },
+      });
+    publishConnected(inputs()[0]!.bindingID);
+    fixture.select("session-b");
+    await vi.waitFor(() => expect(inputs()).toHaveLength(2));
+    const background = inputs()[0]!.bindingID;
+    const selected = inputs()[1]!.bindingID;
+    publishConnected(selected);
+
+    fixture.emit({ bindingID: background, type: "focus", tabID: tab.id });
+    expect(fixture.focus).not.toHaveBeenCalled();
+    expect(fixture.selected()).toBe("session-b");
+
+    fixture.emit({ bindingID: selected, type: "focus", tabID: tab.id });
+    expect(fixture.focus).toHaveBeenCalledTimes(1);
+    expect(fixture.focus).toHaveBeenCalledWith("session-b");
+
+    fixture.select("session-a");
+    fixture.emit({ bindingID: background, type: "focus", tabID: tab.id });
+    expect(fixture.focus).toHaveBeenCalledTimes(2);
+    expect(fixture.focus).toHaveBeenLastCalledWith("session-a");
+  });
+
   it("awaits pending setup and detach settlement during owner shutdown", async () => {
     const pending = deferred();
     const closed = deferred();
