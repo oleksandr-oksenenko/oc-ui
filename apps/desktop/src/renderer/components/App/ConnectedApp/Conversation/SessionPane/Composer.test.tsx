@@ -23,6 +23,8 @@ const unavailableAgentSelection = {
   onSelectAgent: () => undefined,
 };
 
+const tooltipText = () => document.body.querySelector('[data-component="tooltip-v2"]')?.textContent;
+
 describe("Composer", () => {
   it("attaches pasted files and inserts ordinary text paste", () => {
     const paste = vi.fn<(files: readonly File[]) => void>();
@@ -669,6 +671,76 @@ describe("Composer", () => {
     expect(button.querySelector('[data-component="loader-v2"]')).not.toBeNull();
 
     dispose();
+  });
+
+  it("moves the queue shortcuts from below the composer into the send tooltip", async () => {
+    vi.useFakeTimers();
+    const [action, setAction] = createSignal<ComposerProps["action"]>("send");
+    const [onQueue, setOnQueue] = createSignal<(() => void) | undefined>(() => undefined);
+    const { host, dispose } = mount(() => (
+      <Composer
+        value="send this"
+        disabled={false}
+        action={action()}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+        onQueue={onQueue()}
+      />
+    ));
+
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    const trigger = button?.closest('[data-component="tooltip-v2-trigger"]');
+    expect(host.querySelector(".composer-shortcuts")).toBeNull();
+    expect(button?.hasAttribute("title")).toBe(false);
+    expect(trigger).not.toBeNull();
+
+    const event = new Event("pointerenter");
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    trigger!.dispatchEvent(event);
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(tooltipText()).toBe("Enter to send · ⌘ Enter to queue · Shift Enter for a new line");
+
+    setAction("running");
+    expect(tooltipText()).toBe("Enter to steer · ⌘ Enter to queue · Shift Enter for a new line");
+
+    setOnQueue(undefined);
+    expect(tooltipText()).toBe("Send steering message (Enter)");
+
+    setAction("send");
+    expect(tooltipText()).toBe("Send");
+
+    dispose();
+    vi.useRealTimers();
+  });
+
+  it("keeps the stop tooltip while a running composer is empty", async () => {
+    vi.useFakeTimers();
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="running"
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+        onStop={() => undefined}
+      />
+    ));
+
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Stop"]');
+    const trigger = button?.closest('[data-component="tooltip-v2-trigger"]');
+    const event = new Event("pointerenter");
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    trigger!.dispatchEvent(event);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(tooltipText()).toBe("Stop");
+
+    dispose();
+    vi.useRealTimers();
   });
 
   it("submits with Enter but keeps Shift+Enter for newlines", () => {

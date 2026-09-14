@@ -4,6 +4,7 @@ import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Loader } from "@opencode-ai/ui/loader";
+import { Tooltip } from "@opencode-ai/ui/tooltip";
 import { Show } from "solid-js";
 
 import "./Composer/Composer.css";
@@ -207,6 +208,15 @@ export function Composer(props: ComposerProps) {
     props.onSubmit();
   };
 
+  const sendTooltip = () => {
+    if (stopping()) return "Stop";
+    if (props.onQueue) {
+      const steer = props.action === "running" ? "Enter to steer" : "Enter to send";
+      return `${steer} · ⌘ Enter to queue · Shift Enter for a new line`;
+    }
+    return props.action === "running" ? "Send steering message (Enter)" : "Send";
+  };
+
   const keyDown = (event: KeyboardEvent) => {
     if (event.isComposing || event.keyCode === 229 || event.key !== "Enter" || event.shiftKey)
       return;
@@ -312,47 +322,36 @@ export function Composer(props: ComposerProps) {
 
         <div class="composer-controls-row">
           {selectionControls(props)}
-          <button
-            class="composer-action"
-            type={stopping() ? "button" : "submit"}
-            aria-label={stopping() ? "Stop" : "Send"}
-            title={
-              stopping()
-                ? "Stop"
-                : props.action === "running"
-                  ? "Send steering message (Enter)"
-                  : "Send"
-            }
-            disabled={stopping() ? props.onStop === undefined : !canSubmit()}
-            onClick={(event) => {
-              if (!stopping()) return;
-              // Stopping may synchronously turn this same button into a submit button.
-              event.preventDefault();
-              props.onStop?.();
-            }}
-          >
-            {stopping() ? (
-              <Icon name="stop" size="small" aria-hidden="true" />
-            ) : (
-              <span class="composer-action-icon" aria-hidden="true">
-                {props.action === "sending" ? (
-                  <Loader width={16} height={16} />
-                ) : (
-                  <Icon name="arrow-up" />
-                )}
-              </span>
-            )}
-          </button>
+          <Tooltip class="composer-action-tooltip" value={sendTooltip()}>
+            <button
+              class="composer-action"
+              type={stopping() ? "button" : "submit"}
+              aria-label={stopping() ? "Stop" : "Send"}
+              disabled={stopping() ? props.onStop === undefined : !canSubmit()}
+              onClick={(event) => {
+                if (!stopping()) return;
+                // Stopping may synchronously turn this same button into a submit button.
+                event.preventDefault();
+                props.onStop?.();
+              }}
+            >
+              {stopping() ? (
+                <Icon name="stop" size="small" aria-hidden="true" />
+              ) : (
+                <span class="composer-action-icon" aria-hidden="true">
+                  {props.action === "sending" ? (
+                    <Loader width={16} height={16} />
+                  ) : (
+                    <Icon name="arrow-up" />
+                  )}
+                </span>
+              )}
+            </button>
+          </Tooltip>
         </div>
 
         {selectionStatus(props)}
       </form>
-      <Show when={props.onQueue}>
-        <p class="composer-shortcuts">
-          {props.action === "running" ? "Enter to steer" : "Enter to send"} · ⌘ Enter to queue ·
-          Shift Enter for a new line
-        </p>
-      </Show>
     </>
   );
 }

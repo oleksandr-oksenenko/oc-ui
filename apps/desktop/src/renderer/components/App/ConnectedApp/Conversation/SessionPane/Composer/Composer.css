@@ -83,11 +83,14 @@
   line-height: var(--oc-type-body-line-height);
 }
 
+.composer-action-tooltip {
+  margin-left: auto;
+}
+
 .composer-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: auto;
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
@@ -421,16 +424,4 @@
   .composer-picker-row {
     flex-wrap: wrap;
   }
-}
-
-.composer:has(+ .composer-shortcuts) {
-  margin-bottom: 6px;
-}
-
-.composer-shortcuts {
-  margin: 0 16px 12px;
-  text-align: center;
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-caption-size);
-  line-height: var(--oc-type-caption-line-height);
 }

@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/async-function */
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, screen, userEvent, within } from "storybook/test";
 import { QueueingSteering, queuedMessage } from "./queueing-steering/QueueingSteering.tsx";
 
 const meta = {
@@ -31,7 +31,21 @@ export const WaitingForSteering: Story = {
     ],
   },
 };
-export const Idle: Story = { args: { initiallyRunning: false } };
+export const Idle: Story = {
+  args: { initiallyRunning: false },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await step("The queue shortcut hint lives in the send tooltip", async () => {
+      await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "Queue a follow-up");
+      await expect(canvas.queryByText(/Shift Enter for a new line/)).toBeNull();
+      await userEvent.hover(canvas.getByRole("button", { name: "Send" }));
+      const tooltip = await screen.findByRole("tooltip");
+      await expect(tooltip).toHaveTextContent(
+        "Enter to send · ⌘ Enter to queue · Shift Enter for a new line",
+      );
+    });
+  },
+};
 export const AttachmentOnly: Story = { args: { attached: true } };
 export const Narrow: Story = {
   globals: { viewport: { value: "mobile", isRotated: false } },
