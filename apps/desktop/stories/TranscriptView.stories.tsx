@@ -13,6 +13,8 @@ import {
   richItems,
   reviewPrompt,
   allTranscriptElements,
+  longTranscript,
+  longAnchorTranscript,
   toolStates,
   shellStates,
   compactionStates,
@@ -35,6 +37,13 @@ const renderTranscript = (args: TranscriptViewProps) => (
   </div>
 );
 
+// Constrains the transcript viewport so scroll behavior can be inspected.
+const renderConstrainedTranscript = (args: TranscriptViewProps) => (
+  <div style={{ height: "100vh", display: "grid", "grid-template-rows": "minmax(0, 1fr)" }}>
+    <TranscriptView {...args} />
+  </div>
+);
+
 export const Rich: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
   render: renderTranscript,
@@ -52,6 +61,11 @@ export const ScrollPreservation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const viewport = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    // Wait for progressive materialization to finish before capturing rows so
+    // the append/scroll assertions run against the full, stable list.
+    await waitFor(() =>
+      expect(canvasElement.querySelectorAll(".transcript-message")).toHaveLength(40),
+    );
     const tool = canvas.getByRole("button", { name: "read Running" });
     const rows = [...canvasElement.querySelectorAll(".transcript-message")];
     const distanceFromBottom = () =>
@@ -242,5 +256,83 @@ export const CatalogInteractions: Story = {
     await expect(
       canvas.queryByRole("form", { name: "Where should I make this change?" }),
     ).not.toBeInTheDocument();
+  },
+};
+
+export const LongTranscriptMaterialization: Story = {
+  args: { messages: longTranscript, sessionStatus: "idle", loading: false },
+  render: renderConstrainedTranscript,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view");
+    await waitFor(() =>
+      expect(canvasElement.querySelectorAll("[data-message-id]")).toHaveLength(
+        longTranscript.length,
+      ),
+    );
+    await waitFor(() => expect(view).toHaveAttribute("aria-busy", "false"));
+    // With no reader interaction the viewport followed the newest rows.
+    if (!view) throw new Error("Transcript viewport is missing");
+    await expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(2);
+    const oldest = canvasElement.querySelector<HTMLElement>('[data-message-id="long-oldest"]');
+    if (!oldest) throw new Error("The oldest materialized row is missing");
+    const trigger = within(oldest).getByRole("button", { name: /release-check Completed/ });
+    trigger.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(canvas.getByText(/migrations: ready/)).toBeInTheDocument();
+  },
+};
+
+export const LongTranscriptReadingAnchor: Story = {
+  args: { messages: longAnchorTranscript, sessionStatus: "idle", loading: false },
+  render: renderConstrainedTranscript,
+  play: async ({ canvasElement }) => {
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view");
+    if (!view) throw new Error("Transcript viewport is missing");
+    const rows = () => canvasElement.querySelectorAll<HTMLElement>("[data-message-id]");
+    // Catch the pass in flight: recent rows exist, the history is not complete.
+    await waitFor(() => {
+      const count = rows().length;
+      if (
+        view.getAttribute("aria-busy") !== "true" ||
+        count <= 40 ||
+        count >= longAnchorTranscript.length
+      ) {
+        throw new Error(`not mid-materialization: count=${count}`);
+      }
+    });
+
+    // Move the reader away from the bottom and select a fully visible row.
+    view.scrollTop = Math.round((view.scrollHeight - view.clientHeight) / 2);
+    view.dispatchEvent(new Event("scroll"));
+    const bounds = view.getBoundingClientRect();
+    const anchor = [...rows()].find((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.top >= bounds.top && rect.bottom <= bounds.bottom;
+    });
+    if (!anchor) throw new Error("No fully visible row to anchor");
+    const range = document.createRange();
+    range.selectNodeContents(anchor);
+    const selection = window.getSelection();
+    if (!selection) throw new Error("Selection is unavailable");
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    const anchorTop = anchor.getBoundingClientRect().top;
+    const distanceBefore = view.scrollHeight - view.clientHeight - view.scrollTop;
+    await expect(view.style.overflowAnchor).toBe("auto");
+
+    await waitFor(() => expect(rows()).toHaveLength(longAnchorTranscript.length));
+    await waitFor(() => expect(view).toHaveAttribute("aria-busy", "false"));
+
+    // The reading anchor and its selection survived the older batches.
+    await expect(Math.abs(anchor.getBoundingClientRect().top - anchorTop)).toBeLessThan(8);
+    await expect(selection.isCollapsed).toBe(false);
+    await expect(anchor.contains(selection.anchorNode)).toBe(true);
+    // The viewport was not dragged back to the bottom.
+    await expect(
+      Math.abs(view.scrollHeight - view.clientHeight - view.scrollTop - distanceBefore),
+    ).toBeLessThan(8);
   },
 };

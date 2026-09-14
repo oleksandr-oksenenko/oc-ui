@@ -533,6 +533,16 @@ describe.sequential("production browser app", () => {
       .poll(() => page.locator(".shell-session-row.selected .shell-session-attention-dot").count())
       .toBe(0);
     await idle();
+    const answeredTool = page.locator(".transcript-tool-completed").last();
+    expect(await answeredTool.locator('[data-slot="collapsible-content"]').count()).toBe(0);
+    await answeredTool.locator(".transcript-tool-header").click();
+    await expect
+      .poll(() => answeredTool.locator(".transcript-tool-details").textContent())
+      .toContain("Alpha");
+    await answeredTool.locator(".transcript-tool-header").click();
+    await expect
+      .poll(() => answeredTool.locator('[data-slot="collapsible-content"]').count())
+      .toBe(0);
     expect(
       (await providerState()).requests.some(
         (request) =>

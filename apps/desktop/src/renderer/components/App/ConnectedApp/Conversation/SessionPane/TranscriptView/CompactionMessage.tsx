@@ -5,16 +5,19 @@ import { Loader } from "@opencode-ai/ui/loader";
 import { Show, type JSX } from "solid-js";
 
 import { annotationBlock } from "../../annotation-source.ts";
+import { createDeferredCollapsibleMount } from "./createDeferredCollapsibleMount.ts";
 
 export function CompactionMessage(props: {
   readonly message: SessionMessageCompaction;
 }): JSX.Element {
+  const content = createDeferredCollapsibleMount();
   const failed = props.message.status === "failed";
   return (
     <Collapsible
       class={`transcript-message transcript-compaction transcript-compaction-${props.message.status}`}
       data-message-id={props.message.id}
       defaultOpen={false}
+      onOpenChange={content.onOpenChange}
     >
       <Collapsible.Trigger class="transcript-context-trigger">
         <Icon name="collapse" size="small" aria-hidden="true" />
@@ -51,24 +54,26 @@ export function CompactionMessage(props: {
           </span>
         </span>
       </Collapsible.Trigger>
-      <Collapsible.Content>
-        <p
-          data-annotation-block={annotationBlock("compaction", failed ? "error" : "summary")}
-          data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
-          class="transcript-context-text"
-        >
-          {failed ? props.message.error.message : props.message.summary}
-        </p>
-        <Show when={!failed}>
+      <Show when={content.mount()}>
+        <Collapsible.Content>
           <p
-            data-annotation-block={annotationBlock("compaction", "recent")}
+            data-annotation-block={annotationBlock("compaction", failed ? "error" : "summary")}
             data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
             class="transcript-context-text"
           >
-            Recent: {props.message.status === "failed" ? "" : props.message.recent}
+            {failed ? props.message.error.message : props.message.summary}
           </p>
-        </Show>
-      </Collapsible.Content>
+          <Show when={!failed}>
+            <p
+              data-annotation-block={annotationBlock("compaction", "recent")}
+              data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
+              class="transcript-context-text"
+            >
+              Recent: {props.message.status === "failed" ? "" : props.message.recent}
+            </p>
+          </Show>
+        </Collapsible.Content>
+      </Show>
     </Collapsible>
   );
 }

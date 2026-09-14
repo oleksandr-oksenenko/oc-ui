@@ -5,8 +5,10 @@ import { Loader } from "@opencode-ai/ui/loader";
 import { Show, type JSX } from "solid-js";
 
 import { annotationBlock } from "../../annotation-source.ts";
+import { createDeferredCollapsibleMount } from "./createDeferredCollapsibleMount.ts";
 
 export function ShellMessage(props: { readonly message: SessionMessageShell }): JSX.Element {
+  const content = createDeferredCollapsibleMount();
   const output = props.message.output?.output;
   const hasDetails = output !== undefined || props.message.exit !== undefined;
   return (
@@ -14,6 +16,7 @@ export function ShellMessage(props: { readonly message: SessionMessageShell }): 
       class={`transcript-message transcript-shell-message transcript-shell-${props.message.status}`}
       data-message-id={props.message.id}
       defaultOpen={false}
+      onOpenChange={content.onOpenChange}
     >
       <Collapsible.Trigger class="transcript-context-trigger" disabled={!hasDetails}>
         <Icon name="terminal" size="small" aria-hidden="true" />
@@ -34,25 +37,27 @@ export function ShellMessage(props: { readonly message: SessionMessageShell }): 
           <span class="sr-only">{shellStatus(props.message)}</span>
         </span>
       </Collapsible.Trigger>
-      <Collapsible.Content>
-        <div class="transcript-shell-details">
-          <Show when={props.message.exit !== undefined}>
-            <span>Exit: {String(props.message.exit)}</span>
-          </Show>
-          <Show when={output !== undefined}>
-            <pre
-              data-annotation-block={annotationBlock("shell", "output")}
-              data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
-              class="transcript-tool-output oc-scrollable"
-            >
-              {output}
-            </pre>
-          </Show>
-          <Show when={props.message.output?.truncated === true}>
-            <span>Output truncated</span>
-          </Show>
-        </div>
-      </Collapsible.Content>
+      <Show when={content.mount()}>
+        <Collapsible.Content>
+          <div class="transcript-shell-details">
+            <Show when={props.message.exit !== undefined}>
+              <span>Exit: {String(props.message.exit)}</span>
+            </Show>
+            <Show when={output !== undefined}>
+              <pre
+                data-annotation-block={annotationBlock("shell", "output")}
+                data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
+                class="transcript-tool-output oc-scrollable"
+              >
+                {output}
+              </pre>
+            </Show>
+            <Show when={props.message.output?.truncated === true}>
+              <span>Output truncated</span>
+            </Show>
+          </div>
+        </Collapsible.Content>
+      </Show>
     </Collapsible>
   );
 }

@@ -11,12 +11,14 @@ import { Loader } from "@opencode-ai/ui/loader";
 import { For, Show, type JSX } from "solid-js";
 
 import { annotationBlock } from "../../../annotation-source.ts";
+import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMount.ts";
 
 export type ToolCallProps = {
   readonly tool: SessionMessageAssistantTool;
 };
 
 export function ToolCall(props: ToolCallProps): JSX.Element {
+  const content = createDeferredCollapsibleMount();
   const details = () => toolDetails(props.tool);
   const status = () => props.tool.state.status;
   const statusLabel = () =>
@@ -29,7 +31,11 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
           : "Running";
 
   return (
-    <Collapsible class={`transcript-tool-call transcript-tool-${status()}`} defaultOpen={false}>
+    <Collapsible
+      class={`transcript-tool-call transcript-tool-${status()}`}
+      defaultOpen={false}
+      onOpenChange={content.onOpenChange}
+    >
       <Collapsible.Trigger class="transcript-tool-header">
         {renderToolIcon(props.tool.name)}
         <span class="transcript-tool-copy">
@@ -51,16 +57,18 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
           <span class="sr-only">{statusLabel()}</span>
         </span>
       </Collapsible.Trigger>
-      <Collapsible.Content>
-        <div
-          class="transcript-tool-details"
-          data-annotation-disabled={
-            status() === "streaming" || status() === "running" ? "true" : undefined
-          }
-        >
-          <For each={details()}>{(detail) => detail}</For>
-        </div>
-      </Collapsible.Content>
+      <Show when={content.mount()}>
+        <Collapsible.Content>
+          <div
+            class="transcript-tool-details"
+            data-annotation-disabled={
+              status() === "streaming" || status() === "running" ? "true" : undefined
+            }
+          >
+            <For each={details()}>{(detail) => detail}</For>
+          </div>
+        </Collapsible.Content>
+      </Show>
     </Collapsible>
   );
 }

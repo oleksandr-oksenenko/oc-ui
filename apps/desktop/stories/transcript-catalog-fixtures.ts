@@ -391,3 +391,29 @@ export const allTranscriptElements: readonly SessionMessageInfo[] = [
   assistant("assistant-failed", "error"),
   streamingAssistant,
 ];
+
+// A long transcript whose newest suffix mounts first and whose older rows arrive
+// in batches; used to exercise progressive materialization in a real browser.
+export const longTranscript: readonly SessionMessageInfo[] = [
+  assistant("long-oldest", "completed"),
+  ...Array.from({ length: 119 }, (_, index) => ({
+    id: `long-${index + 1}`,
+    time: { created: 1 },
+    type: "user" as const,
+    text: `Materialized message ${index + 1}`,
+  })),
+];
+
+// A longer, uniformly shaped transcript used to hold materialization open while
+// browser scroll anchoring and text selection are exercised. The newest row is
+// a disclosure so the scrollable region has keyboard-focusable content. Sized so
+// a 50-row batch policy still leaves several batches after the play interacts.
+export const longAnchorTranscript: readonly SessionMessageInfo[] = [
+  ...Array.from({ length: 499 }, (_, index) => ({
+    id: `anchor-${index}`,
+    time: { created: 1 },
+    type: "user" as const,
+    text: `Anchored message ${index}`,
+  })),
+  assistant("anchor-tool", "completed"),
+];

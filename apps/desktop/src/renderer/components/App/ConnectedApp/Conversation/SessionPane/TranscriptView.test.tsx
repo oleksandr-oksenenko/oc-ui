@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { mount } from "../../../../../test/mount.ts";
 import { stubResizeObserver } from "../../../../../test/resize-observer.ts";
+import { createAnnotationHighlights } from "../createAnnotationHighlights.ts";
 import { TranscriptView } from "./TranscriptView.tsx";
 import { UserMessage } from "./TranscriptView/UserMessage.tsx";
 import { CODE_REVIEW_METADATA_KEY } from "../../../../../opencode/code-review.ts";
@@ -49,6 +50,77 @@ const assistant = (
 
 function renderUserMessage(message: SessionMessageUser) {
   return mount(() => <UserMessage message={message} />);
+}
+
+function selectNodeContents(node: Node) {
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+}
+
+function userMessages(prefix: string, count: number): SessionMessageInfo[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `${prefix}${index}`,
+    time: base,
+    type: "user" as const,
+    text: `${prefix}${index}`,
+  }));
+}
+
+function toolAssistantMessage(id: string, toolID: string): SessionMessageAssistant {
+  return {
+    id,
+    time: base,
+    type: "assistant",
+    agent: "build",
+    model: { providerID: "p", id: "m" },
+    content: [assistant(toolID, "completed")],
+  };
+}
+
+function textAssistantMessage(id: string, text: string): SessionMessageAssistant {
+  return {
+    id,
+    time: base,
+    type: "assistant",
+    agent: "build",
+    model: { providerID: "p", id: "m" },
+    content: [{ type: "text", text }],
+  };
+}
+
+function stubAnimationFrames() {
+  const frames = new Map<number, FrameRequestCallback>();
+  let next = 0;
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    const id = ++next;
+    frames.set(id, callback);
+    return id;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+    frames.delete(id);
+  });
+  return {
+    pending: () => frames.size,
+    runNext: () => {
+      const entry = [...frames.entries()][0];
+      if (entry === undefined) throw new Error("No pending animation frame");
+      frames.delete(entry[0]);
+      entry[1](0);
+    },
+    runAll: () => {
+      let guard = 0;
+      while (frames.size > 0) {
+        if (++guard > 1000) throw new Error("animation frame loop did not settle");
+        const entry = [...frames.entries()][0]!;
+        frames.delete(entry[0]);
+        entry[1](0);
+      }
+    },
+  };
 }
 
 describe("TranscriptView", () => {
@@ -390,6 +462,517 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps collapsed tool and reasoning content unmounted until first expansion", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
+      {
+        id: "assistant",
+        time: base,
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "p", id: "m" },
+        content: [{ type: "reasoning", text: "First thought" }, assistant("tool", "completed")],
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const reasoning = host.querySelector<HTMLElement>(".transcript-reasoning")!;
+    const tool = host.querySelector<HTMLElement>(".transcript-tool-call")!;
+    expect(reasoning.querySelector('[data-slot="collapsible-content"]')).toBeNull();
+    expect(tool.querySelector('[data-slot="collapsible-content"]')).toBeNull();
+    expect(host.querySelector(".transcript-reasoning-summary")).toBeNull();
+
+    const toolTrigger = tool.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
+    toolTrigger.click();
+    const toolContent = tool.querySelector<HTMLElement>('[data-slot="collapsible-content"]')!;
+    expect(toolContent.querySelector(".transcript-tool-details")).not.toBeNull();
+    expect(
+      [...toolContent.querySelectorAll<HTMLElement>(".transcript-tool-output")].map((element) =>
+        element.getAttribute("data-annotation-block"),
+      ),
+    ).toEqual(['["tool","tool","input"]', '["tool","tool","output",0,"text"]']);
+    expect(host.querySelector(".transcript-reasoning-summary")).toBeNull();
+
+    setMessages(0, "content", 1, assistant("tool", "error"));
+    expect(tool.querySelector('[data-slot="collapsible-content"]')).toBe(toolContent);
+    expect(tool.classList.contains("transcript-tool-error")).toBe(true);
+    expect(toolContent.querySelector(".transcript-tool-details")).not.toBeNull();
+    expect(tool.querySelector(".transcript-tool-header")).toBe(toolTrigger);
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("defers the initial resume to the next animation frame", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(transcript, "scrollHeight", { get: () => 500, configurable: true });
+    transcript.scrollTop = 0;
+
+    expect(frames.pending()).toBe(1);
+    expect(transcript.scrollTop).toBe(0);
+
+    frames.runNext();
+    expect(transcript.scrollTop).toBe(500);
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("cancels a stale resume when the next session starts loading, then resumes it when ready", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const [sessionID, setSessionID] = createSignal("first");
+    const [loading, setLoading] = createSignal(false);
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID={sessionID()}
+        messages={messages}
+        sessionStatus="idle"
+        loading={loading()}
+      />
+    ));
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(transcript, "scrollHeight", { get: () => 500, configurable: true });
+    transcript.scrollTop = 0;
+
+    expect(frames.pending()).toBe(1);
+    expect(transcript.scrollTop).toBe(0);
+
+    // Loading the next session before the first frame runs must not leave the
+    // previous session's resume pending.
+    batch(() => {
+      setSessionID("second");
+      setLoading(true);
+    });
+    expect(frames.pending()).toBe(0);
+
+    // Reset the viewport to observe the new session's deferred resume.
+    transcript.scrollTop = 0;
+    setLoading(false);
+    expect(frames.pending()).toBe(1);
+    frames.runNext();
+    expect(transcript.scrollTop).toBe(500);
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("cancels a still-pending resume when the transcript unmounts", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+
+    expect(frames.pending()).toBe(1);
+    dispose();
+    expect(frames.pending()).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
+  it("does not override a user scroll that lands before the scheduled resume", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(transcript, "scrollHeight", { get: () => 500, configurable: true });
+    transcript.scrollTop = 0;
+
+    expect(frames.pending()).toBe(1);
+    transcript.scrollTop = 120;
+    transcript.dispatchEvent(new Event("scroll"));
+
+    expect(frames.pending()).toBe(0);
+    expect(transcript.scrollTop).toBe(120);
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not resume while the user has an active selection", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(transcript, "scrollHeight", { get: () => 500, configurable: true });
+    transcript.scrollTop = 0;
+
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(transcript);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    expect(frames.pending()).toBe(1);
+    frames.runNext();
+    expect(transcript.scrollTop).toBe(0);
+
+    selection.removeAllRanges();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("materializes a long transcript from its newest rows and settles to the full list", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 60);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    const rowCount = () => host.querySelectorAll("[data-message-id]").length;
+    try {
+      expect(view.getAttribute("aria-busy")).toBe("true");
+      expect(rowCount()).toBe(20);
+      expect(host.querySelector('[data-message-id="m59"]')).not.toBeNull();
+      expect(host.querySelector('[data-message-id="m0"]')).toBeNull();
+
+      frames.runAll();
+
+      expect(rowCount()).toBe(60);
+      expect(host.querySelector('[data-message-id="m0"]')).not.toBeNull();
+      expect(view.getAttribute("aria-busy")).toBe("false");
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps rendered row and expanded disclosure identity while older batches prepend", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      ...userMessages("m", 59),
+      toolAssistantMessage("newest", "tool-newest"),
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    try {
+      const row = host.querySelector<HTMLElement>('[data-message-id="newest"]')!;
+      const trigger = row.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
+      trigger.click();
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+      frames.runAll();
+
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(60);
+      expect(host.querySelector('[data-message-id="newest"]')).toBe(row);
+      expect(row.querySelector(".transcript-tool-header")).toBe(trigger);
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      expect(host.querySelector('[data-message-id="m0"]')).not.toBeNull();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("restarts materialization for a new session and cancels the previous pending work", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const [sessionID, setSessionID] = createSignal("first");
+    const [messages, setMessages] = createSignal(userMessages("a", 60));
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID={sessionID()} messages={messages()} sessionStatus="idle" />
+    ));
+    try {
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+      expect(host.querySelector('[data-message-id="a0"]')).toBeNull();
+
+      batch(() => {
+        setSessionID("second");
+        setMessages(userMessages("b", 40));
+      });
+
+      const switched = [...host.querySelectorAll<HTMLElement>("[data-message-id]")];
+      expect(switched).toHaveLength(20);
+      expect(switched.every((row) => row.dataset.messageId?.startsWith("b"))).toBe(true);
+
+      frames.runAll();
+
+      expect(
+        [...host.querySelectorAll<HTMLElement>("[data-message-id]")].map(
+          (row) => row.dataset.messageId,
+        ),
+      ).toEqual(userMessages("b", 40).map((message) => message.id));
+    } finally {
+      dispose();
+      expect(frames.pending()).toBe(0);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("preserves a user scroll position while older batches materialize", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 60);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    view.scrollTop = 120;
+    try {
+      // The user scrolls away before the deferred resume runs.
+      view.dispatchEvent(new Event("scroll"));
+
+      frames.runAll();
+
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(60);
+      expect(view.scrollTop).toBe(120);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("exposes older annotation source blocks once materialization completes", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      textAssistantMessage("old", "An older passage."),
+      ...userMessages("m", 25),
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    try {
+      expect(host.querySelector('[data-message-id="old"] [data-annotation-block]')).toBeNull();
+
+      frames.runAll();
+
+      const block = host.querySelector<HTMLElement>(
+        '[data-message-id="old"] [data-annotation-block]',
+      );
+      expect(block).not.toBeNull();
+      expect(block?.textContent).toContain("An older passage.");
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("settles aria-busy with an error and stays idle for an empty transcript", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const errored = mount(() => (
+      <TranscriptView
+        sessionID="errored"
+        messages={userMessages("m", 60)}
+        sessionStatus="idle"
+        error="Could not load"
+      />
+    ));
+    try {
+      const view = errored.host.querySelector<HTMLElement>(".transcript-view")!;
+      expect(view.getAttribute("aria-busy")).toBe("true");
+      frames.runAll();
+      expect(view.getAttribute("aria-busy")).toBe("false");
+      expect(errored.host.querySelector('[role="alert"]')?.textContent).toContain("Could not load");
+    } finally {
+      errored.dispose();
+    }
+
+    const empty = mount(() => (
+      <TranscriptView sessionID="empty" messages={[]} sessionStatus="idle" />
+    ));
+    try {
+      expect(empty.host.querySelector(".transcript-view")?.getAttribute("aria-busy")).toBe("false");
+      expect(empty.host.querySelector(".transcript-empty-state")).not.toBeNull();
+    } finally {
+      empty.dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("pauses follow-bottom only for selections inside the transcript viewport", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 170);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    const outside = document.createElement("p");
+    outside.textContent = "Composer text";
+    document.body.append(outside);
+    try {
+      // Follow mode disables browser scroll anchoring.
+      expect(view.style.overflowAnchor).toBe("none");
+
+      frames.runNext(); // deferred resume
+      frames.runNext(); // first older batch
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(70);
+
+      // A selection in another pane must not pause this transcript.
+      selectNodeContents(outside);
+      expect(view.style.overflowAnchor).toBe("none");
+
+      // The upstream interaction policy releases follow-bottom only for this
+      // transcript's own selection.
+      selectNodeContents(host.querySelector('[data-message-id="m100"]')!);
+      expect(view.style.overflowAnchor).toBe("auto");
+
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(170);
+      window.getSelection()?.removeAllRanges();
+    } finally {
+      outside.remove();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps each large-session switch bounded to the initial suffix", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const first = userMessages("a", 120);
+    const second = userMessages("b", 120);
+    const [sessionID, setSessionID] = createSignal("a");
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(first);
+    const attribute = vi.spyOn(Element.prototype, "setAttribute");
+    try {
+      const { dispose } = mount(() => (
+        <TranscriptView sessionID={sessionID()} messages={messages()} sessionStatus="idle" />
+      ));
+      frames.runAll();
+
+      // Selection and the SDK list arrive in separate updates, as in the workspace.
+      const switchTo = (session: string, list: readonly SessionMessageInfo[]) => {
+        attribute.mockClear();
+        setSessionID(session);
+        setMessages(list);
+        const rows = attribute.mock.calls.filter(([name]) => name === "data-message-id").length;
+        frames.runAll();
+        return rows;
+      };
+
+      // Repeated switches must not reorder into a full-history mount.
+      expect(switchTo("b", second)).toBeLessThanOrEqual(20);
+      expect(switchTo("a", first)).toBeLessThanOrEqual(20);
+      expect(switchTo("b", second)).toBeLessThanOrEqual(20);
+
+      dispose();
+    } finally {
+      attribute.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps one selection listener across materializing batches and removes it at completion", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const add = vi.spyOn(document, "addEventListener");
+    const remove = vi.spyOn(document, "removeEventListener");
+    const selectionAdds = () =>
+      add.mock.calls.filter(([type]) => type === "selectionchange").length;
+    const selectionRemoves = () =>
+      remove.mock.calls.filter(([type]) => type === "selectionchange").length;
+    try {
+      const messages = userMessages("m", 80);
+      const { host, dispose } = mount(() => (
+        <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+      ));
+      expect(selectionAdds()).toBe(1);
+      expect(selectionRemoves()).toBe(0);
+
+      let stableAcrossBatches = true;
+      let guard = 0;
+      while (host.querySelectorAll("[data-message-id]").length < messages.length) {
+        if (++guard > 20) throw new Error("materialization did not settle");
+        frames.runNext();
+        if (host.querySelectorAll("[data-message-id]").length < messages.length) {
+          // Advancing batches must not detach and reattach the listener.
+          stableAcrossBatches =
+            stableAcrossBatches && selectionAdds() === 1 && selectionRemoves() === 0;
+        }
+      }
+
+      expect(stableAcrossBatches).toBe(true);
+      expect(selectionAdds()).toBe(1);
+      expect(selectionRemoves()).toBe(1);
+      dispose();
+      expect(selectionAdds()).toBe(1);
+      expect(selectionRemoves()).toBe(1);
+    } finally {
+      add.mockRestore();
+      remove.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("makes a temporarily missing annotation source available after materialization", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      textAssistantMessage("old", "An older passage."),
+      ...userMessages("m", 25),
+    ];
+    const source = {
+      messageID: "old",
+      block: '["content",0,"text"]',
+      textDigest: "0".repeat(64),
+      start: 0,
+      end: 6,
+    };
+    let highlights!: ReturnType<typeof createAnnotationHighlights>;
+    const { dispose } = mount(() => {
+      highlights = createAnnotationHighlights({
+        sources: () => [{ key: "annotation-1", source }],
+        canSelect: () => false,
+        onSelection: () => undefined,
+        onOpen: () => undefined,
+        onDismiss: () => undefined,
+      });
+      return (
+        <TranscriptView
+          sessionID="session"
+          messages={messages}
+          sessionStatus="idle"
+          annotationRootRef={highlights.attach}
+        />
+      );
+    });
+    try {
+      expect(highlights.findSource(source)).toBeUndefined();
+
+      frames.runAll();
+
+      const block = highlights.findSource(source);
+      expect(block).toBeDefined();
+      expect(block?.textContent).toContain("An older passage.");
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("shows raw tool input and structured errors for each tool status", () => {
     stubResizeObserver();
     const messages: readonly SessionMessageInfo[] = [
@@ -618,6 +1201,7 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("Code review · 1 comment");
     trigger.click();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(card.querySelector(".transcript-code-review-content")).not.toBeNull();
     expect(host.textContent).toContain("src/example.ts");
     expect(host.textContent).toContain("old 4 to new 5");
     expect(host.textContent).toContain("const oldValue = 1;");
@@ -720,6 +1304,7 @@ describe("TranscriptView", () => {
     expect(host.textContent).not.toContain("Please explain this.");
     trigger.click();
     expect(host.textContent).toContain("Please explain this.");
+    expect(card.querySelector(".transcript-annotation-content")).not.toBeNull();
     const quote = card.querySelector<HTMLButtonElement>(".transcript-annotation-quote")!;
     quote.click();
     expect(onOpen).toHaveBeenCalledWith("sent-1", "annotation-1", quote);
