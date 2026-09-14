@@ -77,7 +77,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             aria-label={`${title()}, ${statusLabel()}`}
             aria-expanded={props.hasChildren ? props.expanded : undefined}
             onClick={() => {
-              if (props.hasChildren) props.onToggleExpanded(props.session.id);
+              if (props.hasChildren && props.selected) props.onToggleExpanded(props.session.id);
               props.onSelect(props.session.id);
             }}
           >

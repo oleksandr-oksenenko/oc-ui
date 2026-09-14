@@ -1,4 +1,5 @@
 import type { SessionInfo } from "@opencode-ai/client";
+import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -90,7 +91,7 @@ describe("SessionTree", () => {
     dispose();
   });
 
-  it("selects a parent and toggles its children from the title", () => {
+  it("toggles a selected parent's children from the title", () => {
     const onToggleExpanded = vi.fn<(sessionID: string) => void>();
     const onSelect = vi.fn<(sessionID: string) => void>();
     const { host, dispose } = mount(() => (
@@ -122,6 +123,141 @@ describe("SessionTree", () => {
     host.querySelector<HTMLButtonElement>('[aria-label="Collapse Parent"]')?.click();
     expect(onToggleExpanded).toHaveBeenCalledExactlyOnceWith("parent");
     expect(onSelect).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it("selects an unselected parent without toggling its children", () => {
+    const onToggleExpanded = vi.fn<(sessionID: string) => void>();
+    const onSelect = vi.fn<(sessionID: string) => void>();
+    const { host, dispose } = mount(() => (
+      <SessionTreeItem
+        session={session("parent", "Parent")}
+        status="idle"
+        hasChildren
+        selected={false}
+        expanded={false}
+        deleteDisabled={false}
+        onSelect={onSelect}
+        onToggleExpanded={onToggleExpanded}
+        onDelete={() => undefined}
+      >
+        <div>Child</div>
+      </SessionTreeItem>
+    ));
+
+    const title = host.querySelector<HTMLButtonElement>('[aria-label="Parent, Idle"]');
+    expect(title?.getAttribute("aria-expanded")).toBe("false");
+    title?.click();
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("parent");
+    expect(onToggleExpanded).not.toHaveBeenCalled();
+    expect(title?.getAttribute("aria-expanded")).toBe("false");
+
+    dispose();
+  });
+
+  it("keeps an unselected parent's open children when selecting it", () => {
+    const onToggleExpanded = vi.fn<(sessionID: string) => void>();
+    const onSelect = vi.fn<(sessionID: string) => void>();
+    const { host, dispose } = mount(() => (
+      <SessionTreeItem
+        session={session("parent", "Parent")}
+        status="idle"
+        hasChildren
+        selected={false}
+        expanded
+        deleteDisabled={false}
+        onSelect={onSelect}
+        onToggleExpanded={onToggleExpanded}
+        onDelete={() => undefined}
+      >
+        <div>Child</div>
+      </SessionTreeItem>
+    ));
+
+    host.querySelector<HTMLButtonElement>('[aria-label="Parent, Idle"]')?.click();
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("parent");
+    expect(onToggleExpanded).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Child");
+
+    dispose();
+  });
+
+  it("toggles an unselected parent from its disclosure without selecting", () => {
+    const onToggleExpanded = vi.fn<(sessionID: string) => void>();
+    const onSelect = vi.fn<(sessionID: string) => void>();
+    const { host, dispose } = mount(() => (
+      <SessionTreeItem
+        session={session("parent", "Parent")}
+        status="idle"
+        hasChildren
+        selected={false}
+        expanded={false}
+        deleteDisabled={false}
+        onSelect={onSelect}
+        onToggleExpanded={onToggleExpanded}
+        onDelete={() => undefined}
+      >
+        <div>Child</div>
+      </SessionTreeItem>
+    ));
+
+    host.querySelector<HTMLButtonElement>('[aria-label="Expand Parent"]')?.click();
+    expect(onToggleExpanded).toHaveBeenCalledExactlyOnceWith("parent");
+    expect(onSelect).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it("selects a parent before toggling its children across selection changes", () => {
+    const { host, dispose } = mount(() => {
+      const [selectedID, setSelectedID] = createSignal<string>();
+      const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>([]);
+      return (
+        <SessionTree
+          sessions={[session("parent", "Parent"), session("child", "Child", "parent")]}
+          statusForSession={() => "idle"}
+          selectedID={selectedID()}
+          expandedIDs={expandedIDs()}
+          canDelete
+          deletionStatusForSession={() => "ready"}
+          onSelect={setSelectedID}
+          onToggleExpanded={(sessionID) =>
+            setExpandedIDs((current) =>
+              current.includes(sessionID)
+                ? current.filter((id) => id !== sessionID)
+                : [...current, sessionID],
+            )
+          }
+          onDelete={() => undefined}
+        />
+      );
+    });
+
+    const parent = host.querySelector<HTMLButtonElement>('[aria-label="Parent, Idle"]');
+    const child = () => host.querySelector<HTMLButtonElement>('[aria-label="Child, Idle"]');
+
+    parent?.click();
+    expect(parent?.getAttribute("aria-current")).toBe("page");
+    expect(parent?.getAttribute("aria-expanded")).toBe("false");
+    expect(child()).toBeNull();
+
+    parent?.click();
+    expect(parent?.getAttribute("aria-expanded")).toBe("true");
+    expect(child()).not.toBeNull();
+
+    child()?.click();
+    expect(child()?.getAttribute("aria-current")).toBe("page");
+    expect(parent?.getAttribute("aria-current")).toBeNull();
+
+    parent?.click();
+    expect(parent?.getAttribute("aria-current")).toBe("page");
+    expect(parent?.getAttribute("aria-expanded")).toBe("true");
+    expect(child()).not.toBeNull();
+
+    parent?.click();
+    expect(parent?.getAttribute("aria-expanded")).toBe("false");
+    expect(child()).toBeNull();
 
     dispose();
   });
@@ -370,6 +506,32 @@ describe("SessionSidebar", () => {
     expect(host.querySelector('[aria-label="Root, Idle"]')?.getAttribute("aria-expanded")).toBe(
       "false",
     );
+
+    dispose();
+  });
+
+  it("keeps a selected parent's forced expansion while filtering", () => {
+    const onToggleExpanded = vi.fn<(sessionID: string) => void>();
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({
+          sessions: [session("root", "Root"), session("child", "Matching child", "root")],
+          selectedID: "root",
+          expandedIDs: [],
+          onToggleExpanded,
+        })}
+      />
+    ));
+
+    const filter = host.querySelector<HTMLInputElement>('[aria-label="Filter sessions"]');
+    inputEvent(filter!, "matching");
+
+    const root = host.querySelector<HTMLButtonElement>('[aria-label="Root, Idle"]');
+    expect(root?.getAttribute("aria-expanded")).toBe("true");
+    root?.click();
+    expect(onToggleExpanded).not.toHaveBeenCalled();
+    expect(root?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector('[aria-label="Matching child, Idle"]')).not.toBeNull();
 
     dispose();
   });

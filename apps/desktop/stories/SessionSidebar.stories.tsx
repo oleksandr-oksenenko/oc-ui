@@ -48,6 +48,12 @@ const disclosureGutterSessions: readonly SessionInfo[] = [
   ),
 ];
 
+const selectBeforeToggleSessions: readonly SessionInfo[] = [
+  updated(storySession("other", "Other session"), storyNow - 30 * 60 * 1000),
+  updated(storySession("parent", "Parent session"), storyNow - 2 * 60 * 60 * 1000),
+  updated(storySession("child", "Child session", "parent"), storyNow - 3 * 60 * 60 * 1000),
+];
+
 const longContentSessions: readonly SessionInfo[] = [
   updated(
     storySession(
@@ -231,8 +237,45 @@ export const DisclosureGutterAlignment = {
     await expect(child).toBeVisible();
     await userEvent.click(child);
     await expect(child).toHaveAttribute("aria-current", "page");
-    await expect(child).toHaveAttribute("aria-expanded", "false");
+    await expect(child).toHaveAttribute("aria-expanded", "true");
     await expect(parent).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(child);
+    await expect(child).toHaveAttribute("aria-expanded", "false");
+  },
+};
+
+export const ParentSelectionBeforeToggle = {
+  render: () => interactiveSidebar(selectBeforeToggleSessions, { selectedID: "other" }),
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    const parent = canvas.getByRole("button", { name: "Parent session, Idle" });
+    const child = () => canvas.queryByRole("button", { name: "Child session, Idle" });
+
+    await expect(parent).not.toHaveAttribute("aria-current", "page");
+    await expect(parent).toHaveAttribute("aria-expanded", "false");
+    await expect(child()).not.toBeInTheDocument();
+
+    await userEvent.click(parent);
+    await expect(parent).toHaveAttribute("aria-current", "page");
+    await expect(parent).toHaveAttribute("aria-expanded", "false");
+    await expect(child()).not.toBeInTheDocument();
+
+    await userEvent.click(parent);
+    await expect(parent).toHaveAttribute("aria-expanded", "true");
+    await expect(child()).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Other session, Idle" }));
+    await expect(parent).not.toHaveAttribute("aria-current", "page");
+
+    parent.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(parent).toHaveAttribute("aria-current", "page");
+    await expect(parent).toHaveAttribute("aria-expanded", "true");
+    await expect(child()).toBeVisible();
+
+    await userEvent.keyboard("{Enter}");
+    await expect(parent).toHaveAttribute("aria-expanded", "false");
+    await expect(child()).not.toBeInTheDocument();
   },
 };
 
