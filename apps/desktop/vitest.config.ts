@@ -12,6 +12,11 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
+      // Persist Vite's transformed modules across runs so warm test runs skip
+      // re-transforming large inline dependency graphs.
+      experimental: {
+        fsModuleCache: true,
+      },
       server: {
         deps: {
           inline: true,
