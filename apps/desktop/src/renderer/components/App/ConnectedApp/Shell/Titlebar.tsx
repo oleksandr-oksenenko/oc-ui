@@ -1,6 +1,6 @@
 import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
-import { createEffect, type JSX } from "solid-js";
+import { createEffect, onCleanup, type JSX } from "solid-js";
 
 import "./Titlebar.css";
 
@@ -21,17 +21,49 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
   let rightToggle: HTMLButtonElement | undefined;
   let previousLeftOpen = props.leftSidebarOpen;
   let previousRightOpen = props.rightPanelOpen;
+  let focusGeneration = 0;
+  let disposed = false;
+
+  onCleanup(() => {
+    disposed = true;
+  });
+
+  const scheduleFocusRestore = (
+    target: () => HTMLButtonElement | undefined,
+    overlayOpen: () => boolean,
+  ): void => {
+    // Coalesce multiple closes in one update into a single restoration, and
+    // let a newer restoration supersede an earlier one.
+    const generation = ++focusGeneration;
+    queueMicrotask(() => {
+      if (disposed || generation !== focusGeneration) return;
+      // The overlay reopened before the restoration ran; leave focus there.
+      if (overlayOpen()) return;
+      const active = document.activeElement;
+      // Leave focus alone if the user moved it while the overlay was closing.
+      if (active !== null && active !== document.body && active !== document.documentElement)
+        return;
+      const element = target();
+      if (!element?.isConnected) return;
+      // Avoid focus's scroll-into-view; focus still recalculates style.
+      element.focus({ preventScroll: true });
+    });
+  };
 
   createEffect(() => {
     const leftOpen = props.leftSidebarOpen;
     const rightOpen = props.rightPanelOpen;
     if (props.mobile) {
-      if (previousLeftOpen && !leftOpen) {
-        queueMicrotask(() => leftToggle?.focus());
-      }
-      if (previousRightOpen && !rightOpen) {
-        queueMicrotask(() => rightToggle?.focus());
-      }
+      if (previousLeftOpen && !leftOpen)
+        scheduleFocusRestore(
+          () => leftToggle,
+          () => props.leftSidebarOpen,
+        );
+      if (previousRightOpen && !rightOpen)
+        scheduleFocusRestore(
+          () => rightToggle,
+          () => props.rightPanelOpen,
+        );
     }
     previousLeftOpen = leftOpen;
     previousRightOpen = rightOpen;
