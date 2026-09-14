@@ -65,7 +65,8 @@ export function AnnotationPopover(props: AnnotationPopoverProps): JSX.Element {
           <div
             class="annotation-selection-action"
             style={{
-              top: `${selection().anchor.bottom + 6}px`,
+              top: `${selection().anchor.top - 6}px`,
+              transform: "translateY(-100%)",
               left: `${Math.max(8, Math.min(selection().anchor.left, window.innerWidth - (selection().error ? 272 : 110)))}px`,
             }}
           >

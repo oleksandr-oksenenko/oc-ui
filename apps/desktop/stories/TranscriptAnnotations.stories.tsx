@@ -33,7 +33,15 @@ export const Comparison: Story = {
 
     await step("Clear the saved passage when selection leaves the source", async () => {
       select(source);
-      await expect(canvas.getByRole("button", { name: "Add note" })).toBeVisible();
+      const action = canvas.getByRole("button", { name: "Add note" });
+      await expect(action).toBeVisible();
+      await waitFor(() => {
+        const range = window.getSelection()?.getRangeAt(0);
+        const container = action.closest(".annotation-selection-action");
+        if (!range || !container) throw new Error("Missing selection or action");
+        const gap = range.getBoundingClientRect().top - container.getBoundingClientRect().bottom;
+        return expect(Math.abs(gap - 6)).toBeLessThanOrEqual(1);
+      });
       select(header);
       await expect(canvas.queryByRole("button", { name: "Add note" })).toBeNull();
       window.getSelection()?.removeAllRanges();
