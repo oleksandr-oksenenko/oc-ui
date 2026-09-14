@@ -87,8 +87,6 @@ async function addAnnotation(body: string): Promise<void> {
   await $(".annotation-selection-action button").click();
   await $('textarea[placeholder="Write a question or note…"]').setValue(body);
   await browser.keys("Enter");
-  await $(".annotation-inline-editor").waitForExist({ reverse: true });
-  await $(PROMPT).click();
   await $(".annotation-popover").waitForExist({ reverse: true });
   await $('[aria-label="Discard 1 annotations"]').waitForDisplayed();
 }

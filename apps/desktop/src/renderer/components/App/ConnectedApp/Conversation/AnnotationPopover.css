@@ -57,6 +57,11 @@
   padding: 0;
 }
 
+/* The popover shows only the comment body; collapse the unused selection slot. */
+.annotation-popup-comments [data-slot="line-comment-v2-meta"]:empty {
+  display: none;
+}
+
 .annotation-editable-comment {
   display: block;
   width: 100%;

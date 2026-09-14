@@ -132,6 +132,11 @@ export function AnnotationPopover(props: AnnotationPopoverProps): JSX.Element {
                   editing={editingID() === key}
                   onEdit={() => props.controller.edit(key)}
                   onFinish={() => props.controller.finishEditing(key)}
+                  onSubmit={() => {
+                    // Enter finishes the edit and dismisses the popup like Escape.
+                    restoreOnTriggerFocus = true;
+                    props.controller.close();
+                  }}
                   onInput={(body) => props.controller.updateBody(item().annotation.id, body)}
                   onRemove={() => props.controller.remove(item().annotation.id)}
                 />

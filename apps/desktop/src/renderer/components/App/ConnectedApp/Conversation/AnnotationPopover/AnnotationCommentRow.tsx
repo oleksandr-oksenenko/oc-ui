@@ -2,7 +2,7 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { LineComment } from "@opencode-ai/ui/line-comment";
 import { Textarea } from "@opencode-ai/ui/textarea";
-import { Show, onCleanup, untrack, type JSX } from "solid-js";
+import { Show, untrack, type JSX } from "solid-js";
 
 import type { TranscriptAnnotation } from "../../../../../domain/annotation-drafts.ts";
 
@@ -13,19 +13,10 @@ export function AnnotationCommentRow(props: {
   readonly editing: boolean;
   readonly onEdit: () => void;
   readonly onFinish: () => void;
+  readonly onSubmit: () => void;
   readonly onInput: (body: string) => void;
   readonly onRemove: () => void;
 }): JSX.Element {
-  let editingButton: HTMLButtonElement | undefined;
-  onCleanup(() => {
-    editingButton = undefined;
-  });
-
-  const finishEditing = (focus = true) => {
-    props.onFinish();
-    if (focus) requestAnimationFrame(() => editingButton?.focus({ preventScroll: true }));
-  };
-
   return (
     <LineComment
       comment={
@@ -34,7 +25,6 @@ export function AnnotationCommentRow(props: {
             when={props.editing}
             fallback={
               <button
-                ref={editingButton}
                 type="button"
                 class="annotation-editable-comment"
                 disabled={props.disabled}
@@ -57,20 +47,21 @@ export function AnnotationCommentRow(props: {
                 const next = event.relatedTarget;
                 const card = event.currentTarget.closest('[data-component="line-comment-v2"]');
                 if (next instanceof Node && card?.contains(next)) return;
-                finishEditing(false);
+                props.onFinish();
               }}
               onKeyDown={(event) => {
                 if (event.isComposing || event.keyCode === 229) return;
                 if (event.key !== "Enter" || event.shiftKey) return;
                 event.preventDefault();
                 event.stopPropagation();
-                finishEditing();
+                props.onSubmit();
               }}
             />
           </Show>
         </Show>
       }
-      selection={<>“{props.annotation.quote}”</>}
+      // The passage stays highlighted in the transcript; the popover shows only the comment.
+      selection={undefined}
       actions={
         <Show when={!props.readonly}>
           <IconButton

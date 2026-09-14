@@ -88,7 +88,7 @@ export const Comparison: Story = {
       },
     );
 
-    await step("Adding uses the inline editor and keeps its surface opaque", async () => {
+    await step("The popover shows only comments and Enter dismisses it", async () => {
       select(source);
       await userEvent.keyboard("{Escape}");
       await expect(canvas.queryByRole("button", { name: "Add note" })).toBeNull();
@@ -103,10 +103,13 @@ export const Comparison: Story = {
       await expect(dialog.querySelector('[data-variant="editor"]')).toBeNull();
       const editor = within(dialog).getByRole("textbox", { name: "Annotation comment" });
       await waitFor(() => expect(editor).toHaveFocus());
-      await userEvent.keyboard("New inline note{Shift>}{Enter}{/Shift}Second line");
-      window.dispatchEvent(new Event("resize"));
+      await expect(dialog).not.toHaveTextContent(/transcript stays readable/);
+      await userEvent.keyboard("New inline note{Shift>}{Enter}{/Shift}Second line{Enter}");
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await waitFor(() => expect(source).toHaveFocus());
       await userEvent.click(canvas.getByRole("button", { name: "Annotations · 3 comments" }));
+      const comments = await screen.findByRole("dialog", { name: "Annotation comments" });
+      await expect(comments).not.toHaveTextContent(/transcript stays readable/);
       await waitFor(() =>
         expect(screen.getByRole("button", { name: /New inline note\s+Second line/ })).toBeVisible(),
       );
@@ -115,12 +118,19 @@ export const Comparison: Story = {
         name: "Annotation comment",
       });
       await waitFor(() => expect(reopened).toHaveFocus());
+      await expect(reopened.value).toBe("New inline note\nSecond line");
       reopened.setSelectionRange(reopened.value.length, reopened.value.length);
       await userEvent.keyboard(" updated{Enter}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       await waitFor(() =>
-        expect(screen.getByRole("button", { name: /Second line updated/ })).toHaveFocus(),
+        expect(canvas.getByRole("button", { name: "Annotations · 3 comments" })).toHaveFocus(),
+      );
+      await userEvent.click(canvas.getByRole("button", { name: "Annotations · 3 comments" }));
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /Second line updated/ })).toBeVisible(),
       );
       await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
       select(source);
       await userEvent.click(canvas.getByRole("button", { name: "Add note" }));
