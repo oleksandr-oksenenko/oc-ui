@@ -124,8 +124,18 @@
 .shell-session-title {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+
+  /* Fade the clipped end instead of an ellipsis so the row keeps more of the title. */
+  mask-image: linear-gradient(to right, currentcolor calc(100% - 0.75em), transparent);
+}
+
+@media (forced-colors: active) {
+  /* High-contrast themes keep the opaque truncation marker. */
+  .shell-session-title {
+    mask-image: none;
+    text-overflow: ellipsis;
+  }
 }
 
 .shell-session-status svg {
