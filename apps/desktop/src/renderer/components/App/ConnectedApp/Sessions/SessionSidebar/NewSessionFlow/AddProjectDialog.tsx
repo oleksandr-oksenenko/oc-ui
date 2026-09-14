@@ -130,12 +130,11 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
               ref={(element) => {
                 mutationStatus = element;
               }}
-              class="server-flow-mutation-status"
+              class="sr-only"
               aria-live="polite"
               tabIndex={-1}
             >
-              <Loader width={18} height={18} />
-              <span>Adding project</span>
+              Adding project
             </output>
           </Show>
         </DialogBody>

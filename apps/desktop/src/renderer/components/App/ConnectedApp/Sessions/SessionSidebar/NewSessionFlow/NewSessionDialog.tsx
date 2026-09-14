@@ -17,6 +17,8 @@ import "./ServerFlowDialog.css";
 
 export type NewSessionLocationMode = "direct" | "worktree";
 
+export type NewSessionAction = "direct" | "worktree" | "retry";
+
 export type NewSessionProject = {
   readonly id: string;
   readonly name: string;
@@ -49,6 +51,7 @@ export type NewSessionDialogState = {
 export type NewSessionDialogProps = {
   readonly state: NewSessionDialogState;
   readonly mutation?: "creating-worktree" | "creating-session";
+  readonly action?: NewSessionAction;
   readonly onDismissBlockedChange?: (blocked: boolean) => void;
   readonly onAddProject: () => void;
   readonly onProjectChange: (projectID: string) => void;
@@ -100,10 +103,10 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
   let projectPicker: HTMLElement | undefined;
   let operationError: HTMLElement | undefined;
   let mutationStatus: HTMLOutputElement | undefined;
-  const [submitted, setSubmitted] = createSignal(false);
+  const [pendingAction, setPendingAction] = createSignal<NewSessionAction>();
 
   const busy = () => props.mutation !== undefined;
-  const blocked = () => busy() || submitted();
+  const blocked = () => busy() || pendingAction() !== undefined;
   const currentError = () => props.state.error;
   const validationError = () => {
     const error = currentError();
@@ -140,7 +143,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
       return;
     }
     if (state.error?.kind === "session") {
-      setSubmitted(true);
+      setPendingAction("retry");
       props.onRetry();
       return;
     }
@@ -149,16 +152,31 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
       state.projects.find((project) => project.id === projectID)?.vcs !== "git"
     )
       return;
+    setPendingAction(mode);
     props.onModeChange(mode);
-    setSubmitted(true);
     if (mode === "worktree") props.onCreateWorktree();
     else props.onUseProject(projectID);
+  };
+
+  const activeAction = (): NewSessionAction | undefined => {
+    const action = pendingAction();
+    if (action !== undefined) return action;
+    if (props.action !== undefined) return props.action;
+    if (props.mutation === "creating-worktree") return "worktree";
+    if (props.mutation === "creating-session") return "direct";
+    return undefined;
   };
 
   const canCreateWorktree = () =>
     props.state.projects.find((project) => project.id === props.state.selectedProjectID)?.vcs ===
     "git";
   const recovery = () => currentError()?.kind === "session" || currentError()?.kind === "worktree";
+  const showChoices = () => {
+    if (activeAction() === "retry") return false;
+    return busy() || !recovery();
+  };
+  const directActive = () => activeAction() === "direct" && busy();
+  const worktreeActive = () => activeAction() === "worktree" && busy();
 
   createEffect(() => {
     const nextError = currentError();
@@ -171,8 +189,20 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
 
   createEffect(
     on(
-      () => [props.state, props.mutation] as const,
-      () => setSubmitted(false),
+      () => props.mutation,
+      (mutation, previous) => {
+        if (mutation === undefined && previous !== undefined) setPendingAction(undefined);
+      },
+      { defer: true },
+    ),
+  );
+
+  createEffect(
+    on(
+      () => props.state.error,
+      (error) => {
+        if (error !== undefined && props.mutation === undefined) setPendingAction(undefined);
+      },
       { defer: true },
     ),
   );
@@ -252,12 +282,11 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
               ref={(element) => {
                 mutationStatus = element;
               }}
-              class="server-flow-mutation-status"
+              class="sr-only"
               aria-live="polite"
               tabIndex={-1}
             >
-              <Loader width={18} height={18} />
-              <span>{primaryLabel()}</span>
+              {primaryLabel()}
             </output>
           </Show>
         </DialogBody>
@@ -275,7 +304,7 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
             </Button>
           </Show>
           <Show
-            when={!busy() && !recovery()}
+            when={showChoices()}
             fallback={
               <Button
                 type="submit"
@@ -283,6 +312,9 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
                 variant={primaryVariant()}
                 disabled={blocked() || projectSelectionUnavailable(props.state)}
               >
+                <Show when={busy()}>
+                  <Loader width={16} height={16} />
+                </Show>
                 {primaryLabel()}
               </Button>
             }
@@ -290,21 +322,27 @@ export function NewSessionDialog(props: NewSessionDialogProps) {
             <Button
               type="submit"
               size="normal"
-              variant="outline"
+              variant={directActive() ? "loading" : "outline"}
               disabled={blocked() || projectSelectionUnavailable(props.state)}
             >
-              Use project folder
+              <Show when={directActive()}>
+                <Loader width={16} height={16} />
+              </Show>
+              {directActive() ? primaryLabel() : "Use project folder"}
             </Button>
             <Button
               type="button"
               size="normal"
-              variant="contrast"
+              variant={worktreeActive() ? "loading" : "contrast"}
               disabled={
                 blocked() || projectSelectionUnavailable(props.state) || !canCreateWorktree()
               }
               onClick={() => submit("worktree")}
             >
-              Start in worktree
+              <Show when={worktreeActive()}>
+                <Loader width={16} height={16} />
+              </Show>
+              {worktreeActive() ? primaryLabel() : "Start in worktree"}
             </Button>
           </Show>
         </DialogFooter>

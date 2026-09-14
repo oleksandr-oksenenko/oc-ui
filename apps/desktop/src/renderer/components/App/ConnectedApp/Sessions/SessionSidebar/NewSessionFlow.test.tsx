@@ -602,6 +602,40 @@ describe("NewSessionFlow", () => {
     operation.dispose();
   });
 
+  it("retains the initiating action across the worktree and session phases", async () => {
+    const worktree = { location: { directory: "/srv/worktrees/feature-action" } };
+    vi.mocked(createSessionWorktree).mockReturnValueOnce(Effect.succeed(worktree));
+    const pending = deferred<SessionInfo>();
+    const fake = fakeRuntime([pending.promise]);
+    const operation = controller(fake.runtime);
+    await flush();
+
+    operation.flow.createWorktree();
+    await vi.waitFor(() => expect(fake.sessionCreate).toHaveBeenCalledOnce());
+    expect(operation.flow.current().mutation).toBe("creating-session");
+    expect(operation.flow.current().action).toBe("worktree");
+
+    pending.resolve(session("session-1", worktree.location.directory));
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
+    expect(operation.flow.current().action).toBeUndefined();
+    operation.dispose();
+  });
+
+  it("clears the initiating action when session creation fails", async () => {
+    vi.mocked(createSessionWorktree).mockReturnValueOnce(
+      Effect.succeed({ location: { directory: "/srv/worktrees/feature-action" } }),
+    );
+    const fake = fakeRuntime([Promise.reject(new Error("session failed"))]);
+    const operation = controller(fake.runtime);
+    await flush();
+
+    operation.flow.createWorktree();
+    await vi.waitFor(() => expect(operation.flow.current().error?.kind).toBe("session"));
+    expect(operation.flow.current().action).toBeUndefined();
+    expect(operation.flow.current().mutation).toBeUndefined();
+    operation.dispose();
+  });
+
   it("shows a new retained warning when a retry fails after dismissal", async () => {
     vi.mocked(createSessionWorktree).mockReturnValueOnce(
       Effect.succeed({

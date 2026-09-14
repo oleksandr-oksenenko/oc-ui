@@ -189,4 +189,21 @@ describe("AddProjectDialog", () => {
     expect(mounted.root.textContent).toContain("Adding project");
     mounted.dispose();
   });
+
+  it("shows the adding spinner on the submit button instead of the dialog body", async () => {
+    const mounted = mount();
+    await flush();
+    const body = mounted.root.querySelector(".server-flow-dialog-body");
+    if (!body) throw new Error("Expected the dialog body");
+    expect(body.querySelector('[data-component="loader-v2"]')).toBeNull();
+
+    mounted.setAdding(true);
+    await flush();
+    const submit = mounted.root.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (!submit) throw new Error("Expected the add-project submit button");
+    expect(submit.disabled).toBe(true);
+    expect(submit.querySelector('[data-component="loader-v2"]')).not.toBeNull();
+    expect(body.querySelector('[data-component="loader-v2"]')).toBeNull();
+    mounted.dispose();
+  });
 });

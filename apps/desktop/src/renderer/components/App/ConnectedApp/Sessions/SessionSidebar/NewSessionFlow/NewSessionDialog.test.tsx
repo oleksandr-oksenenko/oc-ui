@@ -46,6 +46,7 @@ function callbacks() {
 function mount(
   state: () => NewSessionDialogState,
   mutation?: () => NewSessionDialogProps["mutation"],
+  action?: () => NewSessionDialogProps["action"],
 ) {
   const actions = callbacks();
   const onClose = vi.fn<() => void>();
@@ -60,6 +61,7 @@ function mount(
           <NewSessionDialog
             state={state()}
             mutation={mutation?.()}
+            action={action?.()}
             onDismissBlockedChange={setBlocked}
             {...actions}
           />
@@ -87,6 +89,14 @@ function mount(
 
 async function flush(): Promise<void> {
   await new Promise<void>((resolve) => queueMicrotask(resolve));
+}
+
+function buttonByName(root: HTMLElement, name: string): HTMLButtonElement {
+  const button = [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+    (candidate) => candidate.textContent?.trim() === name,
+  );
+  if (!button) throw new Error(`Expected a "${name}" button`);
+  return button;
 }
 
 describe("NewSessionDialog", () => {
@@ -212,6 +222,162 @@ describe("NewSessionDialog", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(mounted.onClose).not.toHaveBeenCalled();
     expect(mounted.root.querySelector('[aria-label="Close new session dialog"]')).toBeNull();
+    mounted.dispose();
+  });
+
+  it("shows the creating spinner on the clicked project-folder button", async () => {
+    const [mutation, setMutation] = createSignal<NewSessionDialogProps["mutation"]>();
+    const [action, setAction] = createSignal<NewSessionDialogProps["action"]>();
+    const mounted = mount(
+      () => ({ projects, selectedProjectID: "oc-ui", mode: "direct" }),
+      mutation,
+      action,
+    );
+    await flush();
+    const body = mounted.root.querySelector(".server-flow-dialog-body");
+    if (!body) throw new Error("Expected the dialog body");
+    expect(body.querySelector('[data-component="loader-v2"]')).toBeNull();
+
+    buttonByName(mounted.root, "Use project folder").click();
+    expect(mounted.actions.onUseProject).toHaveBeenCalledWith("oc-ui");
+
+    setAction("direct");
+    setMutation("creating-session");
+    await flush();
+    const direct = buttonByName(mounted.root, "Creating session");
+    expect(direct.disabled).toBe(true);
+    expect(direct.querySelector('[data-component="loader-v2"]')).not.toBeNull();
+    expect(
+      buttonByName(mounted.root, "Start in worktree").querySelector('[data-component="loader-v2"]'),
+    ).toBeNull();
+    expect(body.querySelector('[data-component="loader-v2"]')).toBeNull();
+    mounted.dispose();
+  });
+
+  it("keeps the spinner on the worktree button through the session phase", async () => {
+    const [mutation, setMutation] = createSignal<NewSessionDialogProps["mutation"]>();
+    const [action, setAction] = createSignal<NewSessionDialogProps["action"]>();
+    const mounted = mount(
+      () => ({ projects, selectedProjectID: "oc-ui", mode: "worktree" }),
+      mutation,
+      action,
+    );
+    await flush();
+    const worktreeButton = buttonByName(mounted.root, "Start in worktree");
+    worktreeButton.click();
+    expect(mounted.actions.onCreateWorktree).toHaveBeenCalledOnce();
+
+    setAction("worktree");
+    setMutation("creating-worktree");
+    await flush();
+    const worktree = buttonByName(mounted.root, "Creating worktree");
+    expect(worktree).toBe(worktreeButton);
+    expect(worktree.disabled).toBe(true);
+    expect(worktree.querySelector('[data-component="loader-v2"]')).not.toBeNull();
+
+    setMutation("creating-session");
+    await flush();
+    expect(buttonByName(mounted.root, "Creating session")).toBe(worktreeButton);
+    expect(worktreeButton.querySelector('[data-component="loader-v2"]')).not.toBeNull();
+    expect(
+      buttonByName(mounted.root, "Use project folder").querySelector(
+        '[data-component="loader-v2"]',
+      ),
+    ).toBeNull();
+    mounted.dispose();
+  });
+
+  it("keeps the retry action on its own button while retrying", async () => {
+    const [mutation, setMutation] = createSignal<NewSessionDialogProps["mutation"]>();
+    const [action, setAction] = createSignal<NewSessionDialogProps["action"]>();
+    const [error, setError] = createSignal<NewSessionDialogState["error"]>({
+      kind: "session",
+      message: "The session could not be created. Try again.",
+    });
+    const mounted = mount(
+      () => ({ projects, selectedProjectID: "oc-ui", mode: "worktree", error: error() }),
+      mutation,
+      action,
+    );
+    await flush();
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    expect(mounted.actions.onRetry).toHaveBeenCalledOnce();
+
+    setError(undefined);
+    setAction("retry");
+    setMutation("creating-session");
+    await flush();
+    expect(
+      buttonByName(mounted.root, "Creating session").querySelector('[data-component="loader-v2"]'),
+    ).not.toBeNull();
+    expect(mounted.root.textContent).not.toContain("Start in worktree");
+    mounted.dispose();
+  });
+
+  it("clears the pending action after failure so the session can be retried", async () => {
+    const [mutation, setMutation] = createSignal<NewSessionDialogProps["mutation"]>();
+    const [action, setAction] = createSignal<NewSessionDialogProps["action"]>();
+    const [error, setError] = createSignal<NewSessionDialogState["error"]>();
+    const mounted = mount(
+      () => ({ projects, selectedProjectID: "oc-ui", mode: "direct", error: error() }),
+      mutation,
+      action,
+    );
+    await flush();
+    buttonByName(mounted.root, "Use project folder").click();
+    setAction("direct");
+    setMutation("creating-session");
+    await flush();
+    expect(buttonByName(mounted.root, "Creating session").disabled).toBe(true);
+
+    // The owner publishes the failure and clears the operation.
+    setMutation(undefined);
+    setAction(undefined);
+    setError({ kind: "session", message: "The session could not be created. Try again." });
+    await flush();
+    const retry = buttonByName(mounted.root, "Retry creating session");
+    expect(retry.disabled).toBe(false);
+
+    mounted.root.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
+    expect(mounted.actions.onRetry).toHaveBeenCalledOnce();
+    setAction("retry");
+    setMutation("creating-session");
+    await flush();
+    expect(
+      buttonByName(mounted.root, "Creating session").querySelector('[data-component="loader-v2"]'),
+    ).not.toBeNull();
+    mounted.dispose();
+  });
+
+  it("restores the spinning worktree button from the retained action after remount", async () => {
+    const mounted = mount(
+      () => ({ projects, selectedProjectID: "oc-ui", mode: "worktree" }),
+      () => "creating-session",
+      () => "worktree",
+    );
+    await flush();
+    expect(
+      buttonByName(mounted.root, "Creating session").querySelector('[data-component="loader-v2"]'),
+    ).not.toBeNull();
+    expect(
+      buttonByName(mounted.root, "Use project folder").querySelector(
+        '[data-component="loader-v2"]',
+      ),
+    ).toBeNull();
+    mounted.dispose();
+  });
+
+  it("restores the retry button from the retained action after remount", async () => {
+    const mounted = mount(
+      () => ({ projects, selectedProjectID: "oc-ui", mode: "worktree" }),
+      () => "creating-session",
+      () => "retry",
+    );
+    await flush();
+    expect(
+      buttonByName(mounted.root, "Creating session").querySelector('[data-component="loader-v2"]'),
+    ).not.toBeNull();
+    expect(mounted.root.textContent).not.toContain("Start in worktree");
     mounted.dispose();
   });
 });

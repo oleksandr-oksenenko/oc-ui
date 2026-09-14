@@ -19,6 +19,7 @@ import {
 } from "./NewSessionFlow/AddProjectDialog.tsx";
 import {
   NewSessionDialog,
+  type NewSessionAction,
   type NewSessionDialogError,
   type NewSessionDialogState,
   type NewSessionLocationMode,
@@ -69,6 +70,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     projectsError?: string;
     error?: NewSessionDialogError;
     mutation?: "creating-worktree" | "creating-session";
+    action?: NewSessionAction;
     addingProject: boolean;
     addProjectError?: AddProjectDialogError;
   }>({ projectsLoading: true, addingProject: false, dialog: "session" });
@@ -168,9 +170,10 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
   const createSessionAt = Effect.fn("NewSessionFlow.createSessionAt")(function* (
     project: NewSessionProject,
     location: LocationRef,
+    action: NewSessionAction,
     worktreeLocation?: LocationRef,
   ) {
-    update({ mutation: "creating-session", error: undefined });
+    update({ mutation: "creating-session", action, error: undefined });
     const created = props.runtime.data.session.create({
       ...props.selection,
       projectID: project.id,
@@ -198,7 +201,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
         // The SDK owns this uncancellable request. Its settled result still needs
         // reconciliation when workspace shutdown interrupts the caller's wait.
         if (Exit.hasInterrupts(exit)) yield* reconcile;
-        update({ mutation: undefined });
+        update({ mutation: undefined, action: undefined });
         if (current().closed) releaseStatus();
       }),
     );
@@ -230,7 +233,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
       update({ error: { kind: "validation", message: "Choose a project." } });
       return;
     }
-    effects.runFork(createSessionAt(project, project.location));
+    effects.runFork(createSessionAt(project, project.location, "direct"));
   };
 
   const createWorktree = Effect.fn("NewSessionFlow.createWorktree")(function* () {
@@ -240,10 +243,10 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
       update({ error: { kind: "validation", message: "Choose a Git project." } });
       return;
     }
-    update({ mutation: "creating-worktree", error: undefined });
+    update({ mutation: "creating-worktree", action: "worktree", error: undefined });
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
-        update({ mutation: undefined });
+        update({ mutation: undefined, action: undefined });
         if (current().closed) releaseStatus();
       }),
     );
@@ -276,7 +279,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
         description: "Using local main.",
         persistent: true,
       });
-    yield* createSessionAt(project, created.location, created.location);
+    yield* createSessionAt(project, created.location, "worktree", created.location);
   }, Effect.scoped);
 
   const retry = (): void => {
@@ -286,7 +289,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     const failure = current().error;
     if (failure?.kind === "session") {
       const location = failure.worktreeLocation ?? project.location;
-      effects.runFork(createSessionAt(project, location, failure.worktreeLocation));
+      effects.runFork(createSessionAt(project, location, "retry", failure.worktreeLocation));
     }
   };
 
@@ -385,6 +388,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
               <NewSessionDialog
                 state={{ ...flow.state(), ...current() }}
                 mutation={current().mutation}
+                action={current().action}
                 onDismissBlockedChange={setDismissBlocked}
                 onAddProject={flow.openAddProject}
                 onProjectChange={flow.changeProject}

@@ -269,16 +269,6 @@
   line-height: var(--oc-type-status-line-height);
 }
 
-.server-flow-mutation-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 72px;
-  font-size: var(--oc-type-body-size);
-  color: var(--oc-text-muted);
-}
-
 @media (width <= 520px) {
   [data-component="dialog-v2"][data-size="large"]
     > [data-slot="dialog-container"].server-flow-dialog {
