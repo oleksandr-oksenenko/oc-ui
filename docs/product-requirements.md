@@ -371,8 +371,12 @@ empty transcript.
   server-owned default; do not infer a specific agent from list order.
 - Use the session switch APIs for selection without local persistence, and
   block submission while a switch is settling.
-- Do not support attachments, references, slash commands, skills, shell input,
-  or other composer extensions.
+- Discover commands and skills from the connected location in one suggestion
+  menu. Commands are offered at the start of a message and their remaining text
+  is sent as arguments; skills are inserted as inline mentions.
+- Keep code-review comments and transcript annotations attached for the next
+  prompt when a command runs, because the command endpoint has no metadata.
+- Do not support file references, shell input, or other composer extensions.
 
 ## Managed sidecar boundary
 
@@ -415,7 +419,7 @@ The first slice does not include:
 - Stop, interrupt, queue, or steering controls.
 - Permissions, forms, questions, or other server requests for user input.
 - Agent, model, provider, or server configuration screens.
-- File references, commands, skills, images, or attachments.
+- File references.
 - Todos, task progress, token usage, or costs.
 - An embedded terminal.
 - Notifications and other desktop extras.
