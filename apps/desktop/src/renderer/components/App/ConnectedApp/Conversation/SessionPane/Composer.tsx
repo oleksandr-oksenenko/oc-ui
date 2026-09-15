@@ -10,6 +10,8 @@ import { Show } from "solid-js";
 import "./Composer/Composer.css";
 import { AgentPicker } from "./Composer/AgentPicker.tsx";
 import type { AgentPickerOption } from "./Composer/AgentPicker.tsx";
+import { ContextMeter } from "./Composer/ContextMeter.tsx";
+import type { ContextUsage } from "./Composer/context-usage.ts";
 import { ModelPicker } from "./Composer/ModelPicker.tsx";
 import type { ModelPickerOption } from "./Composer/ModelPicker.tsx";
 import { VariantPicker } from "./Composer/VariantPicker.tsx";
@@ -48,6 +50,8 @@ export type ComposerProps = {
   readonly review?: ComposerReview;
   /** Omitted annotations state is equivalent to an empty annotation attachment. */
   readonly annotations?: ComposerAnnotations;
+  /** Omitted context usage hides the context meter. */
+  readonly contextUsage?: ContextUsage;
   readonly modelSelection: {
     readonly state: "loading" | "ready" | "failed";
     readonly switching: boolean;
@@ -77,10 +81,11 @@ export type ComposerProps = {
 };
 
 function selectionControls(
-  props: Pick<ComposerProps, "action" | "agentSelection" | "modelSelection">,
+  props: Pick<ComposerProps, "action" | "agentSelection" | "modelSelection" | "contextUsage">,
 ) {
   return (
     <div class="composer-picker-row">
+      <Show when={props.contextUsage}>{(usage) => <ContextMeter usage={usage()} />}</Show>
       {props.agentSelection.state === "ready" ? (
         <AgentPicker
           placeholder="Default agent"

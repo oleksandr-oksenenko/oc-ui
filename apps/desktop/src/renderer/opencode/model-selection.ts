@@ -26,6 +26,8 @@ export type ModelSelection = {
   readonly switching: () => boolean;
   readonly models: () => readonly ModelSelectionChoice[];
   readonly selectedModelID: () => string | undefined;
+  /** Context window of the selected model, in tokens. */
+  readonly contextLimit: () => number | undefined;
   readonly variants: () => readonly ModelSelectionChoice[];
   readonly selectedVariantID: () => string | undefined;
   readonly sync: () => Promise<void>;
@@ -85,6 +87,7 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
     const model = selectedModel();
     return model ? modelChoiceID(model) : undefined;
   });
+  const contextLimit = () => selectedModel()?.limit.context;
   const variants = createMemo<readonly ModelSelectionChoice[]>(() =>
     (selectedModel()?.variants ?? []).map((variant) => ({ id: variant.id, label: variant.id })),
   );
@@ -184,6 +187,7 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
     switching,
     models: choices,
     selectedModelID,
+    contextLimit,
     variants,
     selectedVariantID,
     sync,

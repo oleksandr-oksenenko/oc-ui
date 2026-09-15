@@ -277,6 +277,27 @@ export const RunningDraft: Story = {
   },
 };
 
+export const ContextUsage: Story = {
+  render: () => (
+    <Composer
+      value=""
+      disabled={false}
+      action="send"
+      contextUsage={{ used: 82_000, limit: 100_000 }}
+      modelSelection={composerModelSelection()}
+      agentSelection={composerAgentSelection()}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const meter = canvasElement.querySelector<HTMLElement>(".composer-context-meter");
+    await expect(meter).toHaveAttribute("data-context-percentage", "82");
+    await expect(meter).toHaveAttribute("data-level", "warning");
+    await expect(meter?.querySelector(".composer-context-fill")).not.toBeNull();
+  },
+};
+
 export const Submitting: Story = {
   render: () => (
     <Composer

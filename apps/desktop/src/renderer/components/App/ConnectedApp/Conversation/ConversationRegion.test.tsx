@@ -1,4 +1,4 @@
-import type { FormInfo, PermissionRequest } from "@opencode-ai/client";
+import type { FormInfo, PermissionRequest, SessionMessageAssistant } from "@opencode-ai/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -44,6 +44,10 @@ const permission = (id: string, action: string, sessionID = session.id): Permiss
 function setup(
   initialForms: readonly FormInfo[] = [],
   initialPermissions: readonly PermissionRequest[] = [],
+  options: {
+    readonly transcript?: SessionWorkspace["transcript"];
+    readonly contextLimit?: () => number | undefined;
+  } = {},
 ) {
   stubResizeObserver();
   const [forms, setForms] = createSignal<readonly FormInfo[]>(initialForms);
@@ -87,7 +91,7 @@ function setup(
     selectedID,
     running: () => false,
     stopError: () => undefined,
-    transcript: () => [],
+    transcript: options.transcript ?? (() => []),
     transcriptStatus: () => "idle",
     transcriptLoading: () => false,
     transcriptError: () => undefined,
@@ -122,6 +126,7 @@ function setup(
     switching: () => false,
     models: () => [],
     selectedModelID: () => undefined,
+    contextLimit: options.contextLimit ?? (() => undefined),
     variants: () => [],
     selectedVariantID: () => undefined,
     sync: vi.fn<ModelSelection["sync"]>(async () => undefined),
@@ -407,6 +412,59 @@ describe("ConversationRegion session permissions", () => {
     mounted.setPermissions([]);
     await Promise.resolve();
     expect(document.activeElement).not.toBe(prompt);
+    mounted.dispose();
+  });
+});
+
+const assistantTokens = (input: number): SessionMessageAssistant => ({
+  id: "assistant",
+  type: "assistant",
+  agent: "build",
+  model: { id: "gpt", providerID: "openai" },
+  content: [],
+  time: { created: 1 },
+  tokens: { input, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+});
+
+describe("ConversationRegion composer context", () => {
+  it("derives the context meter from the model limit and latest assistant step", () => {
+    const mounted = setup([], [], {
+      transcript: () => [assistantTokens(64_000)],
+      contextLimit: () => 100_000,
+    });
+    const meter = mounted.host.querySelector<HTMLElement>(".composer-context-meter");
+    expect(meter?.dataset.contextPercentage).toBe("64");
+    expect(meter?.getAttribute("aria-label")).toBe("Context 64% used · 64k of 100k tokens");
+    mounted.dispose();
+  });
+
+  it("follows reported usage and the selected model limit as they change", () => {
+    const [transcript, setTranscript] = createSignal<readonly SessionMessageAssistant[]>([]);
+    const [limit, setLimit] = createSignal(200_000);
+    const mounted = setup([], [], { transcript, contextLimit: limit });
+    const percentage = () =>
+      mounted.host.querySelector<HTMLElement>(".composer-context-meter")?.dataset.contextPercentage;
+
+    expect(percentage()).toBe("0");
+
+    setTranscript([assistantTokens(150_000)]);
+    expect(percentage()).toBe("75");
+
+    // A newer step without a usage report keeps the last known reading.
+    setTranscript([assistantTokens(150_000), { ...assistantTokens(0), tokens: undefined }]);
+    expect(percentage()).toBe("75");
+
+    // Switching models changes the denominator for the same reported usage.
+    setLimit(100_000);
+    expect(percentage()).toBe("100");
+    mounted.dispose();
+  });
+
+  it("hides the context meter while the model limit is unknown", () => {
+    const mounted = setup([], [], {
+      transcript: () => [assistantTokens(64_000)],
+    });
+    expect(mounted.host.querySelector(".composer-context-meter")).toBeNull();
     mounted.dispose();
   });
 });

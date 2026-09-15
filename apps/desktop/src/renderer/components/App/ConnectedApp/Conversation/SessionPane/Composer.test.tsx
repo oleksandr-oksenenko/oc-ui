@@ -767,4 +767,59 @@ describe("Composer", () => {
     expect(submit).toHaveBeenCalledOnce();
     dispose();
   });
+
+  it("shows context usage as a ring that fills and hides without a limit", async () => {
+    vi.useFakeTimers();
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        contextUsage={{ used: 64_000, limit: 100_000 }}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+
+    const meter = host.querySelector<HTMLElement>(".composer-context-meter");
+    expect(meter).not.toBeNull();
+    expect(meter?.dataset.contextPercentage).toBe("64");
+    expect(meter?.getAttribute("aria-label")).toBe("Context 64% used · 64k of 100k tokens");
+    expect(meter?.dataset.level).toBe("normal");
+    expect(meter?.querySelector(".composer-context-fill")).not.toBeNull();
+
+    const trigger = meter?.closest('[data-component="tooltip-v2-trigger"]');
+    const event = new Event("pointerenter");
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    trigger!.dispatchEvent(event);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(tooltipText()).toBe("Context 64% used · 64k of 100k tokens");
+
+    dispose();
+    vi.useRealTimers();
+  });
+
+  it("renders an empty context ring without a fill", () => {
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        contextUsage={{ used: 0, limit: 100_000 }}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+
+    expect(
+      host.querySelector<HTMLElement>(".composer-context-meter")?.dataset.contextPercentage,
+    ).toBe("0");
+    expect(host.querySelector(".composer-context-fill")).toBeNull();
+
+    dispose();
+  });
 });

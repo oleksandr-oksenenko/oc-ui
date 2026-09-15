@@ -131,6 +131,42 @@
   min-height: 22px;
 }
 
+.composer-context {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+}
+
+.composer-context-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--oc-text-muted);
+}
+
+.composer-context-meter svg {
+  display: block;
+}
+
+.composer-context-track {
+  stroke: var(--oc-border-strong);
+}
+
+.composer-context-fill {
+  stroke: currentcolor;
+  transition: stroke-dashoffset 200ms var(--oc-motion-ease);
+}
+
+.composer-context-meter[data-level="warning"] {
+  color: var(--oc-status-warning);
+}
+
+.composer-context-meter[data-level="danger"] {
+  color: var(--oc-status-danger);
+}
+
 .composer-controls-row {
   display: flex;
   align-items: center;

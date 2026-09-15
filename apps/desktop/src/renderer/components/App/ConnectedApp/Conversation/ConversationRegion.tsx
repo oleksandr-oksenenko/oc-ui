@@ -14,6 +14,7 @@ import type { SessionPermissionsController } from "../Permissions/createPermissi
 import { PendingMessages } from "./SessionPane/PendingMessages.tsx";
 import type { SessionInboxController } from "./createSessionInbox.ts";
 import { Composer, type ComposerProps } from "./SessionPane/Composer.tsx";
+import { contextUsage as deriveContextUsage } from "./SessionPane/Composer/context-usage.ts";
 import { QuestionForm } from "../../../../ui/QuestionForm.tsx";
 import { PermissionRequestCard } from "../../../../ui/PermissionRequestCard.tsx";
 import { SessionPane } from "./SessionPane.tsx";
@@ -60,6 +61,9 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
   };
   const composerAction = () =>
     props.composer.submitting() ? "sending" : props.workspace.running() ? "running" : "send";
+  const contextUsage = createMemo(() =>
+    deriveContextUsage(props.workspace.transcript(), props.modelSelection.contextLimit()),
+  );
   const formKeys = createMemo(() => props.forms.sessionForms().map(formRenderKey), undefined, {
     equals: (previous, next) =>
       previous.length === next.length && previous.every((key, index) => key === next[index]),
@@ -284,6 +288,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               action={composerAction()}
               disabled={props.composer.disabled()}
               error={props.workspace.stopError() ?? props.composer.error()}
+              contextUsage={contextUsage()}
               review={props.composer.review()}
               annotations={
                 annotationCount() > 0

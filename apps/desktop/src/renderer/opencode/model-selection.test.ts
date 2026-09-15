@@ -25,6 +25,7 @@ function model(input: {
   readonly name: string;
   readonly variants?: readonly string[];
   readonly enabled?: boolean;
+  readonly contextLimit?: number;
 }): ModelInfo {
   return {
     id: input.id,
@@ -37,7 +38,7 @@ function model(input: {
     cost: [],
     status: "active",
     enabled: input.enabled ?? true,
-    limit: { context: 1, output: 1 },
+    limit: { context: input.contextLimit ?? 1, output: 1 },
   };
 }
 
@@ -155,12 +156,13 @@ describe("model selection", () => {
   });
 
   it("loads the location catalog and follows session-over-default selection", async () => {
-    const fallback = model({ id: "gpt", providerID: "openai", name: "GPT" });
+    const fallback = model({ id: "gpt", providerID: "openai", name: "GPT", contextLimit: 128_000 });
     const claude = model({
       id: "claude",
       providerID: "anthropic",
       name: "Claude",
       variants: ["fast", "deep"],
+      contextLimit: 200_000,
     });
     const disabled = model({
       id: "old",
@@ -209,6 +211,7 @@ describe("model selection", () => {
     expect(root.selection.models().map((choice) => choice.group)).toEqual(["openai", "anthropic"]);
     expect(root.selection.models().map((choice) => choice.label)).not.toContain("Old model");
     expect(root.selection.selectedModelID()).toBe(root.selection.models()[0]?.id);
+    expect(root.selection.contextLimit()).toBe(128_000);
 
     root.setSelectedSession(
       session("session-1", {
@@ -218,6 +221,7 @@ describe("model selection", () => {
       }),
     );
     expect(root.selection.selectedModelID()).toBe(root.selection.models()[1]?.id);
+    expect(root.selection.contextLimit()).toBe(200_000);
     expect(root.selection.variants().map((choice) => choice.id)).toEqual(["fast", "deep"]);
     expect(root.selection.selectedVariantID()).toBe("deep");
     root.dispose();
