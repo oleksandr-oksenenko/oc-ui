@@ -16,6 +16,13 @@ type ComposerInput = Parameters<typeof createSessionComposer>[0];
 type Prompt = ComposerInput["runtime"]["data"]["session"]["prompt"];
 type PromptInput = Parameters<Prompt>[0];
 type PromptResult = SessionInboxUser;
+type Command = ComposerInput["runtime"]["api"]["session"]["command"];
+type Commands = ReturnType<ComposerInput["commands"]>;
+
+/** Simulates a FileReader failure so the command never reaches the server. */
+function readFailed(this: FileReader): void {
+  this.dispatchEvent(new Event("error"));
+}
 
 const promptResult = ({ sessionID, text, metadata }: PromptInput): PromptResult => ({
   id: "prompt",
@@ -40,7 +47,10 @@ const annotationInput = {
   body: "Please clarify this sentence.",
 };
 
-function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptResult(input)))) {
+function setup(
+  prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptResult(input))),
+  command: Command = vi.fn<Command>(async () => undefined),
+) {
   return withTestWorkspace((effects, dispose) => {
     const [selectedID, setSelectedID] = createSignal<string>();
     const [, setRunning] = createSignal(false);
@@ -49,6 +59,7 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
     const [connected, setConnected] = createSignal(true);
     const [selectionSwitching, setSelectionSwitching] = createSignal(false);
     const [reviewKey, setReviewKey] = createSignal<ReviewDraftKey>();
+    const [commands, setCommands] = createSignal<Commands>({ state: "ready", items: [] });
     const reviewDrafts = createReviewDraftStore(effects);
     const annotationDrafts = createAnnotationDraftStore(effects);
     const messages = new Map<string, SessionMessageInfo>();
@@ -65,6 +76,7 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
       return createSessionComposer({
         effects,
         runtime: {
+          api: { session: { command } },
           data: {
             session: {
               prompt,
@@ -77,6 +89,7 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
             },
           },
         },
+        commands,
         selectedID,
         transcriptLoading,
         transcriptError,
@@ -99,12 +112,14 @@ function setup(prompt: Prompt = vi.fn<Prompt>((input) => Promise.resolve(promptR
       setConnected,
       setSelectionSwitching,
       setReviewKey,
+      setCommands,
       reviewDrafts,
       annotationDrafts,
       messages,
       setMessage,
       requestDiscard,
       prompt,
+      command,
     };
   });
 }
@@ -720,6 +735,397 @@ describe("skill attachments", () => {
     expect(vi.mocked(root.prompt).mock.calls[0]![0].skills).toEqual([
       { ...skills[0], mention: { start: 0, end: 6, text: "review" } },
     ]);
+    root.dispose();
+  });
+});
+
+describe("command submissions", () => {
+  const inventory = { state: "ready" as const, items: [{ name: "review" }] };
+  const settle = () => vi.fn<Command>(async () => undefined);
+
+  it("runs a known command with arguments and clears the draft on success", async () => {
+    const command = settle();
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    root.composer.input("/review the changes");
+    expect(root.composer.command()).toBe("review");
+
+    await root.composer.submit("queue");
+
+    expect(command).toHaveBeenCalledOnce();
+    const [input, options] = command.mock.calls[0]!;
+    expect(input).toEqual({
+      sessionID: "session",
+      command: "review",
+      text: "the changes",
+      skills: undefined,
+      files: undefined,
+      delivery: "queue",
+    });
+    expect(options?.signal).toBeInstanceOf(AbortSignal);
+    expect(root.prompt).not.toHaveBeenCalled();
+    expect(root.composer.value()).toBe("");
+    expect(root.composer.error()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("forwards files and strips skill mention offsets", async () => {
+    const command = settle();
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    root.composer.pasteFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+    root.composer.input("/review review", [
+      { id: "review-id", name: "review", mention: { start: 8, end: 14, text: "review" } },
+    ]);
+
+    await root.composer.submit();
+
+    expect(command.mock.calls[0]![0]).toMatchObject({
+      text: "review",
+      skills: [{ id: "review-id" }],
+      files: [{ name: "notes.txt", uri: "data:text/plain;base64,bm90ZXM=" }],
+    });
+    expect(root.composer.value()).toBe("");
+    expect(root.composer.skills()).toEqual([]);
+    expect(root.composer.files()).toEqual([]);
+    root.dispose();
+  });
+
+  it("keeps review comments and annotations attached when a command runs", async () => {
+    const command = settle();
+    const root = setup(undefined, command);
+    const { key } = seedReview(root);
+    root.annotationDrafts.add("session", annotationInput);
+    root.setCommands(inventory);
+    root.composer.input("/review");
+
+    await root.composer.submit();
+
+    expect(command).toHaveBeenCalledOnce();
+    expect(root.prompt).not.toHaveBeenCalled();
+    expect(root.reviewDrafts.get(key).comments).toHaveLength(1);
+    expect(root.annotationDrafts.get("session")).toHaveLength(1);
+    expect(root.composer.value()).toBe("");
+    root.dispose();
+  });
+
+  it("restores the draft and reports an uncertain command failure", async () => {
+    const command = vi.fn<Command>(() => Promise.reject(new Error("lost")));
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    root.composer.input("/review keep");
+
+    await root.composer.submit();
+
+    expect(root.composer.value()).toBe("/review keep");
+    expect(root.composer.error()).toContain("Couldn't confirm the command completed");
+    expect(root.composer.submitting()).toBe(false);
+    root.dispose();
+  });
+
+  it("reports an unread attachment without dispatching the command", async () => {
+    const spy = vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(readFailed);
+    try {
+      const command = settle();
+      const root = setup(undefined, command);
+      root.setSelectedID("session");
+      root.setCommands(inventory);
+      root.composer.pasteFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+      root.composer.input("/review");
+
+      await root.composer.submit();
+
+      expect(command).not.toHaveBeenCalled();
+      expect(root.composer.error()).toContain("command was not sent");
+      expect(root.composer.files()).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("blocks a leading slash until the inventory is ready", async () => {
+    const command = settle();
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands({ state: "loading", items: [] });
+    root.composer.input("/review");
+
+    await root.composer.submit();
+
+    expect(command).not.toHaveBeenCalled();
+    expect(root.prompt).not.toHaveBeenCalled();
+    expect(root.composer.error()).toContain("still loading");
+
+    root.setCommands(inventory);
+    expect(root.composer.error()).toBeUndefined();
+
+    await root.composer.submit();
+    expect(command).toHaveBeenCalledOnce();
+    root.dispose();
+  });
+
+  it("updates and clears the blocked inventory notice as the inventory changes", async () => {
+    const command = settle();
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands({ state: "loading", items: [] });
+    root.composer.input("/review");
+    await root.composer.submit();
+    expect(root.composer.error()).toContain("still loading");
+
+    root.setCommands({ state: "failed", items: [] });
+    expect(root.composer.error()).toContain("couldn't be loaded");
+
+    root.setCommands(inventory);
+    expect(root.composer.error()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("shows a blocked notice instead of an older prompt failure", async () => {
+    const prompt = vi.fn<Prompt>(() => Promise.reject(new Error("offline")));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.composer.input("keep me");
+    await root.composer.submit();
+    expect(root.composer.error()).toContain("draft has been restored");
+
+    root.setCommands({ state: "loading", items: [] });
+    root.composer.input("/review");
+    await root.composer.submit();
+
+    expect(prompt).toHaveBeenCalledTimes(1);
+    expect(root.composer.error()).toContain("still loading");
+    root.dispose();
+  });
+
+  it("still reconciles a failed prompt echo after a blocked command attempt", async () => {
+    const prompt = vi.fn<Prompt>(() => Promise.reject(new Error("offline")));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.annotationDrafts.add("session", annotationInput);
+    root.composer.input("keep me");
+    await root.composer.submit();
+    expect(root.composer.error()).toContain("draft has been restored");
+
+    root.setCommands({ state: "loading", items: [] });
+    root.composer.input("/review");
+    await root.composer.submit();
+    expect(root.composer.error()).toContain("still loading");
+
+    const submitted = prompt.mock.calls[0]![0];
+    root.setMessage("session", {
+      id: submitted.id!,
+      type: "user",
+      text: submitted.text,
+      metadata: submitted.metadata,
+      time: { created: 1 },
+    });
+    await vi.waitFor(() => expect(root.annotationDrafts.get("session")).toEqual([]));
+    root.dispose();
+  });
+
+  it("sends an unknown leading slash as a prompt once the inventory is ready", async () => {
+    const command = settle();
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    root.composer.input("/unknown hi");
+    expect(root.composer.command()).toBeUndefined();
+
+    await root.composer.submit();
+
+    expect(command).not.toHaveBeenCalled();
+    expect(root.prompt).toHaveBeenCalledWith(expect.objectContaining({ text: "/unknown hi" }));
+    root.dispose();
+  });
+
+  it("forgets a superseded failed prompt instead of reconciling a later echo", async () => {
+    const prompt = vi.fn<Prompt>(() => Promise.reject(new Error("offline")));
+    const command = settle();
+    const root = setup(prompt, command);
+    root.setSelectedID("session");
+    root.annotationDrafts.add("session", annotationInput);
+    root.composer.input("keep me");
+    await root.composer.submit();
+    expect(root.composer.error()).toContain("draft has been restored");
+
+    root.setCommands(inventory);
+    root.composer.input("/review");
+    await root.composer.submit();
+    expect(command).toHaveBeenCalledOnce();
+    expect(root.composer.error()).toBeUndefined();
+
+    root.annotationDrafts.add("session", { ...annotationInput, body: "newer note" });
+    const superseded = prompt.mock.calls[0]![0];
+    root.setMessage("session", {
+      id: superseded.id!,
+      type: "user",
+      text: superseded.text,
+      metadata: superseded.metadata,
+      time: { created: 1 },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(root.annotationDrafts.get("session").map((draft) => draft.body)).toEqual([
+      annotationInput.body,
+      "newer note",
+    ]);
+    root.dispose();
+  });
+
+  it("keeps edits made while command admission is in flight", async () => {
+    let resolve!: () => void;
+    const command = vi.fn<Command>(
+      (_input, options) =>
+        new Promise<void>((done, reject) => {
+          resolve = done;
+          options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    root.composer.input("/review submitted");
+    const submission = root.composer.submit();
+    await vi.waitFor(() => expect(command).toHaveBeenCalledOnce());
+
+    root.composer.input("/review edited");
+    resolve();
+    await submission;
+
+    expect(root.composer.value()).toBe("/review edited");
+    expect(root.composer.submitting()).toBe(false);
+    root.dispose();
+  });
+
+  it("removes only the submitted file identities from a successful command", async () => {
+    let resolve!: () => void;
+    const command = vi.fn<Command>(
+      (_input, options) =>
+        new Promise<void>((done, reject) => {
+          resolve = done;
+          options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    const sent = new File(["sent"], "sent.txt", { type: "text/plain" });
+    const next = new File(["next"], "next.txt", { type: "text/plain" });
+    root.composer.pasteFiles([sent]);
+    root.composer.input("/review");
+    const submission = root.composer.submit();
+    await vi.waitFor(() => expect(command).toHaveBeenCalledOnce());
+
+    root.composer.pasteFiles([next]);
+    resolve();
+    await submission;
+
+    expect(root.composer.files()).toEqual([next]);
+    root.dispose();
+  });
+
+  it("ignores a command result after the session is cleared", async () => {
+    let resolve!: () => void;
+    const command = vi.fn<Command>(
+      (_input, options) =>
+        new Promise<void>((done, reject) => {
+          resolve = done;
+          options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    root.composer.input("/review");
+    const submission = root.composer.submit();
+    await vi.waitFor(() => expect(command).toHaveBeenCalledOnce());
+
+    root.composer.clear("session");
+    root.composer.input("/review newer");
+    resolve();
+    await submission;
+
+    expect(root.composer.value()).toBe("/review newer");
+    expect(root.composer.error()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("does not start a second submission while a command is active", async () => {
+    const command = vi.fn<Command>(
+      (_input, options) =>
+        new Promise<void>((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    root.composer.input("/review");
+    void root.composer.submit().catch(() => undefined);
+    await vi.waitFor(() => expect(command).toHaveBeenCalledOnce());
+
+    await root.composer.submit();
+
+    expect(command).toHaveBeenCalledOnce();
+    root.dispose();
+  });
+
+  it("aborts and settles command admission when the workspace shuts down", async () => {
+    let aborted = false;
+    const command = vi.fn<Command>(
+      (_input, options) =>
+        new Promise<void>((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(new Error("aborted"));
+          });
+        }),
+    );
+    const root = setup(undefined, command);
+    root.setSelectedID("session");
+    root.setCommands(inventory);
+    root.composer.input("/review");
+    const admission = root.composer.submit().catch(() => undefined);
+    await vi.waitFor(() => expect(command).toHaveBeenCalledOnce());
+
+    await Effect.runPromise(Scope.close(root.effects.scope, Exit.void));
+    await admission;
+
+    expect(aborted).toBe(true);
+    expect(root.composer.value()).toBe("/review");
+    root.dispose();
+  });
+
+  it("keeps a command failure for another session out of the selected session", async () => {
+    let reject!: (cause: Error) => void;
+    const command = vi.fn<Command>(
+      (_input, options) =>
+        new Promise<void>((_resolve, error) => {
+          reject = error;
+          options?.signal?.addEventListener("abort", () => error(new Error("aborted")));
+        }),
+    );
+    const root = setup(undefined, command);
+    root.setSelectedID("one");
+    root.setCommands(inventory);
+    root.composer.input("/review");
+    const submission = root.composer.submit();
+    await vi.waitFor(() => expect(command).toHaveBeenCalledOnce());
+
+    root.setSelectedID("two");
+    reject(new Error("lost"));
+    await submission;
+
+    expect(root.composer.error()).toBeUndefined();
+    root.setSelectedID("one");
+    // Command failures are session-transient, matching prompt failure policy.
+    expect(root.composer.value()).toBe("/review");
+    expect(root.composer.error()).toBeUndefined();
     root.dispose();
   });
 });

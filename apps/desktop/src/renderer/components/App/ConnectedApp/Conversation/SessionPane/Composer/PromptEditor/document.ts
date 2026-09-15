@@ -84,7 +84,9 @@ export function slashQuery(
   const { $from, empty } = state.selection;
   if (!empty || !$from.parent.isTextblock) return undefined;
   const before = $from.parent.textBetween(0, $from.parentOffset, "", "\ufffc");
-  const match = /(?:^|\s)\/([^\s/]*)$/.exec(before);
+  // Names may contain slashes (nested command directories); the whitespace or
+  // start guard still keeps path text like `src/review` out of the menu.
+  const match = /(?:^|\s)\/([^\s]*)$/.exec(before);
   return match
     ? { text: match[1]!, from: $from.pos - match[1]!.length - 1, to: $from.pos }
     : undefined;

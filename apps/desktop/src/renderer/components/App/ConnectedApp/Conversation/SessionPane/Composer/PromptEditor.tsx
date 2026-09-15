@@ -7,7 +7,17 @@ import { keymap } from "prosemirror-keymap";
 import { Slice } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
-import { batch, createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  type JSX,
+} from "solid-js";
 import { render } from "solid-js/web";
 import type { ComposerProps } from "../Composer.tsx";
 import { fromDraft, schema, slashQuery, toDraft } from "./PromptEditor/document.ts";
@@ -16,11 +26,32 @@ import "./PromptEditor/PromptEditor.css";
 
 type EditorProps = Pick<
   ComposerProps,
-  "value" | "skills" | "skillCatalog" | "sessionID" | "onInput" | "onPasteFiles"
+  "value" | "skills" | "catalog" | "sessionID" | "onInput" | "onPasteFiles"
 > & {
   placeholder: string;
   onKeyDown: (event: KeyboardEvent) => void;
   ref: (element: HTMLDivElement) => void;
+};
+
+type Suggestion =
+  | {
+      readonly kind: "command";
+      readonly key: string;
+      readonly name: string;
+      readonly description?: string;
+    }
+  | {
+      readonly kind: "skill";
+      readonly key: string;
+      readonly id: string;
+      readonly name: string;
+      readonly description?: string;
+    };
+
+type SuggestionSection = {
+  readonly label: "Commands" | "Skills";
+  readonly state: "loading" | "ready" | "failed";
+  readonly items: readonly Suggestion[];
 };
 
 /** ProseMirror owns editing; Solid owns suggestions and each skill's node view. */
@@ -30,18 +61,84 @@ export function PromptEditor(props: EditorProps) {
   let list: ListRef | undefined;
   let sessionID = props.sessionID;
   const [query, setQuery] = createSignal<ReturnType<typeof slashQuery>>();
-  const close = () => setQuery(undefined);
+  const [selectable, setSelectable] = createSignal(false);
+  const close = () => {
+    setQuery(undefined);
+    setSelectable(false);
+  };
   const plugins = [
     history(),
     keymap({ "Mod-z": undo, "Shift-Mod-z": redo, "Mod-y": redo, "Shift-Enter": splitBlock }),
     keymap(baseKeymap),
   ];
-  const insert = (skill: { id: string; name: string } | undefined) => {
+  const sections = createMemo<SuggestionSection[]>(() => {
+    const current = query();
+    const result: SuggestionSection[] = [];
+    const commands = props.catalog?.commands;
+    // Commands only run at the start of the message, so they are suggested there.
+    if (current !== undefined && current.from === 1) {
+      const state = commands?.state ?? "ready";
+      result.push({
+        label: "Commands",
+        state,
+        items:
+          state === "ready"
+            ? (commands?.items ?? []).map((item) => ({
+                kind: "command" as const,
+                key: `command:${item.name}`,
+                name: item.name,
+                description: item.description,
+              }))
+            : [],
+      });
+    }
+    const skills = props.catalog?.skills;
+    const skillState = skills?.state ?? "ready";
+    result.push({
+      label: "Skills",
+      state: skillState,
+      items:
+        skillState === "ready"
+          ? (skills?.items ?? []).map((item) => ({
+              kind: "skill" as const,
+              key: `skill:${item.id}`,
+              id: item.id,
+              name: item.name,
+              description: item.description,
+            }))
+          : [],
+    });
+    return result;
+  });
+  const items = createMemo(() => sections().flatMap((section) => section.items));
+  const unavailable = createMemo(() => sections().filter((section) => section.state !== "ready"));
+  const listMounted = createMemo(
+    () => query() !== undefined && (items().length > 0 || unavailable().length === 0),
+  );
+  createEffect(() => {
+    if (!listMounted()) setSelectable(false);
+  });
+  const insert = (suggestion: Suggestion | undefined) => {
     const range = query();
-    if (!skill || !range || !view) return;
-    const content = [schema.node("skill", skill), schema.text(" ")];
-    const tr = closeHistory(view.state.tr).replaceWith(range.from, range.to, content);
-    tr.setSelection(TextSelection.create(tr.doc, range.from + 2));
+    if (
+      !suggestion ||
+      !range ||
+      !view ||
+      !items().some((candidate) => candidate.key === suggestion.key)
+    ) {
+      return;
+    }
+    const tr = closeHistory(view.state.tr);
+    if (suggestion.kind === "command") {
+      tr.replaceWith(range.from, range.to, schema.text(`/${suggestion.name} `));
+      tr.setSelection(TextSelection.create(tr.doc, range.from + suggestion.name.length + 2));
+    } else {
+      tr.replaceWith(range.from, range.to, [
+        schema.node("skill", { id: suggestion.id, name: suggestion.name }),
+        schema.text(" "),
+      ]);
+      tr.setSelection(TextSelection.create(tr.doc, range.from + 2));
+    }
     view.dispatch(tr);
     view.focus();
     close();
@@ -77,10 +174,19 @@ export function PromptEditor(props: EditorProps) {
               close();
               return true;
             }
-            if (["ArrowDown", "ArrowUp", "Enter"].includes(event.key) && !event.shiftKey) {
-              if (!props.skillCatalog || props.skillCatalog.state === "ready")
+            if (!event.shiftKey) {
+              if (
+                (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+                listMounted() &&
+                items().length > 0
+              ) {
                 list?.onKeyDown(event);
-              return true;
+                return true;
+              }
+              if (event.key === "Enter" && listMounted() && selectable()) {
+                list?.onKeyDown(event);
+                return true;
+              }
             }
           }
           props.onKeyDown(event);
@@ -182,52 +288,62 @@ export function PromptEditor(props: EditorProps) {
   return (
     <div class="prompt-editor">
       <Show when={query() !== undefined}>
-        <section class="prompt-skill-menu" aria-label="Skill suggestions">
-          <div class="prompt-skill-heading">
-            <Icon name="post-skill" size="small" />
-            Skills
-          </div>
-          <Show
-            when={!props.skillCatalog || props.skillCatalog.state === "ready"}
-            fallback={
-              <div class="prompt-skill-status" role="status">
-                {props.skillCatalog?.state === "loading"
-                  ? "Loading skills…"
-                  : "Couldn’t load skills."}
-                <Show when={props.skillCatalog?.state === "failed"}>
-                  <button type="button" onClick={() => props.skillCatalog?.onRetry()}>
-                    Try again
-                  </button>
-                </Show>
-              </div>
-            }
-          >
+        <section class="prompt-suggestion-menu" aria-label="Suggestions">
+          <Show when={listMounted()}>
             <List
               ref={(value) => {
                 list = value;
               }}
               class="composer-model-list"
-              items={[...(props.skillCatalog?.items ?? [])]}
-              key={(skill) => skill.id}
+              items={[...items()]}
+              key={(suggestion) => suggestion.key}
               filterKeys={["name", "description"]}
               filter={query()?.text ?? ""}
               search={false}
+              groupBy={(suggestion) => (suggestion.kind === "command" ? "Commands" : "Skills")}
+              sortGroupsBy={(left, right) => groupRank(left.category) - groupRank(right.category)}
+              groupHeader={renderSuggestionGroupHeader}
               emptyMessage={
-                props.skillCatalog?.items.length
-                  ? "No matching skills."
-                  : "No skills available for this project."
+                items().length
+                  ? "No matching commands or skills."
+                  : "No commands or skills available for this project."
               }
+              onMove={(suggestion) => setSelectable(suggestion !== undefined)}
               onSelect={insert}
             >
-              {(skill) => (
-                <span class="prompt-skill-option">
-                  <span>/{skill.name}</span>
-                  <span>{skill.description}</span>
+              {(suggestion) => (
+                <span class="prompt-suggestion-option">
+                  <span>/{suggestion.name}</span>
+                  <span>{suggestion.description}</span>
                 </span>
               )}
             </List>
           </Show>
-          <div class="prompt-skill-heading">↑ ↓ navigate · Enter select · Esc close</div>
+          <Show when={unavailable().length > 0}>
+            <div class="prompt-suggestion-status" role="status">
+              <For each={unavailable()}>
+                {(section) => (
+                  <span>
+                    {section.state === "loading"
+                      ? `Loading ${section.label.toLowerCase()}…`
+                      : `Couldn’t load ${section.label.toLowerCase()}.`}
+                    <Show when={section.state === "failed"}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          props.catalog?.onRetry();
+                          view?.focus();
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </Show>
+                  </span>
+                )}
+              </For>
+            </div>
+          </Show>
+          <div class="prompt-suggestion-footer">↑ ↓ navigate · Enter select · Esc close</div>
         </section>
       </Show>
       <div
@@ -237,5 +353,20 @@ export function PromptEditor(props: EditorProps) {
         }}
       />
     </div>
+  );
+}
+
+const groupRank = (category: string): number => (category === "Commands" ? 0 : 1);
+
+function renderSuggestionGroupHeader(group: { readonly category: string }): JSX.Element {
+  return (
+    <span class="prompt-suggestion-heading">
+      <Icon
+        name={group.category === "Commands" ? "terminal-active" : "post-skill"}
+        size="small"
+        aria-hidden="true"
+      />
+      {group.category}
+    </span>
   );
 }

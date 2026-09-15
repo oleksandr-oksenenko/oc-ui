@@ -16,20 +16,12 @@
   text-box: trim-both ex alphabetic;
 }
 
-.prompt-skill-status button {
-  border: 0;
-  color: var(--oc-text-contrast);
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
-}
-
 .prompt-skill-chip [data-component="icon-button-v2"] {
   width: 16px;
   height: 16px;
 }
 
-.prompt-skill-menu {
+.prompt-suggestion-menu {
   z-index: 10;
   position: absolute;
   bottom: calc(100% + 8px);
@@ -43,7 +35,13 @@
   box-shadow: var(--oc-shadow-popover);
 }
 
-.prompt-skill-heading {
+.prompt-suggestion-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prompt-suggestion-footer {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -52,7 +50,7 @@
   font-size: var(--oc-type-caption-size);
 }
 
-.prompt-skill-option {
+.prompt-suggestion-option {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -61,14 +59,28 @@
   text-align: left;
 }
 
-.prompt-skill-status {
-  padding: 16px 8px;
-  font-size: var(--oc-type-body-size);
-}
-
-.prompt-skill-option span + span {
+.prompt-suggestion-option span + span {
   color: var(--oc-text-muted);
   font-size: var(--oc-type-caption-size);
+}
+
+.prompt-suggestion-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.prompt-suggestion-status button {
+  margin-left: 6px;
+  border: 0;
+  color: var(--oc-text-contrast);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 
 .prompt-editor {

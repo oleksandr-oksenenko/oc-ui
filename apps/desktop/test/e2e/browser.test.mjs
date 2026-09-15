@@ -900,6 +900,40 @@ describe.sequential("production browser app", () => {
     expect(await page.getByRole("list", { name: "Attachments", exact: true }).count()).toBe(0);
   });
 
+  it("runs a built-in slash command from the composer suggestions and clears the draft", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const available = await api.command.list({ location });
+    expect(available.data.map((command) => command.name)).toEqual(
+      expect.arrayContaining(["init", "review"]),
+    );
+    const session = await api.session.create({ title: "Slash commands", location });
+    await selectSession(session.title);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    await prompt.click();
+    await prompt.pressSequentially("/ini");
+    await page.getByText("Commands", { exact: true }).waitFor();
+    await page.getByRole("button", { name: /\/init/ }).waitFor();
+    await prompt.press("Enter");
+    await expect.poll(() => prompt.textContent()).toBe("/init ");
+    await prompt.pressSequentially("focus on scripts");
+
+    const admitted = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/session/${session.id}/command`) &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    const response = await admitted;
+    expect(response.ok()).toBe(true);
+    await expect.poll(() => prompt.textContent()).toBe("");
+    await idle();
+
+    const messages = await api.message.list({ sessionID: session.id });
+    const user = messages.data.filter((item) => item.type === "user").at(-1);
+    expect(user.text).toContain("focus on scripts");
+  });
+
   it("pastes screenshot and document attachments, preserves drafts across navigation, and sends their bytes", async () => {
     await ensureConnected();
     const session = await api.session.create({

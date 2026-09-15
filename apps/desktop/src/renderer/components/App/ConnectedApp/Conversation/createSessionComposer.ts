@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-solid";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 import type { SessionInboxDelivery, PromptSkillAttachment } from "@opencode-ai/client";
@@ -12,38 +12,78 @@ import type {
   ReviewDraftStore,
 } from "../../../../domain/index.ts";
 import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
+import { leadingCommandName, parseSessionCommand } from "../../../../opencode/session-command.ts";
 import { readPromptFile } from "../../../../opencode/read-prompt-file.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { createEffect, createMemo, type Accessor } from "solid-js";
 
-import type { ComposerReview } from "./SessionPane/Composer.tsx";
+import type { ComposerCatalog, ComposerReview } from "./SessionPane/Composer.tsx";
 
 const PROMPT_FAILURE_MESSAGE =
   "Couldn't confirm the message was sent. Your draft has been restored.";
+const COMMAND_FAILURE_MESSAGE =
+  "Couldn't confirm the command completed. Check the conversation before retrying; your draft has been restored.";
+const COMMAND_ATTACHMENT_FAILURE_MESSAGE =
+  "Couldn't read an attached file, so the command was not sent. Your draft has been restored.";
+const COMMAND_LOADING_MESSAGE = "Commands are still loading. Try again in a moment.";
+const COMMAND_UNAVAILABLE_MESSAGE = "Commands couldn't be loaded. Retry from the suggestions menu.";
+
+class CommandAttachmentError extends Schema.TaggedError<CommandAttachmentError>()(
+  "CommandAttachmentError",
+  {},
+) {}
 
 type SessionPrompt = ReturnType<typeof createSessionPrompt>;
 
-type SubmissionRequest = {
+type SubmissionBase = {
   readonly sessionID: string;
-  readonly id: string;
-  readonly prompt: SessionPrompt;
   readonly text: string;
   readonly skills: readonly PromptSkillAttachment[];
   readonly delivery: SessionInboxDelivery;
   readonly files: readonly File[];
+};
+
+type PromptSubmission = SubmissionBase & {
+  readonly kind: "prompt";
+  readonly id: string;
+  readonly prompt: SessionPrompt;
   readonly reviewSnapshot: ReturnType<ReviewDraftStore["capture"]> | undefined;
   readonly annotations: AnnotationDraftSnapshot;
+};
+
+type CommandSubmission = SubmissionBase & {
+  readonly kind: "command";
+  readonly name: string;
+  readonly arguments: string;
+};
+
+type SubmissionRequest = PromptSubmission | CommandSubmission;
+
+type CommandNotice = {
+  readonly sessionID: string;
+  readonly kind: "blocked" | "attachment" | "dispatch";
+};
+
+type AdmissionState = {
+  active: SubmissionRequest | undefined;
+  error: PromptSubmission | undefined;
+  commandNotice: CommandNotice | undefined;
+  failed: Readonly<Record<string, PromptSubmission | undefined>>;
 };
 
 type SessionComposerOptions = {
   readonly effects: WorkspaceOwner;
   readonly runtime: {
+    readonly api: {
+      readonly session: Pick<ConnectedRuntime["api"]["session"], "command">;
+    };
     readonly data: {
       readonly session: Pick<ConnectedRuntime["data"]["session"], "prompt"> & {
         readonly message: Pick<ConnectedRuntime["data"]["session"]["message"], "get">;
       };
     };
   };
+  readonly commands: Accessor<ComposerCatalog["commands"]>;
   readonly selectedID: Accessor<string | undefined>;
   readonly transcriptLoading: Accessor<boolean>;
   readonly transcriptError: Accessor<string | undefined>;
@@ -71,12 +111,14 @@ export type SessionComposerController = {
   readonly submitting: Accessor<boolean>;
   readonly error: Accessor<string | undefined>;
   readonly review: Accessor<ComposerReview | undefined>;
+  /** The recognized command invocation for the current draft, if any. */
+  readonly command: Accessor<string | undefined>;
   readonly input: (value: string, skills?: readonly PromptSkillAttachment[]) => void;
   readonly submit: (delivery?: SessionInboxDelivery) => Promise<void>;
   readonly clear: (sessionID: string) => void;
 };
 
-/** Owns session drafts and prompt admission for the selected conversation. */
+/** Owns session drafts, command recognition, and prompt admission for the selected conversation. */
 export function createSessionComposer(options: SessionComposerOptions): SessionComposerController {
   const { effects } = options;
   const drafts = createSessionDraftStore(effects);
@@ -102,32 +144,61 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
         files().filter((item) => item !== file),
       );
   };
-  const admission = Atom.make<{
-    active: SubmissionRequest | undefined;
-    error: SubmissionRequest | undefined;
-    failed: Readonly<Record<string, SubmissionRequest | undefined>>;
-  }>({ active: undefined, error: undefined, failed: {} });
+  const admission = Atom.make<AdmissionState>({
+    active: undefined,
+    error: undefined,
+    commandNotice: undefined,
+    failed: {},
+  });
   effects.mount(admission);
   const state = useAtomValue(() => admission);
   const activeRequest = () => effects.registry.get(admission).active;
   const setActiveRequest = (active: SubmissionRequest | undefined): void => {
     effects.registry.set(admission, { ...effects.registry.get(admission), active });
   };
-  const setErrorRequest = (error: SubmissionRequest | undefined): void => {
+  const setErrorRequest = (error: PromptSubmission | undefined): void => {
     effects.registry.set(admission, { ...effects.registry.get(admission), error });
   };
   const failedRequest = (sessionID: string) => effects.registry.get(admission).failed[sessionID];
-  const setFailedRequest = (sessionID: string, request: SubmissionRequest | undefined): void => {
+  const setFailedRequest = (sessionID: string, request: PromptSubmission | undefined): void => {
     const current = effects.registry.get(admission);
     effects.registry.set(admission, {
       ...current,
       failed: { ...current.failed, [sessionID]: request },
     });
   };
+  const setCommandNotice = (
+    sessionID: string,
+    kind: "blocked" | "attachment" | "dispatch" | undefined,
+  ): void => {
+    effects.registry.set(admission, {
+      ...effects.registry.get(admission),
+      commandNotice: kind === undefined ? undefined : { sessionID, kind },
+    });
+  };
 
   createEffect(() => {
     options.selectedID();
     setErrorRequest(undefined);
+    setCommandNotice(options.selectedID() ?? "", undefined);
+  });
+
+  // A blocked notice only describes an unavailable inventory.
+  createEffect(() => {
+    if (options.commands().state !== "ready") return;
+    const notice = state().commandNotice;
+    if (notice?.kind === "blocked" && notice.sessionID === options.selectedID()) {
+      setCommandNotice(notice.sessionID, undefined);
+    }
+  });
+
+  // A blocked notice stops applying when the draft is no longer a command.
+  createEffect(() => {
+    const notice = state().commandNotice;
+    if (notice?.kind !== "blocked" || notice.sessionID !== options.selectedID()) return;
+    if (leadingCommandName(drafts.get(notice.sessionID)) === undefined) {
+      setCommandNotice(notice.sessionID, undefined);
+    }
   });
 
   const value = createMemo(() => {
@@ -167,6 +238,17 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     return { count: comments.length, onDiscard: discard };
   });
 
+  const command = createMemo(() => {
+    const sessionID = options.selectedID();
+    if (sessionID === undefined) return undefined;
+    const entries = options.commands();
+    if (entries.state !== "ready") return undefined;
+    return parseSessionCommand(
+      drafts.get(sessionID),
+      entries.items.map((item) => item.name),
+    )?.name;
+  });
+
   const input = (nextValue: string, skills: readonly PromptSkillAttachment[] = []): void => {
     const sessionID = options.selectedID();
     if (sessionID === undefined) return;
@@ -176,9 +258,72 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const isSubmissionAllowed = (sessionID: string | undefined): sessionID is string =>
     sessionID !== undefined && !disabled();
 
-  const captureDraft = (sessionID: string) => {
+  const submit = (delivery: SessionInboxDelivery = "steer"): Promise<void> => {
+    const sessionID = options.selectedID();
+    if (!isSubmissionAllowed(sessionID)) return Promise.resolve();
     const text = drafts.get(sessionID);
     const skills = drafts.skills(sessionID);
+    const attached = effects.registry.get(fileDrafts)[sessionID] ?? [];
+    const name = leadingCommandName(text);
+    const inventory = options.commands();
+
+    // A leading slash with an unloaded inventory cannot be classified. Sending
+    // it as prompt text would silently consume attachments the command path
+    // exists to preserve, so the caller gets an explicit notice instead.
+    if (name !== undefined && inventory.state !== "ready") {
+      // The blocked submission is the newest visible failure; keep any failed
+      // prompt record so its durable echo can still reconcile.
+      setErrorRequest(undefined);
+      setCommandNotice(sessionID, "blocked");
+      return Promise.resolve();
+    }
+
+    if (name !== undefined) {
+      const invocation = parseSessionCommand(
+        text,
+        inventory.items.map((item) => item.name),
+      );
+      if (invocation !== undefined) {
+        return submitCommand(sessionID, invocation, text, skills, attached, delivery);
+      }
+    }
+
+    return submitPrompt(sessionID, text, skills, attached, delivery);
+  };
+
+  const submitCommand = (
+    sessionID: string,
+    invocation: { readonly name: string; readonly arguments: string },
+    text: string,
+    skills: readonly PromptSkillAttachment[],
+    attached: readonly File[],
+    delivery: SessionInboxDelivery,
+  ): Promise<void> => {
+    const failed = failedRequest(sessionID);
+    if (failed !== undefined) forgetFailedRequest(failed);
+    const request: CommandSubmission = {
+      kind: "command",
+      sessionID,
+      name: invocation.name,
+      arguments: invocation.arguments,
+      text,
+      skills,
+      delivery,
+      files: attached,
+    };
+    setCommandNotice(sessionID, undefined);
+    setErrorRequest(undefined);
+    setActiveRequest(request);
+    return admit(request, runCommand(request));
+  };
+
+  const submitPrompt = (
+    sessionID: string,
+    text: string,
+    skills: readonly PromptSkillAttachment[],
+    attached: readonly File[],
+    delivery: SessionInboxDelivery,
+  ): Promise<void> => {
     const key = activeReviewKey();
     const reviewCapture = key === undefined ? undefined : options.review.drafts.capture(key);
     const reviewComments = reviewCapture?.comments ?? [];
@@ -186,24 +331,14 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     const annotationComments = options.annotations
       .get(sessionID)
       .filter((comment) => comment.body.trim() !== "");
-    const attached = effects.registry.get(fileDrafts)[sessionID] ?? [];
     if (
       text.trim() === "" &&
       reviewComments.length === 0 &&
       annotationComments.length === 0 &&
       attached.length === 0
     ) {
-      return undefined;
+      return Promise.resolve();
     }
-    return { text, skills, reviewSnapshot, reviewComments, annotationComments, attached };
-  };
-
-  const submit = (delivery: SessionInboxDelivery = "steer"): Promise<void> => {
-    const sessionID = options.selectedID();
-    if (!isSubmissionAllowed(sessionID)) return Promise.resolve();
-    const captured = captureDraft(sessionID);
-    if (captured === undefined) return Promise.resolve();
-    const { text, skills, reviewSnapshot, reviewComments, annotationComments, attached } = captured;
 
     const retry = failedRequest(sessionID);
     const candidatePrompt = createSessionPrompt({
@@ -221,7 +356,8 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     if (retry !== undefined && !retrying) forgetFailedRequest(retry);
     const annotationSnapshot = options.annotations.take(sessionID);
 
-    const request: SubmissionRequest = {
+    const request: PromptSubmission = {
+      kind: "prompt",
       sessionID,
       id: retrying ? retry.id : SessionMessage.ID.create(),
       prompt: retrying ? retry.prompt : candidatePrompt,
@@ -233,38 +369,58 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       annotations: annotationSnapshot,
     };
 
+    setCommandNotice(sessionID, undefined);
     setErrorRequest(undefined);
     setFailedRequest(sessionID, undefined);
     setActiveRequest(request);
-    return effects.runPromise(
-      Effect.forEach(request.files, readPromptFile).pipe(
-        Effect.flatMap((encodedFiles) =>
-          effects.request(() =>
-            options.runtime.data.session.prompt({
-              sessionID,
-              id: request.id,
-              delivery: request.delivery,
-              ...request.prompt,
-              files: encodedFiles.length > 0 ? encodedFiles : undefined,
-            }),
-          ),
-        ),
-        Effect.match({
-          onSuccess: () => completeSubmission(request),
-          onFailure: () => {
-            if (activeRequest() !== request) return;
-            // The SDK rolls back before rejecting. A retained row is its durable acknowledgement.
-            if (matchingMessage(request)) completeSubmission(request);
-            else restoreFailed(request);
-          },
-        }),
-        Effect.onInterrupt(() =>
-          Effect.sync(() => {
-            if (activeRequest() !== request) return;
-            if (matchingMessage(request)) completeSubmission(request);
-            else restoreFailed(request);
+    return admit(request, runPrompt(request));
+  };
+
+  const runPrompt = (request: PromptSubmission) =>
+    Effect.forEach(request.files, readPromptFile).pipe(
+      Effect.flatMap((encodedFiles) =>
+        effects.request(() =>
+          options.runtime.data.session.prompt({
+            sessionID: request.sessionID,
+            id: request.id,
+            delivery: request.delivery,
+            ...request.prompt,
+            files: encodedFiles.length > 0 ? encodedFiles : undefined,
           }),
         ),
+      ),
+    );
+
+  const runCommand = (request: CommandSubmission) =>
+    Effect.forEach(request.files, readPromptFile).pipe(
+      Effect.mapError(() => new CommandAttachmentError()),
+      Effect.flatMap((encodedFiles) =>
+        effects.request((signal) =>
+          options.runtime.api.session.command(
+            {
+              sessionID: request.sessionID,
+              command: request.name,
+              text: request.arguments,
+              // The server expands the template into new text, so the draft's
+              // mention offsets no longer describe it.
+              skills: request.skills.length ? request.skills.map(({ id }) => ({ id })) : undefined,
+              delivery: request.delivery,
+              files: encodedFiles.length > 0 ? encodedFiles : undefined,
+            },
+            { signal },
+          ),
+        ),
+      ),
+    );
+
+  const admit = <A, E>(request: SubmissionRequest, work: Effect.Effect<A, E>) =>
+    effects.runPromise(
+      work.pipe(
+        Effect.match({
+          onSuccess: () => completeSubmission(request),
+          onFailure: (cause) => failSubmission(request, cause),
+        }),
+        Effect.onInterrupt(() => Effect.sync(() => failSubmission(request))),
         Effect.ensuring(
           Effect.sync(() => {
             if (activeRequest() === request) setActiveRequest(undefined);
@@ -272,7 +428,6 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
         ),
       ),
     );
-  };
 
   // A durable echo may arrive after the SDK restored our draft. The row itself
   // is the authority; the failed request only supplies the exact identity and
@@ -295,6 +450,9 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     if (activeRequest()?.sessionID === sessionID) {
       setActiveRequest(undefined);
     }
+    if (effects.registry.get(admission).commandNotice?.sessionID === sessionID) {
+      setCommandNotice(sessionID, undefined);
+    }
   };
 
   return {
@@ -305,18 +463,36 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     removeFile,
     disabled,
     submitting,
-    error: () => (state().error === undefined ? undefined : PROMPT_FAILURE_MESSAGE),
+    error: () => {
+      const notice = state().commandNotice;
+      if (notice !== undefined && notice.sessionID === options.selectedID()) {
+        if (notice.kind === "blocked") {
+          if (options.commands().state === "ready") return undefined;
+          return options.commands().state === "loading"
+            ? COMMAND_LOADING_MESSAGE
+            : COMMAND_UNAVAILABLE_MESSAGE;
+        }
+        return notice.kind === "attachment"
+          ? COMMAND_ATTACHMENT_FAILURE_MESSAGE
+          : COMMAND_FAILURE_MESSAGE;
+      }
+      return state().error === undefined ? undefined : PROMPT_FAILURE_MESSAGE;
+    },
     review,
+    command,
     input,
     submit,
     clear,
   };
 
   function completeSubmission(request: SubmissionRequest): void {
-    if (activeRequest() !== request && failedRequest(request.sessionID) !== request) {
+    if (
+      activeRequest() !== request &&
+      (request.kind === "command" || failedRequest(request.sessionID) !== request)
+    ) {
       return;
     }
-    if (failedRequest(request.sessionID) === request) {
+    if (request.kind === "prompt" && failedRequest(request.sessionID) === request) {
       options.annotations.clearIfUnchanged(request.annotations);
     }
     drafts.clearIfUnchanged(request.sessionID, request.text, request.skills);
@@ -326,19 +502,47 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
         (file) => !request.files.includes(file),
       ),
     );
-    if (request.reviewSnapshot !== undefined) {
+    if (request.kind === "prompt" && request.reviewSnapshot !== undefined) {
       options.review.drafts.clearIfUnchanged(request.reviewSnapshot);
     }
-    if (failedRequest(request.sessionID) === request) {
+    if (request.kind === "prompt" && failedRequest(request.sessionID) === request) {
       setFailedRequest(request.sessionID, undefined);
     }
-    if (effects.registry.get(admission).error === request) setErrorRequest(undefined);
+    if (request.kind === "prompt" && effects.registry.get(admission).error === request) {
+      setErrorRequest(undefined);
+    }
+    if (
+      request.kind === "command" &&
+      effects.registry.get(admission).commandNotice?.sessionID === request.sessionID
+    ) {
+      setCommandNotice(request.sessionID, undefined);
+    }
     if (activeRequest() === request) {
       setActiveRequest(undefined);
     }
   }
 
-  function matchingMessage(request: SubmissionRequest): boolean {
+  function failSubmission(request: SubmissionRequest, cause?: unknown): void {
+    if (activeRequest() !== request) return;
+    if (request.kind === "prompt" && matchingMessage(request)) {
+      completeSubmission(request);
+      return;
+    }
+    if (request.kind === "prompt") {
+      restoreFailed(request);
+      return;
+    }
+    if (options.selectedID() === request.sessionID) {
+      setErrorRequest(undefined);
+      setCommandNotice(
+        request.sessionID,
+        Schema.is(CommandAttachmentError)(cause) ? "attachment" : "dispatch",
+      );
+    }
+    setActiveRequest(undefined);
+  }
+
+  function matchingMessage(request: PromptSubmission): boolean {
     const message = options.runtime.data.session.message.get(request.sessionID, request.id);
     return (
       message?.type === "user" &&
@@ -351,13 +555,13 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     );
   }
 
-  function forgetFailedRequest(request: SubmissionRequest): void {
+  function forgetFailedRequest(request: PromptSubmission): void {
     if (failedRequest(request.sessionID) !== request) return;
     setFailedRequest(request.sessionID, undefined);
     if (effects.registry.get(admission).error === request) setErrorRequest(undefined);
   }
 
-  function restoreFailed(request: SubmissionRequest): void {
+  function restoreFailed(request: PromptSubmission): void {
     options.annotations.restore(request.annotations);
     setFailedRequest(request.sessionID, request);
     if (options.selectedID() === request.sessionID) setErrorRequest(request);

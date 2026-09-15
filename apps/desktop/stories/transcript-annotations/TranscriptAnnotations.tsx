@@ -135,6 +135,11 @@ function TranscriptAnnotationsContent(
   const composer = createSessionComposer({
     effects: props.effects,
     runtime: {
+      api: {
+        session: {
+          command: () => Promise.resolve(),
+        },
+      },
       data: {
         session: {
           message: {
@@ -185,6 +190,7 @@ function TranscriptAnnotationsContent(
         },
       },
     },
+    commands: () => ({ state: "ready", items: [] }),
     selectedID,
     transcriptLoading: () => false,
     transcriptError: () => undefined,

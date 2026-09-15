@@ -6,6 +6,12 @@ import { expect, fireEvent, fn, userEvent, within, waitFor } from "storybook/tes
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
 import "./SkillsComposer.css";
+
+const commands = [
+  { name: "init", description: "Guided AGENTS.md setup." },
+  { name: "compact", description: "Compact the current session." },
+  { name: "nested/format", description: "Format a nested component." },
+];
 const skills = [
   {
     id: "review",
@@ -29,6 +35,19 @@ const skills = [
   },
 ];
 
+type SectionState = "ready" | "loading" | "empty" | "failed";
+
+function section<T>(state: SectionState, items: readonly T[]) {
+  return {
+    get state(): "loading" | "ready" | "failed" {
+      return state === "empty" ? "ready" : state;
+    },
+    get items(): readonly T[] {
+      return state === "ready" ? items : [];
+    },
+  };
+}
+
 function historyKey(prompt: HTMLElement, redo = false) {
   return fireEvent.keyDown(prompt, {
     key: "z",
@@ -40,29 +59,42 @@ function historyKey(prompt: HTMLElement, redo = false) {
   });
 }
 
-function SkillsComposerFixture(props: {
-  state?: "ready" | "loading" | "empty" | "failed";
+function ComposerSuggestionsFixture(props: {
+  commandState?: SectionState;
+  skillState?: SectionState;
+  command?: string;
+  comments?: boolean;
   onSubmit?: (text: string, skills: readonly PromptSkillAttachment[]) => void;
 }) {
   const [value, setValue] = createSignal("");
   const [selected, setSelected] = createSignal<readonly PromptSkillAttachment[]>([]);
-  const [state, setState] = createSignal(props.state ?? "ready");
+  const [commandState, setCommandState] = createSignal(props.commandState ?? "ready");
+  const [skillState, setSkillState] = createSignal(props.skillState ?? "ready");
   const [sent, setSent] = createSignal("");
   return (
     <div class="skills-story-frame">
-      <p class="skills-story-intro">Type / to add a skill to your message.</p>
+      <p class="skills-story-intro">Type / to run a command or add a skill to your message.</p>
       <Composer
         value={value()}
         skills={selected()}
-        skillCatalog={{
-          get state() {
-            const current = state();
-            return current === "empty" ? "ready" : current;
+        command={props.command}
+        review={props.comments ? { count: 2, onDiscard: () => undefined } : undefined}
+        annotations={
+          props.comments
+            ? { count: 1, onOpen: () => undefined, onDiscard: () => undefined }
+            : undefined
+        }
+        catalog={{
+          get commands() {
+            return section(commandState(), commands);
           },
-          get items() {
-            return state() === "empty" ? [] : skills;
+          get skills() {
+            return section(skillState(), skills);
           },
-          onRetry: () => setState("ready"),
+          onRetry: () => {
+            setCommandState("ready");
+            setSkillState("ready");
+          },
         }}
         action="send"
         disabled={false}
@@ -89,18 +121,104 @@ function SkillsComposerFixture(props: {
   );
 }
 const meta = {
-  title: "Composer/Skills",
-  component: SkillsComposerFixture,
+  title: "Composer/Suggestions",
+  component: ComposerSuggestionsFixture,
   parameters: { layout: "centered" },
-} satisfies Meta<typeof SkillsComposerFixture>;
+} satisfies Meta<typeof ComposerSuggestionsFixture>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Interactive: Story = {};
 export const Suggestions: Story = {
   play: async ({ canvasElement }) => {
-    await userEvent.type(within(canvasElement).getByRole("textbox", { name: "Prompt" }), "/");
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "/");
+    await expect(canvas.getByText("Commands")).toBeVisible();
+    await expect(canvas.getByText("Skills")).toBeVisible();
   },
 };
+
+export const CommandInsertion: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "/ini");
+    await expect(canvas.getByText("/init", { exact: true })).toBeVisible();
+    await userEvent.keyboard("{Enter}");
+    await userEvent.type(prompt, "src", { skipClick: true });
+    await expect(prompt).toHaveTextContent("/init src");
+    await expect(canvas.queryByRole("region", { name: "Suggestions" })).toBeNull();
+  },
+};
+
+export const NestedCommandInsertion: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "/nested");
+    await expect(canvas.getByText("/nested/format", { exact: true })).toBeVisible();
+    await userEvent.keyboard("{Enter}");
+    await expect(prompt).toHaveTextContent("/nested/format");
+  },
+};
+
+export const CommandsHiddenAfterSkill: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "/rev");
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
+    await userEvent.type(prompt, "/simp", { skipClick: true });
+    await expect(canvas.queryByText("Commands")).toBeNull();
+    await expect(canvas.getByText("/simplify", { exact: true })).toBeVisible();
+  },
+};
+
+export const NoMatchSubmits: Story = {
+  args: { onSubmit: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "/zzz");
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onSubmit).toHaveBeenCalledWith("/zzz", []);
+    await expect(prompt).toHaveTextContent("");
+  },
+};
+
+export const AbsolutePathSubmits: Story = {
+  args: { onSubmit: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "Inspect /tmp/example");
+    await expect(canvas.queryByText("Commands")).toBeNull();
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onSubmit).toHaveBeenCalledWith("Inspect /tmp/example", []);
+  },
+};
+
+export const CommandsHiddenMidMessage: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "Update /sim");
+    await expect(canvas.queryByText("Commands")).toBeNull();
+    await expect(canvas.getByText("/simplify", { exact: true })).toBeVisible();
+  },
+};
+
+export const CommandKeepsComments: Story = {
+  args: { command: "init", comments: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByText("Review comments and annotations stay attached for your next message."),
+    ).toBeVisible();
+    await expect(canvas.getByText("Code review · 2 comments")).toBeVisible();
+  },
+};
+
 export const MultipleSkills: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -120,19 +238,58 @@ export const SlashSuggestionsAndDismissal: Story = {
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
     await userEvent.type(prompt, "review src/components/rev ");
-    await expect(canvas.queryByRole("region", { name: "Skill suggestions" })).toBeNull();
+    await expect(canvas.queryByRole("region", { name: "Suggestions" })).toBeNull();
     await userEvent.type(prompt, "/rev");
-    await expect(canvas.getByRole("region", { name: "Skill suggestions" })).toBeVisible();
+    await expect(canvas.getByRole("region", { name: "Suggestions" })).toBeVisible();
     await userEvent.type(prompt, "-no-match", { skipClick: true });
-    await expect(canvas.getByText("No matching skills.")).toBeVisible();
+    await expect(canvas.getByText("No matching commands or skills.")).toBeVisible();
     await userEvent.keyboard("{Escape}");
-    await expect(canvas.queryByRole("region", { name: "Skill suggestions" })).toBeNull();
+    await expect(canvas.queryByRole("region", { name: "Suggestions" })).toBeNull();
     await expect(prompt).toHaveFocus();
   },
 };
-export const Loading: Story = { args: { state: "loading" }, play: Suggestions.play };
-export const Empty: Story = { args: { state: "empty" }, play: Suggestions.play };
-export const Failed: Story = { args: { state: "failed" }, play: Suggestions.play };
+export const Loading: Story = {
+  args: { commandState: "loading", skillState: "loading" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "/");
+    await expect(canvas.getByText("Loading commands…")).toBeVisible();
+    await expect(canvas.getByText("Loading skills…")).toBeVisible();
+    await expect(canvas.queryByText("/init", { exact: true })).toBeNull();
+    await expect(canvas.queryByText("/simplify", { exact: true })).toBeNull();
+  },
+};
+export const Empty: Story = {
+  args: { commandState: "empty", skillState: "empty" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "/");
+    await expect(
+      canvas.getByText("No commands or skills available for this project."),
+    ).toBeVisible();
+  },
+};
+export const Failed: Story = {
+  args: { commandState: "failed", skillState: "failed" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "/");
+    await expect(canvas.getByText("Couldn’t load commands.")).toBeVisible();
+    await expect(canvas.getByText("Couldn’t load skills.")).toBeVisible();
+    await expect(canvas.queryByText("/init", { exact: true })).toBeNull();
+    await expect(canvas.queryByText("/simplify", { exact: true })).toBeNull();
+  },
+};
+export const PartialFailure: Story = {
+  args: { commandState: "failed", skillState: "ready" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "/");
+    await expect(canvas.getByText("Couldn’t load commands.")).toBeVisible();
+    await expect(canvas.getByText("/simplify", { exact: true })).toBeVisible();
+    await expect(canvas.queryByText("Couldn’t load skills.")).toBeNull();
+  },
+};
 export const Narrow: Story = {
   globals: { viewport: { value: "mobile", isRotated: false } },
   play: Suggestions.play,
@@ -141,19 +298,40 @@ export const Narrow: Story = {
 export const KeyboardNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "/");
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "/");
     await userEvent.keyboard("{ArrowDown}{Enter}");
+    await expect(prompt).toHaveTextContent("/compact");
+  },
+};
+
+export const SkillKeyboardNavigation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "/simpl");
+    await userEvent.keyboard("{Enter}");
     await expect(canvas.getByRole("button", { name: "Remove simplify skill" })).toBeVisible();
   },
 };
 
-export const RetryAndPointerSelection: Story = {
-  args: { state: "failed" },
+export const CrossGroupKeyboardNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
     await userEvent.type(prompt, "/");
-    await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
+    await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
+  },
+};
+
+export const RetryAndPointerSelection: Story = {
+  args: { commandState: "failed", skillState: "failed" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.type(prompt, "/");
+    await userEvent.click(canvas.getAllByRole("button", { name: "Try again" })[0]!);
     await userEvent.click(canvas.getByRole("button", { name: /\/writing Write clear/ }));
     await expect(canvas.getByRole("button", { name: "Remove writing skill" })).toBeVisible();
     await expect(prompt).toHaveFocus();

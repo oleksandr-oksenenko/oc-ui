@@ -36,4 +36,10 @@ describe("prompt document", () => {
       slashQuery(state.apply(state.tr.setSelection(TextSelection.create(doc, 3, 6)))),
     ).toBeUndefined();
   });
+
+  it("keeps nested command names in the slash query", () => {
+    const doc = fromDraft("/nested/for", []);
+    const state = EditorState.create({ schema, doc, selection: TextSelection.create(doc, 12) });
+    expect(slashQuery(state)).toEqual({ text: "nested/for", from: 1, to: 12 });
+  });
 });

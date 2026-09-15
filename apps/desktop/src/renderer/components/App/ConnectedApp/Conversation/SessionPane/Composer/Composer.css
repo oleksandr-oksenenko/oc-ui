@@ -452,6 +452,11 @@
   color: var(--oc-status-danger);
 }
 
+.composer-kept-notice {
+  padding: 0 2px 0 7px;
+  color: var(--oc-text-muted);
+}
+
 @media (width <= 620px) {
   .composer {
     width: calc(100% - 20px);

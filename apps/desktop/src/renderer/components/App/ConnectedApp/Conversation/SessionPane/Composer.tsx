@@ -1,4 +1,4 @@
-import type { PromptSkillAttachment, SkillInfo } from "@opencode-ai/client";
+import type { CommandInfo, PromptSkillAttachment, SkillInfo } from "@opencode-ai/client";
 import { PromptEditor } from "./Composer/PromptEditor.tsx";
 import { Button } from "@opencode-ai/ui/button";
 import { Icon } from "@opencode-ai/ui/icon";
@@ -29,15 +29,22 @@ type ComposerAnnotations = {
   readonly onDiscard: (opener: HTMLButtonElement) => void;
 };
 
+type ComposerCatalogSection<T> = {
+  readonly state: "loading" | "ready" | "failed";
+  readonly items: readonly T[];
+};
+
+export type ComposerCatalog = {
+  readonly commands: ComposerCatalogSection<Pick<CommandInfo, "name" | "description">>;
+  readonly skills: ComposerCatalogSection<Pick<SkillInfo, "id" | "name" | "description">>;
+  readonly onRetry: () => void;
+};
+
 export type ComposerProps = {
   readonly value: string;
   readonly sessionID?: string;
   readonly skills?: readonly PromptSkillAttachment[];
-  readonly skillCatalog?: {
-    readonly state: "loading" | "ready" | "failed";
-    readonly items: readonly Pick<SkillInfo, "id" | "name" | "description">[];
-    readonly onRetry: () => void;
-  };
+  readonly catalog?: ComposerCatalog;
   readonly files?: readonly File[];
   readonly onPasteFiles?: (files: readonly File[]) => void;
   readonly onRemoveFile?: (file: File) => void;
@@ -46,6 +53,8 @@ export type ComposerProps = {
   /** Disables submission. Omit onStop when stopping is unavailable. */
   readonly disabled: boolean;
   readonly error?: string;
+  /** A recognized command invocation that leaves comments for the next message. */
+  readonly command?: string;
   /** Omitted review state is equivalent to an empty review attachment. */
   readonly review?: ComposerReview;
   /** Omitted annotations state is equivalent to an empty annotation attachment. */
@@ -287,6 +296,15 @@ export function Composer(props: ComposerProps) {
             </div>
           )}
         </Show>
+        <Show
+          when={
+            props.command !== undefined && (review() !== undefined || annotations() !== undefined)
+          }
+        >
+          <p class="composer-status composer-kept-notice" role="status">
+            Review comments and annotations stay attached for your next message.
+          </p>
+        </Show>
         <Show when={(props.files?.length ?? 0) > 0}>
           <ul class="composer-files" aria-label="Attached files">
             {props.files?.map((file) => (
@@ -316,7 +334,7 @@ export function Composer(props: ComposerProps) {
             }}
             value={props.value}
             skills={props.skills}
-            skillCatalog={props.skillCatalog}
+            catalog={props.catalog}
             sessionID={props.sessionID}
             onInput={props.onInput}
             onPasteFiles={props.onPasteFiles}

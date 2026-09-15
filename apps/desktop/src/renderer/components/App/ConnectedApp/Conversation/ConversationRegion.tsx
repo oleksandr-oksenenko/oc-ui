@@ -25,7 +25,7 @@ export type ConversationRegionProps = {
   readonly workspace: SessionWorkspace;
   readonly annotationDrafts: AnnotationDraftStore;
   readonly composer: SessionComposerController;
-  readonly skillCatalog?: ComposerProps["skillCatalog"];
+  readonly catalog?: ComposerProps["catalog"];
   readonly inbox: SessionInboxController;
   readonly modelSelection: ModelSelection;
   readonly agentSelection: SessionAgentSelectionController;
@@ -280,7 +280,8 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
             <Composer
               value={props.composer.value()}
               skills={props.composer.skills()}
-              skillCatalog={props.skillCatalog}
+              catalog={props.catalog}
+              command={props.composer.command()}
               sessionID={props.workspace.selectedID()}
               files={props.composer.files()}
               onPasteFiles={props.composer.pasteFiles}

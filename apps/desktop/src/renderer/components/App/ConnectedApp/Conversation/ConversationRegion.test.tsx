@@ -116,6 +116,7 @@ function setup(
     submitting: () => false,
     error: () => undefined,
     review: () => undefined,
+    command: () => undefined,
     input: () => undefined,
     submit: vi.fn<SessionComposerController["submit"]>(async () => undefined),
     clear: () => undefined,
