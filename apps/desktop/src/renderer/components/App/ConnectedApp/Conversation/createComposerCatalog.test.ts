@@ -1,4 +1,4 @@
-import type { CommandInfo, LocationRef, SkillInfo } from "@opencode-ai/client";
+import type { CommandInfo, LocationRef, SkillInfo } from "@opencode/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { deferred } from "../../../../test/deferred.ts";

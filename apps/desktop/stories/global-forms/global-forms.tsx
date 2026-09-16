@@ -1,4 +1,4 @@
-import { Icon } from "@opencode-ai/ui/icon";
+import { Icon } from "@opencode/ui/icon";
 import { createSignal, type JSXElement } from "solid-js";
 
 import { AppShell } from "../../src/renderer/components/App/ConnectedApp/Shell/AppShell.tsx";

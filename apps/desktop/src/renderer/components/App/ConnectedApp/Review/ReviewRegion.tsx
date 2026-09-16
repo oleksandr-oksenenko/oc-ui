@@ -1,4 +1,4 @@
-import { useDialog } from "@opencode-ai/ui/context/dialog";
+import { useDialog } from "@opencode/ui/context/dialog";
 import { createSignal, onCleanup, onMount, type Accessor } from "solid-js";
 
 import { restoreDialogFocusAfterClose } from "../../../../ui/restoreDialogFocusAfterClose.ts";

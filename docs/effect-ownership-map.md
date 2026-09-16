@@ -35,7 +35,7 @@ Closing the last window on macOS can leave main and the worker alive; reopening 
 
 The original launch investigation checked graph generation `2026-09-04T10:30:39Z`, with no recorded gaps in the relevant indexed source. That historical generation is not evidence for this migration. Graph transport was unavailable during the current update, so the files linked above and installed SDK source were read directly. This is bounded source evidence, not an exhaustive audit.
 
-The pinned [SDK data implementation](../apps/desktop/node_modules/@opencode-ai/client/dist/solid/data.js) owns optimistic admission, ordered sends, acknowledgement, rollback and event reconciliation. The [SDK connection helper](../apps/desktop/node_modules/@opencode-ai/client/dist/solid/connection.js) owns its stream and transport retries. Both retain their Solid lifecycle hooks.
+The pinned [SDK data implementation](../apps/desktop/node_modules/@opencode/client/dist/solid/data.js) owns optimistic admission, ordered sends, acknowledgement, rollback and event reconciliation. The [SDK connection helper](../apps/desktop/node_modules/@opencode/client/dist/solid/connection.js) owns its stream and transport retries. Both retain their Solid lifecycle hooks.
 
 [Worker build configuration](../apps/desktop/electron.vite.config.ts), [dependency staging](../tools/stage-opencode.mjs) and the [packaged acceptance scenario](../apps/desktop/test/e2e/packaged-startup.e2e.ts) remain the evidence locations for bundling and real-process behavior, including lazy launch, reload/reuse, crash restart, Quit and PTY cleanup.
 

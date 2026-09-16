@@ -24,7 +24,8 @@ See [Storybook verification](docs/storybook-verification.md) for the full
 verification workflow.
 
 The workspace pins OpenCode CLI, server, client, and UI packages together at
-`0.0.0-beta-19271` in [pnpm-workspace.yaml](pnpm-workspace.yaml). Connections
+`2.0.3`, the `latest` release of the `@opencode/*` packages, in
+[pnpm-workspace.yaml](pnpm-workspace.yaml). Connections
 require that exact server version. Electron runs the packaged server library in an owned utility
 process. Browser mode connects to an independently running server.
 
@@ -48,7 +49,7 @@ with NixOS runtime libraries.
 Start the pinned server in one terminal:
 
 ```sh
-OPENCODE_SERVER_PASSWORD=your-password pnpm opencode:server
+OPENCODE_SERVER_PASSWORD=your-password pnpm --filter desktop exec opencode serve
 ```
 
 In another terminal:
@@ -72,8 +73,8 @@ pnpm preview:web        # Preview the static build at http://127.0.0.1:4173
 pnpm check              # Check formatting, lint, types, component layout, and unused code
 pnpm lint               # Run type-aware Oxlint and CSS checks
 pnpm knip               # Find unused files, exports, and dependencies
-pnpm opencode:server    # Start the pinned OpenCode server
-pnpm opencode:version   # Print the installed OpenCode version
+pnpm --filter desktop exec opencode serve     # Start the pinned OpenCode server
+pnpm --filter desktop exec opencode --version # Print the installed OpenCode version
 pnpm storybook          # Start the component catalog at http://localhost:6006
 pnpm build-storybook    # Build the static component catalog
 pnpm verify:browser     # Start an isolated app/server session for manual inspection
@@ -153,7 +154,6 @@ verified browser target.
 - [Browser mode and deployment](docs/browser-mode-design.md)
 - [Embedded session browser](docs/browser-tool-integration.md)
 - [Managed worktrees](docs/managed-worktree-design.md)
-- [OpenCode beta 19271 upgrade](docs/opencode-beta-19271.md)
 
 The [original product requirements](docs/product-requirements.md),
 [milestone 1 design](docs/milestone-1-design.md), and

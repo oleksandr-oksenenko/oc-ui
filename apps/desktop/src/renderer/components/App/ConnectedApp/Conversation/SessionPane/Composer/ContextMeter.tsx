@@ -1,4 +1,4 @@
-import { Tooltip } from "@opencode-ai/ui/tooltip";
+import { Tooltip } from "@opencode/ui/tooltip";
 import { Show } from "solid-js";
 
 import { formatTokens, type ContextUsage } from "./context-usage.ts";

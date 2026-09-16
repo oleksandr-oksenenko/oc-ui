@@ -1,8 +1,8 @@
-import { Button } from "@opencode-ai/ui/button";
-import { DiffChanges } from "@opencode-ai/ui/diff-changes";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Loader } from "@opencode-ai/ui/loader";
-import { Select } from "@opencode-ai/ui/select";
+import { Button } from "@opencode/ui/button";
+import { DiffChanges } from "@opencode/ui/diff-changes";
+import { Icon } from "@opencode/ui/icon";
+import { Loader } from "@opencode/ui/loader";
+import { Select } from "@opencode/ui/select";
 import type { SelectedLineRange } from "@pierre/diffs";
 import { createMemo, For, Show } from "solid-js";
 

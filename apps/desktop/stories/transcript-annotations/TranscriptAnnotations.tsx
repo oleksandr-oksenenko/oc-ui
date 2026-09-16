@@ -1,5 +1,5 @@
-import type { SessionInboxUser, SessionMessageInfo, SessionPromptInput } from "@opencode-ai/client";
-import { Button } from "@opencode-ai/ui/button";
+import type { SessionInboxUser, SessionMessageInfo, SessionPromptInput } from "@opencode/client";
+import { Button } from "@opencode/ui/button";
 import { createSignal, onCleanup } from "solid-js";
 import { RegistryContext } from "@effect/atom-solid";
 import { AtomRegistry } from "effect/unstable/reactivity";

@@ -1,17 +1,11 @@
-import { Button } from "@opencode-ai/ui/button";
-import {
-  Dialog,
-  DialogBody,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@opencode-ai/ui/dialog";
-import { useDialog } from "@opencode-ai/ui/context/dialog";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Loader } from "@opencode-ai/ui/loader";
+import { Button } from "@opencode/ui/button";
+import { Dialog, DialogBody, DialogFooter, DialogHeader, DialogTitle } from "@opencode/ui/dialog";
+import { useDialog } from "@opencode/ui/context/dialog";
+import { Icon } from "@opencode/ui/icon";
+import { Loader } from "@opencode/ui/loader";
 import { Show, createEffect, createSignal, on } from "solid-js";
 
-import type { LocationRef, Project } from "@opencode-ai/client";
+import type { LocationRef, Project } from "@opencode/client";
 import { ProjectSelection } from "./NewSessionDialog/ProjectSelection.tsx";
 import "./ServerFlowDialog.css";
 

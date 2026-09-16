@@ -1,6 +1,6 @@
-import type { PromptFileAttachment } from "@opencode-ai/client";
+import type { PromptFileAttachment } from "@opencode/client";
 import { CloseButton, Content, Overlay, Portal, Root, Title, Trigger } from "@kobalte/core/dialog";
-import { Icon } from "@opencode-ai/ui/icon";
+import { Icon } from "@opencode/ui/icon";
 import { Show, createMemo, createSignal, onCleanup, type JSX } from "solid-js";
 
 import "./ImagePreview.css";

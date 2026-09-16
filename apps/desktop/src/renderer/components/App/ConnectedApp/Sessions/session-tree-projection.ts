@@ -1,4 +1,4 @@
-import type { SessionInfo } from "@opencode-ai/client";
+import type { SessionInfo } from "@opencode/client";
 import { DateTime } from "effect";
 
 export type SessionTreeNode = {

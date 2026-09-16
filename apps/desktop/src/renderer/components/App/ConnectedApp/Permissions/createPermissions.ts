@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-solid";
-import type { PermissionReply, PermissionRequest } from "@opencode-ai/client";
-import type { Data } from "@opencode-ai/client/solid";
+import type { PermissionReply, PermissionRequest } from "@opencode/client";
+import type { Data } from "@opencode/client/solid";
 import { Cause, Effect, Fiber } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { createEffect, createMemo, on, onCleanup, type Accessor } from "solid-js";

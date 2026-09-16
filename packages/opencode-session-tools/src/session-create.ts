@@ -1,14 +1,14 @@
 /* oxlint-disable effecttsgo/any-unknown-in-error-context -- The public client erases errors to unknown. createSession narrows them once at the workflow boundary; no unknown failure escapes. */
-import type { Plugin } from "@opencode-ai/plugin/effect";
-import { Agent } from "@opencode-ai/schema/agent";
-import { Location } from "@opencode-ai/schema/location";
-import { Model } from "@opencode-ai/schema/model";
-import { Provider } from "@opencode-ai/schema/provider";
-import { Project } from "@opencode-ai/schema/project";
-import { Session } from "@opencode-ai/schema/session";
-import { SessionMessage } from "@opencode-ai/schema/session-message";
-import { Tool } from "@opencode-ai/schema/tool";
-import { Worktree } from "@opencode-ai/schema/worktree";
+import type { Plugin } from "@opencode/plugin/effect";
+import { Agent } from "@opencode/schema/agent";
+import { Location } from "@opencode/schema/location";
+import { Model } from "@opencode/schema/model";
+import { Provider } from "@opencode/schema/provider";
+import { Project } from "@opencode/schema/project";
+import { Session } from "@opencode/schema/session";
+import { SessionMessage } from "@opencode/schema/session-message";
+import { Tool } from "@opencode/schema/tool";
+import { Worktree } from "@opencode/schema/worktree";
 import { Effect, Fiber, Schema, Scope, Schedule } from "effect";
 
 const Text = Schema.String.check(Schema.isNonEmpty(), Schema.isPattern(/\S/));

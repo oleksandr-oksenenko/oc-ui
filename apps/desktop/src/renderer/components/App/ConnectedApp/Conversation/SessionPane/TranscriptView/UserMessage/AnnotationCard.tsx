@@ -1,6 +1,6 @@
-import { Collapsible } from "@opencode-ai/ui/collapsible";
-import { Icon } from "@opencode-ai/ui/icon";
-import { LineComment } from "@opencode-ai/ui/line-comment";
+import { Collapsible } from "@opencode/ui/collapsible";
+import { Icon } from "@opencode/ui/icon";
+import { LineComment } from "@opencode/ui/line-comment";
 import { For, Show } from "solid-js";
 
 import type { TranscriptAnnotation } from "../../../../../../../domain/annotation-drafts.ts";

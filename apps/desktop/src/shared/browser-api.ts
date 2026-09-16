@@ -1,5 +1,5 @@
 import { Browser } from "@opencode/plugin-browser/rpc";
-import { SessionID } from "@opencode-ai/schema/session-id";
+import { SessionID } from "@opencode/schema/session-id";
 import { Schema } from "effect";
 
 const bindingID = Schema.String.check(Schema.isLengthBetween(1, 128));

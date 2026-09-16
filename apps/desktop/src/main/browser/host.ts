@@ -1,5 +1,5 @@
 import { NodeHttpClient } from "@effect/platform-node";
-import { OpenCode } from "@opencode-ai/client/effect";
+import { OpenCode } from "@opencode/client/effect";
 import { Browser } from "@opencode/plugin-browser/rpc";
 import {
   Cause,

@@ -1,4 +1,4 @@
-import type { PermissionRequest } from "@opencode-ai/client";
+import type { PermissionRequest } from "@opencode/client";
 import { createSignal } from "solid-js";
 import type { SessionPermissionsController } from "../../src/renderer/components/App/ConnectedApp/Permissions/createPermissions.ts";
 

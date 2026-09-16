@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { access, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { $, browser } from "@wdio/globals";
-import type { SessionsResponse, VcsDiffOutput } from "@opencode-ai/client";
+import type { SessionsResponse, VcsDiffOutput } from "@opencode/client";
 
 import { git } from "./project-fixture.ts";
 const TIMEOUT = 45_000;

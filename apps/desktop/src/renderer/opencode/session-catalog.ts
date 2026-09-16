@@ -1,5 +1,5 @@
-import type { Data } from "@opencode-ai/client/solid";
-import type { OpenCodeClient } from "@opencode-ai/client";
+import type { Data } from "@opencode/client/solid";
+import type { OpenCodeClient } from "@opencode/client";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";

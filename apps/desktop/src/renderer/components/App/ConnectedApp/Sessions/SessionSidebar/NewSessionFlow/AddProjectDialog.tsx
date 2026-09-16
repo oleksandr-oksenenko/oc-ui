@@ -1,15 +1,15 @@
-import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
-import { Button } from "@opencode-ai/ui/button";
+import type { LocationRef, OpenCodeClient } from "@opencode/client";
+import { Button } from "@opencode/ui/button";
 import {
   Dialog,
   DialogBody,
   DialogFooter,
   DialogHeader,
   DialogTitleGroup,
-} from "@opencode-ai/ui/dialog";
-import { useDialog } from "@opencode-ai/ui/context/dialog";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Loader } from "@opencode-ai/ui/loader";
+} from "@opencode/ui/dialog";
+import { useDialog } from "@opencode/ui/context/dialog";
+import { Icon } from "@opencode/ui/icon";
+import { Loader } from "@opencode/ui/loader";
 import { Show, createEffect, createSignal, on } from "solid-js";
 
 import type { WorkspaceOwner } from "../../../../../../workspace-owner.ts";

@@ -1,8 +1,8 @@
 import type { Meta } from "storybook-solidjs-vite";
 
-import { Collapsible } from "@opencode-ai/ui/collapsible";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Tabs } from "@opencode-ai/ui/tabs";
+import { Collapsible } from "@opencode/ui/collapsible";
+import { Icon } from "@opencode/ui/icon";
+import { Tabs } from "@opencode/ui/tabs";
 
 import { CatalogCard, CatalogPage } from "./StoryLayout";
 

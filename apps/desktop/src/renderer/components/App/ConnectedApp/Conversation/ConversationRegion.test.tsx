@@ -1,4 +1,4 @@
-import type { FormInfo, PermissionRequest, SessionMessageAssistant } from "@opencode-ai/client";
+import type { FormInfo, PermissionRequest, SessionMessageAssistant } from "@opencode/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 

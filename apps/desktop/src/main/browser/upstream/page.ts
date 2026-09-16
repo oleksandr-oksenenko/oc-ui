@@ -48,17 +48,20 @@ export function createBrowserPage(
     webviewTag: false,
     devTools: false,
     backgroundThrottling: false,
+    // Agent navigation, including in hidden tabs, must not take the user's keyboard focus.
+    focusOnNavigation: false,
   };
   const view = new electron.WebContentsView({ ...options.popupOptions, webPreferences });
   const contents = view.webContents;
   const detachNetwork = options.network.attach(contents);
   contents.on("before-input-event", (event, input) => {
-    if (
-      input.type !== "keyDown" ||
-      input.alt ||
-      !(process.platform === "darwin" ? input.meta : input.control)
-    )
+    if (input.type !== "keyDown") return;
+    if (input.key === "F5" && !input.meta && !input.control && !input.alt && !input.shift) {
+      event.preventDefault();
+      contents.reload();
       return;
+    }
+    if (input.alt || !(process.platform === "darwin" ? input.meta : input.control)) return;
     const step =
       input.key === "=" || input.key === "+" || input.code === "NumpadAdd"
         ? 0.5

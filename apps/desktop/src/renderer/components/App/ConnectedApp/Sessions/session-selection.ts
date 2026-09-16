@@ -1,4 +1,4 @@
-import type { SessionInfo } from "@opencode-ai/client";
+import type { SessionInfo } from "@opencode/client";
 
 /** Returns nearest-first ancestors while the selected session still exists. */
 export function sessionAncestorIDs(

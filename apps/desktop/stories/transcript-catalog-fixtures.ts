@@ -1,4 +1,4 @@
-import type { SessionMessageInfo } from "@opencode-ai/client";
+import type { SessionMessageInfo } from "@opencode/client";
 import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts";
 import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 

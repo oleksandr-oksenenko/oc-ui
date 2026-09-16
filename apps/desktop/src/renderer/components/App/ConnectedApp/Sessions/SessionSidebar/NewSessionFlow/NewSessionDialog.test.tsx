@@ -1,4 +1,4 @@
-import { useDialog } from "@opencode-ai/ui/context/dialog";
+import { useDialog } from "@opencode/ui/context/dialog";
 import { createSignal } from "solid-js";
 import { mount as mountView } from "../../../../../../test/mount.ts";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";

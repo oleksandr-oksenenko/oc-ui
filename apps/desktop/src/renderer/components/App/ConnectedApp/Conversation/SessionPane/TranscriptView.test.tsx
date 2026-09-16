@@ -3,7 +3,7 @@ import type {
   SessionMessageAssistantTool,
   SessionMessageInfo,
   SessionMessageUser,
-} from "@opencode-ai/client";
+} from "@opencode/client";
 import { batch, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -379,6 +379,29 @@ describe("TranscriptView", () => {
       ].every((element) => element.dataset.component === "collapsible"),
     ).toBe(true);
     expect(host.querySelector(".transcript-reasoning svg")).not.toBeNull();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("omits turn idle markers while keeping their surrounding rows", () => {
+    stubResizeObserver();
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "user", time: base, type: "user", text: "Prompt" },
+      { id: "idle-succeeded", time: base, type: "idle", outcome: "succeeded" },
+      textAssistantMessage("assistant", "Answer"),
+      { id: "idle-failed", time: base, type: "idle", outcome: "failed" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+
+    expect(host.textContent).toContain("Prompt");
+    expect(host.textContent).toContain("Answer");
+    expect(
+      [...host.querySelectorAll<HTMLElement>(".transcript-document > [data-message-id]")].map(
+        (element) => element.dataset.messageId,
+      ),
+    ).toEqual(["user", "assistant"]);
     dispose();
     vi.unstubAllGlobals();
   });

@@ -2,7 +2,7 @@
 import { EventEmitter } from "node:events";
 import type { BrowserWindow } from "electron";
 import { Browser } from "@opencode/plugin-browser/rpc";
-import { SessionID } from "@opencode-ai/schema/session-id";
+import { SessionID } from "@opencode/schema/session-id";
 import { Deferred, Effect, ManagedRuntime, Queue, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { emptyBrowserState, type BrowserEvent } from "../../shared/browser-api.ts";
@@ -28,7 +28,7 @@ let rpc: Rpc;
 let controls: Queue.Queue<
   { type: "server.connected" } | { type: "rpc.experimental.browser.control"; data: Browser.Control }
 >;
-vi.mock("@opencode-ai/client/effect", () => ({
+vi.mock("@opencode/client/effect", () => ({
   OpenCode: {
     make: () =>
       Effect.succeed({

@@ -1,4 +1,4 @@
-import type { JsonValue, PromptSkillAttachment } from "@opencode-ai/client";
+import type { JsonValue, PromptSkillAttachment } from "@opencode/client";
 import { Schema } from "effect";
 
 import {

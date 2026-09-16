@@ -1,5 +1,5 @@
 import { createProfile } from "./profile.mjs";
-import { OpenCode } from "@opencode-ai/client";
+import { OpenCode } from "@opencode/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 import { build, preview } from "vite-plus";
 import { chromium } from "playwright";

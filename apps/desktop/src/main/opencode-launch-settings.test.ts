@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { configureOpenCodeLaunch } from "./opencode-launch-settings.ts";
 
-vi.mock("@opencode-ai/util/global", () => ({
+vi.mock("@opencode/util/global", () => ({
   Global: { Path: { data: "/shared/opencode-data" } },
 }));
 vi.mock("node:module", () => ({

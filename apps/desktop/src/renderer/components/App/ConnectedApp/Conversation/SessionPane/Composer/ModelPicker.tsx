@@ -1,6 +1,6 @@
-import { Icon } from "@opencode-ai/ui/icon";
-import { List } from "@opencode-ai/ui/list";
-import { Popover } from "@opencode-ai/ui/popover";
+import { Icon } from "@opencode/ui/icon";
+import { List } from "@opencode/ui/list";
+import { Popover } from "@opencode/ui/popover";
 import { createEffect, createSignal } from "solid-js";
 
 export type ModelPickerOption = {

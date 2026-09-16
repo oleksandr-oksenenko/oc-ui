@@ -3,7 +3,7 @@
 import { For } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
-import { Icon } from "@opencode-ai/ui/icon";
+import { Icon } from "@opencode/ui/icon";
 
 import { CatalogCard, CatalogPage } from "./StoryLayout";
 

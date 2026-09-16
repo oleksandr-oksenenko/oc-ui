@@ -1,7 +1,7 @@
-import type { PermissionReply, PermissionRequest } from "@opencode-ai/client";
-import { Button } from "@opencode-ai/ui/button";
-import { Card } from "@opencode-ai/ui/card";
-import { Loader } from "@opencode-ai/ui/loader";
+import type { PermissionReply, PermissionRequest } from "@opencode/client";
+import { Button } from "@opencode/ui/button";
+import { Card } from "@opencode/ui/card";
+import { Loader } from "@opencode/ui/loader";
 import { For, Show, createUniqueId, type JSX } from "solid-js";
 
 import "./PermissionRequestCard.css";

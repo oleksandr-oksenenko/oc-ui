@@ -1,4 +1,4 @@
-import type { FormAnswer, FormInfo } from "@opencode-ai/client";
+import type { FormAnswer, FormInfo } from "@opencode/client";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { mount as mountView } from "../test/mount.ts";

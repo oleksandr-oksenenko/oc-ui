@@ -1,4 +1,4 @@
-import type { FileDiffInfo, SessionInfo } from "@opencode-ai/client";
+import type { FileDiffInfo, SessionInfo } from "@opencode/client";
 import { createSignal } from "solid-js";
 import { Effect } from "effect";
 import { withTestWorkspace } from "../../../../test/workspace.ts";

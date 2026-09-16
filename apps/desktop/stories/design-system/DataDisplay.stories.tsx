@@ -1,7 +1,7 @@
 import type { Meta } from "storybook-solidjs-vite";
 
-import { DiffChanges } from "@opencode-ai/ui/diff-changes";
-import { Icon } from "@opencode-ai/ui/icon";
+import { DiffChanges } from "@opencode/ui/diff-changes";
+import { Icon } from "@opencode/ui/icon";
 
 import { CatalogCard, CatalogPage } from "./StoryLayout";
 

@@ -1,4 +1,4 @@
-import type { SessionMessageInfo } from "@opencode-ai/client";
+import type { SessionMessageInfo } from "@opencode/client";
 import { createSignal, type Accessor } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 

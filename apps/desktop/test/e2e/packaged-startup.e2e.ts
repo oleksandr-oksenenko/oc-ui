@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { $, browser } from "@wdio/globals";
 import type { DesktopApi } from "../../src/shared/desktop-api.ts";
+import { OPENCODE_VERSION } from "../../src/shared/desktop-api.ts";
 import { verifyBrowserFlows } from "./browser-flows.ts";
 import { verifyConnectionSettings } from "./connection-flows.ts";
 import { verifyProjectFlows } from "./project-flows.ts";
@@ -254,7 +255,7 @@ async function verifyHealth(expectedPid: number): Promise<void> {
   });
   assert.equal(health.status, 200);
   assert.equal(health.body.pid, expectedPid);
-  assert.equal(health.body.version, "0.0.0-beta-19271");
+  assert.equal(health.body.version, OPENCODE_VERSION);
 }
 
 async function waitForProcessExit(pid: number): Promise<void> {

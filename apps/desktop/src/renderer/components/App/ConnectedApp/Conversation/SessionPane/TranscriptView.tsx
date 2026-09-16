@@ -1,9 +1,9 @@
-import type { SessionMessageInfo } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
-import { Button } from "@opencode-ai/ui/button";
-import { createAutoScroll } from "@opencode-ai/ui/hooks";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Loader } from "@opencode-ai/ui/loader";
+import type { SessionMessageInfo } from "@opencode/client";
+import type { DataSessionStatus } from "@opencode/client/solid";
+import { Button } from "@opencode/ui/button";
+import { createAutoScroll } from "@opencode/ui/hooks";
+import { Icon } from "@opencode/ui/icon";
+import { Loader } from "@opencode/ui/loader";
 import { createEffect, createMemo, For, onCleanup, Show, type JSX } from "solid-js";
 
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
@@ -119,7 +119,8 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   const visibleMessages = createMemo(() => {
     const start = materialization.startIndex();
     const messages = props.messages;
-    return start === 0 ? messages : messages.slice(start);
+    const visible = start === 0 ? messages : messages.slice(start);
+    return visible.filter(isRenderableMessage);
   });
   // Rendered rows are real content; materializing reports that history is
   // still arriving without replacing the rows already on screen.
@@ -187,8 +188,16 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   );
 }
 
+// Idle markers close a turn; the message list keeps them for turn boundaries,
+// but the transcript renders no row for them.
+type RenderableMessage = Exclude<SessionMessageInfo, { readonly type: "idle" }>;
+
+function isRenderableMessage(message: SessionMessageInfo): message is RenderableMessage {
+  return message.type !== "idle";
+}
+
 function renderMessage(
-  message: SessionMessageInfo,
+  message: RenderableMessage,
   props: Pick<TranscriptViewProps, "sessionStatus" | "onOpenAnnotation">,
 ): JSX.Element {
   switch (message.type) {

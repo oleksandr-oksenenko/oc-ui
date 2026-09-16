@@ -1,6 +1,6 @@
 # OpenCode session tools
 
-An OpenCode V2 server plugin for `0.0.0-beta-19271`, using Effect `4.0.0-rc.112`.
+An OpenCode V2 server plugin for `2.0.3`, using Effect `4.0.0-rc.112`.
 oc-ui bundles this plugin and loads it automatically on its built-in server.
 
 ## Tool

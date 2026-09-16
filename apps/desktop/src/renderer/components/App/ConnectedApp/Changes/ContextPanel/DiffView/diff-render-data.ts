@@ -1,4 +1,4 @@
-import type { FileDiffInfo } from "@opencode-ai/client";
+import type { FileDiffInfo } from "@opencode/client";
 import { parseDiffFromFile, parsePatchFiles, processFile } from "@pierre/diffs";
 import type { FileContents, FileDiffMetadata, SelectedLineRange } from "@pierre/diffs";
 

@@ -1,4 +1,4 @@
-import { Icon } from "@opencode-ai/ui/icon";
+import { Icon } from "@opencode/ui/icon";
 import type { JSX } from "solid-js";
 
 import { annotationBlock } from "../../annotation-source.ts";

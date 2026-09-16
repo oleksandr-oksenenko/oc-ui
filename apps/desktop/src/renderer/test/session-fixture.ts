@@ -1,4 +1,4 @@
-import type { SessionInfo } from "@opencode-ai/client";
+import type { SessionInfo } from "@opencode/client";
 
 export function sessionFixture(
   input: Pick<SessionInfo, "id" | "location"> & Partial<SessionInfo>,

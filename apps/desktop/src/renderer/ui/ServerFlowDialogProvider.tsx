@@ -1,4 +1,4 @@
-import { DialogProvider } from "@opencode-ai/ui/context/dialog";
+import { DialogProvider } from "@opencode/ui/context/dialog";
 import {
   createContext,
   createSignal,

@@ -1,4 +1,4 @@
-import type { PromptSkillAttachment } from "@opencode-ai/client";
+import type { PromptSkillAttachment } from "@opencode/client";
 import { useAtomValue } from "@effect/atom-solid";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../workspace-owner.ts";

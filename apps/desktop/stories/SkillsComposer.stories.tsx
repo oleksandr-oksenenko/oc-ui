@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/async-function */
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
-import type { PromptSkillAttachment } from "@opencode-ai/client";
+import type { PromptSkillAttachment } from "@opencode/client";
 import { createSignal, Show } from "solid-js";
 import { expect, fireEvent, fn, userEvent, within, waitFor } from "storybook/test";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";

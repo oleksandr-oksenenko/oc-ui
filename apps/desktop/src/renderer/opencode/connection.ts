@@ -1,5 +1,5 @@
-import { OpenCode } from "@opencode-ai/client";
-import type { LocationGetOutput, OpenCodeClient } from "@opencode-ai/client";
+import { OpenCode } from "@opencode/client";
+import type { LocationGetOutput, OpenCodeClient } from "@opencode/client";
 import { Effect, Predicate } from "effect";
 
 import { OPENCODE_VERSION } from "../../shared/desktop-api.ts";

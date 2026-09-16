@@ -1,5 +1,5 @@
-import type { FormAnswer, LocationRef } from "@opencode-ai/client";
-import type { FormWithLocation } from "@opencode-ai/client/solid";
+import type { FormAnswer, LocationRef } from "@opencode/client";
+import type { FormWithLocation } from "@opencode/client/solid";
 import { createSignal, type Accessor } from "solid-js";
 
 import type { GlobalFormsController } from "../../src/renderer/components/App/ConnectedApp/GlobalForms/createGlobalForms.ts";

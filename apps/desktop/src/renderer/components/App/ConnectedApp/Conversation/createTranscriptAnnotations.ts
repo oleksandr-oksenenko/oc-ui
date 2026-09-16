@@ -1,4 +1,4 @@
-import type { SessionMessageInfo } from "@opencode-ai/client";
+import type { SessionMessageInfo } from "@opencode/client";
 import { batch, createEffect, createMemo, createSignal, untrack, type Accessor } from "solid-js";
 import { unwrap } from "solid-js/store";
 

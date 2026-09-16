@@ -1,4 +1,4 @@
-import type { SessionInfo } from "@opencode-ai/client";
+import type { SessionInfo } from "@opencode/client";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { createSignal, type Accessor } from "solid-js";
 

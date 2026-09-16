@@ -18,15 +18,15 @@ const expectedVersion = readFileSync(
 ).match(/export const OPENCODE_VERSION = ["']([^"']+)["']/)?.[1];
 for (const name of ["server", "util", "client", "ui"]) {
   const manifest = JSON.parse(
-    readFileSync(join(desktopDirectory, "node_modules/@opencode-ai", name, "package.json"), "utf8"),
+    readFileSync(join(desktopDirectory, "node_modules/@opencode", name, "package.json"), "utf8"),
   );
   if (manifest.version !== expectedVersion) {
-    throw new Error(`@opencode-ai/${name} must match desktop protocol ${expectedVersion}`);
+    throw new Error(`@opencode/${name} must match desktop protocol ${expectedVersion}`);
   }
 }
 
-const serverDirectory = realpathSync(join(desktopDirectory, "node_modules/@opencode-ai/server"));
-const coreDirectory = findPackage("@opencode-ai/core", serverDirectory);
+const serverDirectory = realpathSync(join(desktopDirectory, "node_modules/@opencode/server"));
+const coreDirectory = findPackage("@opencode/core", serverDirectory);
 const watcherDirectory = findPackage("@parcel/watcher", coreDirectory);
 const ptyDirectory = findPackage("@opencode-ai/pty", coreDirectory);
 const build = JSON.parse(readFileSync(join(runtimeDirectory, "build.json"), "utf8"));

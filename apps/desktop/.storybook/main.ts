@@ -12,7 +12,7 @@ const config: StorybookConfig = {
     optimizeDeps: {
       ...viteConfig.optimizeDeps,
       // OpenCode's comment editor reaches this CommonJS dependency through its hooks barrel.
-      include: [...(viteConfig.optimizeDeps?.include ?? []), "@opencode-ai/ui > fuzzysort"],
+      include: [...(viteConfig.optimizeDeps?.include ?? []), "@opencode/ui > fuzzysort"],
     },
   }),
 };

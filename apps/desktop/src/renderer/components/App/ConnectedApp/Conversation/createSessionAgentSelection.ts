@@ -2,8 +2,8 @@ import { useAtomValue } from "@effect/atom-solid";
 import { Cause, Effect, Fiber } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
-import type { Data } from "@opencode-ai/client/solid";
-import type { OpenCodeClient, SessionInfo } from "@opencode-ai/client";
+import type { Data } from "@opencode/client/solid";
+import type { OpenCodeClient, SessionInfo } from "@opencode/client";
 import { createEffect, createMemo, on, onCleanup, type Accessor } from "solid-js";
 
 type SessionAgentSelectionInput = {

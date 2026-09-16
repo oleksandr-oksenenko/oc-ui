@@ -1,15 +1,15 @@
-import type { FormAnswer } from "@opencode-ai/client";
-import { Badge } from "@opencode-ai/ui/badge";
-import { Button } from "@opencode-ai/ui/button";
-import { useDialog } from "@opencode-ai/ui/context/dialog";
+import type { FormAnswer } from "@opencode/client";
+import { Badge } from "@opencode/ui/badge";
+import { Button } from "@opencode/ui/button";
+import { useDialog } from "@opencode/ui/context/dialog";
 import {
   Dialog,
   DialogBody,
   DialogFooter,
   DialogHeader,
   DialogTitleGroup,
-} from "@opencode-ai/ui/dialog";
-import { Icon } from "@opencode-ai/ui/icon";
+} from "@opencode/ui/dialog";
+import { Icon } from "@opencode/ui/icon";
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, type JSX } from "solid-js";
 
 import { QuestionForm } from "../../../../ui/QuestionForm.tsx";

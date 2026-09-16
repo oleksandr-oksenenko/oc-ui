@@ -1,5 +1,5 @@
 import { withTestWorkspace } from "../../../../test/workspace.ts";
-import type { SessionInboxUser, SessionMessageInfo } from "@opencode-ai/client";
+import type { SessionInboxUser, SessionMessageInfo } from "@opencode/client";
 import { createRoot, createSignal, onCleanup } from "solid-js";
 import { Effect, Exit, Scope } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";

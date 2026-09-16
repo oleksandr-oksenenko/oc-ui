@@ -1,4 +1,4 @@
-import type { SessionInboxUser } from "@opencode-ai/client";
+import type { SessionInboxUser } from "@opencode/client";
 import { Effect, Exit, Scope } from "effect";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";

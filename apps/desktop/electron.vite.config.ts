@@ -43,7 +43,7 @@ export default defineConfig({
                 setup(builder) {
                   builder.onResolve({ filter: /^[^./#]/ }, (args) => {
                     if (
-                      args.path.startsWith("@opencode-ai/") ||
+                      args.path.startsWith("@opencode/") ||
                       args.path === "@parcel/watcher/wrapper"
                     ) {
                       return undefined;

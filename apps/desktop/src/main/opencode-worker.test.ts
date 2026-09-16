@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { EventEmitter } from "node:events";
 
-import type { ServerProcess } from "@opencode-ai/server/process";
+import type { ServerProcess } from "@opencode/server/process";
 import { Deferred, Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -9,6 +9,7 @@ import type {
   OpenCodeWorkerCommand,
   OpenCodeWorkerMessage,
 } from "../shared/opencode-worker-contract.ts";
+import { OPENCODE_VERSION } from "../shared/desktop-api.ts";
 import type { configureOpenCodeLaunch } from "./opencode-launch-settings.ts";
 
 const mocks = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   configure: vi.fn<typeof configureOpenCodeLaunch>(),
 }));
 const exitProcess = vi.fn<(code?: number | string | null) => void>();
-vi.mock("@opencode-ai/server/process", () => ({ ServerProcess: { start: mocks.start } }));
+vi.mock("@opencode/server/process", () => ({ ServerProcess: { start: mocks.start } }));
 vi.mock("./opencode-launch-settings.ts", () => ({ configureOpenCodeLaunch: mocks.configure }));
 
 class Parent extends EventEmitter {
@@ -100,7 +101,7 @@ describe("OpenCode worker scope ownership", () => {
         hostname: "127.0.0.1",
         port: 0,
         password: "worker-test-secret",
-        app: { name: "oc-ui", version: "0.0.0-beta-19271" },
+        app: { name: "oc-ui", version: OPENCODE_VERSION },
       },
       expect.objectContaining({ onListen: expect.any(Function) }),
     );

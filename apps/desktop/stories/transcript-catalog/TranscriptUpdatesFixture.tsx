@@ -1,5 +1,5 @@
-import type { SessionMessageAssistant } from "@opencode-ai/client";
-import { Button } from "@opencode-ai/ui/button";
+import type { SessionMessageAssistant } from "@opencode/client";
+import { Button } from "@opencode/ui/button";
 import { batch, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 

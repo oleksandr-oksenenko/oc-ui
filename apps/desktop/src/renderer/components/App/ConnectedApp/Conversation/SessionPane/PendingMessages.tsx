@@ -1,7 +1,7 @@
-import type { SessionInboxUser } from "@opencode-ai/client";
-import { Button } from "@opencode-ai/ui/button";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
+import type { SessionInboxUser } from "@opencode/client";
+import { Button } from "@opencode/ui/button";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
 import { For, Show, createMemo } from "solid-js";
 import "./PendingMessages.css";
 

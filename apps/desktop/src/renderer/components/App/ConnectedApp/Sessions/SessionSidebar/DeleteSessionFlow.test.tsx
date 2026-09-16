@@ -1,10 +1,10 @@
 import { Effect, Exit, Scope } from "effect";
-import * as toastModule from "@opencode-ai/ui/toast";
+import * as toastModule from "@opencode/ui/toast";
 import { RegistryContext } from "@effect/atom-solid";
 import { withTestWorkspace } from "../../../../../test/workspace.ts";
 import { deferred } from "../../../../../test/deferred.ts";
 import { sessionFixture } from "../../../../../test/session-fixture.ts";
-import type { OpenCodeClient, SessionInfo } from "@opencode-ai/client";
+import type { OpenCodeClient, SessionInfo } from "@opencode/client";
 import { createSignal, Show } from "solid-js";
 import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";

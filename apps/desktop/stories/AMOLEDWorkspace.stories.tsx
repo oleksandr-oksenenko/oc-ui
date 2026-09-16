@@ -15,8 +15,8 @@ import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Convers
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { QuestionForm } from "../src/renderer/ui/QuestionForm.tsx";
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
-import type { SessionMessageInfo } from "@opencode-ai/client";
-import { useDialog } from "@opencode-ai/ui/context/dialog";
+import type { SessionMessageInfo } from "@opencode/client";
+import { useDialog } from "@opencode/ui/context/dialog";
 import { richItems, markdownAssistant, streamingAssistant } from "./transcript-catalog-fixtures.ts";
 import { GlobalFormsRegion } from "../src/renderer/components/App/ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
 import { createFakeGlobalForms } from "./global-forms/global-form-fixtures.ts";

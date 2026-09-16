@@ -1,6 +1,6 @@
-import { createClientConnection, createData } from "@opencode-ai/client/solid";
-import type { Data, ClientConnectionStatus } from "@opencode-ai/client/solid";
-import type { LocationRef, OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client";
+import { createClientConnection, createData } from "@opencode/client/solid";
+import type { Data, ClientConnectionStatus } from "@opencode/client/solid";
+import type { LocationRef, OpenCodeClient, OpenCodeEvent } from "@opencode/client";
 import { Deferred, Effect } from "effect";
 import type { WorkspaceOwner } from "../workspace-owner.ts";
 import { createEffect, getOwner, onCleanup } from "solid-js";

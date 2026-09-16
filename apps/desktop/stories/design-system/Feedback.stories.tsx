@@ -1,8 +1,8 @@
 import type { Meta } from "storybook-solidjs-vite";
 
-import { Button } from "@opencode-ai/ui/button";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Loader } from "@opencode-ai/ui/loader";
+import { Button } from "@opencode/ui/button";
+import { Icon } from "@opencode/ui/icon";
+import { Loader } from "@opencode/ui/loader";
 
 import { CatalogCard, CatalogPage } from "./StoryLayout";
 

@@ -1,5 +1,5 @@
-import { OpenCode, type SessionInfo } from "@opencode-ai/client";
-import { createData } from "@opencode-ai/client/solid";
+import { OpenCode, type SessionInfo } from "@opencode/client";
+import { createData } from "@opencode/client/solid";
 import { createRoot, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 

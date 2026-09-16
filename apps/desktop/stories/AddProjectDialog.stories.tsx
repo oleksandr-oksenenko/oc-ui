@@ -5,7 +5,7 @@ import { Effect, Exit, Scope } from "effect";
 import { AtomRegistry } from "effect/unstable/reactivity";
 import { onCleanup } from "solid-js";
 import { makeWorkspaceOwner } from "../src/renderer/workspace-owner.ts";
-import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode/client";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 

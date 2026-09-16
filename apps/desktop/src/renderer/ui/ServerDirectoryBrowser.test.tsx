@@ -1,7 +1,7 @@
 import { RegistryContext } from "@effect/atom-solid";
 import { Effect, Exit, Scope } from "effect";
 import { withTestWorkspace } from "../test/workspace.ts";
-import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 

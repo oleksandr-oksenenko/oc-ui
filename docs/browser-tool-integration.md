@@ -10,7 +10,7 @@ app has no native browser capability and retains its existing Diff panel.
 
 ## Pinned server contract
 
-OpenCode `0.0.0-beta-19271` registers 44 browser operations through Code Mode:
+OpenCode `2.0.3` registers 44 browser operations through Code Mode:
 
 ```js
 const tab = await tools.browser.tabs.open({ url: "http://localhost:3000" });
@@ -116,7 +116,7 @@ reopening, session switching, tab cleanup and reload. A scripted provider does n
 establish live-model quality; a same-machine proxy test does not establish a
 separate remote deployment. Browser screenshots exclude separate native views.
 
-Sources: [pinned plugin](https://github.com/anomalyco/opencode/tree/013ded3743eb9c198d8f544afdfd60fdad1e68a4/packages/plugin-browser),
-[pinned native backend](https://github.com/anomalyco/opencode/blob/013ded3743eb9c198d8f544afdfd60fdad1e68a4/packages/desktop/src/main/browser-chromium.ts),
-[local version record](opencode-beta-19271.md). Installed source is authoritative
+Sources: [pinned plugin](https://github.com/anomalyco/opencode/tree/d44b52ca66b6bf69626c0384626d1a9cd9555977/packages/plugin-browser),
+[pinned native backend](https://github.com/anomalyco/opencode/blob/d44b52ca66b6bf69626c0384626d1a9cd9555977/packages/desktop/src/main/browser-chromium.ts),
+[local version record](../apps/desktop/src/main/browser/upstream/README.md). Installed source is authoritative
 when current online documentation differs.

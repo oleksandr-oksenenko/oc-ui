@@ -1,7 +1,7 @@
 import type { SessionAttention } from "../createSessionAttention.ts";
-import { ScrollView } from "@opencode-ai/ui/scroll-view";
-import type { SessionInfo } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
+import { ScrollView } from "@opencode/ui/scroll-view";
+import type { SessionInfo } from "@opencode/client";
+import type { DataSessionStatus } from "@opencode/client/solid";
 import { For, Show, createMemo } from "solid-js";
 
 import { projectSessionTree, type SessionTreeNode } from "../session-tree-projection.ts";

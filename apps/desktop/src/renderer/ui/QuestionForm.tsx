@@ -5,17 +5,17 @@ import {
   ItemIndicator,
   ItemLabel,
 } from "@kobalte/core/radio-group";
-import { Textarea } from "@opencode-ai/ui/textarea";
-import type { FormAnswer, FormField, FormInfo, FormValue } from "@opencode-ai/client";
-import { Button } from "@opencode-ai/ui/button";
-import { Card } from "@opencode-ai/ui/card";
-import { Checkbox } from "@opencode-ai/ui/checkbox";
-import { Field } from "@opencode-ai/ui/field";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
-import { Loader } from "@opencode-ai/ui/loader";
-import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
-import { TextInput } from "@opencode-ai/ui/text-input";
+import { Textarea } from "@opencode/ui/textarea";
+import type { FormAnswer, FormField, FormInfo, FormValue } from "@opencode/client";
+import { Button } from "@opencode/ui/button";
+import { Card } from "@opencode/ui/card";
+import { Checkbox } from "@opencode/ui/checkbox";
+import { Field } from "@opencode/ui/field";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
+import { Loader } from "@opencode/ui/loader";
+import { RadioGroup, RadioItem } from "@opencode/ui/radio";
+import { TextInput } from "@opencode/ui/text-input";
 import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on } from "solid-js";
 
 import "./QuestionForm.css";

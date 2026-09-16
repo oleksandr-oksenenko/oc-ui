@@ -2,10 +2,10 @@ import { useAtomValue } from "@effect/atom-solid";
 import { Effect, Exit, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../../workspace-owner.ts";
-import type { LocationRef, OpenCodeClient, Project, SessionInfo } from "@opencode-ai/client";
-import type { Data } from "@opencode-ai/client/solid";
-import { useDialog } from "@opencode-ai/ui/context/dialog";
-import { showToast, toaster } from "@opencode-ai/ui/toast";
+import type { LocationRef, OpenCodeClient, Project, SessionInfo } from "@opencode/client";
+import type { Data } from "@opencode/client/solid";
+import { useDialog } from "@opencode/ui/context/dialog";
+import { showToast, toaster } from "@opencode/ui/toast";
 import { createEffect, createSignal, on, onCleanup } from "solid-js";
 
 import type { SessionCatalog } from "../../../../../opencode/session-catalog.ts";

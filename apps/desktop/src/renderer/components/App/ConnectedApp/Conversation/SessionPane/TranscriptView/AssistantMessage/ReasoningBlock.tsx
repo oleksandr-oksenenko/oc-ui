@@ -1,6 +1,6 @@
-import type { SessionMessageAssistantReasoning } from "@opencode-ai/client";
-import { Collapsible } from "@opencode-ai/ui/collapsible";
-import { Icon } from "@opencode-ai/ui/icon";
+import type { SessionMessageAssistantReasoning } from "@opencode/client";
+import { Collapsible } from "@opencode/ui/collapsible";
+import { Icon } from "@opencode/ui/icon";
 import { Show, type JSX } from "solid-js";
 
 import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMount.ts";

@@ -1,4 +1,4 @@
-import type { JsonValue } from "@opencode-ai/client";
+import type { JsonValue } from "@opencode/client";
 import { Schema } from "effect";
 import type { SelectedLineRange } from "@pierre/diffs";
 

@@ -1,8 +1,8 @@
 import type { Preview } from "storybook-solidjs-vite";
 import { createComponent, createEffect, createSignal } from "solid-js";
 
-import "@opencode-ai/ui/styles";
-import "@opencode-ai/ui/styles/tokens";
+import "@opencode/ui/styles";
+import "@opencode/ui/styles/tokens";
 import "../src/renderer/styles.css";
 import { ServerFlowDialogProvider } from "../src/renderer/ui/ServerFlowDialogProvider.tsx";
 import { ThemeProvider } from "../src/renderer/ui/ThemeProvider.tsx";

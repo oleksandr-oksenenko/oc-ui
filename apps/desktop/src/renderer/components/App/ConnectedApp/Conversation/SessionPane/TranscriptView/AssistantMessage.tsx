@@ -1,5 +1,5 @@
-import type { SessionMessageAssistant } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
+import type { SessionMessageAssistant } from "@opencode/client";
+import type { DataSessionStatus } from "@opencode/client/solid";
 import { For, Show, type JSX } from "solid-js";
 
 import { annotationBlock } from "../../annotation-source.ts";

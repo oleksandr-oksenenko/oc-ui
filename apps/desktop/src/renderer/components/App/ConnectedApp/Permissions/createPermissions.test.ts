@@ -1,5 +1,5 @@
 import { Effect, Exit, Scope } from "effect";
-import type { OpenCodeEvent, PermissionReply, PermissionRequest } from "@opencode-ai/client";
+import type { OpenCodeEvent, PermissionReply, PermissionRequest } from "@opencode/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createOpenCodeEventSource } from "../../../../opencode/event-source.ts";

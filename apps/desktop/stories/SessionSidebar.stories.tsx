@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook interaction tests use Promise APIs. */
 import { createSignal } from "solid-js";
-import type { SessionInfo } from "@opencode-ai/client";
+import type { SessionInfo } from "@opencode/client";
 import { expect, userEvent, within } from "storybook/test";
 import type { Meta } from "storybook-solidjs-vite";
 

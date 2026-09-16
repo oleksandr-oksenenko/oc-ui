@@ -16,8 +16,6 @@
     "knip": "knip",
     "lint": "vp lint && pnpm lint:styles",
     "lint:styles": "stylelint \"apps/**/*.css\" && node tools/check-inline-style-tokens.mjs",
-    "opencode:server": "pnpm --filter desktop exec opencode2 serve",
-    "opencode:version": "pnpm --filter desktop exec opencode2 --version",
     "prepare": "effect-tsgo patch --no-typescript --oxlint",
     "ready": "pnpm check && pnpm test && pnpm build && vp run desktop#build:web && vp run desktop#build-storybook",
     "storybook": "vp run desktop#storybook",

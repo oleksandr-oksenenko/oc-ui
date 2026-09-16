@@ -1,6 +1,6 @@
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
-import { List, type ListRef } from "@opencode-ai/ui/list";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
+import { List, type ListRef } from "@opencode/ui/list";
 import { baseKeymap, splitBlock } from "prosemirror-commands";
 import { closeHistory, history, redo, undo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";

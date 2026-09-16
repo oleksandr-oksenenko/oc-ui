@@ -1,5 +1,5 @@
 import { Effect, Predicate, Schema } from "effect";
-import type { PromptInput } from "@opencode-ai/schema";
+import type { PromptInput } from "@opencode/schema";
 
 class PromptFileReadError extends Schema.TaggedError<PromptFileReadError>()("PromptFileReadError", {
   name: Schema.String,

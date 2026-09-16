@@ -1,8 +1,8 @@
-import { Button } from "@opencode-ai/ui/button";
-import { Field } from "@opencode-ai/ui/field";
-import { Loader } from "@opencode-ai/ui/loader";
-import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
-import { TextInput } from "@opencode-ai/ui/text-input";
+import { Button } from "@opencode/ui/button";
+import { Field } from "@opencode/ui/field";
+import { Loader } from "@opencode/ui/loader";
+import { RadioGroup, RadioItem } from "@opencode/ui/radio";
+import { TextInput } from "@opencode/ui/text-input";
 import { Show } from "solid-js";
 import { ThemeToggle } from "../../ui/ThemeToggle.tsx";
 

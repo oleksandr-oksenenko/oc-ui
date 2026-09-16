@@ -1,4 +1,4 @@
-import type { SessionInboxUser, SessionMessageInfo } from "@opencode-ai/client";
+import type { SessionInboxUser, SessionMessageInfo } from "@opencode/client";
 import { createSignal } from "solid-js";
 
 import { PendingMessages } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/PendingMessages.tsx";

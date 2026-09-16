@@ -483,8 +483,6 @@ create/get/delete, and forced removal. Probe: `/tmp/ocui-beta18866-probe.py`.
 Implementation verification also exercised startup success and failure against
 the pinned server: the command observed the selected commit; failure left a
 registered worktree and returned an error without its directory.
-See [the upgrade evaluation](opencode-upgrade-evaluation.md) for results,
-migration coverage, and the development-launch isolation incident.
 
 The upgrade itself passed root checks, all 467 tests, and production build,
 including a rerun in this checkout with pnpm `11.23.0`. Those earlier results validate the dependency adoption. Feature validation

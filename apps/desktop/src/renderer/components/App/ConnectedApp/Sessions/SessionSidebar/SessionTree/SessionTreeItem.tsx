@@ -1,11 +1,11 @@
 import type { SessionAttention } from "../../createSessionAttention.ts";
-import { Collapsible } from "@opencode-ai/ui/collapsible";
-import { Button } from "@opencode-ai/ui/button";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
-import { Loader } from "@opencode-ai/ui/loader";
-import type { SessionInfo } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
+import { Collapsible } from "@opencode/ui/collapsible";
+import { Button } from "@opencode/ui/button";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
+import { Loader } from "@opencode/ui/loader";
+import type { SessionInfo } from "@opencode/client";
+import type { DataSessionStatus } from "@opencode/client/solid";
 import type { JSX } from "solid-js";
 
 import "./SessionTreeItem.css";

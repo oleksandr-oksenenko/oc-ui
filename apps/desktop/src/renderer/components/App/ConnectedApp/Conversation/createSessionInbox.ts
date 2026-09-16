@@ -1,4 +1,4 @@
-import type { SessionInboxUser } from "@opencode-ai/client";
+import type { SessionInboxUser } from "@opencode/client";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect, Semaphore } from "effect";
 import { Atom } from "effect/unstable/reactivity";

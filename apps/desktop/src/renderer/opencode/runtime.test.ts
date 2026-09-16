@@ -1,5 +1,5 @@
-import { OpenCode, type OpenCodeClient, type OpenCodeEvent } from "@opencode-ai/client";
-import type { ClientConnectionStatus } from "@opencode-ai/client/solid";
+import { OpenCode, type OpenCodeClient, type OpenCodeEvent } from "@opencode/client";
+import type { ClientConnectionStatus } from "@opencode/client/solid";
 import { Effect, Exit, Scope } from "effect";
 import { createSignal } from "solid-js";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -13,7 +13,7 @@ const sdk = vi.hoisted(() => ({
   reconnect: () => {},
   syncInfo: vi.fn<() => Promise<void>>(),
 }));
-vi.mock("@opencode-ai/client/solid", () => ({
+vi.mock("@opencode/client/solid", () => ({
   createClientConnection: (
     _api: OpenCodeClient,
     options: { onEvent: (event: OpenCodeEvent) => void },

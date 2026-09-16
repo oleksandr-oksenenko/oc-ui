@@ -1,4 +1,4 @@
-import type { OpenCodeEvent } from "@opencode-ai/client";
+import type { OpenCodeEvent } from "@opencode/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 

@@ -1,6 +1,6 @@
 import { createEffect, createMemo, onCleanup, Show, untrack } from "solid-js";
 import { useAtomValue } from "@effect/atom-solid";
-import { showToast, Toast, toaster } from "@opencode-ai/ui/toast";
+import { showToast, Toast, toaster } from "@opencode/ui/toast";
 
 import type { Renderer } from "./connection.ts";
 import { ConnectionForm } from "./components/App/ConnectionForm.tsx";

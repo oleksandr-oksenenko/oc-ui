@@ -1,15 +1,15 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook's interaction API is Promise-based. */
 
-import { Button } from "@opencode-ai/ui/button";
-import { Checkbox } from "@opencode-ai/ui/checkbox";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
-import { InlineInput } from "@opencode-ai/ui/inline-input";
-import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
-import { Select } from "@opencode-ai/ui/select";
-import { Switch } from "@opencode-ai/ui/switch";
-import { Textarea } from "@opencode-ai/ui/textarea";
-import { TextInput } from "@opencode-ai/ui/text-input";
+import { Button } from "@opencode/ui/button";
+import { Checkbox } from "@opencode/ui/checkbox";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
+import { InlineInput } from "@opencode/ui/inline-input";
+import { RadioGroup, RadioItem } from "@opencode/ui/radio";
+import { Select } from "@opencode/ui/select";
+import { Switch } from "@opencode/ui/switch";
+import { Textarea } from "@opencode/ui/textarea";
+import { TextInput } from "@opencode/ui/text-input";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 

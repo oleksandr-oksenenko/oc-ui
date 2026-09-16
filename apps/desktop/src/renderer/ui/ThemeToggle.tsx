@@ -1,4 +1,4 @@
-import { Button } from "@opencode-ai/ui/button";
+import { Button } from "@opencode/ui/button";
 
 import { useTheme } from "./ThemeProvider.tsx";
 

@@ -46,7 +46,7 @@ const launch = Effect.gen(function* () {
   const settings = yield* Effect.promise(() => configureOpenCodeLaunch(command.userDataPath)).pipe(
     Effect.uninterruptible,
   );
-  const { ServerProcess } = yield* Effect.promise(() => import("@opencode-ai/server/process")).pipe(
+  const { ServerProcess } = yield* Effect.promise(() => import("@opencode/server/process")).pipe(
     Effect.uninterruptible,
   );
   yield* ServerProcess.start(

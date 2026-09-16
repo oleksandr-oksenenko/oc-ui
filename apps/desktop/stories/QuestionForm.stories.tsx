@@ -5,13 +5,13 @@ import type {
   FormInfo,
   SessionMessageAssistant,
   SessionMessageUser,
-} from "@opencode-ai/client";
-import { Button } from "@opencode-ai/ui/button";
-import { Card, CardActions, CardDescription, CardTitle } from "@opencode-ai/ui/card";
-import { Checkbox } from "@opencode-ai/ui/checkbox";
-import { Field } from "@opencode-ai/ui/field";
-import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
-import { TextInput } from "@opencode-ai/ui/text-input";
+} from "@opencode/client";
+import { Button } from "@opencode/ui/button";
+import { Card, CardActions, CardDescription, CardTitle } from "@opencode/ui/card";
+import { Checkbox } from "@opencode/ui/checkbox";
+import { Field } from "@opencode/ui/field";
+import { RadioGroup, RadioItem } from "@opencode/ui/radio";
+import { TextInput } from "@opencode/ui/text-input";
 import { For, createSignal, type JSX } from "solid-js";
 import { expect, fn, userEvent } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";

@@ -1,8 +1,8 @@
 import { Popover as Kobalte } from "@kobalte/core/popover";
-import { Button } from "@opencode-ai/ui/button";
-import { Icon } from "@opencode-ai/ui/icon";
-import { List } from "@opencode-ai/ui/list";
-import { Loader } from "@opencode-ai/ui/loader";
+import { Button } from "@opencode/ui/button";
+import { Icon } from "@opencode/ui/icon";
+import { List } from "@opencode/ui/list";
+import { Loader } from "@opencode/ui/loader";
 import { Show, createEffect, createMemo, createSignal, createUniqueId } from "solid-js";
 
 import type { NewSessionDialogState } from "../NewSessionDialog.tsx";

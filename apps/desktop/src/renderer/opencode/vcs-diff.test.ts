@@ -4,7 +4,7 @@ import type {
   OpenCodeClient,
   OpenCodeEvent,
   VcsDiffOutput,
-} from "@opencode-ai/client";
+} from "@opencode/client";
 import { Effect, Exit, Fiber, Scope } from "effect";
 import { withTestWorkspace } from "../test/workspace.ts";
 import { describe, expect, it, vi } from "vite-plus/test";

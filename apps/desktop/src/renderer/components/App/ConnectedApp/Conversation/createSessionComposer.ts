@@ -2,8 +2,8 @@ import { useAtomValue } from "@effect/atom-solid";
 import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
-import type { SessionInboxDelivery, PromptSkillAttachment } from "@opencode-ai/client";
-import { SessionMessage } from "@opencode-ai/schema";
+import type { SessionInboxDelivery, PromptSkillAttachment } from "@opencode/client";
+import { SessionMessage } from "@opencode/schema";
 import { createSessionDraftStore } from "../../../../domain/index.ts";
 import type {
   AnnotationDraftSnapshot,

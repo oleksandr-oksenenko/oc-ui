@@ -4,10 +4,10 @@ import type {
   SessionMessageToolStateError,
   SessionMessageToolStateRunning,
   ToolContent,
-} from "@opencode-ai/client";
-import { Collapsible } from "@opencode-ai/ui/collapsible";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Loader } from "@opencode-ai/ui/loader";
+} from "@opencode/client";
+import { Collapsible } from "@opencode/ui/collapsible";
+import { Icon } from "@opencode/ui/icon";
+import { Loader } from "@opencode/ui/loader";
 import { For, Show, type JSX } from "solid-js";
 
 import { annotationBlock } from "../../../annotation-source.ts";

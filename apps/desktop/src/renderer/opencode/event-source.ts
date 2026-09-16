@@ -1,4 +1,4 @@
-import type { OpenCodeEvent } from "@opencode-ai/client";
+import type { OpenCodeEvent } from "@opencode/client";
 
 type EventMap = { [Event in OpenCodeEvent as Event["type"]]: Event };
 

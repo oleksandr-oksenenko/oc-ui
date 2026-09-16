@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
-import { RadioGroup, RadioItem } from "@opencode-ai/ui/radio";
-import { Select } from "@opencode-ai/ui/select";
+import { RadioGroup, RadioItem } from "@opencode/ui/radio";
+import { Select } from "@opencode/ui/select";
 
 import { CatalogCard, CatalogPage } from "./StoryLayout";
 

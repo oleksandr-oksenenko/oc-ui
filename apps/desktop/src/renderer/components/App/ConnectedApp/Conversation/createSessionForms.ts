@@ -1,6 +1,6 @@
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
-import type { FormAnswer, FormInfo } from "@opencode-ai/client";
-import type { Data } from "@opencode-ai/client/solid";
+import type { FormAnswer, FormInfo } from "@opencode/client";
+import type { Data } from "@opencode/client/solid";
 import { onCleanup, type Accessor } from "solid-js";
 
 import { createFormController } from "../Forms/createFormController.ts";

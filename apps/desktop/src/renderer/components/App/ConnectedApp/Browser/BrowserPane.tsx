@@ -1,6 +1,6 @@
-import { Button } from "@opencode-ai/ui/button";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
+import { Button } from "@opencode/ui/button";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
 import type { Browser } from "@opencode/plugin-browser/rpc";
 import { For, Show, createEffect, createSignal, type JSX } from "solid-js";
 import type { SessionBrowserState } from "./createSessionBrowser.ts";

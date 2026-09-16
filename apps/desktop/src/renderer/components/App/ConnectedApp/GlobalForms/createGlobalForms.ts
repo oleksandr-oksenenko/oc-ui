@@ -1,6 +1,6 @@
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
-import type { FormAnswer, LocationRef } from "@opencode-ai/client";
-import { locationKey, type Data, type FormWithLocation } from "@opencode-ai/client/solid";
+import type { FormAnswer, LocationRef } from "@opencode/client";
+import { locationKey, type Data, type FormWithLocation } from "@opencode/client/solid";
 import { createMemo, onCleanup, type Accessor } from "solid-js";
 
 import { createFormController } from "../Forms/createFormController.ts";

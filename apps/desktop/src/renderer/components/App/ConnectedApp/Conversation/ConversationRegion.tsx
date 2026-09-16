@@ -1,5 +1,5 @@
-import { Button } from "@opencode-ai/ui/button";
-import { Loader } from "@opencode-ai/ui/loader";
+import { Button } from "@opencode/ui/button";
+import { Loader } from "@opencode/ui/loader";
 import { For, Show, createMemo, onCleanup, type JSX } from "solid-js";
 
 import type { AnnotationDraftStore } from "../../../../domain/annotation-drafts.ts";

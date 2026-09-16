@@ -1,7 +1,7 @@
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
-import { LineComment } from "@opencode-ai/ui/line-comment";
-import { Textarea } from "@opencode-ai/ui/textarea";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
+import { LineComment } from "@opencode/ui/line-comment";
+import { Textarea } from "@opencode/ui/textarea";
 import { Show, untrack, type JSX } from "solid-js";
 
 import type { TranscriptAnnotation } from "../../../../../domain/annotation-drafts.ts";

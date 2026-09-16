@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import type { Meta } from "storybook-solidjs-vite";
 
-import { Field } from "@opencode-ai/ui/field";
-import { TextInput } from "@opencode-ai/ui/text-input";
+import { Field } from "@opencode/ui/field";
+import { TextInput } from "@opencode/ui/text-input";
 
 import { CatalogCard, CatalogPage } from "./StoryLayout";
 

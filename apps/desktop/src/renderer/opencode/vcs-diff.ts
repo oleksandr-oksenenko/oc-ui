@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-solid";
-import type { FileDiffInfo, LocationRef, OpenCodeClient } from "@opencode-ai/client";
-import { locationKey } from "@opencode-ai/client/solid";
+import type { FileDiffInfo, LocationRef, OpenCodeClient } from "@opencode/client";
+import { locationKey } from "@opencode/client/solid";
 import { Cause, Effect, Fiber, FiberMap, Option } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 
@@ -150,7 +150,7 @@ export function createVcsDiffStore(input: VcsDiffStoreInput): VcsDiffStore {
     );
   });
 
-  // HACK: V2 beta-19271 only publishes external filesystem changes for branch
+  // HACK: V2 only publishes external filesystem changes for branch
   // metadata. Remove polling when upstream supplies working-tree change events.
   // Related report: https://github.com/anomalyco/opencode/issues/48451 (dev, not V2).
   const poll = Effect.fn("VcsDiffStore.poll")(function* (location: LocationRef, mode: VcsDiffMode) {

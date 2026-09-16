@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-solid";
-import type { LocationRef } from "@opencode-ai/client";
-import type { Data } from "@opencode-ai/client/solid";
+import type { LocationRef } from "@opencode/client";
+import type { Data } from "@opencode/client/solid";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { createEffect, on, onCleanup, type Accessor } from "solid-js";

@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import type { BrowserApi } from "./browser-api.ts";
 
-export const OPENCODE_VERSION = "0.0.0-beta-19271" as const;
+export const OPENCODE_VERSION = "2.0.3" as const;
 
 const LocalTargetSchema = Schema.Struct({ kind: Schema.Literal("local") });
 const RemoteTargetSchema = Schema.Struct({

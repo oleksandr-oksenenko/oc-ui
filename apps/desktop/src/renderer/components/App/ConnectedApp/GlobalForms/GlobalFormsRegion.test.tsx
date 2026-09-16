@@ -1,4 +1,4 @@
-import type { FormAnswer, FormInfo, LocationRef } from "@opencode-ai/client";
+import type { FormAnswer, FormInfo, LocationRef } from "@opencode/client";
 import { ServerFlowDialogProvider } from "../../../../ui/ServerFlowDialogProvider.tsx";
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";

@@ -35,7 +35,7 @@ export async function testCertificate(directory) {
 export async function startServer(profile, project, corsOrigin) {
   const password = "browser-acceptance-only";
   const child = spawn(
-    require.resolve("@opencode-ai/cli/bin/opencode2.exe"),
+    require.resolve("@opencode/cli/bin/opencode.exe"),
     ["serve", "--hostname", "127.0.0.1", "--port", "0", "--cors", corsOrigin],
     {
       cwd: project,

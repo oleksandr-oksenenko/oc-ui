@@ -1,5 +1,5 @@
-import type { SessionInfo } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
+import type { SessionInfo } from "@opencode/client";
+import type { DataSessionStatus } from "@opencode/client/solid";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect, Fiber, Semaphore } from "effect";
 import { Atom } from "effect/unstable/reactivity";

@@ -1,4 +1,4 @@
-import type { Data } from "@opencode-ai/client/solid";
+import type { Data } from "@opencode/client/solid";
 import { Deferred, Effect, Queue, RcMap } from "effect";
 
 import type { WorkspaceOwner, WorkspaceRequestError } from "../workspace-owner.ts";

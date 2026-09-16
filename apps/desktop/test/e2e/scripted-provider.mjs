@@ -127,7 +127,7 @@ export async function startScriptedProvider() {
       providers: {
         acceptance: {
           name: "Acceptance local provider",
-          package: "@opencode-ai/ai/providers/openai-compatible",
+          package: "@opencode/ai/providers/openai-compatible",
           settings: { baseURL: `${url}/v1`, apiKey: "local-acceptance-only" },
           models: {
             stream: { ...model("Acceptance Stream"), variants: [{ id: "high" }] },

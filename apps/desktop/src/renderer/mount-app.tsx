@@ -5,8 +5,8 @@ import { render } from "solid-js/web";
 import type { AppHost } from "../shared/app-host.ts";
 import { App } from "./App.tsx";
 import { createRenderer } from "./connection.ts";
-import "@opencode-ai/ui/styles";
-import "@opencode-ai/ui/styles/tokens";
+import "@opencode/ui/styles";
+import "@opencode/ui/styles/tokens";
 import "./styles.css";
 
 export function mountApp(host: AppHost) {

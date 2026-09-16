@@ -1,6 +1,6 @@
 import { withTestWorkspace } from "../../../../test/workspace.ts";
-import type { FormInfo, LocationRef, OpenCodeEvent } from "@opencode-ai/client";
-import type { FormWithLocation } from "@opencode-ai/client/solid";
+import type { FormInfo, LocationRef, OpenCodeEvent } from "@opencode/client";
+import type { FormWithLocation } from "@opencode/client/solid";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 

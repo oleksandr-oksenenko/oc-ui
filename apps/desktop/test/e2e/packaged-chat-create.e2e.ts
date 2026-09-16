@@ -6,11 +6,7 @@ import assert from "node:assert/strict";
 import { stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { $, browser } from "@wdio/globals";
-import type {
-  OpenCodeClient,
-  SessionMessageAssistant,
-  SessionMessageInfo,
-} from "@opencode-ai/client";
+import type { OpenCodeClient, SessionMessageAssistant, SessionMessageInfo } from "@opencode/client";
 
 import { OPENCODE_VERSION } from "../../src/shared/desktop-api.ts";
 import { withLocalOpenCodeClient } from "./support/local-opencode-client.ts";

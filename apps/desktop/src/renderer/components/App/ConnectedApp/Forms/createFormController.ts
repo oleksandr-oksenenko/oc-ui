@@ -2,8 +2,8 @@ import { useAtomValue } from "@effect/atom-solid";
 import { Cause, Effect, Fiber } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
-import type { FormAnswer, LocationRef } from "@opencode-ai/client";
-import type { Data, FormWithLocation } from "@opencode-ai/client/solid";
+import type { FormAnswer, LocationRef } from "@opencode/client";
+import type { Data, FormWithLocation } from "@opencode/client/solid";
 import { createEffect, createMemo, on, onCleanup, type Accessor } from "solid-js";
 
 type FormControllerState = "loading" | "ready" | "failed";

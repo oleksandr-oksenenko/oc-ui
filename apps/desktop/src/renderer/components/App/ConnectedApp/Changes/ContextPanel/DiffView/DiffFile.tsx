@@ -1,7 +1,7 @@
-import type { FileDiffInfo } from "@opencode-ai/client";
+import type { FileDiffInfo } from "@opencode/client";
 import { Show, createMemo, createSignal } from "solid-js";
-import { Collapsible } from "@opencode-ai/ui/collapsible";
-import { DiffChanges } from "@opencode-ai/ui/diff-changes";
+import { Collapsible } from "@opencode/ui/collapsible";
+import { DiffChanges } from "@opencode/ui/diff-changes";
 
 import { PierreDiffBody } from "./DiffFile/PierreDiffBody.tsx";
 import type { DiffFileReview } from "./diff-render-data.ts";

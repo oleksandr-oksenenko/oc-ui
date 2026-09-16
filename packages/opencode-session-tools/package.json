@@ -17,8 +17,8 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
-    "@opencode-ai/plugin": "catalog:",
-    "@opencode-ai/schema": "catalog:",
+    "@opencode/plugin": "catalog:",
+    "@opencode/schema": "catalog:",
     "esbuild": "0.28.2",
     "vite-plus": "catalog:"
   }

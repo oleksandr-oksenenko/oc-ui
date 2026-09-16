@@ -1,4 +1,4 @@
-import { Select } from "@opencode-ai/ui/select";
+import { Select } from "@opencode/ui/select";
 import { createEffect } from "solid-js";
 
 export type VariantPickerOption = {

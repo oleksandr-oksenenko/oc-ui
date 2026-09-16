@@ -2,14 +2,14 @@ import { useAtomValue } from "@effect/atom-solid";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../workspace-owner.ts";
-import type { Data } from "@opencode-ai/client/solid";
+import type { Data } from "@opencode/client/solid";
 import type {
   LocationRef,
   ModelInfo,
   ModelRef,
   OpenCodeClient,
   SessionInfo,
-} from "@opencode-ai/client";
+} from "@opencode/client";
 import { createMemo } from "solid-js";
 
 type ModelSelectionChoice = {

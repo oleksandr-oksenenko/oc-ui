@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/async-function */
 
-import { Button } from "@opencode-ai/ui/button";
-import { Icon } from "@opencode-ai/ui/icon";
+import { Button } from "@opencode/ui/button";
+import { Icon } from "@opencode/ui/icon";
 import { Show, createSignal, onCleanup } from "solid-js";
 import { expect, screen, userEvent, within } from "storybook/test";
 import type { Meta } from "storybook-solidjs-vite";

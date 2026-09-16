@@ -1,7 +1,7 @@
 import { app, session, type WebContents } from "electron";
 import { Browser } from "@opencode/plugin-browser/rpc";
 import { BrowserProxy } from "@opencode/plugin-browser/proxy";
-import type { RpcClient } from "@opencode-ai/client/effect";
+import type { RpcClient } from "@opencode/client/effect";
 import { Effect, Encoding } from "effect";
 
 export type BrowserNetwork = Effect.Success<ReturnType<typeof createBrowserNetwork>>;

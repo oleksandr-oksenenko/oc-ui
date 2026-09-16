@@ -1,7 +1,7 @@
 # Queueing and steering
 
 This extends the original milestone-one composer behavior using OpenCode
-`0.0.0-beta-19271` inbox contracts.
+`2.0.3` inbox contracts.
 
 - Enter and Send submit with `delivery: "steer"`; Cmd+Enter uses `"queue"`.
   Shift+Enter inserts a newline. While running, the shared button shows Stop

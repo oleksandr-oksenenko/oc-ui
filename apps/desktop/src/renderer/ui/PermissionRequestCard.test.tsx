@@ -1,4 +1,4 @@
-import type { PermissionReply, PermissionRequest } from "@opencode-ai/client";
+import type { PermissionReply, PermissionRequest } from "@opencode/client";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { mount } from "../test/mount.ts";

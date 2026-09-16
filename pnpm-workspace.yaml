@@ -10,14 +10,14 @@ catalog:
   "@effect/tsgo": 0.38.0
   "@effect/vitest": 4.0.0-rc.112
   "@kobalte/core": 0.13.13
-  "@opencode-ai/cli": 0.0.0-beta-19271
-  "@opencode-ai/client": 0.0.0-beta-19271
-  "@opencode-ai/plugin": 0.0.0-beta-19271
-  "@opencode-ai/schema": 0.0.0-beta-19271
-  "@opencode-ai/server": 0.0.0-beta-19271
-  "@opencode-ai/ui": 0.0.0-beta-19271
-  "@opencode-ai/util": 0.0.0-beta-19271
-  "@opencode/plugin-browser": 0.0.0-beta-19271
+  "@opencode/cli": 2.0.3
+  "@opencode/client": 2.0.3
+  "@opencode/plugin": 2.0.3
+  "@opencode/schema": 2.0.3
+  "@opencode/server": 2.0.3
+  "@opencode/ui": 2.0.3
+  "@opencode/util": 2.0.3
+  "@opencode/plugin-browser": 2.0.3
   devtools-protocol: 0.0.1687809
   lighthouse: 13.4.1
   "@oxlint/plugins": 1.79.0
@@ -67,7 +67,7 @@ peerDependencyRules:
     vite: "*"
 
 allowBuilds:
-  "@opencode-ai/cli": true
+  "@opencode/cli": true
   "@ff-labs/fff-node": false
   "@lydell/node-pty": false
   "@parcel/watcher": false
@@ -93,25 +93,25 @@ minimumReleaseAgeExclude:
   - "@voidzero-dev/vite-plus-win32-arm64-msvc@0.3.0"
   - "@voidzero-dev/vite-plus-win32-x64-msvc@0.3.0"
   - "vite-plus@0.3.0"
-  - "@opencode-ai/cli-darwin-arm64@0.0.0-beta-19271"
-  - "@opencode-ai/cli-darwin-x64-baseline@0.0.0-beta-19271"
-  - "@opencode-ai/cli-darwin-x64@0.0.0-beta-19271"
-  - "@opencode-ai/cli-linux-arm64-musl@0.0.0-beta-19271"
-  - "@opencode-ai/cli-linux-arm64@0.0.0-beta-19271"
-  - "@opencode-ai/cli-linux-x64-baseline-musl@0.0.0-beta-19271"
-  - "@opencode-ai/cli-linux-x64-baseline@0.0.0-beta-19271"
-  - "@opencode-ai/cli-linux-x64-musl@0.0.0-beta-19271"
-  - "@opencode-ai/cli-linux-x64@0.0.0-beta-19271"
-  - "@opencode-ai/cli-windows-arm64@0.0.0-beta-19271"
-  - "@opencode-ai/cli-windows-x64-baseline@0.0.0-beta-19271"
-  - "@opencode-ai/cli-windows-x64@0.0.0-beta-19271"
-  - "@opencode-ai/cli@0.0.0-beta-19271"
-  - "@opencode-ai/client@0.0.0-beta-19271"
-  - "@opencode-ai/server@0.0.0-beta-19271"
-  - "@opencode-ai/util@0.0.0-beta-19271"
-  - "@opencode-ai/protocol@0.0.0-beta-19271"
-  - "@opencode-ai/schema@0.0.0-beta-19271"
-  - "@opencode-ai/ui@0.0.0-beta-19271"
+  - "@opencode/cli-darwin-arm64@2.0.3"
+  - "@opencode/cli-darwin-x64-baseline@2.0.3"
+  - "@opencode/cli-darwin-x64@2.0.3"
+  - "@opencode/cli-linux-arm64-musl@2.0.3"
+  - "@opencode/cli-linux-arm64@2.0.3"
+  - "@opencode/cli-linux-x64-baseline-musl@2.0.3"
+  - "@opencode/cli-linux-x64-baseline@2.0.3"
+  - "@opencode/cli-linux-x64-musl@2.0.3"
+  - "@opencode/cli-linux-x64@2.0.3"
+  - "@opencode/cli-windows-arm64@2.0.3"
+  - "@opencode/cli-windows-x64-baseline@2.0.3"
+  - "@opencode/cli-windows-x64@2.0.3"
+  - "@opencode/cli@2.0.3"
+  - "@opencode/client@2.0.3"
+  - "@opencode/server@2.0.3"
+  - "@opencode/util@2.0.3"
+  - "@opencode/protocol@2.0.3"
+  - "@opencode/schema@2.0.3"
+  - "@opencode/ui@2.0.3"
   - "@types/node@26.3.0"
   - "@effect/tsgo-darwin-arm64@0.38.0"
   - "@effect/tsgo-darwin-x64@0.38.0"

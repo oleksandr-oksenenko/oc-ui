@@ -43,7 +43,7 @@ actual exported type rather than introducing a parallel application type.
 ## Current integration points
 
 - `pnpm-workspace.yaml` already includes `packages/*` and pins OpenCode to
-  `0.0.0-beta-19271`.
+  `2.0.3`.
 - The published plugin package supports Effect tool registration through
   `ctx.tool.transform`, and session get/create/switch/prompt plus worktree APIs.
   Its session interface does not expose fork.
@@ -89,7 +89,7 @@ access. Keep findings narrowly tied to this contract.
 
 Create `packages/opencode-session-tools` with an ESM plugin entry, input/output
 schemas, one creation workflow, and focused tests. Use
-`@opencode-ai/plugin/effect` pinned alongside the other OpenCode packages.
+`@opencode/plugin/effect` pinned alongside the other OpenCode packages.
 
 The plugin registers the tool; the workflow owns validation and creation ordering;
 OpenCode owns sessions, worktrees, model execution, and persistent state. Use the

@@ -1,8 +1,8 @@
 /* oxlint-disable effecttsgo/async-function */
 
-import type { PermissionReply, PermissionRequest } from "@opencode-ai/client";
-import { Button } from "@opencode-ai/ui/button";
-import { Loader } from "@opencode-ai/ui/loader";
+import type { PermissionReply, PermissionRequest } from "@opencode/client";
+import { Button } from "@opencode/ui/button";
+import { Loader } from "@opencode/ui/loader";
 import { type JSX } from "solid-js";
 import { expect, fn, userEvent, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";

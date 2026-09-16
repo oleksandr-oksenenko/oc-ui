@@ -1,5 +1,5 @@
 import { RegistryContext } from "@effect/atom-solid";
-import type { LocationRef, OpenCodeClient } from "@opencode-ai/client";
+import type { LocationRef, OpenCodeClient } from "@opencode/client";
 import { Effect, Exit, Scope } from "effect";
 import { AtomRegistry } from "effect/unstable/reactivity";
 import { onCleanup } from "solid-js";

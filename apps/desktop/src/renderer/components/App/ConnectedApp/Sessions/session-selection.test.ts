@@ -1,4 +1,4 @@
-import type { SessionInfo } from "@opencode-ai/client";
+import type { SessionInfo } from "@opencode/client";
 import { describe, expect, it } from "vite-plus/test";
 
 import { sessionFixture } from "../../../../test/session-fixture.ts";

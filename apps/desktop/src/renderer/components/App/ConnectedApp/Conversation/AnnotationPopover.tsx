@@ -1,5 +1,5 @@
-import { Button } from "@opencode-ai/ui/button";
-import { Popover } from "@opencode-ai/ui/popover";
+import { Button } from "@opencode/ui/button";
+import { Popover } from "@opencode/ui/popover";
 import { For, Show, createEffect, createMemo, onCleanup, untrack, type JSX } from "solid-js";
 
 import { AnnotationCommentRow } from "./AnnotationPopover/AnnotationCommentRow.tsx";

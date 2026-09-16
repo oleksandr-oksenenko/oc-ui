@@ -7,9 +7,9 @@ import type {
   SessionInfo,
   WorktreeDirectory,
   WorktreeRemoveInput,
-} from "@opencode-ai/client";
-import { useDialog } from "@opencode-ai/ui/context/dialog";
-import { showToast } from "@opencode-ai/ui/toast";
+} from "@opencode/client";
+import { useDialog } from "@opencode/ui/context/dialog";
+import { showToast } from "@opencode/ui/toast";
 import { createEffect, onCleanup, onMount, type Accessor } from "solid-js";
 
 import { useServerFlowDismissBlock } from "../../../../../ui/ServerFlowDialogProvider.tsx";

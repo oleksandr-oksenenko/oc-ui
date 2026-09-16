@@ -1,6 +1,6 @@
 import { Show } from "solid-js";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
 
 import "../Changes/ContextPanel/ContextTabs.css";
 

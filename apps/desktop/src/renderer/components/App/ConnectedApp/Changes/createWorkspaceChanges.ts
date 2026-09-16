@@ -1,4 +1,4 @@
-import type { FileDiffInfo, SessionInfo } from "@opencode-ai/client";
+import type { FileDiffInfo, SessionInfo } from "@opencode/client";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";

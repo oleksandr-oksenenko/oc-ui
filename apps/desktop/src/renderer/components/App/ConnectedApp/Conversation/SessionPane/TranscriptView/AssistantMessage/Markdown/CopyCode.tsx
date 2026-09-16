@@ -1,6 +1,6 @@
 import { createSignal, type JSX } from "solid-js";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
 
 export function CopyCode(props: { readonly text: string }): JSX.Element {
   const [status, setStatus] = createSignal("Copy code");

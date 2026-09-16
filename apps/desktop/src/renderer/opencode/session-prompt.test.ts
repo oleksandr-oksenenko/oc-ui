@@ -1,4 +1,4 @@
-import type { JsonValue } from "@opencode-ai/client";
+import type { JsonValue } from "@opencode/client";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { TranscriptAnnotation } from "../domain/annotation-drafts.ts";

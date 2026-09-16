@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import { RegistryContext } from "@effect/atom-solid";
 import { withTestWorkspace } from "../../../../../../test/workspace.ts";
-import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode-ai/client";
-import { useDialog } from "@opencode-ai/ui/context/dialog";
+import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode/client";
+import { useDialog } from "@opencode/ui/context/dialog";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { mount as mountView } from "../../../../../../test/mount.ts";

@@ -16,7 +16,7 @@ pnpm preview:web  # Local build preview: http://127.0.0.1:4173
 ```
 
 Start OpenCode separately or connect to a running server. The pinned CLI can be
-started with `OPENCODE_SERVER_PASSWORD=your-password pnpm opencode:server`.
+started with `OPENCODE_SERVER_PASSWORD=your-password pnpm --filter desktop exec opencode serve`.
 Browser commands do not launch Electron or OpenCode. Use `pnpm dev:web --port 5185`
 when the default port is occupied, including by Electron development.
 

@@ -1,7 +1,7 @@
 import { Deferred, Effect, Result, Schema } from "effect";
 import type { WorkspaceOwner } from "../workspace-owner.ts";
-import { isWorktreeError } from "@opencode-ai/client";
-import type { LocationRef, OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client";
+import { isWorktreeError } from "@opencode/client";
+import type { LocationRef, OpenCodeClient, OpenCodeEvent } from "@opencode/client";
 
 import prepareScript from "./worktree-scripts/prepare-worktree.sh?raw";
 

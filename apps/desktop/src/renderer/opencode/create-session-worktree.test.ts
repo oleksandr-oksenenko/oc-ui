@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { OpenCodeClient, OpenCodeEvent } from "@opencode-ai/client";
+import type { OpenCodeClient, OpenCodeEvent } from "@opencode/client";
 import { Effect, Exit, Schema, Scope } from "effect";
 import { deferred } from "../test/deferred.ts";
 import { describe, expect, it, vi } from "vite-plus/test";

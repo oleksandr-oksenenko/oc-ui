@@ -4,6 +4,6 @@ import solid from "vite-plugin-solid";
 export default defineConfig({
   plugins: [solid()],
   optimizeDeps: {
-    include: ["@opencode-ai/ui > fuzzysort"],
+    include: ["@opencode/ui > fuzzysort"],
   },
 });

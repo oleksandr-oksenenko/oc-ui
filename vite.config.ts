@@ -88,7 +88,7 @@ export default defineConfig({
       "import/no-unassigned-import": [
         "error",
         {
-          allow: ["**/*.css", "@opencode-ai/ui/styles", "@opencode-ai/ui/styles/tokens"],
+          allow: ["**/*.css", "@opencode/ui/styles", "@opencode/ui/styles/tokens"],
         },
       ],
       "typescript/no-unsafe-type-assertion": "error",

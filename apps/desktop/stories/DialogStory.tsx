@@ -1,4 +1,4 @@
-import { useDialog } from "@opencode-ai/ui/context/dialog";
+import { useDialog } from "@opencode/ui/context/dialog";
 import type { JSXElement } from "solid-js";
 import { onCleanup, onMount } from "solid-js";
 

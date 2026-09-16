@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-solid";
 import { Browser } from "@opencode/plugin-browser/rpc";
-import { SessionID } from "@opencode-ai/schema/session-id";
+import { SessionID } from "@opencode/schema/session-id";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { createEffect, type Accessor } from "solid-js";

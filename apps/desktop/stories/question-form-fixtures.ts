@@ -1,4 +1,4 @@
-import type { FormInfo } from "@opencode-ai/client";
+import type { FormInfo } from "@opencode/client";
 
 export const workspaceQuestionForm = {
   id: "frm_workspace_scope",

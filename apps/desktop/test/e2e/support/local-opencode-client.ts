@@ -1,8 +1,8 @@
 /// <reference types="node" />
 
 import { browser } from "@wdio/globals";
-import { OpenCode } from "@opencode-ai/client";
-import type { OpenCodeClient } from "@opencode-ai/client";
+import { OpenCode } from "@opencode/client";
+import type { OpenCodeClient } from "@opencode/client";
 import {
   parseLocalOpenCodeConnectResult,
   type DesktopApi,

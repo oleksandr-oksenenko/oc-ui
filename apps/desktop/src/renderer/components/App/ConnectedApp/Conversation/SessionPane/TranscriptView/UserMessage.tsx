@@ -1,5 +1,5 @@
 import type { JSX } from "solid-js";
-import type { SessionMessageUser } from "@opencode-ai/client";
+import type { SessionMessageUser } from "@opencode/client";
 import { For, Show, createMemo } from "solid-js";
 import { unwrap } from "solid-js/store";
 

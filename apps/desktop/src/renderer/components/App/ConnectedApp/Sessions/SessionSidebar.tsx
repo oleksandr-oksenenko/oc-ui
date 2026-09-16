@@ -1,10 +1,10 @@
 import type { SessionAttention } from "./createSessionAttention.ts";
-import { Button } from "@opencode-ai/ui/button";
-import { Icon } from "@opencode-ai/ui/icon";
-import { Loader } from "@opencode-ai/ui/loader";
-import { TextInput } from "@opencode-ai/ui/text-input";
-import type { SessionInfo } from "@opencode-ai/client";
-import type { DataSessionStatus } from "@opencode-ai/client/solid";
+import { Button } from "@opencode/ui/button";
+import { Icon } from "@opencode/ui/icon";
+import { Loader } from "@opencode/ui/loader";
+import { TextInput } from "@opencode/ui/text-input";
+import type { SessionInfo } from "@opencode/client";
+import type { DataSessionStatus } from "@opencode/client/solid";
 import { Show, createSignal } from "solid-js";
 
 import { SessionHeader } from "./SessionSidebar/SessionHeader.tsx";

@@ -1,6 +1,6 @@
 import { Effect, Exit, Scope } from "effect";
 import { withTestWorkspace } from "../../../../test/workspace.ts";
-import type { FormAnswer, FormInfo, OpenCodeEvent } from "@opencode-ai/client";
+import type { FormAnswer, FormInfo, OpenCodeEvent } from "@opencode/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 

@@ -1,4 +1,4 @@
-import type { Data } from "@opencode-ai/client/solid";
+import type { Data } from "@opencode/client/solid";
 import { Effect, Exit, Scope } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 

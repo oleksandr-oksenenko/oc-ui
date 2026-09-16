@@ -1,7 +1,7 @@
 import { createUniqueId, type JSX } from "solid-js";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
-import { Tabs } from "@opencode-ai/ui/tabs";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
+import { Tabs } from "@opencode/ui/tabs";
 
 import "./ContextTabs.css";
 

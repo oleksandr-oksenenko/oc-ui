@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { realpath, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { OpenCode } from "@opencode-ai/client";
+import { OpenCode } from "@opencode/client";
 import { $, browser } from "@wdio/globals";
 
 import { git } from "./project-fixture.ts";

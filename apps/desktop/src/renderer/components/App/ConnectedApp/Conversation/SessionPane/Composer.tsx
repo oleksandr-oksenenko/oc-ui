@@ -1,10 +1,10 @@
-import type { CommandInfo, PromptSkillAttachment, SkillInfo } from "@opencode-ai/client";
+import type { CommandInfo, PromptSkillAttachment, SkillInfo } from "@opencode/client";
 import { PromptEditor } from "./Composer/PromptEditor.tsx";
-import { Button } from "@opencode-ai/ui/button";
-import { Icon } from "@opencode-ai/ui/icon";
-import { IconButton } from "@opencode-ai/ui/icon-button";
-import { Loader } from "@opencode-ai/ui/loader";
-import { Tooltip } from "@opencode-ai/ui/tooltip";
+import { Button } from "@opencode/ui/button";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
+import { Loader } from "@opencode/ui/loader";
+import { Tooltip } from "@opencode/ui/tooltip";
 import { For, Show } from "solid-js";
 
 import { ImagePreview, isImageFile } from "../../../../../ui/ImagePreview.tsx";

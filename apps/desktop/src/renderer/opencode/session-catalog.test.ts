@@ -1,5 +1,5 @@
-import type { LocationRef, OpenCodeClient, OpenCodeEvent, SessionInfo } from "@opencode-ai/client";
-import type { Data } from "@opencode-ai/client/solid";
+import type { LocationRef, OpenCodeClient, OpenCodeEvent, SessionInfo } from "@opencode/client";
+import type { Data } from "@opencode/client/solid";
 import { Effect, Exit, Scope } from "effect";
 import { withTestWorkspace } from "../test/workspace.ts";
 import { describe, expect, it, vi } from "vite-plus/test";

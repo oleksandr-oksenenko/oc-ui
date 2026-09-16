@@ -13,7 +13,7 @@ export async function configureOpenCodeLaunch(userDataPath: string, env = proces
     `@opencode-ai/pty-${process.platform}-${process.arch}/bin/opencode-pty`,
   );
 
-  const { Global } = await import("@opencode-ai/util/global");
+  const { Global } = await import("@opencode/util/global");
   const database = env.OPENCODE_DB || "opencode.db";
   if (database === ":memory:") throw new Error("Built-in OpenCode requires a persistent database.");
   return {

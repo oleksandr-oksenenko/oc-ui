@@ -1,2 +1,2 @@
-declare module "@opencode-ai/ui/styles";
-declare module "@opencode-ai/ui/styles/tokens";
+declare module "@opencode/ui/styles";
+declare module "@opencode/ui/styles/tokens";
