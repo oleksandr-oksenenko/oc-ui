@@ -1,5 +1,6 @@
 .composer {
   box-sizing: border-box;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -160,6 +161,28 @@
   gap: 0;
   min-width: 0;
   min-height: 22px;
+}
+
+.composer-attach[data-component="icon-button-v2"] {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  color: var(--oc-text-muted);
+}
+
+.composer-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--oc-border-emphasis);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-muted);
+  background: var(--oc-surface-raised);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+  pointer-events: none;
 }
 
 .composer-context {

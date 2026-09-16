@@ -974,7 +974,7 @@ describe.sequential("production browser app", () => {
       )
       .toBeGreaterThan(0);
     await selectSession(other.title);
-    expect(await page.getByRole("list", { name: "Attached files", exact: true }).count()).toBe(0);
+    expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
     await selectSession(session.title);
     await page.getByRole("button", { name: "Remove screenshot.png", exact: true }).waitFor();
     const admitted = page.waitForResponse(
@@ -986,7 +986,7 @@ describe.sequential("production browser app", () => {
     const response = await admitted;
     expect(response.ok(), await response.text()).toBe(true);
     await page
-      .getByRole("list", { name: "Attached files", exact: true })
+      .getByRole("list", { name: "Images and files", exact: true })
       .waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Enlarge screenshot.png", exact: true }).waitFor();
     await transcript("notes.txt");
@@ -1024,8 +1024,44 @@ describe.sequential("production browser app", () => {
       { name: "screenshot.png", mime: "image/png" },
       { name: "notes.txt", mime: "text/plain" },
     ]);
+    expect(message.files.every((file) => file.source.type === "inline")).toBe(true);
     expect(Buffer.from(message.files[1].data, "base64").toString()).toBe(
       "Clipboard document contents",
+    );
+  });
+
+  it("attaches files chosen through the picker button and sends their bytes", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Picker attachments",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    const chooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Add images and files", exact: true }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles([
+      {
+        name: "picked.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("Picked document contents"),
+      },
+    ]);
+    await page.getByRole("button", { name: "Remove picked.txt", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await page
+      .getByRole("list", { name: "Images and files", exact: true })
+      .waitFor({ state: "hidden" });
+    await transcript("picked.txt");
+    await idle();
+    const messages = await api.message.list({ sessionID: session.id });
+    const message = messages.data.find((item) => item.type === "user");
+    expect(message.files.map((file) => ({ name: file.name, mime: file.mime }))).toEqual([
+      { name: "picked.txt", mime: "text/plain" },
+    ]);
+    expect(message.files[0].source).toEqual({ type: "inline" });
+    expect(Buffer.from(message.files[0].data, "base64").toString()).toBe(
+      "Picked document contents",
     );
   });
 

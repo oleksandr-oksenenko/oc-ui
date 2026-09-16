@@ -10,6 +10,7 @@ import {
   type ReviewDraftKey,
 } from "../../../../domain/index.ts";
 import { SESSION_PROMPT_METADATA_KEY } from "../../../../opencode/session-prompt.ts";
+import { MAX_ATTACHMENT_BYTES } from "../../../../opencode/attachments.ts";
 import { createSessionComposer } from "./createSessionComposer.ts";
 
 type ComposerInput = Parameters<typeof createSessionComposer>[0];
@@ -164,7 +165,7 @@ describe("createSessionComposer", () => {
     root.setSelectedID("session");
     const screenshot = new File(["image"], "screenshot.png", { type: "image/png" });
     const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
-    root.composer.pasteFiles([screenshot, notes]);
+    root.composer.attachFiles([screenshot, notes]);
     root.setSelectedID("other");
     expect(root.composer.files()).toEqual([]);
     root.setSelectedID("session");
@@ -194,10 +195,10 @@ describe("createSessionComposer", () => {
     root.setSelectedID("session");
     const sent = new File(["first"], "first.txt");
     const next = new File(["next"], "next.txt");
-    root.composer.pasteFiles([sent]);
+    root.composer.attachFiles([sent]);
     const admission = root.composer.submit();
     await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
-    root.composer.pasteFiles([next]);
+    root.composer.attachFiles([next]);
     root.setSelectedID("other");
     resolvePrompt(promptResult(prompt.mock.calls[0]![0]));
     await admission;
@@ -211,7 +212,7 @@ describe("createSessionComposer", () => {
   it("finishes reading and sending pasted files after the UI subscriber unmounts", async () => {
     const root = setup();
     root.setSelectedID("session");
-    root.composer.pasteFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+    root.composer.attachFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
     const admission = root.composer.submit();
     root.unmountComposer();
     await admission;
@@ -775,7 +776,7 @@ describe("command submissions", () => {
     const root = setup(undefined, command);
     root.setSelectedID("session");
     root.setCommands(inventory);
-    root.composer.pasteFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+    root.composer.attachFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
     root.composer.input("/review review", [
       { id: "review-id", name: "review", mention: { start: 8, end: 14, text: "review" } },
     ]);
@@ -833,7 +834,7 @@ describe("command submissions", () => {
       const root = setup(undefined, command);
       root.setSelectedID("session");
       root.setCommands(inventory);
-      root.composer.pasteFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+      root.composer.attachFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
       root.composer.input("/review");
 
       await root.composer.submit();
@@ -844,6 +845,180 @@ describe("command submissions", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it("reports an unread prompt attachment without dispatching the prompt", async () => {
+    const spy = vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(readFailed);
+    try {
+      const prompt = vi.fn<Prompt>();
+      const root = setup(prompt);
+      root.setSelectedID("session");
+      root.composer.attachFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+
+      await root.composer.submit();
+
+      expect(prompt).not.toHaveBeenCalled();
+      expect(root.composer.error()).toContain('Couldn\'t read "notes.txt"');
+      expect(root.composer.files()).toHaveLength(1);
+      root.dispose();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("rejects an oversized attachment before reading and keeps the valid ones", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const large = new File(["x"], "large.bin");
+    Object.defineProperty(large, "size", { value: MAX_ATTACHMENT_BYTES + 1 });
+
+    root.composer.attachFiles([notes, large]);
+
+    expect(root.composer.files()).toEqual([notes]);
+    expect(root.composer.error()).toContain("large.bin");
+    expect(root.composer.error()).toContain("20 MiB");
+
+    root.composer.attachFiles([new File(["more"], "more.txt", { type: "text/plain" })]);
+    expect(root.composer.error()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("never stores the same File object twice", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const other = new File(["other"], "other.txt", { type: "text/plain" });
+
+    root.composer.attachFiles([notes, notes, other]);
+    root.composer.attachFiles([notes]);
+
+    expect(root.composer.files()).toEqual([notes, other]);
+    root.dispose();
+  });
+
+  it("does not mask a later network failure with an earlier attachment read error", async () => {
+    const spy = vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(readFailed);
+    const prompt = vi.fn<Prompt>().mockRejectedValue(new Error("offline"));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.composer.attachFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+
+    await root.composer.submit();
+    expect(root.composer.error()).toContain('Couldn\'t read "notes.txt"');
+    spy.mockRestore();
+
+    await root.composer.submit();
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(root.composer.error()).toContain("Couldn't confirm the message was sent");
+    root.dispose();
+  });
+
+  it("does not mask a later network failure with an oversized attachment notice", async () => {
+    const prompt = vi.fn<Prompt>().mockRejectedValue(new Error("offline"));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    const large = new File(["x"], "large.bin");
+    Object.defineProperty(large, "size", { value: MAX_ATTACHMENT_BYTES + 1 });
+
+    root.composer.attachFiles([large]);
+    root.composer.input("go");
+    await root.composer.submit();
+
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(root.composer.error()).toContain("Couldn't confirm the message was sent");
+    expect(root.composer.error()).not.toContain("large.bin");
+    root.dispose();
+  });
+
+  it("clears a command attachment error when the file is removed", async () => {
+    const spy = vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(readFailed);
+    try {
+      const command = settle();
+      const root = setup(undefined, command);
+      root.setSelectedID("session");
+      root.setCommands(inventory);
+      const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+      root.composer.attachFiles([notes]);
+      root.composer.input("/review");
+
+      await root.composer.submit();
+      expect(root.composer.error()).toContain("command was not sent");
+
+      root.composer.removeFile(notes);
+      expect(root.composer.error()).toBeUndefined();
+      root.dispose();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("keeps a newer attachment notice when an older request's echo arrives", async () => {
+    let firstInput!: PromptInput;
+    const prompt = vi.fn<Prompt>((input) => {
+      firstInput = input;
+      return Promise.reject(new Error("response lost"));
+    });
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.composer.input("first");
+
+    await root.composer.submit();
+    expect(root.composer.error()).toContain("draft has been restored");
+
+    const large = new File(["x"], "large.bin");
+    Object.defineProperty(large, "size", { value: MAX_ATTACHMENT_BYTES + 1 });
+    root.composer.attachFiles([large]);
+    expect(root.composer.error()).toContain("large.bin");
+
+    root.setMessage("session", {
+      id: firstInput.id!,
+      type: "user",
+      text: firstInput.text,
+      metadata: firstInput.metadata,
+      time: { created: 1 },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(root.composer.error()).toContain("large.bin");
+    root.dispose();
+  });
+
+  it("does not claim a retry was not sent while an earlier attempt is uncertain", async () => {
+    let firstInput!: PromptInput;
+    const prompt = vi.fn<Prompt>((input) => {
+      firstInput = input;
+      return Promise.reject(new Error("response lost"));
+    });
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.composer.attachFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
+
+    await root.composer.submit();
+    expect(root.composer.error()).toContain("draft has been restored");
+
+    const spy = vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(readFailed);
+    try {
+      await root.composer.submit();
+      expect(root.composer.error()).toContain('Couldn\'t read "notes.txt"');
+      expect(root.composer.error()).not.toContain("was not sent");
+    } finally {
+      spy.mockRestore();
+    }
+
+    root.setMessage("session", {
+      id: firstInput.id!,
+      type: "user",
+      text: firstInput.text,
+      metadata: firstInput.metadata,
+      time: { created: 1 },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(root.composer.error()).toBeUndefined();
+    root.dispose();
   });
 
   it("blocks a leading slash until the inventory is ready", async () => {
@@ -1016,12 +1191,12 @@ describe("command submissions", () => {
     root.setCommands(inventory);
     const sent = new File(["sent"], "sent.txt", { type: "text/plain" });
     const next = new File(["next"], "next.txt", { type: "text/plain" });
-    root.composer.pasteFiles([sent]);
+    root.composer.attachFiles([sent]);
     root.composer.input("/review");
     const submission = root.composer.submit();
     await vi.waitFor(() => expect(command).toHaveBeenCalledOnce());
 
-    root.composer.pasteFiles([next]);
+    root.composer.attachFiles([next]);
     resolve();
     await submission;
 

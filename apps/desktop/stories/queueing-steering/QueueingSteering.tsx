@@ -107,7 +107,7 @@ export function QueueingSteering(props: {
             <Composer
               value={draft()}
               files={files()}
-              onPasteFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
+              onAttachFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
               onRemoveFile={(file) =>
                 setFiles((current) => current.filter((item) => item !== file))
               }

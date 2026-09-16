@@ -24,10 +24,7 @@ import { fromDraft, schema, slashQuery, toDraft } from "./PromptEditor/document.
 import "prosemirror-view/style/prosemirror.css";
 import "./PromptEditor/PromptEditor.css";
 
-type EditorProps = Pick<
-  ComposerProps,
-  "value" | "skills" | "catalog" | "sessionID" | "onInput" | "onPasteFiles"
-> & {
+type EditorProps = Pick<ComposerProps, "value" | "skills" | "catalog" | "sessionID" | "onInput"> & {
   placeholder: string;
   onKeyDown: (event: KeyboardEvent) => void;
   ref: (element: HTMLDivElement) => void;
@@ -207,13 +204,12 @@ export function PromptEditor(props: EditorProps) {
           },
         },
         handlePaste(editor, event) {
-          const files = Array.from(event.clipboardData?.files ?? []);
-          if (files.length && props.onPasteFiles) {
-            props.onPasteFiles(files);
-            return true;
-          }
+          // File payloads are owned by the composer's capture listener. Only
+          // meaningful plain text is inserted here; an absent format returns an
+          // empty string, and treating it as text would replace the selection
+          // with an empty slice and suppress ProseMirror's own URI handling.
           const text = event.clipboardData?.getData("text/plain");
-          if (text === undefined) return false;
+          if (!text) return false;
           editor.dispatch(
             editor.state.tr.replaceSelection(new Slice(fromDraft(text, []).content, 1, 1)),
           );

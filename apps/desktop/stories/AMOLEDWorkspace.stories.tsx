@@ -438,7 +438,7 @@ function WorkspaceShowcaseFixture() {
                     disabled={false}
                     action={running(selectedID()) ? "running" : "send"}
                     files={files()}
-                    onPasteFiles={(added) => setFiles((items) => [...items, ...added])}
+                    onAttachFiles={(added) => setFiles((items) => [...items, ...added])}
                     onRemoveFile={(file) =>
                       setFiles((items) => items.filter((item) => item !== file))
                     }

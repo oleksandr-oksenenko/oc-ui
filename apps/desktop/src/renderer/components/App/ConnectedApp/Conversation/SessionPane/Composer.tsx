@@ -5,8 +5,9 @@ import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
 import { Loader } from "@opencode/ui/loader";
 import { Tooltip } from "@opencode/ui/tooltip";
-import { For, Show } from "solid-js";
+import { For, Show, createEffect, createSignal, on, onCleanup, onMount, type JSX } from "solid-js";
 
+import { collectTransferFiles, isFileTransfer } from "../../../../../opencode/attachments.ts";
 import { ImagePreview, isImageFile } from "../../../../../ui/ImagePreview.tsx";
 import "./Composer/Composer.css";
 import { AgentPicker } from "./Composer/AgentPicker.tsx";
@@ -47,7 +48,7 @@ export type ComposerProps = {
   readonly skills?: readonly PromptSkillAttachment[];
   readonly catalog?: ComposerCatalog;
   readonly files?: readonly File[];
-  readonly onPasteFiles?: (files: readonly File[]) => void;
+  readonly onAttachFiles?: (files: readonly File[]) => void;
   readonly onRemoveFile?: (file: File) => void;
   /** Session execution and prompt admission state. */
   readonly action: "send" | "sending" | "running";
@@ -92,9 +93,11 @@ export type ComposerProps = {
 
 function selectionControls(
   props: Pick<ComposerProps, "action" | "agentSelection" | "modelSelection" | "contextUsage">,
+  attachButton: JSX.Element,
 ) {
   return (
     <div class="composer-picker-row">
+      {attachButton}
       <Show when={props.contextUsage}>{(usage) => <ContextMeter usage={usage()} />}</Show>
       {props.agentSelection.state === "ready" ? (
         <AgentPicker
@@ -200,6 +203,12 @@ function selectionStatus(
 
 export function Composer(props: ComposerProps) {
   let editor: HTMLDivElement | undefined;
+  let form: HTMLFormElement | undefined;
+  let fileInput: HTMLInputElement | undefined;
+  let pickerSessionID: string | undefined;
+  let dragDepth = 0;
+  const [dropping, setDropping] = createSignal(false);
+  const canAttach = () => props.onAttachFiles !== undefined;
   const review = () => props.review;
   const annotations = () => ((props.annotations?.count ?? 0) > 0 ? props.annotations : undefined);
   const sendable = () =>
@@ -243,9 +252,147 @@ export function Composer(props: ComposerProps) {
     submit();
   };
 
+  const attach = (incoming: readonly File[]) => {
+    if (!canAttach() || incoming.length === 0) return;
+    props.onAttachFiles?.(incoming);
+  };
+
+  const openPicker = () => {
+    if (!canAttach()) return;
+    pickerSessionID = props.sessionID;
+    fileInput?.click();
+  };
+
+  const onPickerChange = (event: Event & { currentTarget: HTMLInputElement }) => {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    // Reset so choosing the same file again re-fires the change event.
+    input.value = "";
+    const sessionID = pickerSessionID;
+    pickerSessionID = undefined;
+    // A selection made for one session must not attach to another.
+    if (sessionID !== props.sessionID) return;
+    attach(files);
+  };
+
+  const dragEnter = (event: DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer)) return;
+    // Always cancel native navigation; only advertise an attachable drag.
+    event.preventDefault();
+    if (!canAttach()) return;
+    dragDepth += 1;
+    setDropping(true);
+  };
+
+  const dragOver = (event: DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer)) return;
+    event.preventDefault();
+    if (event.dataTransfer !== null) {
+      event.dataTransfer.dropEffect = canAttach() ? "copy" : "none";
+    }
+  };
+
+  const dragLeave = () => {
+    if (dragDepth === 0) return;
+    dragDepth -= 1;
+    if (dragDepth === 0) setDropping(false);
+  };
+
+  const drop = (event: DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth = 0;
+    setDropping(false);
+    if (!canAttach()) return;
+    attach(collectTransferFiles(event.dataTransfer));
+  };
+
+  const paste = (event: ClipboardEvent) => {
+    // Without an attachment owner, leave the payload for normal handling.
+    if (!canAttach()) return;
+    const files = collectTransferFiles(event.clipboardData);
+    if (files.length === 0) return;
+    event.preventDefault();
+    // Capture-phase stop so ProseMirror does not also receive the file payload.
+    event.stopPropagation();
+    attach(files);
+  };
+
+  onMount(() => {
+    const element = form;
+    if (element === undefined) return;
+    // Capture phase so files are taken before ProseMirror handles the event;
+    // Solid does not delegate drag or paste events.
+    element.addEventListener("dragenter", dragEnter, true);
+    element.addEventListener("dragover", dragOver, true);
+    element.addEventListener("dragleave", dragLeave, true);
+    element.addEventListener("drop", drop, true);
+    element.addEventListener("paste", paste, true);
+    onCleanup(() => {
+      element.removeEventListener("dragenter", dragEnter, true);
+      element.removeEventListener("dragover", dragOver, true);
+      element.removeEventListener("dragleave", dragLeave, true);
+      element.removeEventListener("drop", drop, true);
+      element.removeEventListener("paste", paste, true);
+    });
+  });
+
+  createEffect(
+    on(
+      () => props.sessionID,
+      () => {
+        // A drag or an open chooser does not survive a session change.
+        dragDepth = 0;
+        setDropping(false);
+        pickerSessionID = undefined;
+      },
+      { defer: true },
+    ),
+  );
+
+  createEffect(() => {
+    // Hide the drop state if attachment capability disappears mid-drag.
+    if (canAttach()) return;
+    dragDepth = 0;
+    setDropping(false);
+  });
+
+  const attachButton = () => (
+    <IconButton
+      class="composer-attach"
+      type="button"
+      size="small"
+      variant="ghost-muted"
+      disabled={!canAttach()}
+      aria-label="Add images and files"
+      title="Add images and files"
+      icon={<Icon name="plus" size="small" aria-hidden="true" />}
+      onClick={openPicker}
+    />
+  );
+
   return (
     <>
-      <form class="composer oc-focus-container" aria-label="Message composer" onSubmit={submit}>
+      <form
+        ref={(element) => {
+          form = element;
+        }}
+        class="composer oc-focus-container"
+        aria-label="Message composer"
+        data-dropping={dropping() ? "true" : undefined}
+        onSubmit={submit}
+      >
+        <input
+          ref={(element) => {
+            fileInput = element;
+          }}
+          class="composer-file-input"
+          type="file"
+          multiple
+          hidden
+          onChange={onPickerChange}
+        />
         {review() ? (
           <div class="composer-review-row">
             <span class="composer-review-label">
@@ -307,7 +454,7 @@ export function Composer(props: ComposerProps) {
           </p>
         </Show>
         <Show when={(props.files?.length ?? 0) > 0}>
-          <ul class="composer-files" aria-label="Attached files">
+          <ul class="composer-files" aria-label="Images and files">
             <For each={props.files ?? []}>
               {(file) => (
                 <li class="composer-file">
@@ -352,14 +499,13 @@ export function Composer(props: ComposerProps) {
             catalog={props.catalog}
             sessionID={props.sessionID}
             onInput={props.onInput}
-            onPasteFiles={props.onPasteFiles}
             onKeyDown={keyDown}
             placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}
           />
         </div>
 
         <div class="composer-controls-row">
-          {selectionControls(props)}
+          {selectionControls(props, attachButton())}
           <Tooltip class="composer-action-tooltip" value={sendTooltip()}>
             <button
               class="composer-action"
@@ -389,6 +535,12 @@ export function Composer(props: ComposerProps) {
         </div>
 
         {selectionStatus(props)}
+
+        <Show when={dropping()}>
+          <div class="composer-drop-overlay" aria-hidden="true">
+            Drop files to add
+          </div>
+        </Show>
       </form>
     </>
   );

@@ -130,7 +130,7 @@ export const PastedFiles: Story = {
       <Composer
         value=""
         files={files()}
-        onPasteFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
+        onAttachFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
         onRemoveFile={(file) => setFiles((current) => current.filter((item) => item !== file))}
         disabled={false}
         action="send"
@@ -148,8 +148,61 @@ export const PastedFiles: Story = {
     const remove = canvas.getByRole("button", { name: "Remove Project notes.txt" });
     remove.focus();
     await userEvent.keyboard("{Enter}");
-    await expect(canvas.queryByRole("list", { name: "Attached files" })).toBeNull();
+    await expect(canvas.queryByRole("list", { name: "Images and files" })).toBeNull();
     await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
+  },
+};
+
+export const DroppedFiles: Story = {
+  render: () => {
+    const [files, setFiles] = createSignal<readonly File[]>([]);
+    const [value, setValue] = createSignal("keep this text");
+    return (
+      <Composer
+        value={value()}
+        files={files()}
+        onAttachFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
+        onRemoveFile={(file) => setFiles((current) => current.filter((item) => item !== file))}
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={setValue}
+        onSubmit={() => setFiles([])}
+      />
+    );
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const editor = canvas.getByRole("textbox", { name: "Prompt" });
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(new File(["notes"], "notes.txt", { type: "text/plain" }));
+    // A drag can carry text alongside files; only the file should attach. The
+    // coordinates must land over the editor, or ProseMirror's own drop handler
+    // bails before it can insert anything and the check proves nothing.
+    dataTransfer.setData("text/plain", "ignored drag text");
+    const rect = editor.getBoundingClientRect();
+    const point = {
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+
+    await step("Show the drop state while a file is dragged", async () => {
+      editor.dispatchEvent(
+        new DragEvent("dragenter", { dataTransfer, bubbles: true, cancelable: true, ...point }),
+      );
+      await expect(canvasElement.querySelector(".composer-drop-overlay")).not.toBeNull();
+    });
+
+    await step("Attach the dropped file without inserting its text", async () => {
+      editor.dispatchEvent(
+        new DragEvent("drop", { dataTransfer, bubbles: true, cancelable: true, ...point }),
+      );
+      await expect(canvas.getByText("notes.txt")).toBeVisible();
+      await expect(editor).toHaveTextContent(/^keep this text$/);
+      await expect(editor).not.toHaveTextContent("ignored drag text");
+      await expect(canvasElement.querySelector(".composer-drop-overlay")).toBeNull();
+    });
   },
 };
 

@@ -2,6 +2,7 @@ import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { mount } from "../../../../../test/mount.ts";
+import type { FileTransferLike } from "../../../../../opencode/attachments.ts";
 import { Composer } from "./Composer.tsx";
 import type { ComposerProps } from "./Composer.tsx";
 
@@ -25,22 +26,29 @@ const unavailableAgentSelection = {
 
 const tooltipText = () => document.body.querySelector('[data-component="tooltip-v2"]')?.textContent;
 
+const dragEvent = (type: string, dataTransfer: FileTransferLike): Event => {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+  return event;
+};
+
 describe("Composer", () => {
   it("attaches pasted files and inserts ordinary text paste", () => {
     const paste = vi.fn<(files: readonly File[]) => void>();
     const remove = vi.fn<(file: File) => void>();
+    const onInput = vi.fn<(value: string) => void>();
     const screenshot = new File(["image"], "screenshot.png", { type: "image/png" });
     const { host, dispose } = mount(() => (
       <Composer
         value=""
         files={[screenshot]}
-        onPasteFiles={paste}
+        onAttachFiles={paste}
         onRemoveFile={remove}
         action="send"
         disabled={false}
         modelSelection={unavailableSelection}
         agentSelection={unavailableAgentSelection}
-        onInput={() => undefined}
+        onInput={onInput}
         onSubmit={() => undefined}
       />
     ));
@@ -53,15 +61,170 @@ describe("Composer", () => {
     input.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     expect(paste).toHaveBeenCalledWith([screenshot]);
+    expect(onInput).not.toHaveBeenCalled();
     const textPaste = new Event("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(textPaste, "clipboardData", {
       value: { files: [], getData: () => "hello" },
     });
     input.dispatchEvent(textPaste);
     expect(textPaste.defaultPrevented).toBe(true);
+    expect(onInput).toHaveBeenLastCalledWith("hello", []);
     expect(host.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.disabled).toBe(false);
     host.querySelector<HTMLButtonElement>('[aria-label="Remove screenshot.png"]')!.click();
     expect(remove).toHaveBeenCalledWith(screenshot);
+    dispose();
+  });
+
+  it("opens the picker and attaches the chosen files", () => {
+    const attach = vi.fn<(files: readonly File[]) => void>();
+    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        onAttachFiles={attach}
+        action="send"
+        disabled={false}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Add images and files"]');
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!button || !input) throw new Error("Composer did not render its picker");
+    const click = vi.spyOn(input, "click");
+    button.click();
+    expect(click).toHaveBeenCalledOnce();
+
+    Object.defineProperty(input, "files", { configurable: true, value: [notes] });
+    Object.defineProperty(input, "value", {
+      configurable: true,
+      writable: true,
+      value: "C:\\fakepath\\notes.txt",
+    });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(attach).toHaveBeenCalledWith([notes]);
+    expect(input.value).toBe("");
+    dispose();
+  });
+
+  it("attaches dropped files, shows the drop state, and cancels the event", () => {
+    const attach = vi.fn<(files: readonly File[]) => void>();
+    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        onAttachFiles={attach}
+        action="send"
+        disabled={false}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+
+    const form = host.querySelector("form");
+    if (!form) throw new Error("Composer did not render its form");
+
+    const enter = dragEvent("dragenter", { files: [], types: ["Files"] });
+    form.dispatchEvent(enter);
+    expect(form.getAttribute("data-dropping")).toBe("true");
+    expect(host.querySelector(".composer-drop-overlay")).not.toBeNull();
+
+    const over = dragEvent("dragover", { files: [], types: ["Files"] });
+    form.dispatchEvent(over);
+    expect(over.defaultPrevented).toBe(true);
+
+    const drop = dragEvent("drop", { files: [notes], types: ["Files"] });
+    form.dispatchEvent(drop);
+    expect(drop.defaultPrevented).toBe(true);
+    expect(attach).toHaveBeenCalledWith([notes]);
+    expect(form.hasAttribute("data-dropping")).toBe(false);
+    expect(host.querySelector(".composer-drop-overlay")).toBeNull();
+    dispose();
+  });
+
+  it("hides the drop state when the drag leaves without dropping", () => {
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        onAttachFiles={() => undefined}
+        action="send"
+        disabled={false}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+    const form = host.querySelector("form");
+    if (!form) throw new Error("Composer did not render its form");
+
+    form.dispatchEvent(dragEvent("dragenter", { files: [], types: ["Files"] }));
+    form.dispatchEvent(dragEvent("dragleave", { files: [], types: ["Files"] }));
+    expect(host.querySelector(".composer-drop-overlay")).toBeNull();
+    dispose();
+  });
+
+  it("ignores text drags", () => {
+    const attach = vi.fn<(files: readonly File[]) => void>();
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        onAttachFiles={attach}
+        action="send"
+        disabled={false}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+    const form = host.querySelector("form");
+    if (!form) throw new Error("Composer did not render its form");
+
+    const over = dragEvent("dragover", { files: [], types: ["text/plain"] });
+    form.dispatchEvent(over);
+    expect(over.defaultPrevented).toBe(false);
+
+    const drop = dragEvent("drop", { files: [], types: ["text/plain"] });
+    form.dispatchEvent(drop);
+    expect(drop.defaultPrevented).toBe(false);
+    expect(attach).not.toHaveBeenCalled();
+    expect(host.querySelector(".composer-drop-overlay")).toBeNull();
+    dispose();
+  });
+
+  it("attaches a paste exposed only through clipboard items", () => {
+    const attach = vi.fn<(files: readonly File[]) => void>();
+    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        onAttachFiles={attach}
+        action="send"
+        disabled={false}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+    const input = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+    if (!input) throw new Error("Composer did not render its prompt");
+
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: { files: [], items: [{ kind: "file", getAsFile: () => notes }] },
+    });
+    input.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(attach).toHaveBeenCalledWith([notes]);
     dispose();
   });
 
@@ -628,7 +791,7 @@ describe("Composer", () => {
         onSubmit={submit}
       />
     ));
-    const button = host.querySelector("button");
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
     if (!button) throw new Error("Composer did not render a button");
 
     expect(button.disabled).toBe(true);
@@ -821,6 +984,210 @@ describe("Composer", () => {
     ).toBe("0");
     expect(host.querySelector(".composer-context-fill")).toBeNull();
 
+    dispose();
+  });
+
+  it("keeps attachments available while submission is disabled", () => {
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled
+        action="send"
+        onAttachFiles={() => undefined}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+
+    expect(
+      host.querySelector<HTMLButtonElement>('[aria-label="Add images and files"]')?.disabled,
+    ).toBe(false);
+    dispose();
+  });
+
+  it("does not advertise or consume attachments without a callback", () => {
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Add images and files"]');
+    expect(button?.disabled).toBe(true);
+
+    const form = host.querySelector("form");
+    if (!form) throw new Error("Composer did not render its form");
+    form.dispatchEvent(dragEvent("dragenter", { files: [], types: ["Files"] }));
+    expect(host.querySelector(".composer-drop-overlay")).toBeNull();
+
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: { files: [new File(["x"], "x.txt")], getData: () => "" },
+    });
+    form.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    dispose();
+  });
+
+  it("delivers a picker selection only to the session that opened it", () => {
+    const attach = vi.fn<(files: readonly File[]) => void>();
+    const [sessionID, setSessionID] = createSignal<string | undefined>("a");
+    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        sessionID={sessionID()}
+        disabled={false}
+        action="send"
+        onAttachFiles={attach}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Add images and files"]');
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!button || !input) throw new Error("Composer did not render its picker");
+    vi.spyOn(input, "click");
+
+    button.click();
+    setSessionID("b");
+    Object.defineProperty(input, "files", { configurable: true, value: [notes] });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(attach).not.toHaveBeenCalled();
+
+    button.click();
+    Object.defineProperty(input, "files", { configurable: true, value: [notes] });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(attach).toHaveBeenCalledWith([notes]);
+    dispose();
+  });
+
+  it("attaches a file dropped on the editor without inserting its text", () => {
+    const attach = vi.fn<(files: readonly File[]) => void>();
+    const onInput = vi.fn<(value: string) => void>();
+    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        onAttachFiles={attach}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={onInput}
+        onSubmit={() => undefined}
+      />
+    ));
+    const editor = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+    if (!editor) throw new Error("Composer did not render its prompt");
+    const dataTransfer = { files: [notes], types: ["Files"], getData: () => "dropped text" };
+
+    const over = dragEvent("dragover", dataTransfer);
+    editor.dispatchEvent(over);
+    expect(over.defaultPrevented).toBe(true);
+
+    const drop = dragEvent("drop", dataTransfer);
+    editor.dispatchEvent(drop);
+    expect(drop.defaultPrevented).toBe(true);
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(attach).toHaveBeenCalledWith([notes]);
+    expect(onInput).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it("keeps the drop state across nested drag transitions", () => {
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        onAttachFiles={() => undefined}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+    const form = host.querySelector("form");
+    const editor = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+    if (!form || !editor) throw new Error("Composer did not render its target");
+    const dataTransfer = { files: [], types: ["Files"] };
+
+    form.dispatchEvent(dragEvent("dragenter", dataTransfer));
+    editor.dispatchEvent(dragEvent("dragenter", dataTransfer));
+    editor.dispatchEvent(dragEvent("dragleave", dataTransfer));
+    expect(host.querySelector(".composer-drop-overlay")).not.toBeNull();
+
+    form.dispatchEvent(dragEvent("dragleave", dataTransfer));
+    expect(host.querySelector(".composer-drop-overlay")).toBeNull();
+    dispose();
+  });
+
+  it("hides the drop state when attachment capability disappears", () => {
+    const [canAttach, setCanAttach] = createSignal(true);
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        onAttachFiles={canAttach() ? () => undefined : undefined}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+    const form = host.querySelector("form");
+    if (!form) throw new Error("Composer did not render its form");
+
+    form.dispatchEvent(dragEvent("dragenter", { files: [], types: ["Files"] }));
+    expect(host.querySelector(".composer-drop-overlay")).not.toBeNull();
+
+    setCanAttach(false);
+    expect(host.querySelector(".composer-drop-overlay")).toBeNull();
+    dispose();
+  });
+
+  it("lets ProseMirror insert a URI-only paste", () => {
+    const onInput = vi.fn<(value: string) => void>();
+    const { host, dispose } = mount(() => (
+      <Composer
+        value=""
+        disabled={false}
+        action="send"
+        onAttachFiles={() => undefined}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={onInput}
+        onSubmit={() => undefined}
+      />
+    ));
+    const editor = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+    if (!editor) throw new Error("Composer did not render its prompt");
+
+    // Empty text/plain must defer to ProseMirror instead of replacing the
+    // selection with an empty slice, so the URI-list fallback still inserts.
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: {
+        files: [],
+        getData: (type: string) => (type === "text/uri-list" ? "https://example.com/a" : ""),
+      },
+    });
+    editor.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onInput.mock.calls.at(-1)?.[0]).toContain("https://example.com/a");
     dispose();
   });
 });

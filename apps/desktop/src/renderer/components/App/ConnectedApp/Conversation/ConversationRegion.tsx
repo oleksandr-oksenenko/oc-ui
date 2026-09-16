@@ -284,7 +284,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               command={props.composer.command()}
               sessionID={props.workspace.selectedID()}
               files={props.composer.files()}
-              onPasteFiles={props.composer.pasteFiles}
+              onAttachFiles={props.composer.attachFiles}
               onRemoveFile={props.composer.removeFile}
               action={composerAction()}
               disabled={props.composer.disabled()}

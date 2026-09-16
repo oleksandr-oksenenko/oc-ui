@@ -109,7 +109,7 @@ function setup(
   const composer: SessionComposerController = {
     files: () => [],
     skills: () => [],
-    pasteFiles: () => undefined,
+    attachFiles: () => undefined,
     removeFile: () => undefined,
     value: () => "",
     disabled: () => false,
@@ -249,11 +249,13 @@ describe("ConversationRegion session forms", () => {
     mounted.setConnected(false);
     mounted.setState("failed");
     expect(mounted.host.querySelector('[role="alert"]')?.textContent).toContain("Refresh failed.");
-    expect(mounted.host.querySelector<HTMLButtonElement>("button")?.disabled).toBe(true);
+    const pending = mounted.host.querySelector('[data-message-id="session-forms"]');
+    if (!pending) throw new Error("ConversationRegion did not render the pending forms");
+    expect(pending.querySelector<HTMLButtonElement>("button")?.disabled).toBe(true);
     expect(
-      [
-        ...mounted.host.querySelectorAll<HTMLInputElement | HTMLButtonElement>("input, button"),
-      ].every((element) => element.disabled),
+      [...pending.querySelectorAll<HTMLInputElement | HTMLButtonElement>("input, button")].every(
+        (element) => element.disabled,
+      ),
     ).toBe(true);
     mounted.dispose();
   });

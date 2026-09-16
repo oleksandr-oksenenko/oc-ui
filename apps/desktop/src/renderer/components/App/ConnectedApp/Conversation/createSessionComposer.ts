@@ -14,6 +14,7 @@ import type {
 import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
 import { leadingCommandName, parseSessionCommand } from "../../../../opencode/session-command.ts";
 import { readPromptFile } from "../../../../opencode/read-prompt-file.ts";
+import { MAX_ATTACHMENT_BYTES, selectAttachableFiles } from "../../../../opencode/attachments.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { createEffect, createMemo, type Accessor } from "solid-js";
 
@@ -23,14 +24,37 @@ const PROMPT_FAILURE_MESSAGE =
   "Couldn't confirm the message was sent. Your draft has been restored.";
 const COMMAND_FAILURE_MESSAGE =
   "Couldn't confirm the command completed. Check the conversation before retrying; your draft has been restored.";
-const COMMAND_ATTACHMENT_FAILURE_MESSAGE =
-  "Couldn't read an attached file, so the command was not sent. Your draft has been restored.";
 const COMMAND_LOADING_MESSAGE = "Commands are still loading. Try again in a moment.";
 const COMMAND_UNAVAILABLE_MESSAGE = "Commands couldn't be loaded. Retry from the suggestions menu.";
 
+const commandAttachmentMessage = (name: string | undefined): string =>
+  name === undefined
+    ? "Couldn't read an attached file, so the command was not sent. Your draft has been restored."
+    : `Couldn't read "${name}", so the command was not sent. Your draft has been restored.`;
+
+const promptAttachmentMessage = (name: string, reusesFailedRequest: boolean): string =>
+  reusesFailedRequest
+    ? `Couldn't read "${name}". Remove the file or choose it again.`
+    : `Couldn't read "${name}". Your message was not sent. Remove the file or choose it again.`;
+
+const ATTACHMENT_LIMIT_LABEL = `${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
+
+const attachmentSizeMessage = (rejected: readonly File[]): string => {
+  const first = rejected[0];
+  if (rejected.length === 1 && first !== undefined) {
+    return `"${first.name || "An unnamed file"}" is larger than the ${ATTACHMENT_LIMIT_LABEL} attachment limit.`;
+  }
+  return `${rejected.length} files are larger than the ${ATTACHMENT_LIMIT_LABEL} attachment limit.`;
+};
+
 class CommandAttachmentError extends Schema.TaggedError<CommandAttachmentError>()(
   "CommandAttachmentError",
-  {},
+  { name: Schema.String },
+) {}
+
+class PromptAttachmentError extends Schema.TaggedError<PromptAttachmentError>()(
+  "PromptAttachmentError",
+  { name: Schema.String },
 ) {}
 
 type SessionPrompt = ReturnType<typeof createSessionPrompt>;
@@ -49,6 +73,11 @@ type PromptSubmission = SubmissionBase & {
   readonly prompt: SessionPrompt;
   readonly reviewSnapshot: ReturnType<ReviewDraftStore["capture"]> | undefined;
   readonly annotations: AnnotationDraftSnapshot;
+  /**
+   * This attempt reuses a previously failed request ID, which may already be in
+   * flight on the server, so a local read failure must not assert "not sent".
+   */
+  readonly reusesFailedRequest: boolean;
 };
 
 type CommandSubmission = SubmissionBase & {
@@ -62,12 +91,21 @@ type SubmissionRequest = PromptSubmission | CommandSubmission;
 type CommandNotice = {
   readonly sessionID: string;
   readonly kind: "blocked" | "attachment" | "dispatch";
+  readonly name?: string;
+};
+
+type AttachmentNotice = {
+  readonly sessionID: string;
+  readonly message: string;
+  /** Set when the notice describes a submission attempt, so its echo can clear it. */
+  readonly request?: PromptSubmission | undefined;
 };
 
 type AdmissionState = {
   active: SubmissionRequest | undefined;
   error: PromptSubmission | undefined;
   commandNotice: CommandNotice | undefined;
+  attachmentNotice: AttachmentNotice | undefined;
   failed: Readonly<Record<string, PromptSubmission | undefined>>;
 };
 
@@ -105,7 +143,7 @@ export type SessionComposerController = {
   readonly value: Accessor<string>;
   readonly skills: Accessor<readonly PromptSkillAttachment[]>;
   readonly files: Accessor<readonly File[]>;
-  readonly pasteFiles: (files: readonly File[]) => void;
+  readonly attachFiles: (files: readonly File[]) => void;
   readonly removeFile: (file: File) => void;
   readonly disabled: Accessor<boolean>;
   readonly submitting: Accessor<boolean>;
@@ -132,22 +170,42 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     else current[sessionID] = next;
     effects.registry.set(fileDrafts, current);
   };
-  const pasteFiles = (incoming: readonly File[]) => {
+  const attachFiles = (incoming: readonly File[]) => {
     const sessionID = options.selectedID();
-    if (sessionID !== undefined) setFiles(sessionID, [...files(), ...incoming]);
+    if (sessionID === undefined) return;
+    const { accepted, rejected } = selectAttachableFiles(incoming);
+    // A draft owns each File object once; removal and completion track identity.
+    const known = new Set(files());
+    const next: File[] = [];
+    for (const file of accepted) {
+      if (known.has(file)) continue;
+      known.add(file);
+      next.push(file);
+    }
+    if (next.length > 0) setFiles(sessionID, [...files(), ...next]);
+    // New selection feedback replaces any earlier attachment or command-read error.
+    clearCommandAttachmentNotice(sessionID);
+    if (rejected.length > 0) {
+      setAttachmentNotice(sessionID, attachmentSizeMessage(rejected));
+    } else if (next.length > 0) {
+      clearAttachmentNotice(sessionID);
+    }
   };
   const removeFile = (file: File) => {
     const sessionID = options.selectedID();
-    if (sessionID !== undefined)
-      setFiles(
-        sessionID,
-        files().filter((item) => item !== file),
-      );
+    if (sessionID === undefined) return;
+    setFiles(
+      sessionID,
+      files().filter((item) => item !== file),
+    );
+    clearCommandAttachmentNotice(sessionID);
+    clearAttachmentNotice(sessionID);
   };
   const admission = Atom.make<AdmissionState>({
     active: undefined,
     error: undefined,
     commandNotice: undefined,
+    attachmentNotice: undefined,
     failed: {},
   });
   effects.mount(admission);
@@ -170,11 +228,43 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const setCommandNotice = (
     sessionID: string,
     kind: "blocked" | "attachment" | "dispatch" | undefined,
+    name?: string,
   ): void => {
     effects.registry.set(admission, {
       ...effects.registry.get(admission),
-      commandNotice: kind === undefined ? undefined : { sessionID, kind },
+      commandNotice: kind === undefined ? undefined : { sessionID, kind, name },
     });
+  };
+  const setAttachmentNotice = (
+    sessionID: string,
+    message: string,
+    request?: PromptSubmission,
+  ): void => {
+    effects.registry.set(admission, {
+      ...effects.registry.get(admission),
+      attachmentNotice: { sessionID, message, request },
+    });
+  };
+  const clearAttachmentNoticeForRequest = (request: PromptSubmission): void => {
+    const notice = effects.registry.get(admission).attachmentNotice;
+    if (notice?.request !== request) return;
+    effects.registry.set(admission, {
+      ...effects.registry.get(admission),
+      attachmentNotice: undefined,
+    });
+  };
+  const clearAttachmentNotice = (sessionID: string): void => {
+    const notice = effects.registry.get(admission).attachmentNotice;
+    if (notice === undefined || notice.sessionID !== sessionID) return;
+    effects.registry.set(admission, {
+      ...effects.registry.get(admission),
+      attachmentNotice: undefined,
+    });
+  };
+  const clearCommandAttachmentNotice = (sessionID: string): void => {
+    const notice = effects.registry.get(admission).commandNotice;
+    if (notice?.kind !== "attachment" || notice.sessionID !== sessionID) return;
+    setCommandNotice(sessionID, undefined);
   };
 
   createEffect(() => {
@@ -274,6 +364,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       // The blocked submission is the newest visible failure; keep any failed
       // prompt record so its durable echo can still reconcile.
       setErrorRequest(undefined);
+      clearAttachmentNotice(sessionID);
       setCommandNotice(sessionID, "blocked");
       return Promise.resolve();
     }
@@ -312,6 +403,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       files: attached,
     };
     setCommandNotice(sessionID, undefined);
+    clearAttachmentNotice(sessionID);
     setErrorRequest(undefined);
     setActiveRequest(request);
     return admit(request, runCommand(request));
@@ -367,9 +459,11 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       files: attached,
       reviewSnapshot,
       annotations: annotationSnapshot,
+      reusesFailedRequest: retrying,
     };
 
     setCommandNotice(sessionID, undefined);
+    clearAttachmentNotice(sessionID);
     setErrorRequest(undefined);
     setFailedRequest(sessionID, undefined);
     setActiveRequest(request);
@@ -378,6 +472,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
   const runPrompt = (request: PromptSubmission) =>
     Effect.forEach(request.files, readPromptFile).pipe(
+      Effect.mapError((cause) => new PromptAttachmentError({ name: cause.name })),
       Effect.flatMap((encodedFiles) =>
         effects.request(() =>
           options.runtime.data.session.prompt({
@@ -393,7 +488,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
   const runCommand = (request: CommandSubmission) =>
     Effect.forEach(request.files, readPromptFile).pipe(
-      Effect.mapError(() => new CommandAttachmentError()),
+      Effect.mapError((cause) => new CommandAttachmentError({ name: cause.name })),
       Effect.flatMap((encodedFiles) =>
         effects.request((signal) =>
           options.runtime.api.session.command(
@@ -453,13 +548,14 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     if (effects.registry.get(admission).commandNotice?.sessionID === sessionID) {
       setCommandNotice(sessionID, undefined);
     }
+    clearAttachmentNotice(sessionID);
   };
 
   return {
     value,
     skills: () => drafts.skills(options.selectedID() ?? ""),
     files,
-    pasteFiles,
+    attachFiles,
     removeFile,
     disabled,
     submitting,
@@ -473,10 +569,21 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
             : COMMAND_UNAVAILABLE_MESSAGE;
         }
         return notice.kind === "attachment"
-          ? COMMAND_ATTACHMENT_FAILURE_MESSAGE
+          ? commandAttachmentMessage(notice.name)
           : COMMAND_FAILURE_MESSAGE;
       }
-      return state().error === undefined ? undefined : PROMPT_FAILURE_MESSAGE;
+      const attachment = state().attachmentNotice;
+      const attachmentMessage =
+        attachment !== undefined && attachment.sessionID === options.selectedID()
+          ? attachment.message
+          : undefined;
+      const failure = state().error === undefined ? undefined : PROMPT_FAILURE_MESSAGE;
+      // A draft size rejection raised while a send was pending and the send's own
+      // failure are both keepers; show them together rather than hiding either.
+      if (attachmentMessage !== undefined && failure !== undefined) {
+        return `${attachmentMessage} ${failure}`;
+      }
+      return attachmentMessage ?? failure;
     },
     review,
     command,
@@ -491,6 +598,11 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       (request.kind === "command" || failedRequest(request.sessionID) !== request)
     ) {
       return;
+    }
+    if (request.kind === "prompt") {
+      // A confirmed echo resolves this attempt's own read-failure notice; an
+      // unrelated newer size notice is preserved.
+      clearAttachmentNoticeForRequest(request);
     }
     if (request.kind === "prompt" && failedRequest(request.sessionID) === request) {
       options.annotations.clearIfUnchanged(request.annotations);
@@ -529,15 +641,20 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       return;
     }
     if (request.kind === "prompt") {
+      if (Schema.is(PromptAttachmentError)(cause)) {
+        restoreAttachmentFailure(request, cause.name);
+        return;
+      }
       restoreFailed(request);
       return;
     }
     if (options.selectedID() === request.sessionID) {
       setErrorRequest(undefined);
-      setCommandNotice(
-        request.sessionID,
-        Schema.is(CommandAttachmentError)(cause) ? "attachment" : "dispatch",
-      );
+      if (Schema.is(CommandAttachmentError)(cause)) {
+        setCommandNotice(request.sessionID, "attachment", cause.name);
+      } else {
+        setCommandNotice(request.sessionID, "dispatch");
+      }
     }
     setActiveRequest(undefined);
   }
@@ -565,6 +682,21 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     options.annotations.restore(request.annotations);
     setFailedRequest(request.sessionID, request);
     if (options.selectedID() === request.sessionID) setErrorRequest(request);
+    setActiveRequest(undefined);
+  }
+
+  function restoreAttachmentFailure(request: PromptSubmission, name: string): void {
+    // Nothing from this attempt reached the server, but a reused request ID may
+    // already be in flight, so the wording must not assert it was never sent.
+    options.annotations.restore(request.annotations);
+    setFailedRequest(request.sessionID, request);
+    if (options.selectedID() === request.sessionID) {
+      setAttachmentNotice(
+        request.sessionID,
+        promptAttachmentMessage(name, request.reusesFailedRequest),
+        request,
+      );
+    }
     setActiveRequest(undefined);
   }
 }
