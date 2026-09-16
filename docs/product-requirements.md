@@ -376,7 +376,10 @@ empty transcript.
   is sent as arguments; skills are inserted as inline mentions.
 - Keep code-review comments and transcript annotations attached for the next
   prompt when a command runs, because the command endpoint has no metadata.
-- Do not support file references, shell input, or other composer extensions.
+- Attach local files to the next prompt by paste, drag and drop, or the native
+  file picker. Files are inlined as data URIs so the connected server never needs
+  the desktop's paths; server-side file references remain unsupported.
+- Do not support shell input or other composer extensions.
 
 ## Managed sidecar boundary
 
