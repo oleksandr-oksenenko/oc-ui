@@ -1,6 +1,6 @@
 # Slash commands
 
-Slash commands extend the composer using the OpenCode `0.0.0-beta-19271`
+Slash commands extend the composer using the OpenCode `2.0.3`
 `location.command` and `session.command` contracts.
 
 ## Behavior
