@@ -30,7 +30,7 @@ This repository uses Effect v4 RC for server communication, persistence, connect
 
 - Follow the approved Storybook story, mockup, and latest browser annotations for structure, controls, spacing, density, and placement.
 - Use the Codex in-app browser for standalone pages and Storybook when it supports the required check. Verify Electron and embedded views in the running app; they are not reachable through that browser.
-- Launch through the repository entrypoint, normally `pnpm dev` from the root. Identify processes by their repository and entrypoint, never just the name `Electron`. Use the pinned OpenCode executable when testing this integration.
+- Launch through the repository entrypoint, normally `pnpm dev` from the root. Identify processes by their repository and entrypoint, never just the name `Electron`. Use the pinned `@opencode/server` library (through `pnpm dev:opencode` or the browser fixtures) when testing this integration.
 - Verify the Electron app, renderer, and server separately before reporting them as running: check the expected processes and app window, and verify the server endpoint with the required credentials.
 - Use isolated app or server state for onboarding, connection, and empty-state tests so saved settings and sessions do not affect the result.
 

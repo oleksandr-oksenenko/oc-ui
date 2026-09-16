@@ -2,6 +2,8 @@
 
 Status: Integration contract.
 
+> Superseded: the desktop app now runs the pinned `@opencode/server` library in an Electron utility process (`apps/desktop/src/main/opencode-worker.ts`) and no longer stages or launches the CLI executable. The CLI sidecar references below are historical.
+
 This milestone adds a local-first connection path to the remote session client.
 The desktop app supervises one OpenCode server process when local startup is
 available and falls back to a user-configured remote server when it is not.

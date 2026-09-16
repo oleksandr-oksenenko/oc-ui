@@ -15,10 +15,11 @@ pnpm build:web    # Static assets: apps/desktop/dist-web
 pnpm preview:web  # Local build preview: http://127.0.0.1:4173
 ```
 
-Start OpenCode separately or connect to a running server. The pinned CLI can be
-started with `OPENCODE_SERVER_PASSWORD=your-password pnpm --filter desktop exec opencode serve`.
-Browser commands do not launch Electron or OpenCode. Use `pnpm dev:web --port 5185`
-when the default port is occupied, including by Electron development.
+Start OpenCode separately or connect to a running server. The pinned server
+library can be started with `OPENCODE_SERVER_PASSWORD=your-password pnpm dev:opencode`.
+Browser commands do not launch Electron or the server library. Use
+`pnpm dev:web --port 5185` when the default port is occupied, including by
+Electron development.
 
 For hosting beneath a static path, run `pnpm build:web --base /ocui/`. Deploy the
 output directory through a normal static HTTPS host. Refresh HTML when deploying
@@ -113,12 +114,12 @@ The loopback rule is a deliberate initial limit. It avoids depending on
 browser-specific mixed-content exceptions or local-network permission behavior.
 Desktop does not have an HTTP page origin and is not subject to this page policy.
 
-The pinned server `0.0.0-beta-18866` allows HTTP origins on `localhost:<port>` and
+The pinned server `2.0.3` allows HTTP origins on `localhost:<port>` and
 `127.0.0.1:<port>`. Hosted origins need an explicit allowlist entry; `--cors` can
 repeat:
 
 ```sh
-pnpm --filter desktop exec opencode2 serve --hostname 127.0.0.1 --port 4096 --cors https://ocui.example.com
+pnpm --filter desktop opencode:serve --port 4096 --cors https://ocui.example.com
 ```
 
 The operator provides a reachable HTTPS endpoint, usually through a TLS reverse

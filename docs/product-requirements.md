@@ -399,10 +399,10 @@ directory; a remote connection uses that server's default. The desktop app
 does not choose or persist a directory.
 
 The repository packages a local macOS ARM64 app with electron-builder. The
-pinned CLI executable is staged outside ASAR at
-`Contents/Resources/opencode/opencode2`, signed with the app, and resolved from
-`process.resourcesPath`. Development continues to resolve the package-local
-CLI dependency. Public distribution, notarization, other platforms, and
+pinned `@opencode/server` library is staged outside ASAR at
+`Contents/Resources/opencode-runtime`, bundled with the app, and resolved from
+`process.resourcesPath`. Development stages the same runtime alongside the
+Electron main build. Public distribution, notarization, other platforms, and
 updater behavior remain outside this boundary.
 
 ## Explicitly deferred

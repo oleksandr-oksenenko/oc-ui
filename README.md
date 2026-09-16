@@ -46,10 +46,10 @@ with NixOS runtime libraries.
 
 ### Browser
 
-Start the pinned server in one terminal:
+Start the pinned server library in one terminal:
 
 ```sh
-OPENCODE_SERVER_PASSWORD=your-password pnpm --filter desktop exec opencode serve
+OPENCODE_SERVER_PASSWORD=your-password pnpm dev:opencode
 ```
 
 In another terminal:
@@ -73,8 +73,7 @@ pnpm preview:web        # Preview the static build at http://127.0.0.1:4173
 pnpm check              # Check formatting, lint, types, component layout, and unused code
 pnpm lint               # Run type-aware Oxlint and CSS checks
 pnpm knip               # Find unused files, exports, and dependencies
-pnpm --filter desktop exec opencode serve     # Start the pinned OpenCode server
-pnpm --filter desktop exec opencode --version # Print the installed OpenCode version
+pnpm dev:opencode       # Start the pinned OpenCode server library
 pnpm storybook          # Start the component catalog at http://localhost:6006
 pnpm build-storybook    # Build the static component catalog
 pnpm verify:browser     # Start an isolated app/server session for manual inspection
@@ -126,7 +125,7 @@ a reachable HTTPS OpenCode endpoint with a valid certificate. Allow the UI origi
 on that server, for example:
 
 ```sh
-pnpm --filter desktop exec opencode2 serve --hostname 127.0.0.1 --port 4096 --cors https://ocui.example.com
+pnpm --filter desktop opencode:serve --port 4096 --cors https://ocui.example.com
 ```
 
 The operator supplies TLS and authentication; oc-ui does not proxy or host the API.
