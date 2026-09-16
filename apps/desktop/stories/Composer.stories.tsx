@@ -7,6 +7,7 @@ import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import type { ComposerReview } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
+import { previewImageFile } from "./image-fixtures.ts";
 
 const meta = {
   title: "Composer/Composer",
@@ -122,7 +123,7 @@ export const Idle: Story = {
 export const PastedFiles: Story = {
   render: () => {
     const [files, setFiles] = createSignal<readonly File[]>([
-      new File([], "Screenshot.png", { type: "image/png" }),
+      previewImageFile("Screenshot.png"),
       new File([], "Project notes.txt", { type: "text/plain" }),
     ]);
     return (
@@ -149,6 +150,37 @@ export const PastedFiles: Story = {
     await userEvent.keyboard("{Enter}");
     await expect(canvas.queryByRole("list", { name: "Attached files" })).toBeNull();
     await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
+  },
+};
+
+export const ImageAttachment: Story = {
+  render: () => {
+    const [files, setFiles] = createSignal<readonly File[]>([previewImageFile("Screenshot.png")]);
+    return (
+      <Composer
+        value=""
+        files={files()}
+        onRemoveFile={() => setFiles([])}
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    );
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await step("Enlarge the attached image and close the preview", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Enlarge Screenshot.png" }));
+      const dialog = await screen.findByRole("dialog", { name: "Preview of Screenshot.png" });
+      await expect(dialog).toBeVisible();
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog", { name: "Preview of Screenshot.png" })).toBeNull(),
+      );
+    });
   },
 };
 

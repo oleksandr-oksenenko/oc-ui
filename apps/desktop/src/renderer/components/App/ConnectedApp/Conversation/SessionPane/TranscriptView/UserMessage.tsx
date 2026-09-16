@@ -1,11 +1,12 @@
 import type { JSX } from "solid-js";
 import type { SessionMessageUser } from "@opencode-ai/client";
-import { createMemo } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import { unwrap } from "solid-js/store";
 
 import { AnnotationCard } from "./UserMessage/AnnotationCard.tsx";
 import { annotationBlock } from "../../annotation-source.ts";
 import { CodeReviewCard } from "./UserMessage/CodeReviewCard.tsx";
+import { ImagePreview, promptFileImageSource } from "../../../../../../ui/ImagePreview.tsx";
 import { readSessionPromptMetadata } from "../../../../../../opencode/session-prompt.ts";
 
 export type UserMessageProps = {
@@ -16,6 +17,11 @@ export type UserMessageProps = {
     opener: HTMLElement,
   ) => void;
 };
+
+type TranscriptAttachment =
+  | { readonly kind: "image"; readonly name: string; readonly source: string }
+  | { readonly kind: "file"; readonly name: string }
+  | { readonly kind: "name"; readonly name: string };
 
 export function UserMessage(props: UserMessageProps): JSX.Element {
   const prompt = createMemo(() =>
@@ -55,12 +61,20 @@ export function UserMessage(props: UserMessageProps): JSX.Element {
     parts.push(text.slice(end));
     return parts;
   };
-  const attachments = () => [
-    ...(props.message.files?.flatMap((file) => (file.name ? [file.name] : [])) ?? []),
-    ...(props.message.agents?.map((agent) => agent.name) ?? []),
+  const attachments = (): TranscriptAttachment[] => [
+    ...(props.message.files?.map((file): TranscriptAttachment => {
+      const source = promptFileImageSource(file);
+      return source === undefined
+        ? { kind: "file", name: file.name || "Attached file" }
+        : { kind: "image", name: file.name || "Attached image", source };
+    }) ?? []),
+    ...(props.message.agents?.map((agent): TranscriptAttachment => ({
+      kind: "name",
+      name: agent.name,
+    })) ?? []),
     ...(props.message.skills
       ?.filter((skill) => !inlineSkills().includes(skill))
-      .map((skill) => skill.name) ?? []),
+      .map((skill): TranscriptAttachment => ({ kind: "name", name: skill.name })) ?? []),
   ];
   const showBubble = () =>
     instruction() !== undefined || reviewComments().length > 0 || attachments().length > 0;
@@ -76,9 +90,27 @@ export function UserMessage(props: UserMessageProps): JSX.Element {
           {reviewComments().length > 0 && <CodeReviewCard comments={reviewComments()} />}
           {attachments().length > 0 && (
             <ul class="transcript-user-attachments" aria-label="Attachments">
-              {attachments().map((name, index) => (
-                <li data-annotation-block={annotationBlock("attachment", index)}>{name}</li>
-              ))}
+              <For each={attachments()}>
+                {(attachment, index) => (
+                  <li
+                    class={attachment.kind === "image" ? "transcript-user-attachment-image" : ""}
+                    data-annotation-block={annotationBlock("attachment", index())}
+                  >
+                    <Show
+                      when={attachment.kind === "image" ? attachment : undefined}
+                      fallback={attachment.name}
+                    >
+                      {(image) => (
+                        <ImagePreview
+                          src={image().source}
+                          alt={image().name}
+                          class="transcript-user-image"
+                        />
+                      )}
+                    </Show>
+                  </li>
+                )}
+              </For>
             </ul>
           )}
         </div>

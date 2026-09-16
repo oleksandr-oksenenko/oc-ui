@@ -1,5 +1,5 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import {
@@ -44,9 +44,33 @@ const renderConstrainedTranscript = (args: TranscriptViewProps) => (
   </div>
 );
 
+// A narrow column stresses metadata and image rows at their tightest.
+const renderNarrowTranscript = (args: TranscriptViewProps) => (
+  <div style={{ width: "260px", height: "100vh", background: "var(--oc-surface-canvas)" }}>
+    <TranscriptView {...args} />
+  </div>
+);
+
 export const Rich: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
   render: renderTranscript,
+};
+
+export const ImagePreviews: Story = {
+  args: { messages: richItems, sessionStatus: "idle", loading: false },
+  render: renderTranscript,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await step("Enlarge a user image attachment", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Enlarge preview.png" }));
+      const dialog = await screen.findByRole("dialog", { name: "Preview of preview.png" });
+      await expect(dialog).toBeVisible();
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog", { name: "Preview of preview.png" })).toBeNull(),
+      );
+    });
+  },
 };
 
 const settle = () =>
@@ -186,6 +210,40 @@ export const AllElements: Story = {
 export const ToolStates: Story = {
   args: { messages: toolStates, sessionStatus: "running" },
   render: renderTranscript,
+};
+export const ToolImageLongMetadata: Story = {
+  args: { messages: toolStates, sessionStatus: "idle", loading: false },
+  render: renderNarrowTranscript,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await step("Keeps the image preview readable under long metadata", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "browser_capture Completed" }));
+      const thumbnail = await waitFor(() => {
+        const element = canvasElement.querySelector<HTMLElement>(
+          ".transcript-tool-image-thumbnail",
+        );
+        if (!element) throw new Error("Tool image thumbnail did not render");
+        return element;
+      });
+      const file = thumbnail.closest<HTMLElement>(".transcript-tool-file");
+      if (!file) throw new Error("Tool image container is missing");
+      const name = file.querySelector<HTMLElement>(".transcript-tool-file-name");
+      if (!name) throw new Error("Tool image name is missing");
+      await waitFor(() => expect(thumbnail.querySelector("img")?.complete).toBe(true));
+
+      const fileRect = file.getBoundingClientRect();
+      const nameRect = name.getBoundingClientRect();
+      const thumbnailRect = thumbnail.getBoundingClientRect();
+      // The image keeps a usable width instead of collapsing beside the metadata.
+      await expect(thumbnailRect.width).toBeGreaterThan(150);
+      await expect(thumbnailRect.width).toBeGreaterThan(fileRect.width * 0.7);
+      // The image owns a row below the metadata rather than sharing its line.
+      await expect(nameRect.bottom).toBeLessThanOrEqual(thumbnailRect.top + 1);
+      // Long metadata truncates instead of overflowing the transcript column.
+      await expect(file.scrollWidth).toBeLessThanOrEqual(file.clientWidth + 1);
+      await expect(thumbnail.querySelector("img")?.naturalWidth ?? 0).toBeGreaterThan(0);
+    });
+  },
 };
 export const ShellStates: Story = {
   args: { messages: shellStates, sessionStatus: "idle" },

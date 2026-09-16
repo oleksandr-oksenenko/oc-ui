@@ -5,8 +5,9 @@ import { Icon } from "@opencode-ai/ui/icon";
 import { IconButton } from "@opencode-ai/ui/icon-button";
 import { Loader } from "@opencode-ai/ui/loader";
 import { Tooltip } from "@opencode-ai/ui/tooltip";
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
 
+import { ImagePreview, isImageFile } from "../../../../../ui/ImagePreview.tsx";
 import "./Composer/Composer.css";
 import { AgentPicker } from "./Composer/AgentPicker.tsx";
 import type { AgentPickerOption } from "./Composer/AgentPicker.tsx";
@@ -307,24 +308,38 @@ export function Composer(props: ComposerProps) {
         </Show>
         <Show when={(props.files?.length ?? 0) > 0}>
           <ul class="composer-files" aria-label="Attached files">
-            {props.files?.map((file) => (
-              <li class="composer-review-row">
-                <span class="composer-review-label" title={file.name || "Pasted file"}>
-                  {file.name || "Pasted file"}
-                </span>
-                <IconButton
-                  type="button"
-                  size="small"
-                  variant="ghost-muted"
-                  aria-label={`Remove ${file.name || "Pasted file"}`}
-                  icon={<Icon name="close" size="small" aria-hidden="true" />}
-                  onClick={() => {
-                    props.onRemoveFile?.(file);
-                    editor?.focus();
-                  }}
-                />
-              </li>
-            ))}
+            <For each={props.files ?? []}>
+              {(file) => (
+                <li class="composer-file">
+                  <Show
+                    when={isImageFile(file)}
+                    fallback={
+                      <span class="composer-file-name" title={file.name || "Pasted file"}>
+                        {file.name || "Pasted file"}
+                      </span>
+                    }
+                  >
+                    <ImagePreview
+                      file={file}
+                      alt={file.name || "Pasted image"}
+                      class="composer-file-preview"
+                    />
+                  </Show>
+                  <IconButton
+                    class="composer-file-remove"
+                    type="button"
+                    size="small"
+                    variant="ghost-muted"
+                    aria-label={`Remove ${file.name || "Pasted file"}`}
+                    icon={<Icon name="close" size="small" aria-hidden="true" />}
+                    onClick={() => {
+                      props.onRemoveFile?.(file);
+                      editor?.focus();
+                    }}
+                  />
+                </li>
+              )}
+            </For>
           </ul>
         </Show>
         <div class="composer-editor-row">

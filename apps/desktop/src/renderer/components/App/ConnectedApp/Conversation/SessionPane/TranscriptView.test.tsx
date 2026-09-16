@@ -1210,6 +1210,32 @@ describe("TranscriptView", () => {
     dispose();
   });
 
+  it("renders named and unnamed image attachments as enlargeable thumbnails", () => {
+    const message: SessionMessageUser = {
+      id: "attachments",
+      time: base,
+      type: "user",
+      text: "",
+      files: [
+        { data: "AAAA", mime: "image/png", source: { type: "inline" }, name: "preview.png" },
+        { data: "BBBB", mime: "image/png", source: { type: "inline" } },
+        { data: "bW90ZXM=", mime: "text/plain", source: { type: "inline" }, name: "notes.txt" },
+        { data: "bW9yZQ==", mime: "text/plain", source: { type: "inline" } },
+      ],
+    };
+    const { host, dispose } = renderUserMessage(message);
+
+    const labels = [...host.querySelectorAll(".transcript-user-image")].map((thumbnail) =>
+      thumbnail.getAttribute("aria-label"),
+    );
+    expect(labels).toEqual(["Enlarge preview.png", "Enlarge Attached image"]);
+    expect(host.textContent).toContain("notes.txt");
+    expect(host.textContent).toContain("Attached file");
+    expect(host.textContent).not.toContain("preview.png");
+
+    dispose();
+  });
+
   it("reacts when durable review metadata arrives on an SDK store proxy", () => {
     const prompt = createSessionPrompt({
       instruction: "",

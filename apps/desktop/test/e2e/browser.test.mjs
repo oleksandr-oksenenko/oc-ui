@@ -966,6 +966,13 @@ describe.sequential("production browser app", () => {
       );
     });
     await page.getByRole("button", { name: "Remove remove.txt", exact: true }).click();
+    await expect
+      .poll(() =>
+        page
+          .locator(".composer-file-preview img")
+          .evaluate((image) => (image instanceof HTMLImageElement ? image.naturalWidth : 0)),
+      )
+      .toBeGreaterThan(0);
     await selectSession(other.title);
     expect(await page.getByRole("list", { name: "Attached files", exact: true }).count()).toBe(0);
     await selectSession(session.title);
@@ -981,8 +988,35 @@ describe.sequential("production browser app", () => {
     await page
       .getByRole("list", { name: "Attached files", exact: true })
       .waitFor({ state: "hidden" });
-    await transcript("screenshot.png");
+    await page.getByRole("button", { name: "Enlarge screenshot.png", exact: true }).waitFor();
     await transcript("notes.txt");
+    await expect
+      .poll(() =>
+        page
+          .locator(".transcript-user-image img")
+          .evaluate((image) => (image instanceof HTMLImageElement ? image.naturalWidth : 0)),
+      )
+      .toBeGreaterThan(0);
+
+    // The modal preview dismisses on a backdrop click but not an image click,
+    // and returns focus to the thumbnail.
+    const enlarge = page.getByRole("button", { name: "Enlarge screenshot.png", exact: true });
+    const previewDialog = page.getByRole("dialog", { name: "Preview of screenshot.png" });
+    await enlarge.click();
+    await previewDialog.waitFor();
+    await page.mouse.click(20, 300);
+    await previewDialog.waitFor({ state: "hidden" });
+    await expect
+      .poll(() => enlarge.evaluate((element) => element === document.activeElement))
+      .toBe(true);
+
+    await enlarge.click();
+    await previewDialog.waitFor();
+    await page.locator(".image-preview-image").click();
+    await expect.poll(() => previewDialog.isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    await previewDialog.waitFor({ state: "hidden" });
+
     await idle();
     const messages = await api.message.list({ sessionID: session.id });
     const message = messages.data.find((item) => item.type === "user");

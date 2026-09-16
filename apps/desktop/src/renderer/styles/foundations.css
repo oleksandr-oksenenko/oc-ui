@@ -12,6 +12,7 @@
   --oc-surface-elevated: #e0e0e0;
   --oc-overlay-hover: rgb(0 0 0 / 6%);
   --oc-overlay-pressed: rgb(0 0 0 / 10%);
+  --oc-scrim: rgb(0 0 0 / 55%);
   --oc-content-code-surface: var(--oc-surface-raised);
   --oc-border-muted: #e5e5e5;
   --oc-border-base: #dbdbdb;
@@ -190,6 +191,7 @@
   --oc-surface-elevated: #1f1f1f;
   --oc-overlay-hover: rgb(255 255 255 / 6%);
   --oc-overlay-pressed: rgb(255 255 255 / 10%);
+  --oc-scrim: rgb(0 0 0 / 72%);
   --oc-border-muted: #1a1a1a;
   --oc-border-base: #242424;
   --oc-border-strong: #343434;

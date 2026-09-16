@@ -29,6 +29,7 @@ export default mergeConfig(
             name: "unit",
             environment: "jsdom",
             include: ["src/**/*.test.{ts,tsx}", "test/*.test.mjs"],
+            setupFiles: ["./test/setup-dom.ts"],
           },
         },
         {

@@ -11,6 +11,7 @@ import { Loader } from "@opencode-ai/ui/loader";
 import { For, Show, type JSX } from "solid-js";
 
 import { annotationBlock } from "../../../annotation-source.ts";
+import { ImagePreview } from "../../../../../../../ui/ImagePreview.tsx";
 import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMount.ts";
 
 export type ToolCallProps = {
@@ -111,7 +112,10 @@ function renderToolContent(content: ToolContent, toolID: string, index: number):
   ) : (
     <div class="transcript-tool-file">
       <Icon name="file-tree" size="small" aria-hidden="true" />
-      <span data-annotation-block={annotationBlock("tool", toolID, "output", index, "name")}>
+      <span
+        class="transcript-tool-file-name"
+        data-annotation-block={annotationBlock("tool", toolID, "output", index, "name")}
+      >
         {content.name ?? content.uri}
       </span>
       <span
@@ -136,11 +140,11 @@ function renderToolContent(content: ToolContent, toolID: string, index: number):
           </Show>
         }
       >
-        <img
-          class="transcript-tool-image"
+        <ImagePreview
           src={content.uri}
           alt={content.name ?? "Browser capture"}
-          loading="lazy"
+          class="transcript-tool-image-thumbnail"
+          imageClass="transcript-tool-image"
         />
       </Show>
     </div>

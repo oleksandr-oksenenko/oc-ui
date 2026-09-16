@@ -1,0 +1,64 @@
+.image-preview-thumbnail {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-control);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.image-preview-thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--oc-scrim);
+}
+
+.image-preview-content {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.image-preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+  box-shadow: var(--oc-shadow-floating);
+  object-fit: contain;
+}
+
+.image-preview-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-base);
+  background: var(--oc-surface-raised);
+  cursor: pointer;
+}
+
+.image-preview-close:hover {
+  background: var(--oc-surface-hover);
+}

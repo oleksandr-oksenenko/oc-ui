@@ -45,6 +45,7 @@ describe("Composer", () => {
       />
     ));
     const input = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]')!;
+    expect(host.querySelector('[aria-label="Enlarge screenshot.png"]')).not.toBeNull();
     const event = new Event("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "clipboardData", {
       value: { files: [screenshot], getData: () => "" },

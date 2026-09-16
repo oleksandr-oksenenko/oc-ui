@@ -36,6 +36,7 @@ import { WorkspaceBrowser } from "./workspace-showcase/WorkspaceBrowser.tsx";
 import { createWorkspacePermissions } from "./workspace-showcase/permission-fixture.ts";
 import { storySession } from "./session-fixtures.ts";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
+import { previewImageBase64 } from "./image-fixtures.ts";
 import { workspaceQuestionForm } from "./question-form-fixtures.ts";
 
 const sessions = [
@@ -476,7 +477,7 @@ function WorkspaceShowcaseFixture() {
                         files: files().map((file) => ({
                           name: file.name,
                           mime: file.type || "application/octet-stream",
-                          data: "fixture",
+                          data: previewImageBase64,
                           source: { type: "inline" },
                         })),
                       };

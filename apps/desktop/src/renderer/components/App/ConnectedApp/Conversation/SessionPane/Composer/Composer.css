@@ -27,6 +27,37 @@
   padding: 0;
 }
 
+.composer-file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 22px;
+  padding: 2px 2px 2px 7px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.composer-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-file-preview {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 64px;
+}
+
+.composer-file-remove[data-component="icon-button-v2"] {
+  flex: 0 0 20px;
+  margin-left: auto;
+  color: var(--oc-text-muted);
+}
+
 .composer-review-row,
 .composer-annotation-row {
   display: flex;

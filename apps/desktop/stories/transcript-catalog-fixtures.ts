@@ -1,5 +1,6 @@
 import type { SessionMessageInfo } from "@opencode-ai/client";
 import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts";
+import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 
 export const assistant = (
   id: string,
@@ -125,6 +126,12 @@ export const richItems: readonly SessionMessageInfo[] = [
     type: "user",
     text: "Can you review the release notes?",
     files: [
+      {
+        data: previewImageBase64,
+        mime: previewImageMime,
+        source: { type: "inline" },
+        name: "preview.png",
+      },
       { data: "omitted", mime: "text/plain", source: { type: "inline" }, name: "release.md" },
     ],
   },
@@ -259,9 +266,11 @@ export const toolStates: readonly SessionMessageInfo[] = [
           input: { tab: "preview" },
           content: [
             {
+              // A long, unbreakable name and mime exercise the tool-file row
+              // layout under metadata wider than the transcript column.
               type: "file",
-              name: "preview.png",
-              mime: "image/png",
+              name: "browser_capture_full_page_with_devtools_overlay_final_v2.apng",
+              mime: "image/vnd.mozilla.apng",
               uri: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=",
             },
             { type: "file", mime: "application/json", uri: "file:///tmp/report.json" },
