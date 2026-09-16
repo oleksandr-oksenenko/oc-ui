@@ -1,3 +1,4 @@
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- Scrollable tool output needs keyboard access. */
 import type {
   SessionMessageAssistantTool,
   SessionMessageToolStateCompleted,
@@ -77,13 +78,18 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
 function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
   switch (tool.state.status) {
     case "streaming":
-      return [<pre class="transcript-tool-output oc-scrollable">{tool.state.input}</pre>];
+      return [
+        <pre class="transcript-tool-output oc-scrollable" tabIndex={0}>
+          {tool.state.input}
+        </pre>,
+      ];
     case "running":
     case "completed":
     case "error":
       return [
         <pre
           class="transcript-tool-output oc-scrollable"
+          tabIndex={0}
           data-annotation-block={annotationBlock("tool", tool.id, "input")}
         >
           {formatObject(tool.state)}
@@ -105,6 +111,7 @@ function renderToolContent(content: ToolContent, toolID: string, index: number):
   return content.type === "text" ? (
     <pre
       class="transcript-tool-output oc-scrollable"
+      tabIndex={0}
       data-annotation-block={annotationBlock("tool", toolID, "output", index, "text")}
     >
       {content.text}

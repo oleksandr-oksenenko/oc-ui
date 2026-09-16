@@ -63,6 +63,14 @@
   outline-offset: var(--oc-focus-ring-offset) !important;
 }
 
+/* Restored annotation focus returns to transcript reading content, not a
+ * control. Keep DOM focus for assistive technology without ringing the
+ * annotated passage. Scrollable annotated output is keyboard-operable, so it
+ * keeps its indicator. */
+:root .transcript-view [data-annotation-block]:not(.oc-scrollable):focus-visible {
+  outline: none !important;
+}
+
 /* A compound field owns its editor's ring. Independent clear/reveal actions
  * retain their own keyboard indicator; hidden choice inputs delegate too. */
 :root :where(.oc-focus-delegate):focus-visible,

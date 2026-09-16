@@ -281,6 +281,33 @@ export const toolStates: readonly SessionMessageInfo[] = [
   },
 ];
 
+// A realistic check log that overflows the bounded shell output so the
+// scroll container is keyboard-focusable, as it is in the real transcript.
+const shellCheckOutput = [
+  "$ pnpm check",
+  "> vp check && tsc -p apps/desktop/tsconfig.wdio.json --noEmit && pnpm lint:styles && knip",
+  "Found 0 warnings and 0 errors.",
+  "Finished in 812ms on 1 files using 10 threads.",
+  "",
+  '> stylelint "apps/**/*.css"',
+  "> node tools/check-inline-style-tokens.mjs",
+  "",
+  "> knip",
+  "✂️  Excellent, Knip found no issues.",
+  "",
+  "> vp test run --passWithNoTests",
+  "Test Files  110 passed (110)",
+  "Tests  941 passed (941)",
+  "Duration  86.69s",
+  "",
+  "> tsc -p apps/desktop/tsconfig.wdio.json --noEmit",
+  "",
+  "> pnpm build",
+  "built in 4.2s",
+  "",
+  "All checks passed.",
+].join("\n");
+
 export const shellStates: readonly SessionMessageInfo[] = [
   {
     id: "shell-running",
@@ -298,7 +325,12 @@ export const shellStates: readonly SessionMessageInfo[] = [
     command: "pnpm check",
     status: "exited",
     exit: 0,
-    output: { output: "No errors found.", cursor: 16, size: 16, truncated: false },
+    output: {
+      output: shellCheckOutput,
+      cursor: shellCheckOutput.length,
+      size: shellCheckOutput.length,
+      truncated: false,
+    },
   },
   {
     id: "shell-error",

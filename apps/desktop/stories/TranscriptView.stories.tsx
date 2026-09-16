@@ -248,6 +248,25 @@ export const ToolImageLongMetadata: Story = {
 export const ShellStates: Story = {
   args: { messages: shellStates, sessionStatus: "idle" },
   render: renderTranscript,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await step("Keyboard-focusable annotated output keeps its focus indicator", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: /pnpm check/ }));
+      const output = await waitFor(() => {
+        const element = canvasElement.querySelector<HTMLElement>(
+          "pre.transcript-tool-output[data-annotation-block]",
+        );
+        if (!element) throw new Error("Shell output did not render");
+        return element;
+      });
+      await expect(output.scrollHeight).toBeGreaterThan(output.clientHeight);
+      await userEvent.tab();
+      output.focus();
+      await waitFor(() => expect(output).toHaveFocus());
+      await expect(output.matches(":focus-visible")).toBe(true);
+      await expect(getComputedStyle(output).outlineStyle).not.toBe("none");
+    });
+  },
 };
 export const CompactionStates: Story = {
   args: { messages: compactionStates, sessionStatus: "idle" },

@@ -1,3 +1,4 @@
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- Scrollable shell output needs keyboard access. */
 import type { SessionMessageShell } from "@opencode/client";
 import { Collapsible } from "@opencode/ui/collapsible";
 import { Icon } from "@opencode/ui/icon";
@@ -48,6 +49,7 @@ export function ShellMessage(props: { readonly message: SessionMessageShell }): 
                 data-annotation-block={annotationBlock("shell", "output")}
                 data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
                 class="transcript-tool-output oc-scrollable"
+                tabIndex={0}
               >
                 {output}
               </pre>

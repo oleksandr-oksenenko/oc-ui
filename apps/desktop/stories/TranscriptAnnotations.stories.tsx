@@ -62,6 +62,8 @@ export const Comparison: Story = {
       );
       await userEvent.keyboard("{Escape}");
       await waitFor(() => expect(opener).toHaveFocus());
+      // The reading-content exception never strips a control's indicator.
+      await expect(getComputedStyle(opener).outlineStyle).toBe("solid");
     });
 
     await step(
@@ -107,6 +109,7 @@ export const Comparison: Story = {
       await userEvent.keyboard("New inline note{Shift>}{Enter}{/Shift}Second line{Enter}");
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       await waitFor(() => expect(source).toHaveFocus());
+      await expect(getComputedStyle(source).outlineStyle).toBe("none");
       await userEvent.click(canvas.getByRole("button", { name: "Annotations · 3 comments" }));
       const comments = await screen.findByRole("dialog", { name: "Annotation comments" });
       await expect(comments).not.toHaveTextContent(/transcript stays readable/);
