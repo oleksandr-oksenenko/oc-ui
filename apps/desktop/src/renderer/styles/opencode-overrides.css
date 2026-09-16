@@ -1,18 +1,20 @@
 /*
  * The pinned OpenCode UI package hardcodes the ordinary control radius in
  * these public roots and slots. Keep this narrow override at the app edge so
- * upstream styles remain untouched while visible controls follow our single
- * product radius.
+ * upstream styles remain untouched while visible controls and the cards nested
+ * in them follow our single product radius.
  */
 :root [data-component="button-v2"],
 :root [data-component="icon-button-v2"],
 :root [data-component="text-input-v2"],
+:root [data-component="textarea-v2"],
 :root [data-component="select-v2"],
 :root [data-component="menu-v2-content"][data-slot="select-v2-content"],
 :root [data-component="dialog-v2"] [data-slot="dialog-container"],
 :root [data-component="text-input-v2"] [data-slot="text-input-v2-icon-button"],
 :root [data-component="select-v2"] [data-slot="select-v2-chevron"],
-:root [data-component="dialog-v2"] [data-slot="dialog-close-button"] {
+:root [data-component="dialog-v2"] [data-slot="dialog-close-button"],
+:root [data-component="line-comment-v2"] [data-slot="line-comment-v2-shell"] {
   border-radius: var(--oc-radius);
 }
 

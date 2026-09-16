@@ -16,7 +16,7 @@
 .annotation-popover[data-component="popover-content"] {
   width: min(390px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
-  border: 0;
+  border: 1px solid var(--oc-border-strong);
   background: var(--oc-surface-raised);
   box-shadow: none;
   color: var(--oc-text-contrast);
