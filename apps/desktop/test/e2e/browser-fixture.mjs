@@ -1,13 +1,13 @@
 import { spawn, execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { createServer } from "node:https";
 import { request } from "node:http";
 
+import { ensureOpenCodeServerBundle } from "../../scripts/opencode-server-build.mjs";
+
 const execute = promisify(execFile);
-const require = createRequire(import.meta.url);
 
 export async function testCertificate(directory) {
   const key = join(directory, "test.key");
@@ -32,17 +32,14 @@ export async function testCertificate(directory) {
   return { key: await readFile(key), cert: await readFile(cert) };
 }
 
-export async function startServer(profile, project, corsOrigin) {
-  const password = "browser-acceptance-only";
-  const child = spawn(
-    require.resolve("@opencode/cli/bin/opencode.exe"),
-    ["serve", "--hostname", "127.0.0.1", "--port", "0", "--cors", corsOrigin],
-    {
-      cwd: project,
-      env: { ...profile.env, OPENCODE_SERVER_PASSWORD: password },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
+export async function startServer(profile, project, corsOrigin, extraEnv = {}) {
+  const serverScript = await ensureOpenCodeServerBundle();
+  const password = extraEnv.OPENCODE_SERVER_PASSWORD ?? "browser-acceptance-only";
+  const child = spawn(process.execPath, [serverScript, "--cors", corsOrigin], {
+    cwd: project,
+    env: { ...profile.env, ...extraEnv, OPENCODE_SERVER_PASSWORD: password },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   const exited = new Promise((resolve) => {
     child.once("exit", resolve);
     child.once("error", resolve);
@@ -58,6 +55,7 @@ export async function startServer(profile, project, corsOrigin) {
     }
   };
   let output = "";
+  let pending = "";
   const url = await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
@@ -69,16 +67,24 @@ export async function startServer(profile, project, corsOrigin) {
     };
     child.once("error", fail);
     child.once("exit", (code) => fail(new Error(`Server exited ${code}: ${output}`)));
-    const read = (chunk) => {
-      output = (output + chunk.toString()).slice(-8192);
-      const match = /http:\/\/127\.0\.0\.1:(\d+)/u.exec(output);
-      if (match) {
-        clearTimeout(timeout);
-        resolve(match[0]);
+    child.stdout.on("data", (chunk) => {
+      const text = chunk.toString();
+      output = (output + text).slice(-8192);
+      pending += text;
+      const lines = pending.split("\n");
+      pending = lines.pop() ?? "";
+      for (const line of lines) {
+        const match = /^server listening on (http:\/\/127\.0\.0\.1:\d+)$/u.exec(line.trim());
+        if (match) {
+          clearTimeout(timeout);
+          resolve(match[1]);
+          return;
+        }
       }
-    };
-    child.stdout.on("data", read);
-    child.stderr.on("data", read);
+    });
+    child.stderr.on("data", (chunk) => {
+      output = (output + chunk.toString()).slice(-8192);
+    });
   }).catch(async (error) => {
     await close();
     throw error;
@@ -91,7 +97,11 @@ export async function startServer(profile, project, corsOrigin) {
     password,
     headers,
     exited,
-    health: () => fetch(`${url}/api/health`, { headers }).then((response) => response.json()),
+    health: () =>
+      fetch(`${url}/api/health`, { headers }).then((response) => {
+        if (!response.ok) throw new Error(`Server health failed: ${response.status}`);
+        return response.json();
+      }),
     close,
   };
 }

@@ -8,6 +8,7 @@
     "check": "vp check && tsc -p apps/desktop/tsconfig.wdio.json --noEmit && pnpm lint:styles && pnpm check:components && knip",
     "check:components": "node tools/check-component-layout.mjs",
     "dev": "vp run --no-cache desktop#dev",
+    "dev:opencode": "pnpm --filter desktop opencode:serve",
     "dev:web": "pnpm --filter desktop dev:web",
     "verify:browser": "pnpm --filter desktop verify:browser",
     "build:web": "pnpm --filter desktop build:web",

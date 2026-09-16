@@ -36,7 +36,7 @@ export default mergeConfig(
           test: {
             name: "web",
             environment: "node",
-            include: ["test/e2e/browser.test.mjs"],
+            include: ["test/e2e/browser.test.mjs", "test/e2e/opencode-server.test.mjs"],
             hookTimeout: 60_000,
             testTimeout: 180_000,
             expect: { poll: { timeout: 30_000 } },

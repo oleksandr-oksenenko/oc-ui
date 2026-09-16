@@ -10,7 +10,7 @@ catalog:
   "@effect/tsgo": 0.38.0
   "@effect/vitest": 4.0.0-rc.112
   "@kobalte/core": 0.13.13
-  "@opencode/cli": 2.0.3
+  "@opencode-ai/pty": 0.1.13
   "@opencode/client": 2.0.3
   "@opencode/plugin": 2.0.3
   "@opencode/schema": 2.0.3
@@ -67,7 +67,6 @@ peerDependencyRules:
     vite: "*"
 
 allowBuilds:
-  "@opencode/cli": true
   "@ff-labs/fff-node": false
   "@lydell/node-pty": false
   "@parcel/watcher": false
@@ -93,19 +92,6 @@ minimumReleaseAgeExclude:
   - "@voidzero-dev/vite-plus-win32-arm64-msvc@0.3.0"
   - "@voidzero-dev/vite-plus-win32-x64-msvc@0.3.0"
   - "vite-plus@0.3.0"
-  - "@opencode/cli-darwin-arm64@2.0.3"
-  - "@opencode/cli-darwin-x64-baseline@2.0.3"
-  - "@opencode/cli-darwin-x64@2.0.3"
-  - "@opencode/cli-linux-arm64-musl@2.0.3"
-  - "@opencode/cli-linux-arm64@2.0.3"
-  - "@opencode/cli-linux-x64-baseline-musl@2.0.3"
-  - "@opencode/cli-linux-x64-baseline@2.0.3"
-  - "@opencode/cli-linux-x64-musl@2.0.3"
-  - "@opencode/cli-linux-x64@2.0.3"
-  - "@opencode/cli-windows-arm64@2.0.3"
-  - "@opencode/cli-windows-x64-baseline@2.0.3"
-  - "@opencode/cli-windows-x64@2.0.3"
-  - "@opencode/cli@2.0.3"
   - "@opencode/client@2.0.3"
   - "@opencode/server@2.0.3"
   - "@opencode/util@2.0.3"

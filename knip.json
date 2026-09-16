@@ -8,6 +8,7 @@
         "src/main/opencode-worker.ts",
         "stories/**/*.stories.{ts,tsx}",
         "test/e2e/**/*.e2e.ts",
+        "scripts/**/*.{ts,mjs}",
         "electron-builder.config.mjs",
         "src/renderer/browser.ts",
         "vite.web.config.ts"

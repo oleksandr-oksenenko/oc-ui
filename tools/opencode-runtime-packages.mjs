@@ -6,6 +6,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { isBuiltin } from "node:module";
@@ -45,7 +46,31 @@ function resolveRoots(imports) {
   return new Map([...roots].toSorted(([left], [right]) => left.localeCompare(right)));
 }
 
-export function stagePackageClosure(imports, runtimeDirectory) {
+// Each real package keeps its pnpm-resolved dependencies, so linking the roots
+// preserves every nested version without copying the closure.
+function linkRootPackages(roots, packagesDirectory) {
+  for (const [name, source] of roots) {
+    const destination = join(packagesDirectory, name);
+    mkdirSync(dirname(destination), { recursive: true });
+    symlinkSync(source, destination, process.platform === "win32" ? "junction" : "dir");
+  }
+}
+
+function copyPackageEntries(entries, runtimeDirectory) {
+  for (const { path, source } of entries) {
+    cpSync(source, join(runtimeDirectory, path), {
+      recursive: true,
+      dereference: true,
+      filter: (file) => !relative(source, file).split(sep).includes("node_modules"),
+    });
+  }
+}
+
+/**
+ * Stages a package closure beside a runtime bundle. Packaging copies real files;
+ * local test/dev caches pass `{ mode: "link" }` to mirror the install on disk.
+ */
+export function stagePackageClosure(imports, runtimeDirectory, options = {}) {
   const roots = resolveRoots(imports);
 
   // Reserve root imports before traversing dependencies. Nested versions remain
@@ -97,7 +122,9 @@ export function stagePackageClosure(imports, runtimeDirectory) {
     source,
     manifest: readFileSync(join(source, "package.json"), "utf8"),
   }));
-  const fingerprint = createHash("sha256").update(JSON.stringify(entries)).digest("hex");
+  const fingerprint = createHash("sha256")
+    .update(JSON.stringify({ mode: options.mode ?? "copy", entries }))
+    .digest("hex");
   const manifestPath = join(runtimeDirectory, "closure.json");
   if (
     existsSync(packagesDirectory) &&
@@ -109,15 +136,22 @@ export function stagePackageClosure(imports, runtimeDirectory) {
   // Delete only this build's generated dependency directory, never the install.
   rmSync(packagesDirectory, { recursive: true, force: true });
   mkdirSync(packagesDirectory, { recursive: true });
-  for (const { path, source } of entries) {
-    cpSync(source, join(runtimeDirectory, path), {
-      recursive: true,
-      dereference: true,
-      filter: (file) => !relative(source, file).split(sep).includes("node_modules"),
-    });
-  }
+  if (options.mode === "link") linkRootPackages(roots, packagesDirectory);
+  else copyPackageEntries(entries, runtimeDirectory);
   writeFileSync(
     manifestPath,
-    JSON.stringify({ fingerprint, packages: entries.map(({ path }) => path) }, null, 2),
+    JSON.stringify(
+      {
+        fingerprint,
+        packages:
+          options.mode === "link"
+            ? [...roots.keys()].map((name) =>
+                relative(runtimeDirectory, join(packagesDirectory, name)),
+              )
+            : entries.map(({ path }) => path),
+      },
+      null,
+      2,
+    ),
   );
 }

@@ -7,6 +7,7 @@
   "include": [
     "src/main/**/*.ts",
     "src/shared/**/*.ts",
+    "scripts/**/*.ts",
     "electron.vite.config.ts",
     "../../packages/opencode-session-tools/build.ts",
     "vite.config.ts",

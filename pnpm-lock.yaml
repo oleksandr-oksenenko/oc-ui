@@ -21,9 +21,9 @@ catalogs:
     '@kobalte/core':
       specifier: 0.13.13
       version: 0.13.13
-    '@opencode/cli':
-      specifier: 2.0.3
-      version: 2.0.3
+    '@opencode-ai/pty':
+      specifier: 0.1.13
+      version: 0.1.13
     '@opencode/client':
       specifier: 2.0.3
       version: 2.0.3
@@ -273,9 +273,9 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.0-rc.112(effect@4.0.0-rc.112)(vitest@4.1.11)
-      '@opencode/cli':
+      '@opencode-ai/pty':
         specifier: 'catalog:'
-        version: 2.0.3
+        version: 0.1.13
       '@storybook/addon-a11y':
         specifier: 'catalog:'
         version: 10.5.10(storybook@10.5.10(react@19.2.8)(vite-plus@0.3.0(@opentelemetry/api@1.9.1)(@types/node@26.3.0)(@vitest/browser-playwright@4.1.11)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.3.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.4.0))(tsx@4.23.13)(typescript@7.0.2)(yaml@2.9.0)))
@@ -1945,72 +1945,6 @@ packages:
 
   '@opencode/ai@2.0.3':
     resolution: {integrity: sha512-SqrFdmgwCDWug95v7vpkT8asd64i/iimK67BVzvuCbtLfzWdUljzp3No4ytHXyVqLt/XkdyOuJA/NoGrDM8muw==}
-
-  '@opencode/cli-darwin-arm64@2.0.3':
-    resolution: {integrity: sha512-2JzNaHmMHUCk2uLXo2kCKCs81KOzErt7V7ypFFp5hUCIXRPjt9D7C5CKsz2GKWfpHRivUKILKrfUS9MpYzfq6A==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@opencode/cli-darwin-x64-baseline@2.0.3':
-    resolution: {integrity: sha512-sm9ZjG2KOk/v4ht6WHAo+pAeOfxnnImwT5rFWNIn15fVlXncbWH2QmKWDC3Nf/h7vpgeghZ1UBbBmo8fP3lBCA==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@opencode/cli-darwin-x64@2.0.3':
-    resolution: {integrity: sha512-dMAH/N5KD10Wlct2BbCa8tEV6SiPgBg1kF9Ud7N7ZUctMEeGoz3fqZTrcGrQz7yoAkyyHhGgq+gmxqobwrAhhg==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@opencode/cli-linux-arm64-musl@2.0.3':
-    resolution: {integrity: sha512-cif0oXReK/lVZ9kFplNc3XTNM3uuAKLIgcfcEIVMbjTivLzdHe0O5Dp8y7rakJOdXqQ5yM1k6oP8kP2rfpitxg==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@opencode/cli-linux-arm64@2.0.3':
-    resolution: {integrity: sha512-q3QhCIW5CxkmJjzKI6GXJ89M0OF9lOsi1e3e4YTvQL6Htv0S7eHyZ+3Wg0UYQaoYqegAf3vBoYiPR3Z9ieIVrQ==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@opencode/cli-linux-x64-baseline-musl@2.0.3':
-    resolution: {integrity: sha512-AYMNzjwPU63FjqjKLEm61s2tBL7+yipt/lzn+2eMpPHYGggV2urJH9TEME2+mReENeYFfOSItPR7gWLX1p2g5A==}
-    cpu: [x64]
-    os: [linux]
-
-  '@opencode/cli-linux-x64-baseline@2.0.3':
-    resolution: {integrity: sha512-14CFor+PFx7tPAFOB3uEcg2EOQZNB1gK4uit4p8gfN30FK7kwNHBjs/m79QGICPMjwZrCOVdZ3ZiI+AgbjanjA==}
-    cpu: [x64]
-    os: [linux]
-
-  '@opencode/cli-linux-x64-musl@2.0.3':
-    resolution: {integrity: sha512-YDZCk0MddTJ8lDwlEmE5bVWF5R13nDpLEQPcCA5IY2njB/y2g6UaAiIVbJE1rVmFd7/Z7JmyB2X3z60uk3C/dA==}
-    cpu: [x64]
-    os: [linux]
-
-  '@opencode/cli-linux-x64@2.0.3':
-    resolution: {integrity: sha512-H8m5m4g1Z/zkx1O8+pos7euLYpY/zgc5NTdUbZZ7Dh8xQ35qoHCnJjt9H8Y1hnpm4ClNKDVHmEISw/qPiskX5A==}
-    cpu: [x64]
-    os: [linux]
-
-  '@opencode/cli-windows-arm64@2.0.3':
-    resolution: {integrity: sha512-WQuojS+6O6YNlRsal9kbePiEEv4hZHVL7l7ILRnlyZSLx7M2ynTOUahtGzC42AbdH9sdIa4OGQDmDwcbfCqHuA==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@opencode/cli-windows-x64-baseline@2.0.3':
-    resolution: {integrity: sha512-9R6QdvoEd6bxv+Izi2kwg+85Mc3lCoTRgAsTZpNadVaRgAcU8vzEjjgrzFM6gLr8j+65EgG7vtP1gCVhfyQRwg==}
-    cpu: [x64]
-    os: [win32]
-
-  '@opencode/cli-windows-x64@2.0.3':
-    resolution: {integrity: sha512-4pCiryt3LZG4dCkhvDOiTttzBECE36HUKe5uwCSAu9Ny7Sh2H1iVw1XFKo3QYqh6XdkWa9Uyza0lqLB6SSAGTw==}
-    cpu: [x64]
-    os: [win32]
-
-  '@opencode/cli@2.0.3':
-    resolution: {integrity: sha512-FC4+2a5kwdKS2o/pIcGCscpSQB7PuhBObwGMfqnx/2XtoaZBMtSq/99nuEdeDNAFvy1qyK6mp2hwvoiMWsiI4w==}
-    cpu: [arm64, x64]
-    os: [darwin, linux, win32]
-    hasBin: true
 
   '@opencode/client@2.0.3':
     resolution: {integrity: sha512-b+LcpMI131fXnGqf+O+9Y33H4XmwAkQibfYvtpEOROftkTpkcMj3R7WW/wGl2VTBNTZECAk2Yd+TACTzzAwk0A==}
@@ -9370,7 +9304,7 @@ snapshots:
       effect: 4.0.0-rc.112
       solid-js: 1.9.15
 
-  '@effect/opentelemetry@4.0.0-rc.112(@opentelemetry/api-logs@0.220.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.112)':
+  '@effect/opentelemetry@4.0.0-rc.112(@opentelemetry/api-logs@0.220.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.112)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.43.0
       effect: 4.0.0-rc.112
@@ -9380,14 +9314,6 @@ snapshots:
       '@opentelemetry/resources': 2.11.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/sdk-logs': 0.214.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/sdk-metrics': 2.6.1(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-trace-base': 2.6.1(@opentelemetry/api@1.9.0)
-      '@opentelemetry/sdk-trace-node': 2.6.1(@opentelemetry/api@1.9.1)
-
-  '@effect/opentelemetry@4.0.0-rc.112(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.1(@opentelemetry/api@1.9.0))(effect@4.0.0-rc.112)':
-    dependencies:
-      effect: 4.0.0-rc.112
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.0
       '@opentelemetry/sdk-trace-base': 2.6.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-node': 2.6.1(@opentelemetry/api@1.9.0)
 
@@ -10481,57 +10407,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opencode/cli-darwin-arm64@2.0.3':
-    optional: true
-
-  '@opencode/cli-darwin-x64-baseline@2.0.3':
-    optional: true
-
-  '@opencode/cli-darwin-x64@2.0.3':
-    optional: true
-
-  '@opencode/cli-linux-arm64-musl@2.0.3':
-    optional: true
-
-  '@opencode/cli-linux-arm64@2.0.3':
-    optional: true
-
-  '@opencode/cli-linux-x64-baseline-musl@2.0.3':
-    optional: true
-
-  '@opencode/cli-linux-x64-baseline@2.0.3':
-    optional: true
-
-  '@opencode/cli-linux-x64-musl@2.0.3':
-    optional: true
-
-  '@opencode/cli-linux-x64@2.0.3':
-    optional: true
-
-  '@opencode/cli-windows-arm64@2.0.3':
-    optional: true
-
-  '@opencode/cli-windows-x64-baseline@2.0.3':
-    optional: true
-
-  '@opencode/cli-windows-x64@2.0.3':
-    optional: true
-
-  '@opencode/cli@2.0.3':
-    optionalDependencies:
-      '@opencode/cli-darwin-arm64': 2.0.3
-      '@opencode/cli-darwin-x64': 2.0.3
-      '@opencode/cli-darwin-x64-baseline': 2.0.3
-      '@opencode/cli-linux-arm64': 2.0.3
-      '@opencode/cli-linux-arm64-musl': 2.0.3
-      '@opencode/cli-linux-x64': 2.0.3
-      '@opencode/cli-linux-x64-baseline': 2.0.3
-      '@opencode/cli-linux-x64-baseline-musl': 2.0.3
-      '@opencode/cli-linux-x64-musl': 2.0.3
-      '@opencode/cli-windows-arm64': 2.0.3
-      '@opencode/cli-windows-x64': 2.0.3
-      '@opencode/cli-windows-x64-baseline': 2.0.3
-
   '@opencode/client@2.0.3(effect@4.0.0-rc.112)(solid-js@1.9.15)':
     dependencies:
       '@opencode/protocol': 2.0.3
@@ -11066,7 +10941,7 @@ snapshots:
 
   '@opencode/util@2.0.3(@opentelemetry/api-logs@0.220.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(redis@6.2.1(@opentelemetry/api@1.9.1))(supports-color@8.1.1)':
     dependencies:
-      '@effect/opentelemetry': 4.0.0-rc.112(@opentelemetry/api-logs@0.220.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.112)
+      '@effect/opentelemetry': 4.0.0-rc.112(@opentelemetry/api-logs@0.220.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.112)
       '@effect/platform-node': 4.0.0-rc.112(effect@4.0.0-rc.112)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/platform-node-shared': 4.0.0-rc.112(effect@4.0.0-rc.112)
       '@npmcli/arborist': 9.4.0(supports-color@8.1.1)
@@ -11097,7 +10972,7 @@ snapshots:
 
   '@opencode/util@2.0.3(supports-color@10.2.2)':
     dependencies:
-      '@effect/opentelemetry': 4.0.0-rc.112(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.1(@opentelemetry/api@1.9.0))(effect@4.0.0-rc.112)
+      '@effect/opentelemetry': 4.0.0-rc.112(@opentelemetry/api-logs@0.220.0)(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.1(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.112)
       '@effect/platform-node': 4.0.0-rc.112(effect@4.0.0-rc.112)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/platform-node-shared': 4.0.0-rc.112(effect@4.0.0-rc.112)
       '@npmcli/arborist': 9.4.0(supports-color@10.2.2)
@@ -11147,11 +11022,6 @@ snapshots:
   '@opentelemetry/context-async-hooks@2.6.1(@opentelemetry/api@1.9.0)':
     dependencies:
       '@opentelemetry/api': 1.9.0
-
-  '@opentelemetry/context-async-hooks@2.6.1(@opentelemetry/api@1.9.1)':
-    dependencies:
-      '@opentelemetry/api': 1.9.1
-    optional: true
 
   '@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -11311,14 +11181,6 @@ snapshots:
       '@opentelemetry/context-async-hooks': 2.6.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/core': 2.6.1(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 2.6.1(@opentelemetry/api@1.9.0)
-
-  '@opentelemetry/sdk-trace-node@2.6.1(@opentelemetry/api@1.9.1)':
-    dependencies:
-      '@opentelemetry/api': 1.9.1
-      '@opentelemetry/context-async-hooks': 2.6.1(@opentelemetry/api@1.9.1)
-      '@opentelemetry/core': 2.6.1(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-trace-base': 2.6.1(@opentelemetry/api@1.9.1)
-    optional: true
 
   '@opentelemetry/sdk-trace@2.11.0(@opentelemetry/api@1.9.1)':
     dependencies:

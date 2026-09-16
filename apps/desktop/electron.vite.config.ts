@@ -4,8 +4,8 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "electron-vite";
-import { build } from "esbuild";
 import rendererConfig from "./vite.config.ts";
+import { bundleOpenCodeRuntime } from "./scripts/build-opencode-runtime.ts";
 import { buildSessionTools } from "../../packages/opencode-session-tools/build.ts";
 
 const configDirectory = dirname(fileURLToPath(import.meta.url));
@@ -21,49 +21,15 @@ export default defineConfig({
           for (const input of await buildSessionTools(resolve(runtimeDirectory, "session-tools"))) {
             this.addWatchFile(input);
           }
-          // OpenCode publishes extensionless ESM and Node-specific conditional loaders.
-          // Bundle its code, but retain native modules and other packages as packages.
-          const dependencies = new Map<string, string>();
-          const result = await build({
-            absWorkingDir: configDirectory,
+          // Bundle OpenCode's extensionless ESM, but retain native modules and
+          // other packages as staged packages. The standalone server uses the
+          // same recipe through scripts/build-opencode-runtime.ts.
+          const { result, dependencies } = await bundleOpenCodeRuntime({
+            configDirectory,
             entryPoints: ["src/main/opencode-worker.ts"],
             outfile: resolve(runtimeDirectory, "opencode-worker.mjs"),
-            bundle: true,
-            platform: "node",
-            conditions: ["node"],
-            format: "esm",
-            target: "node24",
-            metafile: true,
-            banner: {
-              js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
-            },
-            plugins: [
-              {
-                name: "opencode-package-boundary",
-                setup(builder) {
-                  builder.onResolve({ filter: /^[^./#]/ }, (args) => {
-                    if (
-                      args.path.startsWith("@opencode/") ||
-                      args.path === "@parcel/watcher/wrapper"
-                    ) {
-                      return undefined;
-                    }
-                    dependencies.set(`${args.path}\0${args.resolveDir}`, args.resolveDir);
-                    return { path: args.path, external: true };
-                  });
-                },
-              },
-            ],
           });
-          writeFileSync(
-            resolve(runtimeDirectory, "build.json"),
-            JSON.stringify({
-              dependencies: [...dependencies].map(([key, from]) => ({
-                specifier: key.split("\0")[0],
-                from,
-              })),
-            }),
-          );
+          writeFileSync(resolve(runtimeDirectory, "build.json"), JSON.stringify({ dependencies }));
           // The worker is not an import of main; explicitly watch all of its local inputs.
           for (const input of Object.keys(result.metafile.inputs)) {
             if (!input.includes("node_modules/"))

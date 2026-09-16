@@ -204,6 +204,14 @@ export default defineConfig({
         },
       },
       {
+        files: ["apps/desktop/scripts/**/*.{ts,mjs}"],
+        rules: {
+          ...effectNodeBoundaryRules,
+          "effecttsgo/global-console": "off",
+          "effecttsgo/global-date": "off",
+        },
+      },
+      {
         files: ["tools/**/*.mjs"],
         rules: {
           "effecttsgo/global-console": "off",
