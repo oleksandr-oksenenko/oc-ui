@@ -2,10 +2,12 @@ import { Context, Effect, Fiber, Layer, ManagedRuntime, ScopedRef } from "effect
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { RegistryContext } from "@effect/atom-solid";
 import { createComponent, createRoot, getOwner, runWithOwner, untrack } from "solid-js";
+import type { WorkerPoolManager } from "@pierre/diffs/worker";
 
 import type { OpenCodeTarget } from "../shared/desktop-api.ts";
 import type { AppHost } from "../shared/app-host.ts";
 import { Appearance, makeAppearance, type Theme } from "./appearance.ts";
+import { createDiffHighlight, createDiffHighlightPool } from "./diff-highlighter.ts";
 import { OpenCodeConnectionError, verifyServer } from "./opencode/index.ts";
 import type { VerifiedServer } from "./opencode/index.ts";
 import { createConnectedRuntime, type ConnectedRuntime } from "./opencode/runtime.ts";
@@ -316,6 +318,13 @@ export function createRenderer(host: AppHost) {
   );
   const connection = runtime.runSync(Connection);
   const appearance = runtime.runSync(Appearance);
+  const diffHighlightState = Atom.make<WorkerPoolManager | undefined>(undefined);
+  const unmountDiffHighlight = registry.mount(diffHighlightState);
+  const diffHighlight = createDiffHighlight({
+    initialTheme: registry.get(appearance.state).theme,
+    onChange: (manager) => registry.set(diffHighlightState, manager),
+    createPool: createDiffHighlightPool() ?? undefined,
+  });
   let closing: Promise<void> | undefined;
   return {
     registry,
@@ -326,9 +335,17 @@ export function createRenderer(host: AppHost) {
         if (!closing) runtime.runSync(appearance.setTheme(theme));
       },
     },
+    diffHighlight: {
+      state: diffHighlightState,
+      setTheme: (theme: Theme) => diffHighlight.setTheme(theme),
+    },
     dispose: () =>
       (closing ??= Effect.runPromise(runtime.disposeEffect.pipe(Effect.uninterruptible)).finally(
-        () => registry.dispose(),
+        () => {
+          diffHighlight.dispose();
+          unmountDiffHighlight();
+          registry.dispose();
+        },
       )),
   };
 }

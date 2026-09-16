@@ -128,8 +128,14 @@ generated `<diffs-container>`, open Shadow DOM, styles, syntax highlighting,
 and line layout. The wrapper reuses one renderer for updates and calls
 `cleanUp()` whenever the collapsible content unmounts. The initial layout is
 dark, unified, and horizontally scrollable because the panel is 280-560 px
-wide. Pierre cache keys are omitted so updates to the same path cannot reuse
-stale parsed content.
+wide.
+
+Pierre skips its worker highlight and diff caches unless a diff carries a
+`cacheKey`, and `parseDiffFromFile` combines both sides only when both set one.
+`diff-render-data.ts` therefore derives a content key (file name, length, and a
+53-bit hash) for each side, so identical content reuses highlights while a
+same-path content change produces a different key and cannot reuse stale
+parsed content.
 
 Malformed or empty patches remain in the file list with their server totals and
 show a local “This patch could not be displayed” fallback. One bad file does not

@@ -5,18 +5,10 @@ import type { FileContents, FileDiffMetadata, SelectedLineRange } from "@pierre/
 import type { ReviewComment } from "../../../../../../domain/review-drafts.ts";
 export type { ReviewComment } from "../../../../../../domain/review-drafts.ts";
 
-export type DiffRenderData =
-  | {
-      readonly kind: "files";
-      readonly oldFile: FileContents;
-      readonly newFile: FileContents;
-      /** Normalized metadata used for review selections. */
-      readonly fileDiff: FileDiffMetadata;
-    }
-  | {
-      readonly kind: "patch";
-      readonly fileDiff: FileDiffMetadata;
-    };
+export type DiffRenderData = {
+  readonly kind: "files" | "patch";
+  readonly fileDiff: FileDiffMetadata;
+};
 
 type Hunk = {
   readonly oldStart: number;
@@ -49,7 +41,6 @@ export function prepareDiffRender(file: FileDiffInfo): DiffRenderData | undefine
     try {
       return {
         kind: "files",
-        ...complete,
         fileDiff: {
           ...parseDiffFromFile(complete.oldFile, complete.newFile, undefined, true),
           name: file.file,
@@ -57,7 +48,9 @@ export function prepareDiffRender(file: FileDiffInfo): DiffRenderData | undefine
         },
       };
     } catch {
-      return undefined;
+      // A reconstructed pair can still fail Pierre's parser (for example when a
+      // generated patch is degenerate). Fall through so the original patch can
+      // still render instead of discarding a displayable diff.
     }
   }
 
@@ -76,8 +69,8 @@ export function reconstructCompleteFiles(
   if (file.status === "deleted" && state.newLines.length !== 0) return undefined;
 
   return {
-    oldFile: { name: file.file, contents: state.oldLines.join("") },
-    newFile: { name: file.file, contents: state.newLines.join("") },
+    oldFile: fileWithCacheKey(file.file, state.oldLines.join("")),
+    newFile: fileWithCacheKey(file.file, state.newLines.join("")),
   };
 }
 
@@ -192,6 +185,7 @@ export function parseFilePatch(file: FileDiffInfo): FileDiffMetadata | undefined
       ...fallback,
       name: file.file,
       type: file.status === "added" ? "new" : file.status === "deleted" ? "deleted" : "change",
+      cacheKey: patchCacheKey(file.file, file.patch),
     };
   } catch {
     return undefined;
@@ -347,10 +341,13 @@ function completeHunk(hunk: Hunk): boolean {
 }
 
 function coversWholeFile(hunks: readonly Hunk[], oldLines: number, newLines: number): boolean {
-  // OpenCode's no-context request promises full context. Unified diffs do not
-  // carry a separate EOF line count, so prove the parts they do encode: both
-  // sides start at the file boundary, all hunks are contiguous, and their
-  // declared counts end exactly at the reconstructed contents.
+  // Structural boundary check: both sides start at the file boundary, all hunks
+  // are contiguous, and their declared counts end exactly at the reconstructed
+  // contents. A unified hunk header records only the lines it includes, so this
+  // cannot prove EOF coverage on its own. It is sound here only because the
+  // renderer's sole diff producer (`opencode/vcs-diff.ts`) omits `context`, which
+  // the server resolves to a full-context patch; keep that request unchanged, or
+  // reconstruct from authoritative completeness instead of inferring it.
   let nextOld = oldLines === 0 ? 0 : 1;
   let nextNew = newLines === 0 ? 0 : 1;
 
@@ -364,4 +361,40 @@ function coversWholeFile(hunks: readonly Hunk[], oldLines: number, newLines: num
     nextOld === (oldLines === 0 ? 0 : oldLines + 1) &&
     nextNew === (newLines === 0 ? 0 : newLines + 1)
   );
+}
+
+/**
+ * A stable cache key derived from file identity and content. Pierre skips its
+ * worker highlight and diff caches unless a diff carries a `cacheKey`, and
+ * `parseDiffFromFile` only combines the two sides when both files set one.
+ *
+ * The key uses the name plus the content length and a 53-bit cyrb53 hash. It is
+ * synchronous and stable across renders for identical content. A collision would
+ * let Pierre reuse a highlight result for different bytes; the length prefix
+ * rejects most accidental collisions, and the residual risk only mis-highlights
+ * an otherwise correct diff. The name is included so identical bytes with
+ * different extensions do not reuse a language-mismatched highlight.
+ */
+function fileWithCacheKey(name: string, contents: string): FileContents {
+  return { name, contents, cacheKey: `${name}:${contents.length}:${cyrb53(contents)}` };
+}
+
+function patchCacheKey(name: string, patch: string): string {
+  return `${name}:patch:${patch.length}:${cyrb53(patch)}`;
+}
+
+/** cyrb53: a fast, synchronous, 53-bit non-cryptographic string hash. */
+function cyrb53(value: string, seed = 0): number {
+  let h1 = 0xdeadbeef ^ seed;
+  let h2 = 0x41c6ce57 ^ seed;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }

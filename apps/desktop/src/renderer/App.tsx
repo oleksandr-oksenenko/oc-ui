@@ -6,6 +6,7 @@ import type { Renderer } from "./connection.ts";
 import { ConnectionForm } from "./components/App/ConnectionForm.tsx";
 import { ConnectedApp } from "./components/App/ConnectedApp.tsx";
 import { ServerProvider } from "./opencode/index.ts";
+import { DiffHighlightProvider } from "./ui/DiffHighlightProvider.tsx";
 import { ServerFlowDialogProvider } from "./ui/ServerFlowDialogProvider.tsx";
 import { ThemeProvider } from "./ui/ThemeProvider.tsx";
 
@@ -14,6 +15,9 @@ export function App(props: { readonly renderer: Renderer }) {
   const connection = props.renderer.connection;
   const state = useAtomValue(() => connection.state);
   const appearance = useAtomValue(() => props.renderer.appearance.state);
+  const diffManager = useAtomValue(() => props.renderer.diffHighlight.state);
+  // The highlight pool owns its own theme; keep it in step with the window theme.
+  createEffect(() => props.renderer.diffHighlight.setTheme(appearance().theme));
   createEffect(() => {
     const description = appearance().notice;
     if (!description) return;
@@ -39,40 +43,42 @@ export function App(props: { readonly renderer: Renderer }) {
       : undefined);
   return (
     <ThemeProvider theme={() => appearance().theme} onChange={props.renderer.appearance.setTheme}>
-      <ServerFlowDialogProvider>
-        <Toast.Region style={{ "z-index": 40 }} />
-        <Show when={visibleWorkspace()} keyed>
-          {(workspace) => (
-            <div class="runtime-layer" hidden={connecting()}>
-              <ServerProvider runtime={workspace.runtime}>
-                <ConnectedApp
-                  server={workspace.server}
-                  model={workspace.model}
-                  onChangeServer={connection.changeServer}
-                />
-              </ServerProvider>
-            </div>
-          )}
-        </Show>
-        <Show when={!visibleWorkspace() || connecting()}>
-          <ConnectionForm
-            builtInAvailable={connection.builtInAvailable}
-            serverUrl={state().serverUrl}
-            password={state().password}
-            mode={state().mode}
-            busy={connecting()}
-            error={error()}
-            restartBuiltIn={state().localUnavailable}
-            savedTarget={state().savedTarget}
-            onModeChange={connection.setMode}
-            onServerUrlInput={connection.setServerUrl}
-            onPasswordInput={connection.setPassword}
-            onConnect={() => connection.connect("remote")}
-            onUseBuiltInServer={() => connection.connect("local")}
-            onForget={connection.forget}
-          />
-        </Show>
-      </ServerFlowDialogProvider>
+      <DiffHighlightProvider manager={diffManager}>
+        <ServerFlowDialogProvider>
+          <Toast.Region style={{ "z-index": 40 }} />
+          <Show when={visibleWorkspace()} keyed>
+            {(workspace) => (
+              <div class="runtime-layer" hidden={connecting()}>
+                <ServerProvider runtime={workspace.runtime}>
+                  <ConnectedApp
+                    server={workspace.server}
+                    model={workspace.model}
+                    onChangeServer={connection.changeServer}
+                  />
+                </ServerProvider>
+              </div>
+            )}
+          </Show>
+          <Show when={!visibleWorkspace() || connecting()}>
+            <ConnectionForm
+              builtInAvailable={connection.builtInAvailable}
+              serverUrl={state().serverUrl}
+              password={state().password}
+              mode={state().mode}
+              busy={connecting()}
+              error={error()}
+              restartBuiltIn={state().localUnavailable}
+              savedTarget={state().savedTarget}
+              onModeChange={connection.setMode}
+              onServerUrlInput={connection.setServerUrl}
+              onPasswordInput={connection.setPassword}
+              onConnect={() => connection.connect("remote")}
+              onUseBuiltInServer={() => connection.connect("local")}
+              onForget={connection.forget}
+            />
+          </Show>
+        </ServerFlowDialogProvider>
+      </DiffHighlightProvider>
     </ThemeProvider>
   );
 }

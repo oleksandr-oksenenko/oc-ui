@@ -5,11 +5,14 @@ import type {
   PostRenderPhase,
   SelectedLineRange,
 } from "@pierre/diffs";
+import type { WorkerPoolManager } from "@pierre/diffs/worker";
 import { createEffect, createMemo, createSignal, on, onCleanup, untrack } from "solid-js";
 
 import type { DiffFileReview, ReviewComment } from "../diff-render-data.ts";
 import { getAnnotationTarget, getSelectedCode } from "../diff-render-data.ts";
 import type { DiffRenderData } from "../diff-render-data.ts";
+import { activeDiffTheme } from "../../../../../../../diff-highlighter.ts";
+import { useDiffHighlight } from "../../../../../../../ui/DiffHighlightProvider.tsx";
 import { useTheme } from "../../../../../../../ui/ThemeProvider.tsx";
 
 type AnnotationMetadata = { readonly commentID: string };
@@ -138,8 +141,21 @@ function syncGutterCommentIcons(container: HTMLElement): void {
 
 export function PierreDiffBody(props: PierreDiffBodyProps) {
   const { theme } = useTheme();
+  const manager = useDiffHighlight();
   const [host, setHost] = createSignal<HTMLDivElement>();
-  const renderer = new PierreFileDiff<AnnotationMetadata>();
+  let renderer = new PierreFileDiff<AnnotationMetadata>();
+  let rendererManager: WorkerPoolManager | undefined;
+  // The worker pool is fixed at construction, so recreate the renderer only when
+  // its availability changes (initialization success or watchdog failure).
+  const rendererFor = (): PierreFileDiff<AnnotationMetadata> => {
+    const next = manager();
+    if (next !== rendererManager) {
+      renderer.cleanUp();
+      renderer = new PierreFileDiff<AnnotationMetadata>(undefined, next);
+      rendererManager = next;
+    }
+    return renderer;
+  };
 
   const currentReview = () => props.review;
   const commentsForAnnotations = (diff: DiffRenderData) =>
@@ -171,7 +187,7 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
     diff: DiffRenderData,
     review: DiffFileReview | undefined,
   ): FileDiffOptions<AnnotationMetadata> => ({
-    theme: { light: "github-light-high-contrast", dark: "github-dark-high-contrast" },
+    theme: activeDiffTheme(theme()),
     themeType: theme(),
     diffStyle: "unified",
     expandUnchanged: false,
@@ -226,26 +242,20 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
   const render = (diff: DiffRenderData, review: DiffFileReview | undefined): void => {
     const currentHost = host();
     if (!currentHost) return;
-    renderer.setOptions(optionsFor(diff, review));
-    renderer.render(
-      diff.kind === "files"
-        ? {
-            oldFile: diff.oldFile,
-            newFile: diff.newFile,
-            lineAnnotations: commentsForAnnotations(diff),
-            containerWrapper: currentHost,
-          }
-        : {
-            fileDiff: diff.fileDiff,
-            lineAnnotations: commentsForAnnotations(diff),
-            containerWrapper: currentHost,
-          },
-    );
-    renderer.setSelectedLines(selectedRange(review), { notify: false });
+    const instance = rendererFor();
+    instance.setOptions(optionsFor(diff, review));
+    // The parsed metadata already carries the full lines (non-partial for
+    // reconstructed files), so Pierre does not need the raw contents here.
+    instance.render({
+      fileDiff: diff.fileDiff,
+      lineAnnotations: commentsForAnnotations(diff),
+      containerWrapper: currentHost,
+    });
+    instance.setSelectedLines(selectedRange(review), { notify: false });
   };
 
   createEffect(
-    on([host, () => props.diff], ([currentHost, diff]) => {
+    on([host, () => props.diff, manager], ([currentHost, diff]) => {
       if (!currentHost) return;
       render(diff, untrack(currentReview));
     }),
@@ -253,16 +263,17 @@ export function PierreDiffBody(props: PierreDiffBodyProps) {
 
   createEffect(
     on(
-      [renderSignature, theme],
+      [renderSignature, theme, manager],
       () => {
         const currentHost = host();
         if (!currentHost) return;
         const diff = untrack(() => props.diff);
         const review = untrack(currentReview);
-        renderer.setOptions(optionsFor(diff, review));
-        renderer.setLineAnnotations(commentsForAnnotations(diff));
-        renderer.rerender();
-        renderer.setSelectedLines(selectedRange(review), { notify: false });
+        const instance = rendererFor();
+        instance.setOptions(optionsFor(diff, review));
+        instance.setLineAnnotations(commentsForAnnotations(diff));
+        instance.rerender();
+        instance.setSelectedLines(selectedRange(review), { notify: false });
       },
       { defer: true },
     ),

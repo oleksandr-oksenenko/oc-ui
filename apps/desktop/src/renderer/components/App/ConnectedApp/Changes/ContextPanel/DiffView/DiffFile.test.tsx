@@ -113,7 +113,7 @@ describe("DiffFile", () => {
  last
 `,
     });
-    expect(modified).toEqual({
+    expect(modified).toMatchObject({
       oldFile: { name: file.file, contents: "first\nold\nlast\n" },
       newFile: { name: file.file, contents: "first\nnew\nlast\n" },
     });
@@ -125,7 +125,7 @@ describe("DiffFile", () => {
       deletions: 0,
       patch: "@@ -0,0 +1,2 @@\n+first\n+second\n",
     });
-    expect(added).toEqual({
+    expect(added).toMatchObject({
       oldFile: { name: file.file, contents: "" },
       newFile: { name: file.file, contents: "first\nsecond\n" },
     });
@@ -137,7 +137,7 @@ describe("DiffFile", () => {
       deletions: 2,
       patch: "@@ -1,2 +0,0 @@\n-first\n-second\n",
     });
-    expect(deleted).toEqual({
+    expect(deleted).toMatchObject({
       oldFile: { name: file.file, contents: "first\nsecond\n" },
       newFile: { name: file.file, contents: "" },
     });
@@ -433,7 +433,7 @@ describe("DiffFile", () => {
         ...file,
         patch: "@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new\n",
       }),
-    ).toEqual({
+    ).toMatchObject({
       oldFile: { name: file.file, contents: "old" },
       newFile: { name: file.file, contents: "new\n" },
     });
@@ -517,11 +517,13 @@ describe("DiffFile", () => {
     expect(trigger?.getAttribute("aria-expanded")).toBe("true");
     expect(renderSpy).toHaveBeenCalledTimes(1);
 
-    expect(renderSpy.mock.calls[0]?.[0]).toMatchObject({
-      oldFile: { name: file.file, contents: "old\n" },
-      newFile: { name: file.file, contents: "new\n" },
+    // Pierre receives only the parsed metadata (no raw old/new files), which
+    // already carries the full lines; expand affordances remain because the
+    // reconstructed metadata is not partial.
+    expect(renderSpy.mock.calls[0]?.[0].fileDiff).toMatchObject({
+      name: file.file,
+      isPartial: false,
     });
-    expect(renderSpy.mock.calls[0]?.[0].fileDiff).toBeUndefined();
 
     host.querySelector<HTMLButtonElement>('[aria-label="Collapse src/example.ts"]')?.click();
     await vi.waitFor(() => expect(host.querySelector("diffs-container")).toBeNull());
@@ -547,14 +549,16 @@ describe("DiffFile", () => {
     });
 
     await vi.waitFor(() => expect(renderSpy).toHaveBeenCalledTimes(1));
-    const firstNewFile = renderSpy.mock.calls[0]?.[0].newFile;
+    const firstDiff = renderSpy.mock.calls[0]?.[0].fileDiff;
     update({ ...file, patch: file.patch.replace("+new", "+newer") });
     await vi.waitFor(() => expect(renderSpy).toHaveBeenCalledTimes(2));
-    const secondNewFile = renderSpy.mock.calls[1]?.[0].newFile;
-    expect(secondNewFile).not.toBe(firstNewFile);
-    expect(secondNewFile?.contents).toContain("newer");
-    expect(firstNewFile?.cacheKey).toBeUndefined();
-    expect(secondNewFile?.cacheKey).toBeUndefined();
+    const secondDiff = renderSpy.mock.calls[1]?.[0].fileDiff;
+    expect(secondDiff).not.toBe(firstDiff);
+    expect(secondDiff?.additionLines.join("")).toContain("newer");
+    // Content-derived keys activate Pierre's caches and change with content.
+    expect(firstDiff?.cacheKey).toBeDefined();
+    expect(secondDiff?.cacheKey).toBeDefined();
+    expect(secondDiff?.cacheKey).not.toBe(firstDiff?.cacheKey);
 
     dispose();
     renderSpy.mockRestore();
