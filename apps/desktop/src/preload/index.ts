@@ -5,6 +5,7 @@ import { BROWSER_CHANNELS, BrowserEvent, type BrowserRequest } from "../shared/b
 import {
   IPC_CHANNELS,
   parseLocalOpenCodeConnectResult,
+  parseOpenExternalUrl,
   parseTargetLoadResult,
   parseTargetSaveResult,
   parseVoidResult,
@@ -13,6 +14,11 @@ import type { DesktopApi } from "../shared/desktop-api.ts";
 
 const invokeBrowser = (input: typeof BrowserRequest.Type) =>
   ipcRenderer.invoke(BROWSER_CHANNELS.request, input).then(parseVoidResult);
+
+const openExternal = async (url: string) =>
+  parseVoidResult(
+    await ipcRenderer.invoke(IPC_CHANNELS.openExternal, parseOpenExternalUrl(url).href),
+  );
 
 const desktopApi: DesktopApi = {
   browser: {
@@ -50,6 +56,7 @@ const desktopApi: DesktopApi = {
       return () => ipcRenderer.removeListener(IPC_CHANNELS.localOpenCodeUnavailable, handler);
     },
   },
+  openExternal,
 };
 
 contextBridge.exposeInMainWorld("desktop", desktopApi);

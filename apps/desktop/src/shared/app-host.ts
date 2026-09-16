@@ -6,6 +6,7 @@ export type AppHost =
   | ({ readonly kind: "desktop" } & DesktopApi)
   | {
       readonly kind: "browser";
+      readonly openExternal: DesktopApi["openExternal"];
       readonly target: {
         readonly load: () => Promise<Pick<RemoteTarget, "kind" | "serverUrl"> | undefined>;
         readonly saveRemote: DesktopApi["target"]["saveRemote"];

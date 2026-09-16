@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   parseLocalOpenCodeConnectResult,
+  parseOpenExternalUrl,
   parseSaveTargetInput,
   parseTargetLoadResult,
   parseTargetSaveResult,
@@ -54,5 +55,20 @@ describe("desktop IPC result parsing", () => {
       }),
     ).toThrow('Missing key\n  at ["connection"]["password"]');
     expect(() => parseVoidResult(null)).toThrow("Expected undefined");
+  });
+
+  it("opens only web URLs externally and rejects other schemes", () => {
+    expect(parseOpenExternalUrl("https://example.test/docs?q=1#intro").href).toBe(
+      "https://example.test/docs?q=1#intro",
+    );
+    expect(parseOpenExternalUrl("http://127.0.0.1:4096/").href).toBe("http://127.0.0.1:4096/");
+    expect(() => parseOpenExternalUrl("file:///etc/passwd")).toThrow(
+      "Expected an http or https URL",
+    );
+    expect(() => parseOpenExternalUrl("javascript:alert(1)")).toThrow(
+      "Expected an http or https URL",
+    );
+    expect(() => parseOpenExternalUrl("not a url")).toThrow("a valid URL string");
+    expect(() => parseOpenExternalUrl(42)).toThrow("Expected string");
   });
 });

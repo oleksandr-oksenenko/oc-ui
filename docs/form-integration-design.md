@@ -119,9 +119,10 @@ failures use the same form-level error boundary; local validation remains in
 
 ## External fields
 
-Leave `QuestionForm.onOpenExternal` disabled until oc-ui has an existing,
-reviewed desktop URL-open contract. This integration does not invent Electron
-IPC or call a browser global.
+Transcript web links now leave the window through the host `openExternal`
+capability. `QuestionForm.onOpenExternal` stays disabled: adopting that same
+contract for global and review forms is a separate change, not part of this
+integration.
 
 ## Verification evidence and requirements
 
@@ -148,5 +149,6 @@ real pending session form receives `form.created` through the pinned data layer.
 
 Notifications for unselected sessions; global forms as app-level dialogs with
 location context; client-side reordering, persistence, or history;
-cross-form mutation serialization; automatic composer focus; and a new
-URL-opening IPC contract remain separate product decisions.
+cross-form mutation serialization; automatic composer focus; and enabling form
+external fields through the host `openExternal` contract remain separate product
+decisions.

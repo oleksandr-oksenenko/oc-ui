@@ -44,4 +44,15 @@ describe("browser connection settings", () => {
     await expect(host.target.saveRemote({ serverUrl: "https://server" })).rejects.toBeDefined();
     await expect(host.target.clear()).rejects.toBeDefined();
   });
+
+  it("opens external links in a new tab and rejects non-web URLs", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    await expect(
+      createBrowserHost().openExternal("https://example.test/docs"),
+    ).resolves.toBeUndefined();
+    expect(open).toHaveBeenCalledWith("https://example.test/docs", "_blank", "noopener,noreferrer");
+
+    await expect(createBrowserHost().openExternal("javascript:alert(1)")).rejects.toBeDefined();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
 });

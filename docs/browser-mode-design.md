@@ -32,13 +32,20 @@ The entrypoint supplies one `AppHost` to the existing renderer owner:
 
 - Desktop supplies `{ kind: "desktop", ...window.desktop }`, retaining the
   existing `DesktopApi`, IPC, secure settings, and built-in server operations.
-- Browser supplies `{ kind: "browser", target }`, with address load/save/clear
-  operations. It has no built-in-server methods or fake implementations.
+- Browser supplies `{ kind: "browser", openExternal, target }`, with address
+  load/save/clear operations. It has no built-in-server methods or fake
+  implementations.
 
-Only startup, Connection, and the connection form depend on host capabilities.
-Connection derives built-in availability once, guards unsupported local actions,
-and uses remote defaults throughout browser startup, Forget, and recovery.
-Connected feature components retain their existing data/callback contracts.
+Both hosts expose `openExternal`, which accepts only absolute HTTP(S) URLs:
+desktop hands them to the OS default browser through IPC and `shell.openExternal`,
+while browser opens them in a new tab with `window.open`. The application's
+single document link handler routes transcript Markdown anchors through it.
+
+Only startup, Connection, the connection form, and external web links depend on
+host capabilities. Connection derives built-in availability once, guards
+unsupported local actions, and uses remote defaults throughout browser startup,
+Forget, and recovery. Connected feature components retain their existing
+data/callback contracts.
 
 ```mermaid
 flowchart LR

@@ -44,6 +44,8 @@ export type DesktopApi = {
     readonly connect: () => Promise<LocalOpenCodeConnectResult>;
     readonly onUnavailable: (listener: () => void) => () => void;
   };
+  /** Hands a web URL to the operating system's default handler. */
+  readonly openExternal: (url: string) => Promise<void>;
 };
 
 export const IPC_CHANNELS = {
@@ -52,7 +54,25 @@ export const IPC_CHANNELS = {
   targetClear: "desktop:target:clear",
   localOpenCodeConnect: "desktop:local-opencode:connect",
   localOpenCodeUnavailable: "desktop:local-opencode:unavailable",
+  openExternal: "desktop:open-external",
 } as const;
+
+/**
+ * Accepts only absolute web URLs for the OS handler. Other schemes can launch
+ * arbitrary local programs or read local files through `shell.openExternal`.
+ * The length bound applies to the normalized `href`, so preload and main agree
+ * on the same value.
+ */
+const ExternalUrlSchema = Schema.URLFromString.check(
+  Schema.makeFilter((url) => url.protocol === "http:" || url.protocol === "https:", {
+    message: "Expected an http or https URL",
+  }),
+  Schema.makeFilter((url) => url.href.length <= 2_048, {
+    message: "Expected a URL of at most 2048 characters",
+  }),
+);
+
+export const parseOpenExternalUrl = Schema.decodeUnknownSync(ExternalUrlSchema);
 
 const ipcParseOptions = { onExcessProperty: "error" } as const;
 

@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 
 import type { AppHost } from "../shared/app-host.ts";
+import { parseOpenExternalUrl } from "../shared/desktop-api.ts";
 import { parseServerUrl, ServerUrlSchema } from "../shared/server-url.ts";
 
 const storageKey = "ocui.connection.v1";
@@ -17,6 +18,15 @@ const encodeStored = Schema.encodeSync(Schema.fromJsonString(Schema.toEncoded(St
 export function createBrowserHost(): Extract<AppHost, { kind: "browser" }> {
   return {
     kind: "browser",
+    openExternal: (url) => {
+      try {
+        // Keep the tab open synchronous with the activation call stack.
+        window.open(parseOpenExternalUrl(url).href, "_blank", "noopener,noreferrer");
+        return Promise.resolve();
+      } catch (cause) {
+        return Promise.reject(cause);
+      }
+    },
     target: {
       load: () =>
         Effect.runPromise(

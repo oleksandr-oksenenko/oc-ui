@@ -4,7 +4,17 @@ import { join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { NodePath } from "@effect/platform-node";
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, safeStorage, session } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  net,
+  protocol,
+  safeStorage,
+  session,
+  shell,
+} from "electron";
 import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electron";
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 
@@ -12,7 +22,7 @@ import { BrowserHost } from "./browser/host.ts";
 import { BROWSER_CHANNELS, BrowserRequest } from "../shared/browser-api.ts";
 
 import type { SaveTargetInput } from "../shared/desktop-api.ts";
-import { IPC_CHANNELS, parseSaveTargetInput } from "../shared/desktop-api.ts";
+import { IPC_CHANNELS, parseOpenExternalUrl, parseSaveTargetInput } from "../shared/desktop-api.ts";
 import { LocalOpenCode, LocalOpenCodeUnavailableError } from "./local-opencode.ts";
 import { settingsLayer, Settings } from "./settings.ts";
 import { settingsFileSystemLayer } from "./settings-file-system.ts";
@@ -104,19 +114,23 @@ const resolveDesktopRuntimeEnvironment = (): DesktopRuntimeEnvironment => {
   };
 };
 
-const runIpc = <A, E>(
-  operation: Effect.Effect<A, E, Settings | LocalOpenCode | BrowserHost>,
-): Promise<A> => {
-  if (desktopRuntime === undefined) {
-    return Promise.reject(new Error("Desktop services are not ready"));
-  }
-  const result = desktopRuntime.runPromise(operation);
+/** Keeps accepted IPC work observable to shutdown until it settles. */
+const trackPending = <A>(result: Promise<A>): Promise<A> => {
   pendingIpc.add(result);
   void result.then(
     () => pendingIpc.delete(result),
     () => pendingIpc.delete(result),
   );
   return result;
+};
+
+const runIpc = <A, E>(
+  operation: Effect.Effect<A, E, Settings | LocalOpenCode | BrowserHost>,
+): Promise<A> => {
+  if (desktopRuntime === undefined) {
+    return Promise.reject(new Error("Desktop services are not ready"));
+  }
+  return trackPending(desktopRuntime.runPromise(operation));
 };
 
 const assertTrustedIpcSender = (event: IpcMainInvokeEvent): void => {
@@ -184,6 +198,21 @@ const installIpcHandlers = (): void => {
         ),
       ),
     );
+  });
+
+  ipcMain.handle(IPC_CHANNELS.openExternal, (event, rawUrl) => {
+    assertTrustedIpcSender(event);
+    if (quitHandler.isQuitting()) {
+      return Promise.reject(new Error("Ocui is closing."));
+    }
+    let url: string;
+    try {
+      url = parseOpenExternalUrl(rawUrl).href;
+    } catch {
+      return Promise.reject(new TypeError("invalid external URL"));
+    }
+    // The OS handoff is not cancellable; keep it owned until it settles.
+    return trackPending(shell.openExternal(url));
   });
 
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- IPC input is decoded before dispatch.

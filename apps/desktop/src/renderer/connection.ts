@@ -329,6 +329,8 @@ export function createRenderer(host: AppHost) {
   return {
     registry,
     connection,
+    /* The host owns how a web link leaves the window; the caller reports failure. */
+    openExternal: (url: string) => host.openExternal(url),
     appearance: {
       state: appearance.state,
       setTheme: (theme: Theme) => {
