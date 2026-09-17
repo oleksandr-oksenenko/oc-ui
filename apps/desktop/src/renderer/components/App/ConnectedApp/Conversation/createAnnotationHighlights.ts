@@ -26,6 +26,23 @@ type AnnotationHighlightsInput = {
 
 let instanceNumber = 0;
 
+const blockKey = (messageID: string, block: string): string => `${messageID}\u0000${block}`;
+const MAX_CACHED_DIGESTS = 256;
+
+/** One pass over the mounted blocks, keyed by message and block name. */
+function mountedBlocks(root: HTMLElement): Map<string, HTMLElement> {
+  const blocks = new Map<string, HTMLElement>();
+  for (const block of root.querySelectorAll<HTMLElement>("[data-annotation-block]")) {
+    const messageID = block.closest<HTMLElement>("[data-message-id]")?.dataset.messageId;
+    const blockName = block.dataset.annotationBlock;
+    if (messageID === undefined || blockName === undefined) continue;
+    if (block.closest('[data-annotation-disabled="true"]')) continue;
+    const key = blockKey(messageID, blockName);
+    if (!blocks.has(key)) blocks.set(key, block);
+  }
+  return blocks;
+}
+
 /** Computes the stable source hash used when restoring an annotation highlight. */
 export async function digestAnnotationText(text: string): Promise<string> {
   const result = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -43,6 +60,26 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
   const highlightName = `oc-ui-transcript-annotations-${++instanceNumber}`;
   let suppressScroll = false;
   let suppressScrollFrame: number | undefined;
+  // Unchanged blocks keep their digest across rebuilds, so streaming or a new
+  // materialization batch does not re-hash every annotated block.
+  const digests = new Map<string, Promise<string>>();
+
+  const digestFor = (text: string): Promise<string> => {
+    const cached = digests.get(text);
+    if (cached !== undefined) {
+      digests.delete(text);
+      digests.set(text, cached);
+      return cached;
+    }
+    const digest = digestAnnotationText(text);
+    digests.set(text, digest);
+    while (digests.size > MAX_CACHED_DIGESTS) {
+      const oldest = digests.keys().next().value;
+      if (oldest === undefined) break;
+      digests.delete(oldest);
+    }
+    return digest;
+  };
 
   /**
    * Ignores scroll notifications until the next animation frame so scroll events
@@ -159,16 +196,19 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     >();
     const restored = new Map<string, Range>();
 
+    // One pass over the mounted blocks replaces a scan per annotation.
+    const blocks = mountedBlocks(root);
+
     for (const item of input.sources()) {
-      const block = findSource(item.source);
-      if (!block || block.closest('[data-annotation-disabled="true"]')) continue;
+      const block = blocks.get(blockKey(item.source.messageID, item.source.block));
+      if (!block) continue;
 
       let entry = projections.get(block);
       if (!entry) {
         const projection = projectAnnotationSource(block);
         entry = {
           range: projection.range,
-          digest: digestAnnotationText(projection.text),
+          digest: digestFor(projection.text),
         };
         projections.set(block, entry);
       }
@@ -251,6 +291,25 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     input.onDismiss();
   };
 
+  // Only mutations that can change an annotated block or its message require a
+  // rebuild; unrelated streaming still dismisses the popover but leaves the
+  // existing highlights and digests untouched.
+  const affectsAnnotations = (records: readonly MutationRecord[]): boolean => {
+    const annotated = new Set(input.sources().map((item) => item.source.messageID));
+    if (annotated.size === 0) return false;
+    return records.some((record) => {
+      const target = record.target instanceof Element ? record.target : record.target.parentElement;
+      const owner = target?.closest<HTMLElement>("[data-message-id]")?.dataset.messageId;
+      if (owner !== undefined && annotated.has(owner)) return true;
+      for (const node of [...record.addedNodes, ...record.removedNodes]) {
+        if (!(node instanceof Element)) continue;
+        const nodeOwner = node.closest<HTMLElement>("[data-message-id]")?.dataset.messageId;
+        if (nodeOwner === undefined || annotated.has(nodeOwner)) return true;
+      }
+      return false;
+    });
+  };
+
   const attach = (nextRoot: HTMLDivElement): (() => void) => {
     detach?.();
     mountedRoot = nextRoot;
@@ -260,9 +319,9 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     style.textContent = `::highlight(${highlightName}) { background-color: var(--oc-selection-ring); text-decoration: underline; text-decoration-color: var(--oc-accent); }`;
     document.head.append(style);
 
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((records) => {
       input.onDismiss();
-      scheduleRebuild();
+      if (affectsAnnotations(records)) scheduleRebuild();
     });
     observer.observe(nextRoot, {
       childList: true,
