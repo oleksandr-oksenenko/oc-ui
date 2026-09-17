@@ -12,6 +12,7 @@ const sdk = vi.hoisted(() => ({
   emit: (_event: OpenCodeEvent) => {},
   reconnect: () => {},
   syncInfo: vi.fn<() => Promise<void>>(),
+  createDataConfig: vi.fn<(config: { initialMessageLimit?: () => number }) => void>(),
 }));
 vi.mock("@opencode/client/solid", () => ({
   createClientConnection: (
@@ -23,7 +24,10 @@ vi.mock("@opencode/client/solid", () => ({
     sdk.reconnect = () => setStatus("reconnecting");
     return { status, attempt: () => 1, error: () => "handshake failed" };
   },
-  createData: () => ({ location: { syncInfo: sdk.syncInfo } }),
+  createData: (config: { initialMessageLimit?: () => number }) => {
+    sdk.createDataConfig(config);
+    return { location: { syncInfo: sdk.syncInfo } };
+  },
 }));
 vi.mock("./session-catalog", () => ({ createSessionCatalog: () => ({}) }));
 vi.mock("./vcs-diff", () => ({ createVcsDiffStore: () => ({}) }));
@@ -45,6 +49,13 @@ const connected = () => sdk.emit({ id: "connected", type: "server.connected", da
 beforeEach(() => sdk.syncInfo.mockReset());
 
 describe("Workspace readiness", () => {
+  it("requests one wider initial transcript window", () => {
+    setup();
+
+    const config = sdk.createDataConfig.mock.calls[0]?.[0];
+    expect(config?.initialMessageLimit?.()).toBe(200);
+  });
+
   it("waits for the first handshake and location sync, retaining success across reconnect", async () => {
     const location = deferred();
     sdk.syncInfo.mockReturnValue(location.promise);

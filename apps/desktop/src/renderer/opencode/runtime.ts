@@ -58,6 +58,9 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     directory: input.defaultLocation.directory,
     event: events,
     connection: { status: stream.status },
+    // One wider initial window saves a bulk round trip; older pages are
+    // unchanged, and the materializer still reveals from the newest rows.
+    initialMessageLimit: () => 200,
   });
   const sessions = createSessionCatalog({
     effects: input.effects,
