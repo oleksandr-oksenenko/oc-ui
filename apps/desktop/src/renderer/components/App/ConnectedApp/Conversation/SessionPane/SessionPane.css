@@ -685,10 +685,13 @@
 /*
  * Let the browser skip layout and paint for rows far from the viewport. The
  * intrinsic block size stands in while a row is skipped; `auto` replaces it
- * with the row's last rendered size after its first render. The estimates come
- * from a rendered-height census: header-only rows 22px, user rows mean ~44px,
- * assistant rows mean ~73px (medians 48px with long tails). Kept at the end of
- * the file because these child selectors outrank the plain row rules above.
+ * with the row's last rendered size after its first render. Values are rounded
+ * per-class estimates from a rendered-height census: header-only rows 22px,
+ * user rows mean ~44px, assistant rows mean ~73px (medians 48px with long
+ * tails). Shell, skill, and compaction rows share the header shape but were not
+ * in the measured sessions, and the total scroll extent can drift on a first
+ * narrow-layout visit (~10% at 420px) until those rows render. Kept at the end
+ * of the file because these child selectors outrank the plain row rules above.
  */
 .transcript-document > .transcript-message {
   content-visibility: auto;

@@ -170,7 +170,8 @@ describe("createAnnotationHighlights", () => {
     const root = document.createElement("div");
     root.innerHTML =
       '<article data-message-id="one"><p data-annotation-block="a">alpha</p><span>plain</span></article>' +
-      '<article data-message-id="two"><p data-annotation-block="b">beta</p></article>';
+      '<article data-message-id="two"><p data-annotation-block="b">beta</p></article>' +
+      '<article data-message-id="three"><p data-annotation-block="c">gamma</p></article>';
     document.body.append(root);
     const onOpen = vi.fn<(keys: readonly string[], target: HTMLElement, anchor: DOMRect) => void>();
     const result = createRoot((dispose) => {
@@ -201,6 +202,15 @@ describe("createAnnotationHighlights", () => {
 
       // A block without annotations performs no geometry queries.
       click(root.querySelector('[data-message-id="one"] span')!);
+      expect(rects).not.toHaveBeenCalled();
+      expect(onOpen).not.toHaveBeenCalled();
+
+      // A marked block with no matching source is rejected the same way, on
+      // click and on the pointer-move cursor path.
+      click(root.querySelector('[data-message-id="three"] p')!);
+      root
+        .querySelector('[data-message-id="three"] p')!
+        .dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 10, clientY: 10 }));
       expect(rects).not.toHaveBeenCalled();
       expect(onOpen).not.toHaveBeenCalled();
 
