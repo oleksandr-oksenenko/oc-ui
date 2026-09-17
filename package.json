@@ -11,6 +11,8 @@
     "dev:opencode": "pnpm --filter desktop opencode:serve",
     "dev:web": "pnpm --filter desktop dev:web",
     "verify:browser": "pnpm --filter desktop verify:browser",
+    "profile:transcripts": "node apps/desktop/scripts/profile-transcripts.mjs",
+    "compare:transcript-profiles": "node apps/desktop/scripts/compare-transcript-profiles.mjs",
     "build:web": "pnpm --filter desktop build:web",
     "preview:web": "pnpm --filter desktop preview:web",
     "format": "vp fmt",
