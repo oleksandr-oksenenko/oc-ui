@@ -501,6 +501,33 @@ describe("DiffFile", () => {
     dispose();
   });
 
+  it("wires the path to start truncation with an LTR base and a hover tooltip", async () => {
+    const path =
+      "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/very-long-file-name.tsx";
+    const { host, dispose } = mount(() => <DiffFile file={{ ...file, file: path }} />);
+
+    const pathElement = host.querySelector<HTMLElement>(".diff-file-path");
+    expect(pathElement?.classList.contains("truncate-start")).toBe(true);
+    const isolatedPath = pathElement?.querySelector("bdi");
+    expect(isolatedPath?.getAttribute("dir")).toBe("ltr");
+    expect(isolatedPath?.textContent).toBe(path);
+    expect(host.querySelector(".diff-file-name [title]")).toBeNull();
+    expect(host.querySelector(`[aria-label="Collapse ${path}"]`)?.textContent).toContain(
+      "very-long-file-name.tsx",
+    );
+
+    const trigger = pathElement?.closest('[data-component="tooltip-v2-trigger"]');
+    expect(trigger).not.toBeNull();
+    const event = new Event("pointerenter");
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    trigger!.dispatchEvent(event);
+    await vi.waitFor(() =>
+      expect(document.body.querySelector('[data-component="tooltip-v2"]')?.textContent).toBe(path),
+    );
+
+    dispose();
+  });
+
   it("mounts Pierre when opened and remounts it after closing", async () => {
     const renderSpy = vi.spyOn(PierreFileDiff.prototype, "render").mockImplementation((props) => {
       props.containerWrapper?.append(document.createElement("diffs-container"));

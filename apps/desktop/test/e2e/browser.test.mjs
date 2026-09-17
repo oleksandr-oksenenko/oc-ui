@@ -795,11 +795,13 @@ describe.sequential("production browser app", () => {
       await page.getByLabel("Show context", { exact: true }).click();
     await page.locator(".diff-comparison-select").click();
     await page.getByText("Changes vs main", { exact: true }).click();
-    await page.locator('.diff-file-name [title="branch.txt"]').waitFor();
-    await page.locator('.diff-file-name [title="working.txt"]').waitFor();
+    await page.locator(".diff-file-path", { hasText: /^branch\.txt$/ }).waitFor();
+    await page.locator(".diff-file-path", { hasText: /^working\.txt$/ }).waitFor();
     await page.locator(".diff-comparison-select").click();
     await page.getByText("Working changes", { exact: true }).click();
-    await page.locator('.diff-file-name [title="branch.txt"]').waitFor({ state: "hidden" });
+    await page
+      .locator(".diff-file-path", { hasText: /^branch\.txt$/ })
+      .waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Collapse working.txt", exact: true }).click();
     let release;
     const pending = new Promise((resolve) => {
@@ -830,7 +832,9 @@ describe.sequential("production browser app", () => {
     const path = join(project, "polling.txt");
     try {
       await writeFile(path, "External creation\n");
-      const row = page.locator(".diff-file").filter({ has: page.locator('[title="polling.txt"]') });
+      const row = page
+        .locator(".diff-file")
+        .filter({ has: page.locator(".diff-file-path", { hasText: /^polling\.txt$/ }) });
       await expect.poll(() => row.count()).toBe(1);
       await expect
         .poll(() => page.getByRole("button", { name: "Expand working.txt", exact: true }).count())

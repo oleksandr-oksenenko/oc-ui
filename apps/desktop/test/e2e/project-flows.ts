@@ -112,10 +112,7 @@ async function expectFiles(files: readonly string[]): Promise<void> {
   await browser.waitUntil(
     async () => {
       const actual = await browser.execute(() =>
-        Array.from(
-          document.querySelectorAll(".diff-file-name [title]"),
-          (node) => node.getAttribute("title") ?? "",
-        ),
+        Array.from(document.querySelectorAll(".diff-file-path"), (node) => node.textContent ?? ""),
       );
       return actual.length === files.length && files.every((file) => actual.includes(file));
     },

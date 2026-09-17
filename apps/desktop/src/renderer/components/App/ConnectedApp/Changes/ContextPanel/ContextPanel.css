@@ -175,6 +175,7 @@
 
 .diff-file-name {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   min-width: 0;
   gap: 3px;
@@ -191,10 +192,16 @@
   opacity: 1;
 }
 
-.diff-file-name span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* `truncate-start` clips the beginning of the path instead of the end, so the
+   file name stays readable. The inner `bdi` pins the path to an LTR base
+   direction while the RTL box keeps the ellipsis on the left. */
+.diff-file-path {
+  min-width: 0;
+}
+
+.diff-file-path-tooltip {
+  max-width: min(420px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
 }
 
 .diff-file-stats {

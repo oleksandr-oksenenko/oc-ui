@@ -2,6 +2,7 @@ import type { FileDiffInfo } from "@opencode/client";
 import { Show, createMemo, createSignal } from "solid-js";
 import { Collapsible } from "@opencode/ui/collapsible";
 import { DiffChanges } from "@opencode/ui/diff-changes";
+import { Tooltip } from "@opencode/ui/tooltip";
 
 import { PierreDiffBody } from "./DiffFile/PierreDiffBody.tsx";
 import type { DiffFileReview } from "./diff-render-data.ts";
@@ -34,10 +35,22 @@ export function DiffFile(props: DiffFileProps) {
             class="diff-file-toggle oc-focus-inset"
             aria-label={`${expanded() ? "Collapse" : "Expand"} ${props.file.file}`}
           >
-            <span class="diff-file-name">
+            {/* The tooltip trigger stays inside the disclosure button: the
+                upstream Tooltip suppresses itself when a trigger descendant
+                reports an expanded disclosure, so wrapping the button would
+                disable it for open files. */}
+            <Tooltip
+              class="diff-file-name"
+              contentClass="diff-file-path-tooltip"
+              value={props.file.file}
+            >
               <Collapsible.Arrow class="diff-file-disclosure" />
-              <span title={props.file.file}>{props.file.file}</span>
-            </span>
+              {/* `truncate-start` clips the beginning of the path; the LTR base
+                  direction keeps the file name at the visible end. */}
+              <span class="diff-file-path truncate-start">
+                <bdi dir="ltr">{props.file.file}</bdi>
+              </span>
+            </Tooltip>
           </Collapsible.Trigger>
           <div class="diff-file-stats">
             <span class="sr-only">
