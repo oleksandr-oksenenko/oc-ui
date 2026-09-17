@@ -64,6 +64,44 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   );
   assert.ok((await git(projectDirectory, "worktree", "list", "--porcelain")).includes(worktree));
   await $("p=No working tree changes").waitForDisplayed({ timeout: TIMEOUT });
+  // A session worktree is detached, so it reports no current branch. The Diff
+  // panel must still offer the comparison against the default branch. Commit a
+  // file in the worktree so the branch diff has a unique result to show; the
+  // working tree stays clean.
+  assert.equal(await git(worktree, "rev-parse", "--abbrev-ref", "HEAD"), "HEAD");
+  await writeFile(join(worktree, "worktree-commit.txt"), "Committed in the worktree\n");
+  await git(worktree, "add", "worktree-commit.txt");
+  await git(
+    worktree,
+    "-c",
+    "user.name=oc-ui-e2e",
+    "-c",
+    "user.email=oc-ui-e2e@invalid",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "-m",
+    "Worktree commit",
+  );
+  await browser.waitUntil(
+    async () => {
+      const select = $(".diff-comparison-select");
+      return (await select.isExisting()) && (await select.getText()).includes("Working changes");
+    },
+    { timeout: TIMEOUT, timeoutMsg: "The detached worktree did not offer a diff comparison" },
+  );
+  await $(".diff-comparison-select").click();
+  const branchOption = '[data-slot="menu-v2-item-content"]=Changes vs main';
+  await $(branchOption).waitForClickable({ timeout: TIMEOUT });
+  await $(branchOption).click();
+  await expectFiles(["worktree-commit.txt"]);
+  await $(".diff-comparison-select").click();
+  await $('[data-slot="menu-v2-item-content"]=Working changes').waitForClickable({
+    timeout: TIMEOUT,
+  });
+  await $('[data-slot="menu-v2-item-content"]=Working changes').click();
+  await $("p=No working tree changes").waitForDisplayed({ timeout: TIMEOUT });
+  await expectFiles([]);
 
   const deleteButton = ".shell-session-row.selected .shell-session-delete";
   await $(".shell-session-row.selected").moveTo();

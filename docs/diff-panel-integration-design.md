@@ -20,8 +20,10 @@ The available comparisons are:
 | **Working changes**        | `working`   | Working copy compared with `HEAD`.                                                                                         |
 | **Changes vs `<default>`** | `branch`    | Working copy compared with the merge base of the named default branch. This can include committed and uncommitted changes. |
 
-`Working changes` is the default. The branch comparison is offered only when
-`vcs.get` reports distinct, non-empty current and default branch names.
+`Working changes` is the default. Branch comparison is offered when `vcs.get`
+reports a non-empty default branch name and the reported current branch name
+differs from it. This includes detached `HEAD` worktrees, which report no
+current branch, provided a default branch name is available.
 
 ## Exact client use
 
@@ -155,7 +157,8 @@ Coverage added for:
 - same-key refresh replacement;
 - scoped and unscoped event invalidation;
 - cached files retained after refresh failure;
-- comparison control and honest empty copy;
+- comparison control and honest empty copy, including detached `HEAD` metadata
+  and the on-default reset;
 - stale files and Retry presentation;
 - complete, headerless, and empty patch handling;
 - collapsed open/close/reopen lifecycle and same-path patch updates.

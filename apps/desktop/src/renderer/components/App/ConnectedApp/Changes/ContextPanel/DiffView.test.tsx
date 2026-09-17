@@ -43,6 +43,35 @@ describe("DiffView", () => {
     dispose();
   });
 
+  it("hides the comparison selector when only one comparison is available", () => {
+    const { host, dispose } = mount(() => (
+      <DiffView files={[malformedFile]} loading={false} comparison="working" />
+    ));
+
+    expect(host.querySelector('[data-component="select-v2"]')).toBeNull();
+    expect(host.textContent).toContain("1 file");
+    dispose();
+  });
+
+  it("shows the comparison selector with no files when two comparisons exist", () => {
+    const { host, dispose } = mount(() => (
+      <DiffView
+        files={[]}
+        loading={false}
+        comparison="branch"
+        comparisonOptions={[
+          { value: "working", label: "Working changes" },
+          { value: "branch", label: "Changes vs main" },
+        ]}
+      />
+    ));
+
+    const select = host.querySelector<HTMLElement>('[data-component="select-v2"]');
+    expect(select).not.toBeNull();
+    expect(select?.textContent).toContain("Changes vs main");
+    dispose();
+  });
+
   it("uses workspace-state wording for an empty comparison", () => {
     const host = document.createElement("div");
     const dispose = render(

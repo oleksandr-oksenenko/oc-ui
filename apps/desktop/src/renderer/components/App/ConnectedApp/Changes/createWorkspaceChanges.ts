@@ -112,7 +112,10 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
   >(() => {
     const location = selectedLocation();
     const branch = location && input.runtime.data.location.vcs.info(location)?.branch;
-    if (branch?.current && branch.default && branch.current !== branch.default) {
+    // Session worktrees are detached, so they report no current branch. A
+    // non-empty default branch alone names the comparison base; the option
+    // stays hidden when that default is missing or matches the current branch.
+    if (branch?.default && branch.current !== branch.default) {
       return [
         { value: "working", label: "Working changes" },
         { value: "branch", label: `Changes vs ${branch.default}` },

@@ -278,6 +278,110 @@ describe("createWorkspaceChanges", () => {
     root.dispose();
   });
 
+  it("offers branch comparison when the worktree has a detached HEAD", async () => {
+    const root = setup({
+      selected: session(),
+      snapshot: { files: [], status: "ready", stale: false },
+      branch: { default: "main" },
+    });
+
+    expect(root.changes.view().comparisonOptions).toEqual([
+      { value: "working", label: "Working changes" },
+      { value: "branch", label: "Changes vs main" },
+    ]);
+    root.changes.view().onComparisonChange?.("branch");
+    expect(root.changes.view().comparison).toBe("branch");
+    expect(root.changes.view().emptyMessage).toBe("No changes against main");
+
+    // A metadata refresh that is still detached keeps the option and selection.
+    root.setBranch({ default: "main" });
+    await settle();
+    expect(root.changes.view().comparisonOptions).toHaveLength(2);
+    expect(root.changes.view().comparison).toBe("branch");
+
+    root.dispose();
+  });
+
+  it("keeps branch comparison when a named branch becomes detached", async () => {
+    const root = setup({
+      selected: session(),
+      branch: { current: "feature", default: "main" },
+    });
+    root.changes.view().onComparisonChange?.("branch");
+    expect(root.changes.view().comparison).toBe("branch");
+
+    root.setBranch({ default: "main" });
+    await settle();
+    expect(root.changes.view().comparison).toBe("branch");
+
+    root.dispose();
+  });
+
+  it("adds branch comparison when default metadata arrives after mount", async () => {
+    const root = setup({ selected: session() });
+    expect(root.changes.view().comparisonOptions).toEqual([
+      { value: "working", label: "Working changes" },
+    ]);
+
+    root.setBranch({ default: "main" });
+    await settle();
+    expect(root.changes.view().comparisonOptions).toHaveLength(2);
+    expect(root.changes.view().comparison).toBe("working");
+
+    root.dispose();
+  });
+
+  it("omits branch comparison on the default branch or without a default", () => {
+    for (const branch of [
+      { current: "main", default: "main" },
+      { current: "feature" },
+      { default: "" },
+      {},
+    ]) {
+      const root = setup({ selected: session(), branch });
+      expect(root.changes.view().comparisonOptions).toEqual([
+        { value: "working", label: "Working changes" },
+      ]);
+      root.dispose();
+    }
+  });
+
+  it("retries the detached branch comparison and keeps the selection", () => {
+    const root = setup({
+      selected: session(),
+      snapshot: {
+        files: [file("src/example.ts")],
+        status: "failed",
+        stale: true,
+        error: "The comparison base could not be read.",
+      },
+      branch: { default: "main" },
+    });
+    root.changes.view().onComparisonChange?.("branch");
+    expect(root.changes.view().comparison).toBe("branch");
+    expect(root.changes.view().error).toBe("The comparison base could not be read.");
+
+    root.changes.view().onRetry?.();
+    expect(root.refreshDiff).toHaveBeenCalledWith(location, "branch");
+
+    root.dispose();
+  });
+
+  it("resets branch comparison when HEAD is the default branch", async () => {
+    const root = setup({
+      selected: session(),
+      branch: { current: "feature", default: "main" },
+    });
+    root.changes.view().onComparisonChange?.("branch");
+    expect(root.changes.view().comparison).toBe("branch");
+
+    root.setBranch({ current: "main", default: "main" });
+    await settle();
+    expect(root.changes.view().comparison).toBe("working");
+
+    root.dispose();
+  });
+
   it("removes empty comments immediately but delegates non-empty removal", () => {
     const root = setup({ selected: session() });
     const key: ReviewDraftKey = { sessionID: "session-1", comparison: "working" };
