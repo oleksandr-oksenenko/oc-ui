@@ -12,7 +12,11 @@ export const DIFF_FILE_UNAVAILABLE = "This patch could not be displayed.";
 export const DIFF_HEADER_HEIGHT = 30;
 /** Matches `--oc-type-code-line-height` in foundations.css. */
 export const DIFF_LINE_HEIGHT = 18;
-
+/**
+ * The gap Pierre removes from `[data-code]` when a file header exists. The
+ * panel restores it in unsafeCSS, so the item metric must include it too.
+ */
+export const DIFF_BODY_TOP_PADDING = 8;
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 function annotationFor(

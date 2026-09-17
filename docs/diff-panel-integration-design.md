@@ -141,11 +141,17 @@ The same restoration runs when a refresh replaces a header that currently owns
 focus.
 
 `itemMetrics` matches the rendered CSS (`diffHeaderHeight: 30`,
-`lineHeight: 18` from `--oc-type-code-line-height`, default `spacing`) so
-virtualization estimates line up with measured content. `layout.gap` replaces
-the previous per-card margin, and the card border is a pointer-transparent
-shadow pseudo-element so it adds no measured height. The CodeView root is the
-scroll viewport
+`lineHeight: 18` from `--oc-type-code-line-height`, `paddingTop: 8` for the
+body gap Pierre removes when a header exists, default `spacing`) so
+virtualization estimates line up with measured content. A collapsed item
+renders the same 8 px below its header, because CodeView measures every item
+with `paddingTop` whether or not a body is rendered; without it the list
+bottom-aligns in the leftover space and pushes the first row down. Every item
+therefore ends with the same 8 px — the body's bottom padding, or a collapsed
+header's restored padding — so `layout.gap` is 0 and that trailing 8 px is the
+card gap. The card border is a pointer-transparent shadow pseudo-element that
+stops above it, which keeps every header exactly 30 px in both states. The
+CodeView root is the scroll viewport
 (`oc-scrollable`), is exposed as `role="region"` with an accessible
 "Changed files" label, and is the only scroll owner while files exist.
 

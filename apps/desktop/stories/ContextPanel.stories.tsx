@@ -218,14 +218,22 @@ export const CollapseAll: Story = {
   },
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
+    const firstItemTop = () =>
+      canvasElement.querySelector("diffs-container")?.getBoundingClientRect().top;
 
     await step("collapse every file", async () => {
+      // Wait for the first row before anchoring; items render on the next frame.
+      await canvas.findByRole("button", { name: `Collapse ${diffFiles[0]!.file}` });
+      const anchoredTop = firstItemTop();
       await userEvent.click(canvas.getByRole("button", { name: "Collapse all files" }));
       await expect(canvas.getByRole("button", { name: "Expand all files" })).toBeVisible();
       for (const file of diffFiles) {
         const toggle = await canvas.findByRole("button", { name: `Expand ${file.file}` });
         await expect(toggle).toHaveAttribute("aria-expanded", "false");
       }
+      // Collapsed rows must render at their measured height or the list
+      // bottom-aligns in the leftover space and pushes the first row down.
+      await waitFor(() => expect(firstItemTop()).toBe(anchoredTop));
     });
 
     await step("expand every file", async () => {

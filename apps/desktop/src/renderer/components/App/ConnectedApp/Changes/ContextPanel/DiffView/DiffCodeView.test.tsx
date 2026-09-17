@@ -167,6 +167,27 @@ describe("DiffCodeView", () => {
     dispose();
   });
 
+  it("marks collapsed rows so their rendered height matches the item estimate", async () => {
+    const [expanded, setExpanded] = createSignal(false);
+    const { host, dispose } = mount(() => (
+      <DiffCodeView files={[file()]} expanded={() => expanded()} onToggle={() => undefined} />
+    ));
+
+    await vi.waitFor(() => {
+      expect(host.querySelector("diffs-container")?.hasAttribute("data-diff-file-collapsed")).toBe(
+        true,
+      );
+    });
+
+    setExpanded(true);
+    await vi.waitFor(() => {
+      expect(host.querySelector("diffs-container")?.hasAttribute("data-diff-file-collapsed")).toBe(
+        false,
+      );
+    });
+    dispose();
+  });
+
   it("renders review annotations and marks fallback rows", async () => {
     const { host, dispose } = mount(() => (
       <DiffCodeView

@@ -15,6 +15,7 @@ import {
   enhanceRenderedDiff,
   createReviewAnnotation,
   syncGutterCommentIcons,
+  DIFF_BODY_TOP_PADDING,
   DIFF_HEADER_HEIGHT,
   DIFF_LINE_HEIGHT,
   type AnnotationMetadata,
@@ -39,11 +40,25 @@ const UNSAFE_CSS = `
   :host::after {
     content: "";
     position: absolute;
-    inset: 0;
+    /* The last DIFF_BODY_TOP_PADDING pixels of every item are the card gap,
+       not card content, so the border stops above them. */
+    inset: 0 0 8px 0;
     z-index: 3;
     border: 1px solid var(--oc-border-base);
     border-radius: var(--oc-radius);
     pointer-events: none;
+  }
+
+  :host [data-code] {
+    /* Matches DIFF_BODY_TOP_PADDING; Pierre removes its own gap with a header. */
+    padding-top: 8px;
+  }
+
+  :host([data-diff-file-collapsed]) [data-diffs-header] {
+    /* A collapsed item has no body to carry DIFF_BODY_TOP_PADDING, so keep the
+       rendered height equal to the header-plus-padding estimate. The host
+       itself cannot carry this: a global reset overrides its padding. */
+    padding-bottom: 8px;
   }
 
   :is(code[data-code], [data-expand-button]):focus-visible {
@@ -186,8 +201,12 @@ export function DiffCodeView(props: DiffCodeViewProps) {
     overflow: "scroll",
     disableFileHeader: false,
     stickyHeaders: true,
-    itemMetrics: { diffHeaderHeight: DIFF_HEADER_HEIGHT, lineHeight: DIFF_LINE_HEIGHT },
-    layout: { paddingTop: 0, paddingBottom: 8, gap: 8 },
+    itemMetrics: {
+      diffHeaderHeight: DIFF_HEADER_HEIGHT,
+      lineHeight: DIFF_LINE_HEIGHT,
+      paddingTop: DIFF_BODY_TOP_PADDING,
+    },
+    layout: { paddingTop: 0, paddingBottom: 8, gap: 0 },
     enableGutterUtility: gutterEnabled(),
     enableLineSelection: props.review !== undefined,
     controlledSelection: false,
@@ -219,6 +238,7 @@ export function DiffCodeView(props: DiffCodeViewProps) {
       if (phase === "unmount") return;
       container.classList.add("diff-file");
       container.classList.toggle("diff-file-unavailable", context.item.type === "file");
+      container.toggleAttribute("data-diff-file-collapsed", context.item.collapsed === true);
       enhanceRenderedDiff(container);
       syncGutterCommentIcons(container);
       if (pendingFocusPath !== context.item.id) return;
