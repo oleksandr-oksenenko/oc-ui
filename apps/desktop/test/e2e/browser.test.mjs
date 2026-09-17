@@ -5,6 +5,7 @@ import { build, preview } from "vite-plus";
 import { chromium } from "playwright";
 import { access, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { startScriptedProvider } from "./scripted-provider.mjs";
 import { git, prepareProjectFixture } from "./project-fixture.ts";
 import { startServer, startTlsProxy, testCertificate } from "./browser-fixture.mjs";
@@ -26,6 +27,12 @@ let failed = false;
 let permissionRequestNumber = 0;
 const errors = [];
 const artifacts = new URL("../../dist/web-artifacts/", import.meta.url).pathname;
+
+// A 1×1 PNG so the resolved server file decodes as a real image.
+const acceptancePng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=",
+  "base64",
+);
 
 async function preparePermissionProject(directory, identity) {
   await mkdir(directory, { recursive: true });
@@ -1384,6 +1391,30 @@ describe.sequential("production browser app", () => {
     expect(await page.locator(".transcript-view").textContent()).not.toContain(
       "E2E_CREATE_SESSION browser",
     );
+    expect(errors).toEqual([]);
+  });
+
+  it("renders assistant Markdown images that name a file on the connected server", async () => {
+    await ensureConnected();
+    const directory = await realpath(project);
+    // Stored beside Git metadata so the disposable project's change lists are
+    // unaffected; the server still resolves it inside the session location.
+    const imagePath = join(directory, ".git", "acceptance-capture.png");
+    await writeFile(imagePath, acceptancePng);
+    const session = await api.session.create({
+      title: "Server file image",
+      location: { directory },
+    });
+    await selectSession(session.title);
+    await send(`E2E_FILE_IMAGE ${pathToFileURL(imagePath).href}`);
+    await idle();
+
+    const image = page.locator(".transcript-assistant-complete img[data-file-src]").last();
+    await expect.poll(() => image.getAttribute("alt")).toBe("Tool states");
+    await expect.poll(() => image.evaluate((node) => node.src.startsWith("blob:"))).toBe(true);
+    await expect.poll(() => image.evaluate((node) => node.naturalWidth)).toBeGreaterThan(0);
+    // The sanitized markup never gives the browser a loadable file: source.
+    expect(await image.getAttribute("src")).toMatch(/^blob:/u);
     expect(errors).toEqual([]);
   });
 

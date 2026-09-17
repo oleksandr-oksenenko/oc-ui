@@ -6,6 +6,7 @@ import { Icon } from "@opencode/ui/icon";
 import { Loader } from "@opencode/ui/loader";
 import { createEffect, createMemo, For, onCleanup, Show, type JSX } from "solid-js";
 
+import type { ServerFileImageReader } from "../../../../../opencode/file-images.ts";
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
 import { CompactionMessage } from "./TranscriptView/CompactionMessage.tsx";
 import { ContextMessage } from "./TranscriptView/ContextMessage.tsx";
@@ -20,6 +21,8 @@ import "./SessionPane.css";
 
 export type TranscriptViewProps = {
   readonly sessionID: string;
+  /** Resolves `file:` images in assistant Markdown through the connected server. */
+  readonly readFileImage?: ServerFileImageReader;
   readonly annotationRootRef?: (element: HTMLDivElement) => (() => void) | void;
   readonly onOpenAnnotation?: UserMessageProps["onOpenAnnotation"];
   readonly messages: readonly SessionMessageInfo[];
@@ -198,13 +201,19 @@ function isRenderableMessage(message: SessionMessageInfo): message is Renderable
 
 function renderMessage(
   message: RenderableMessage,
-  props: Pick<TranscriptViewProps, "sessionStatus" | "onOpenAnnotation">,
+  props: Pick<TranscriptViewProps, "sessionStatus" | "onOpenAnnotation" | "readFileImage">,
 ): JSX.Element {
   switch (message.type) {
     case "user":
       return <UserMessage message={message} onOpenAnnotation={props.onOpenAnnotation} />;
     case "assistant":
-      return <AssistantMessage message={message} sessionStatus={props.sessionStatus} />;
+      return (
+        <AssistantMessage
+          message={message}
+          sessionStatus={props.sessionStatus}
+          readFileImage={props.readFileImage}
+        />
+      );
     case "shell":
       return <ShellMessage message={message} />;
     case "skill":

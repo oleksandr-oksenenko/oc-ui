@@ -1,4 +1,4 @@
-import DOMPurify from "dompurify";
+import createDOMPurify from "dompurify";
 import { marked } from "marked";
 
 const markdownTags = [
@@ -30,10 +30,37 @@ const markdownTags = [
   "ul",
 ];
 
+/** Attribute that carries a `file:` image URL past sanitization without making it loadable. */
+const FILE_IMAGE_SOURCE_ATTRIBUTE = "data-file-src";
+
+/**
+ * A module-private instance keeps this hook from mutating any other consumer's
+ * sanitizer, and keeps repeated module evaluation (for example HMR) from
+ * stacking hooks that remove and re-add the same carrier.
+ */
+const purifier = createDOMPurify(window);
+
+/**
+ * A `file:` URL names the Electron host, while session files belong to the
+ * connected server. Move the URL to an inert data attribute so it never
+ * reaches `src`, then let Markdown.tsx resolve it through the server's file
+ * contract. DOMPurify allows data attributes by default, and every URI policy,
+ * allowed tag, and allowed attribute stays in force for everything else.
+ */
+purifier.addHook("uponSanitizeElement", (node, data) => {
+  if (data.tagName !== "img" || !(node instanceof Element)) return;
+  // Messages must not supply the carrier; only the accepted file source below adds it.
+  node.removeAttribute(FILE_IMAGE_SOURCE_ATTRIBUTE);
+  const source = node.getAttribute("src");
+  if (source === null || !/^file:/i.test(source.trim())) return;
+  node.setAttribute(FILE_IMAGE_SOURCE_ATTRIBUTE, source);
+  node.removeAttribute("src");
+});
+
 /** Parses model Markdown and sanitizes the resulting HTML. */
-function renderMarkdown(source: string): string {
+export function renderMarkdown(source: string): string {
   const html = marked.parse(source, { async: false, breaks: true });
-  return DOMPurify.sanitize(html.trim(), {
+  return purifier.sanitize(html.trim(), {
     ALLOWED_ATTR: ["alt", "href", "src", "title", "start"],
     ALLOWED_TAGS: markdownTags,
   });

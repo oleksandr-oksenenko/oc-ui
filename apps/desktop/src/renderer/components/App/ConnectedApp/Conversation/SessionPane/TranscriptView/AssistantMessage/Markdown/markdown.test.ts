@@ -1,6 +1,50 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createMarkdownCache } from "./markdown.ts";
+import { createMarkdownCache, renderMarkdown } from "./markdown.ts";
+
+describe("renderMarkdown", () => {
+  it("keeps file image sources inert for server resolution and preserves alt text", () => {
+    const html = renderMarkdown("![Tool states](file:///Users/alex/project/tool-states.png)");
+
+    expect(html).toContain('data-file-src="file:///Users/alex/project/tool-states.png"');
+    expect(html).toContain('alt="Tool states"');
+    expect(html).not.toMatch(/\ssrc="file:/);
+  });
+
+  it("moves raw HTML file image sources with the same policy", () => {
+    const html = renderMarkdown('<img src="file:///tmp/shot.png" alt="shot" onerror="alert(1)">');
+
+    expect(html).toContain('data-file-src="file:///tmp/shot.png"');
+    expect(html).not.toContain("onerror");
+    expect(html).not.toMatch(/\ssrc="file:/);
+  });
+
+  it("discards an author-supplied carrier attribute", () => {
+    const html = renderMarkdown(
+      '<img src="https://example.test/a.png" data-file-src="file:///srv/project/b.png" alt="forged">',
+    );
+
+    expect(html).toContain('src="https://example.test/a.png"');
+    expect(html).not.toContain("data-file-src");
+  });
+
+  it("leaves web and data image sources unchanged", () => {
+    const web = renderMarkdown("![a](https://example.test/a.png)");
+    expect(web).toContain('src="https://example.test/a.png"');
+    expect(web).not.toContain("data-file-src");
+
+    const inline = renderMarkdown("![a](data:image/png;base64,AAAA)");
+    expect(inline).toContain('src="data:image/png;base64,AAAA"');
+    expect(inline).not.toContain("data-file-src");
+  });
+
+  it("drops other unsafe image sources and markup", () => {
+    const html = renderMarkdown("![a](javascript:alert(1))\n\n<script>alert(1)</script>");
+
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("<script");
+  });
+});
 
 describe("createMarkdownCache", () => {
   it("reuses rendered output for identical text and renders changed text", () => {

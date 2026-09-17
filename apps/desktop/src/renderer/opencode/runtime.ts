@@ -6,6 +6,7 @@ import type { WorkspaceOwner } from "../workspace-owner.ts";
 import { createEffect, getOwner, onCleanup } from "solid-js";
 import { createOpenCodeEventSource } from "./event-source";
 import { mapConnectionFailure, type OpenCodeConnectionError } from "./connection";
+import { createServerFileImages, type ServerFileImages } from "./file-images";
 import { createSessionCatalog } from "./session-catalog";
 import type { SessionCatalog } from "./session-catalog";
 import { createSessionTranscriptSync } from "./transcript";
@@ -30,6 +31,8 @@ export type ConnectedRuntime = {
   };
   readonly sessions: SessionCatalog;
   readonly diffs: VcsDiffStore;
+  /** Reads `file:` image URLs from the connected server's filesystem. */
+  readonly fileImages: ServerFileImages;
   /** Resolves after the initial stream handshake and default location synchronization. */
   readonly ready: Promise<void>;
   readonly onShellExited: (
@@ -65,6 +68,10 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     events,
   });
   const diffs = createVcsDiffStore({ diff: input.api.vcs.diff, events, effects: input.effects });
+  const fileImages = createServerFileImages({
+    fileRead: input.api.file.read,
+    effects: input.effects,
+  });
 
   const handshake = Deferred.makeUnsafe<void, OpenCodeConnectionError>();
   const stopReady = events.on("server.connected", () => {
@@ -115,6 +122,7 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     stream,
     sessions,
     diffs,
+    fileImages,
     ready,
     onShellExited,
     syncTranscript,

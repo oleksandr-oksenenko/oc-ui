@@ -10,6 +10,7 @@ import {
   assistant,
   streamingAssistant,
   markdownAssistant,
+  fileImageAssistant,
   richItems,
   reviewPrompt,
   allTranscriptElements,
@@ -19,6 +20,7 @@ import {
   shellStates,
   compactionStates,
 } from "./transcript-catalog-fixtures.ts";
+import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 import { TranscriptPendingFixture } from "./transcript-catalog/TranscriptPendingFixture.tsx";
 import { TranscriptUpdatesFixture } from "./transcript-catalog/TranscriptUpdatesFixture.tsx";
 
@@ -50,6 +52,13 @@ const renderNarrowTranscript = (args: TranscriptViewProps) => (
     <TranscriptView {...args} />
   </div>
 );
+
+// Stands in for the workspace reader so the story can verify server-backed
+// file images without a live OpenCode runtime.
+const readStoryFileImage = async (): Promise<Blob> =>
+  new Blob([Uint8Array.from(atob(previewImageBase64), (character) => character.charCodeAt(0))], {
+    type: previewImageMime,
+  });
 
 export const Rich: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
@@ -135,6 +144,29 @@ export const ScrollPreservation: Story = {
 export const Markdown: Story = {
   args: { messages: [markdownAssistant], sessionStatus: "idle", loading: false },
   render: renderTranscript,
+};
+export const MarkdownFileImage: Story = {
+  args: {
+    messages: [fileImageAssistant],
+    sessionStatus: "idle",
+    loading: false,
+    readFileImage: readStoryFileImage,
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement, step }) => {
+    await step("resolves and renders a server file image from Markdown", async () => {
+      const image = await waitFor(() => {
+        const element = canvasElement.querySelector<HTMLImageElement>("img[data-file-src]");
+        if (!element || !element.src.startsWith("blob:")) {
+          throw new Error("The file image was not resolved to a blob URL");
+        }
+        return element;
+      });
+      await waitFor(() => expect(image.complete).toBe(true));
+      await expect(image.naturalWidth).toBeGreaterThan(0);
+      await expect(image.alt).toBe("Tool states");
+    });
+  },
 };
 export const SentCodeReview: Story = {
   args: {

@@ -7,6 +7,11 @@ import { createTranscriptAnnotations } from "./createTranscriptAnnotations.ts";
 import { AnnotationPopover } from "./AnnotationPopover.tsx";
 
 import type { ModelSelection } from "../../../../opencode/model-selection.ts";
+import {
+  serverFileImageLocation,
+  type ServerFileImageReader,
+} from "../../../../opencode/file-images.ts";
+import { useServerRuntimeOptional } from "../../../../opencode/index.ts";
 import type { SessionAgentSelectionController } from "./createSessionAgentSelection.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
 import type { SessionFormsController } from "./createSessionForms.ts";
@@ -43,6 +48,7 @@ const permissionRenderKey = (request: {
 }): string => `${request.sessionID}\u0000${request.id}`;
 
 export function ConversationRegion(props: ConversationRegionProps): JSX.Element {
+  const runtime = useServerRuntimeOptional();
   const visibleTranscript = createMemo(() => {
     const pending = new Set(props.inbox.messages().map((item) => item.id));
     return props.workspace.transcript().filter((message) => !pending.has(message.id));
@@ -64,6 +70,16 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
   const contextUsage = createMemo(() =>
     deriveContextUsage(props.workspace.transcript(), props.modelSelection.contextLimit()),
   );
+  const readFileImage = createMemo<ServerFileImageReader | undefined>(() => {
+    const session = props.workspace.selectedSession();
+    if (runtime === undefined || session === undefined) return undefined;
+    // Read the location fields so an in-place store update replaces the reader,
+    // then pin a plain snapshot: worktree files resolve on the server that owns
+    // them, not against the window's default location, and queued reads keep the
+    // location they were requested for.
+    const location = serverFileImageLocation(session.location);
+    return (fileUrl) => runtime.fileImages.read(fileUrl, location);
+  });
   const formKeys = createMemo(() => props.forms.sessionForms().map(formRenderKey), undefined, {
     equals: (previous, next) =>
       previous.length === next.length && previous.every((key, index) => key === next[index]),
@@ -248,6 +264,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
           <Show when={props.workspace.selectedSession()}>
             <TranscriptView
               sessionID={props.workspace.selectedID()!}
+              readFileImage={readFileImage()}
               annotationRootRef={annotationUI.attach}
               onOpenAnnotation={annotationUI.openSent}
               messages={visibleTranscript()}

@@ -67,24 +67,19 @@ export async function startScriptedProvider() {
         response.end("data: [DONE]\n\n");
       };
       send({ role: "assistant", content: "" });
-      if (body.model === "title") {
-        send({
-          content: prompt.includes("Independent acceptance task")
-            ? "Independent acceptance task"
-            : "Acceptance conversation",
-        });
-        finish();
+      if (
+        respondScriptedPrompt({
+          modelName: body.model,
+          prompt,
+          response,
+          send,
+          finish,
+          onCancel: () => {
+            cancelledStreams += 1;
+          },
+        })
+      )
         return;
-      }
-      if (prompt.includes("E2E_STOP")) {
-        send({ content: "Acceptance stream is waiting for cancellation." });
-        const keepAlive = setInterval(() => response.write(": waiting\n\n"), 1000);
-        response.once("close", () => {
-          clearInterval(keepAlive);
-          cancelledStreams += 1;
-        });
-        return;
-      }
       if (respondBrowser(prompt, toolReply, body, send, finish, requests.length)) return;
       if (respondTool(prompt, toolReply, body, send, finish, requests.length)) return;
       send({ content: "Acceptance first streamed fragment. " });
@@ -143,6 +138,35 @@ export async function startScriptedProvider() {
         server.closeAllConnections();
       }),
   };
+}
+
+function respondScriptedPrompt({ modelName, prompt, response, send, finish, onCancel }) {
+  if (modelName === "title") {
+    send({
+      content: prompt.includes("Independent acceptance task")
+        ? "Independent acceptance task"
+        : "Acceptance conversation",
+    });
+    finish();
+    return true;
+  }
+  if (prompt.includes("E2E_STOP")) {
+    send({ content: "Acceptance stream is waiting for cancellation." });
+    const keepAlive = setInterval(() => response.write(": waiting\n\n"), 1000);
+    response.once("close", () => {
+      clearInterval(keepAlive);
+      onCancel();
+    });
+    return true;
+  }
+  if (prompt.includes("E2E_FILE_IMAGE")) {
+    const fileUrl = prompt.match(/file:\/\/[^\s"\\]+/u)?.[0];
+    if (!fileUrl) throw new Error("File image URL missing from prompt");
+    send({ content: `Here is the capture: ![Tool states](${fileUrl})` });
+    finish();
+    return true;
+  }
+  return false;
 }
 
 function requestedTool(prompt) {

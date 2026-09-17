@@ -118,6 +118,27 @@ export const markdownAssistant: SessionMessageInfo = {
   finish: "stop",
 };
 
+export const fileImageAssistant: SessionMessageInfo = {
+  id: "assistant-file-image",
+  time: { created: 1, completed: 2 },
+  type: "assistant",
+  agent: "build",
+  model: { providerID: "openai", id: "gpt-5" },
+  content: [
+    {
+      type: "text",
+      text: [
+        "The captured state looks like this:",
+        "",
+        "![Tool states](file:///srv/project/tool-states.png)",
+        "",
+        "The image was written by the browser tool.",
+      ].join("\n"),
+    },
+  ],
+  finish: "stop",
+};
+
 export const richItems: readonly SessionMessageInfo[] = [
   { id: "system-1", time: { created: 0 }, type: "system", text: "System context" },
   {

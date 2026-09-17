@@ -19,3 +19,12 @@ export function useServerRuntime(): ConnectedRuntime {
   if (!runtime) throw new Error("useServerRuntime must be used inside ServerProvider");
   return runtime;
 }
+
+/**
+ * The connected runtime when one is present. Views that can render outside a
+ * workspace, such as the transcript in Storybook, use this to keep their
+ * server-backed enhancements optional instead of requiring a workspace.
+ */
+export function useServerRuntimeOptional(): ConnectedRuntime | undefined {
+  return useContext(ServerRuntimeContext);
+}
