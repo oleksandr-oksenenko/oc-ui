@@ -435,7 +435,46 @@ export const LongTranscriptReadingAnchor: Story = {
       }
     });
 
-    // Move the reader away from the bottom and select a fully visible row.
+    // Move the reader away from the bottom before older rows prepend.
+    view.scrollTop = Math.round((view.scrollHeight - view.clientHeight) / 2);
+    view.dispatchEvent(new Event("scroll"));
+    const bounds = view.getBoundingClientRect();
+    const anchor = [...rows()].find((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.top >= bounds.top && rect.bottom <= bounds.bottom;
+    });
+    if (!anchor) throw new Error("No fully visible row to anchor");
+    const anchorTop = anchor.getBoundingClientRect().top;
+    const distanceBefore = view.scrollHeight - view.clientHeight - view.scrollTop;
+    await expect(view.style.overflowAnchor).toBe("auto");
+
+    await waitFor(() => expect(rows()).toHaveLength(longAnchorTranscript.length));
+    await waitFor(() => expect(view).toHaveAttribute("aria-busy", "false"));
+
+    // The reading anchor survived the older batches.
+    await expect(Math.abs(anchor.getBoundingClientRect().top - anchorTop)).toBeLessThan(8);
+    // The viewport was not dragged back to the bottom.
+    await expect(
+      Math.abs(view.scrollHeight - view.clientHeight - view.scrollTop - distanceBefore),
+    ).toBeLessThan(8);
+  },
+};
+
+export const LongTranscriptSelectionPause: Story = {
+  args: { messages: longAnchorTranscript, sessionStatus: "idle", loading: false },
+  render: renderConstrainedTranscript,
+  play: async ({ canvasElement }) => {
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view");
+    if (!view) throw new Error("Transcript viewport is missing");
+    const rows = () => canvasElement.querySelectorAll<HTMLElement>("[data-message-id]");
+    await waitFor(() => {
+      const count = rows().length;
+      if (view.getAttribute("aria-busy") !== "true" || count <= 20) {
+        throw new Error(`not mid-materialization: count=${count}`);
+      }
+    });
+
+    // Select a fully visible row while older rows are still prepending.
     view.scrollTop = Math.round((view.scrollHeight - view.clientHeight) / 2);
     view.dispatchEvent(new Event("scroll"));
     const bounds = view.getBoundingClientRect();
@@ -451,20 +490,27 @@ export const LongTranscriptReadingAnchor: Story = {
     selection.removeAllRanges();
     selection.addRange(range);
     document.dispatchEvent(new Event("selectionchange"));
+
+    // The pause holds the rendered range: nothing mounts above the selection.
     const anchorTop = anchor.getBoundingClientRect().top;
-    const distanceBefore = view.scrollHeight - view.clientHeight - view.scrollTop;
-    await expect(view.style.overflowAnchor).toBe("auto");
-
-    await waitFor(() => expect(rows()).toHaveLength(longAnchorTranscript.length));
-    await waitFor(() => expect(view).toHaveAttribute("aria-busy", "false"));
-
-    // The reading anchor and its selection survived the older batches.
+    const pausedCount = rows().length;
+    let frames = 0;
+    const countFrames = () => {
+      frames += 1;
+      if (frames < 3) requestAnimationFrame(countFrames);
+    };
+    requestAnimationFrame(countFrames);
+    await waitFor(() => expect(frames).toBeGreaterThanOrEqual(3));
+    await expect(rows()).toHaveLength(pausedCount);
+    await expect(view).toHaveAttribute("aria-busy", "false");
     await expect(Math.abs(anchor.getBoundingClientRect().top - anchorTop)).toBeLessThan(8);
+
+    // A deliberate downward gesture at the bottom resumes and completes the
+    // history while the selection is still present.
+    view.scrollTop = view.scrollHeight;
+    view.dispatchEvent(new WheelEvent("wheel", { deltaY: 1, bubbles: true }));
+    await waitFor(() => expect(rows()).toHaveLength(longAnchorTranscript.length));
     await expect(selection.isCollapsed).toBe(false);
     await expect(anchor.contains(selection.anchorNode)).toBe(true);
-    // The viewport was not dragged back to the bottom.
-    await expect(
-      Math.abs(view.scrollHeight - view.clientHeight - view.scrollTop - distanceBefore),
-    ).toBeLessThan(8);
   },
 };

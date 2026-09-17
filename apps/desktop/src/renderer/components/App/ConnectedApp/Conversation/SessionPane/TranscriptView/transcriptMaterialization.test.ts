@@ -43,14 +43,22 @@ function stubFrames() {
 function mountMaterialization(initial: {
   sessionID: Accessor<string>;
   messages: Accessor<readonly { id: string }[]>;
+  paused?: Accessor<boolean>;
 }) {
   return createRoot((dispose) => ({
-    materialization: createTranscriptMaterialization({
-      sessionID: initial.sessionID,
-      messages: initial.messages,
-    }),
+    materialization: createMaterialization(initial),
     dispose,
   }));
+}
+
+function createMaterialization(initial: {
+  sessionID: Accessor<string>;
+  messages: Accessor<readonly { id: string }[]>;
+  paused?: Accessor<boolean>;
+}) {
+  const base = { sessionID: initial.sessionID, messages: initial.messages };
+  if (initial.paused === undefined) return createTranscriptMaterialization(base);
+  return createTranscriptMaterialization({ ...base, paused: initial.paused });
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -214,6 +222,70 @@ describe("createTranscriptMaterialization", () => {
       expect(result.seen).toEqual([true]);
       frames.runAll();
       expect(result.seen).toEqual([true, false]);
+    } finally {
+      result.dispose();
+    }
+  });
+
+  it("batches a bulk prepend that arrives under a completed frontier", () => {
+    const frames = stubFrames();
+    const [sessionID] = createSignal("session");
+    const tail = sequence("m", 20);
+    const [messages, setMessages] = createSignal(tail);
+    const result = mountMaterialization({ sessionID, messages });
+    try {
+      // The initial page is the whole history, so the frontier completes at 0.
+      expect(result.materialization.startIndex()).toBe(0);
+      expect(result.materialization.materializing()).toBe(false);
+
+      const prepended = [...sequence("old", 100, -100), ...tail];
+      setMessages(prepended);
+
+      // The memo must never expose the prepended history as fully mounted, and
+      // the frontier row is retained while batching restarts.
+      expect(result.materialization.startIndex()).toBe(100);
+      expect(result.materialization.materializing()).toBe(true);
+      expect(frames.pending()).toBe(1);
+
+      frames.runNext();
+      expect(result.materialization.startIndex()).toBe(50);
+      frames.runNext();
+      expect(result.materialization.startIndex()).toBe(0);
+      expect(result.materialization.materializing()).toBe(false);
+      expect(frames.pending()).toBe(0);
+    } finally {
+      result.dispose();
+    }
+  });
+
+  it("holds prepending while paused and resumes from the same frontier", () => {
+    const frames = stubFrames();
+    const [sessionID] = createSignal("session");
+    const [paused, setPaused] = createSignal(false);
+    const [messages, setMessages] = createSignal(sequence("m", 170));
+    const result = mountMaterialization({ sessionID, messages, paused });
+    try {
+      frames.runNext();
+      expect(result.materialization.startIndex()).toBe(100);
+
+      setPaused(true);
+      expect(result.materialization.materializing()).toBe(false);
+      expect(frames.pending()).toBe(0);
+      expect(result.materialization.startIndex()).toBe(100);
+
+      // A prepend while paused moves the frontier's index but mounts nothing.
+      setMessages([...sequence("old", 10, -10), ...messages()]);
+      expect(result.materialization.startIndex()).toBe(110);
+      expect(result.materialization.materializing()).toBe(false);
+      expect(frames.pending()).toBe(0);
+
+      setPaused(false);
+      expect(result.materialization.materializing()).toBe(true);
+      expect(frames.pending()).toBe(1);
+
+      frames.runAll();
+      expect(result.materialization.startIndex()).toBe(0);
+      expect(result.materialization.materializing()).toBe(false);
     } finally {
       result.dispose();
     }

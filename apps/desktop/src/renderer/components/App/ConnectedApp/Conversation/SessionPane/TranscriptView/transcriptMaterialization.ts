@@ -14,6 +14,12 @@ type TranscriptMaterializationOptions = {
   readonly sessionID: () => string;
   /** Full SDK-owned message list, oldest first. */
   readonly messages: () => readonly MessageRef[];
+  /**
+   * Pauses prepending while true. A paused reader keeps the rendered range and
+   * its frontier; no older row mounts until the pause clears, so the reader's
+   * scroll position and selection cannot move because of materialization.
+   */
+  readonly paused?: () => boolean;
 };
 
 type Frontier = {
@@ -57,6 +63,12 @@ function initialFrontier(session: string, list: readonly MessageRef[]): Frontier
  * transition keeps the frontier consistent for every consumer; `startIndex` and
  * `materializing` are pure reads.
  *
+ * A large late prepend (a bulk history drain) under a completed frontier keeps
+ * that frontier and batches again instead of mounting the whole history, and
+ * `paused` freezes prepending entirely while a reader holds a position or
+ * selection. `startIndex` derives from the frontier's actual index, so no
+ * consumer can observe the prepended history before the transition runs.
+ *
  * Solid re-subscribes a computation after each run, so this memo can execute
  * before the transition when the session and its list arrive in separate
  * updates. `startIndex` therefore re-derives the initial suffix whenever the
@@ -74,6 +86,7 @@ export function createTranscriptMaterialization(
     id: undefined,
     complete: true,
   });
+  const paused = () => options.paused?.() === true;
   let frame: number | undefined;
 
   function cancel(): void {
@@ -92,6 +105,7 @@ export function createTranscriptMaterialization(
 
   function advance(session: string): void {
     if (options.sessionID() !== session) return;
+    if (paused()) return;
     const list = options.messages();
     const current = untrack(frontier);
     if (current.session !== session || current.complete) return;
@@ -137,9 +151,12 @@ export function createTranscriptMaterialization(
         setFrontier(initialFrontier(session, list));
         return;
       }
-      const oldest = list[0]!.id;
-      // Older rows arrived; keep the whole history rendered.
-      if (oldest !== current.id) setFrontier({ session, id: oldest, complete: true });
+      if (index > 0) {
+        // Older rows prepended under a completed frontier (for example a bulk
+        // history drain). Keep the rendered frontier and batch the prepend, so
+        // a large arrival cannot mount the whole history in one update.
+        setFrontier({ session, id: current.id, complete: false });
+      }
       return;
     }
 
@@ -157,7 +174,7 @@ export function createTranscriptMaterialization(
   createEffect(() => {
     const session = options.sessionID();
     const current = frontier();
-    if (current.session !== session || current.complete) {
+    if (current.session !== session || current.complete || paused()) {
       cancel();
       return;
     }
@@ -166,21 +183,23 @@ export function createTranscriptMaterialization(
 
   onCleanup(cancel);
 
-  // Derived defensively from the current list: a consumer must never observe
-  // `0` for a session whose frontier row is no longer present (Solid can run
-  // this memo before the transition above, so the frontier may lag one update).
+  // Derived defensively from the current list: a consumer must never observe a
+  // range that omits rows it should keep. When the frontier row exists, the
+  // start is its actual index even if `complete` still lags the transition
+  // (Solid can run this memo before the transition above), so a late prepend
+  // cannot transiently expose older rows as fully mounted.
   const startIndex = createMemo(() => {
     const list = options.messages();
     const current = frontier();
     if (current.id === undefined) return suffixStart(list);
     const index = list.findIndex((message) => message.id === current.id);
     if (index < 0) return suffixStart(list);
-    return current.complete ? 0 : index;
+    return index;
   });
 
   const materializing = createMemo(() => {
     const current = frontier();
-    return current.id !== undefined && !current.complete;
+    return current.id !== undefined && !current.complete && !paused();
   });
 
   return {

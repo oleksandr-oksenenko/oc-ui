@@ -62,6 +62,59 @@ function selectNodeContents(node: Node) {
   document.dispatchEvent(new Event("selectionchange"));
 }
 
+/** jsdom has no PointerEvent constructor; build the fields the view reads. */
+function touchPointer(type: string, clientY: number, clientX = 0): Event {
+  const event = new Event(type, { bubbles: true });
+  Object.defineProperty(event, "pointerId", { value: 7 });
+  Object.defineProperty(event, "pointerType", { value: "touch" });
+  Object.defineProperty(event, "clientY", { value: clientY });
+  Object.defineProperty(event, "clientX", { value: clientX });
+  return event;
+}
+
+function wheelAt(target: EventTarget, init: WheelEventInit): void {
+  target.dispatchEvent(new WheelEvent("wheel", { bubbles: true, ...init }));
+}
+
+function nativeContains(element: Element, node: Node | null): boolean {
+  return Node.prototype.contains.call(element, node);
+}
+
+/** ResizeObserver stub that delivers to every observer in creation order. */
+function stubResizeObservers() {
+  const notifiers: Array<() => void> = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      private target: Element | undefined;
+
+      constructor(callback: ResizeObserverCallback) {
+        notifiers.push(() => {
+          if (this.target === undefined) throw new Error("No resize target was observed");
+          const entry: ResizeObserverEntry = {
+            target: this.target,
+            contentRect: new DOMRectReadOnly(0, 0, 0, 480),
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          };
+          callback([entry], this);
+        });
+      }
+      observe(target: Element) {
+        this.target = target;
+      }
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  return {
+    notify: () => {
+      for (const notify of notifiers) notify();
+    },
+  };
+}
+
 function userMessages(prefix: string, count: number): SessionMessageInfo[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `${prefix}${index}`,
@@ -903,7 +956,7 @@ describe("TranscriptView", () => {
     }
   });
 
-  it("pauses follow-bottom only for selections inside the transcript viewport", () => {
+  it("pauses materialization only for selections inside the transcript viewport", () => {
     stubResizeObserver();
     const frames = stubAnimationFrames();
     const messages = userMessages("m", 170);
@@ -916,28 +969,704 @@ describe("TranscriptView", () => {
     outside.textContent = "Composer text";
     document.body.append(outside);
     try {
-      // Follow mode disables browser scroll anchoring.
-      expect(view.style.overflowAnchor).toBe("none");
-
       frames.runNext(); // deferred resume
       frames.runNext(); // first older batch
       expect(host.querySelectorAll("[data-message-id]")).toHaveLength(70);
 
       // A selection in another pane must not pause this transcript.
       selectNodeContents(outside);
-      expect(view.style.overflowAnchor).toBe("none");
+      frames.runNext();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(120);
 
-      // The upstream interaction policy releases follow-bottom only for this
-      // transcript's own selection.
+      // A selection inside the transcript pauses prepending; it mounts nothing.
       selectNodeContents(host.querySelector('[data-message-id="m100"]')!);
-      expect(view.style.overflowAnchor).toBe("auto");
-
+      expect(frames.pending()).toBe(0);
       frames.runAll();
-      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(170);
-      window.getSelection()?.removeAllRanges();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(120);
+      expect(view.getAttribute("aria-busy")).toBe("false");
     } finally {
+      window.getSelection()?.removeAllRanges();
       outside.remove();
       dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("holds older history while a reader selection exists and resumes at the bottom", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const tail = userMessages("m", 20);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(tail);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+      view.scrollTop = 0;
+
+      // The selection exists before the bulk history arrives.
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      setMessages([...userMessages("old", 100), ...tail]);
+
+      expect(frames.pending()).toBe(0);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+      expect(view.scrollTop).toBe(0);
+      expect(view.getAttribute("aria-busy")).toBe("false");
+
+      // A deliberate downward gesture at the bottom resumes prepending, even
+      // with the selection still present.
+      view.scrollTop = 500;
+      view.dispatchEvent(new WheelEvent("wheel", { deltaY: 1, bubbles: true }));
+      expect(frames.pending()).toBe(1);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(120);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("requires real downward movement before a mid-history gesture resumes", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const tail = userMessages("m", 20);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(tail);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runAll();
+      view.scrollTop = 0;
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      setMessages([...userMessages("old", 100), ...tail]);
+      expect(frames.pending()).toBe(0);
+
+      // Not at the bottom: a downward wheel only arms intent.
+      wheelAt(view, { deltaY: 1 });
+      expect(frames.pending()).toBe(0);
+
+      // Real downward movement to the bottom confirms it.
+      view.scrollTop = 500;
+      view.dispatchEvent(new Event("scroll"));
+      expect(frames.pending()).toBe(1);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(120);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects a layout scroll without real movement", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const tail = userMessages("m", 20);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(tail);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runAll();
+      view.scrollTop = 200;
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      setMessages([...userMessages("old", 100), ...tail]);
+
+      wheelAt(view, { deltaY: 1 });
+      // Equal position is not movement, even at the anchor the intent recorded.
+      view.dispatchEvent(new Event("scroll"));
+      expect(frames.pending()).toBe(0);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("ignores gestures that are not transcript navigation", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const tail = userMessages("m", 20);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(tail);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    const nested = document.createElement("div");
+    nested.dataset.scrollable = "";
+    nested.textContent = "nested output";
+    view.append(nested);
+    const field = document.createElement("input");
+    view.append(field);
+    try {
+      frames.runAll();
+      view.scrollTop = 0;
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      setMessages([...userMessages("old", 100), ...tail]);
+      expect(frames.pending()).toBe(0);
+
+      const wheel = (init: WheelEventInit, target: EventTarget = view) => wheelAt(target, init);
+      wheel({ deltaY: -1 }); // upward
+      wheel({ deltaY: 1, deltaX: 50 }); // horizontal
+      wheel({ deltaY: 1, ctrlKey: true }); // zoom
+      wheel({ deltaY: 1 }, nested); // nested scrollable
+      wheel({ deltaY: 1 }, field); // editing target
+      view.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      expect(frames.pending()).toBe(0);
+
+      // A downward wheel at the bottom still resumes, so the setup is live.
+      view.scrollTop = 500;
+      wheel({ deltaY: 1 });
+      expect(frames.pending()).toBe(1);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("resumes by upward touch drag when the paused suffix has no scroll room", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const tail = userMessages("m", 20);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(tail);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 100, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runAll();
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      setMessages([...userMessages("old", 100), ...tail]);
+      expect(frames.pending()).toBe(0);
+
+      // A tap or a downward drag (toward older content) does not resume.
+      view.dispatchEvent(touchPointer("pointerdown", 10));
+      view.dispatchEvent(touchPointer("pointerup", 10));
+      expect(frames.pending()).toBe(0);
+      view.dispatchEvent(touchPointer("pointerdown", 10));
+      view.dispatchEvent(touchPointer("pointermove", 30));
+      view.dispatchEvent(touchPointer("pointerup", 30));
+      expect(frames.pending()).toBe(0);
+
+      // A horizontal pan is not vertical navigation.
+      view.dispatchEvent(touchPointer("pointerdown", 10, 0));
+      view.dispatchEvent(touchPointer("pointermove", 10, 40));
+      view.dispatchEvent(touchPointer("pointerup", 10, 40));
+      expect(frames.pending()).toBe(0);
+
+      // Native touch scroll: a finger moving up reveals newer content and
+      // moves toward the bottom.
+      view.dispatchEvent(touchPointer("pointerdown", 30));
+      view.dispatchEvent(touchPointer("pointermove", 10));
+      expect(frames.pending()).toBe(1);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not resume on selection collapse alone", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const tail = userMessages("m", 20);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(tail);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="idle" />
+    ));
+    try {
+      frames.runAll();
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      setMessages([...userMessages("old", 100), ...tail]);
+      expect(frames.pending()).toBe(0);
+
+      // Collapsing the selection is not a deliberate return to the bottom.
+      window.getSelection()?.removeAllRanges();
+      document.dispatchEvent(new Event("selectionchange"));
+      expect(frames.pending()).toBe(0);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("relinquishes pending positioning on a reader gesture before the frame runs", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const [loading, setLoading] = createSignal(false);
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID="session"
+        messages={messages}
+        sessionStatus="idle"
+        loading={loading()}
+      />
+    ));
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(transcript, "scrollHeight", { get: () => 500, configurable: true });
+    try {
+      expect(frames.pending()).toBe(1);
+
+      // The reader scrolls up before the deferred frame: the request is
+      // relinquished, not deferred again by a later loading transition.
+      transcript.dispatchEvent(new WheelEvent("wheel", { deltaY: -1, bubbles: true }));
+      expect(frames.pending()).toBe(0);
+      setLoading(true);
+      setLoading(false);
+      expect(frames.pending()).toBe(0);
+      expect(transcript.scrollTop).toBe(0);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("stops follow-bottom when a selection pauses materialization during settling", () => {
+    vi.useFakeTimers();
+    const resize = stubResizeObservers();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 170);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    let scrollHeight = 400;
+    Object.defineProperty(view, "scrollHeight", {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runNext(); // deferred resume
+      view.scrollTop = 400;
+
+      selectNodeContents(host.querySelector('[data-message-id="m150"]')!);
+      // The pause stops upstream following as well as materialization.
+      expect(view.style.overflowAnchor).toBe("auto");
+
+      // A layout/clamping scroll while paused must not clear the follow latch.
+      view.dispatchEvent(new Event("scroll"));
+
+      // Growth during the hook's settling window must not pin the reader.
+      scrollHeight = 1_000;
+      resize.notify();
+      expect(view.scrollTop).toBe(400);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("latches the pause when a non-scrollable suffix grows enough to scroll", () => {
+    vi.useFakeTimers();
+    const resize = stubResizeObservers();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 170);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    let scrollHeight = 100;
+    Object.defineProperty(view, "scrollHeight", {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runNext();
+      view.scrollTop = 0;
+
+      // Paused while the suffix fits: the hook cannot latch yet.
+      selectNodeContents(host.querySelector('[data-message-id="m150"]')!);
+      expect(view.style.overflowAnchor).toBe("none");
+
+      // Geometry alone grows the content to overflowing during settling; the
+      // paused view latches the hook before the resize follow can pin.
+      scrollHeight = 500;
+      resize.notify();
+      expect(view.scrollTop).toBe(0);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("holds materialization for a selection present before the first frame runs", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 170);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    try {
+      // The initial suffix is scheduled but has not run.
+      expect(frames.pending()).toBeGreaterThan(0);
+      selectNodeContents(host.querySelector('[data-message-id="m150"]')!);
+
+      expect(frames.pending()).toBe(0);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("latches a selection that exists before the initial effects and resumes deliberately", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    // A real pre-existing selection outside the transcript, with `contains`
+    // reporting it as inside the viewport to model a persisted selection.
+    const outside = document.createElement("p");
+    outside.textContent = "Persisted selection";
+    document.body.append(outside);
+    const selectedNode = outside.firstChild!;
+    selectNodeContents(selectedNode);
+    const contains = vi.spyOn(Element.prototype, "contains");
+    contains.mockImplementation(function (this: Element, node: Node | null) {
+      return node === selectedNode ? true : nativeContains(this, node);
+    });
+    const messages = userMessages("m", 170);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      // A selection present during the initial effects holds the suffix; the
+      // positioning frame declines instead of forcing bottom.
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+
+      // A deliberate at-bottom gesture resumes even with it retained, and
+      // clearing upstream state does not re-latch the pause.
+      view.scrollTop = 500;
+      wheelAt(view, { deltaY: 1 });
+      expect(frames.pending()).toBe(1);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(170);
+    } finally {
+      dispose();
+      contains.mockRestore();
+      window.getSelection()?.removeAllRanges();
+      outside.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("preserves descendant wheel handlers for non-navigation input", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    const nested = document.createElement("div");
+    nested.dataset.scrollable = "";
+    const nestedHandler = vi.fn<() => void>();
+    nested.addEventListener("wheel", nestedHandler);
+    view.append(nested);
+    try {
+      wheelAt(nested, { deltaY: -1, ctrlKey: true });
+      expect(nestedHandler).toHaveBeenCalledTimes(1);
+      expect(frames.pending()).toBe(1);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps non-navigation wheel input out of the upstream follow policy", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    try {
+      expect(frames.pending()).toBe(1);
+
+      // These reach the upstream listener if not stopped, cancelling the
+      // pending positioning even though they are not navigation.
+      wheelAt(view, { deltaY: -1, ctrlKey: true });
+      expect(frames.pending()).toBe(1);
+      wheelAt(view, { deltaY: 0, deltaX: 40 });
+      expect(frames.pending()).toBe(1);
+
+      // A real upward navigation still relinquishes.
+      wheelAt(view, { deltaY: -1 });
+      expect(frames.pending()).toBe(0);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("relinquishes positioning in a newly selected session before it is ready", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const [sessionID, setSessionID] = createSignal("first");
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID={sessionID()} messages={messages} sessionStatus="idle" />
+    ));
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(transcript, "scrollHeight", { get: () => 500, configurable: true });
+    try {
+      frames.runNext();
+      expect(transcript.scrollTop).toBe(500);
+
+      // The reader scrolls up in the first session, latching the hook's
+      // `userScrolled`, which then emits no callback for later interactions.
+      transcript.scrollTop = 0;
+      transcript.dispatchEvent(new Event("scroll"));
+
+      setSessionID("second");
+      expect(frames.pending()).toBe(1);
+      transcript.scrollTop = 0;
+      transcript.dispatchEvent(new WheelEvent("wheel", { deltaY: -1, bubbles: true }));
+
+      // The gesture still relinquishes the new selection's positioning.
+      expect(frames.pending()).toBe(0);
+      frames.runAll();
+      expect(transcript.scrollTop).toBe(0);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("requires real downward movement before a downward key resumes", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const tail = userMessages("m", 20);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(tail);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runAll();
+      view.scrollTop = 0;
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      setMessages([...userMessages("old", 100), ...tail]);
+      expect(frames.pending()).toBe(0);
+
+      // Not at the bottom: the key only arms intent.
+      view.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+      expect(frames.pending()).toBe(0);
+
+      // Real downward movement to the bottom confirms it.
+      view.scrollTop = 500;
+      view.dispatchEvent(new Event("scroll"));
+      expect(frames.pending()).toBe(1);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(120);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("relinquishes positioning on an upward key without resuming", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    try {
+      expect(frames.pending()).toBe(1);
+
+      view.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      expect(frames.pending()).toBe(0);
+      frames.runAll();
+      expect(view.scrollTop).toBe(0);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("expires an unconfirmed scroll gesture", () => {
+    vi.useFakeTimers();
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const tail = userMessages("m", 20);
+    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(tail);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runAll();
+      view.scrollTop = 0;
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      setMessages([...userMessages("old", 100), ...tail]);
+      view.dispatchEvent(new WheelEvent("wheel", { deltaY: 1, bubbles: true }));
+
+      // Without confirmation the gesture expires, so a later layout scroll
+      // cannot resume the transcript.
+      vi.advanceTimersByTime(401);
+      view.scrollTop = 500;
+      view.dispatchEvent(new Event("scroll"));
+      expect(frames.pending()).toBe(0);
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not reposition a scrolled-up reader on a same-session refresh", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const [loading, setLoading] = createSignal(false);
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID="session"
+        messages={messages}
+        sessionStatus="idle"
+        loading={loading()}
+      />
+    ));
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(transcript, "scrollHeight", { get: () => 500, configurable: true });
+    transcript.scrollTop = 120;
+    try {
+      // The reader scrolls up before the deferred resume, relinquishing it.
+      transcript.dispatchEvent(new Event("scroll"));
+      expect(frames.pending()).toBe(0);
+
+      // A same-session refresh must not position to the bottom again.
+      setLoading(true);
+      setLoading(false);
+      expect(frames.pending()).toBe(0);
+      expect(transcript.scrollTop).toBe(120);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("positions each selection again after navigating away and back", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const [sessionID, setSessionID] = createSignal("first");
+    const messages: readonly SessionMessageInfo[] = [
+      { id: "message", time: base, type: "user", text: "Prompt" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID={sessionID()} messages={messages} sessionStatus="idle" />
+    ));
+    const transcript = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(transcript, "scrollHeight", { get: () => 500, configurable: true });
+    try {
+      frames.runNext();
+      expect(transcript.scrollTop).toBe(500);
+      transcript.scrollTop = 0;
+
+      setSessionID("second");
+      expect(frames.pending()).toBe(1);
+      frames.runNext();
+      expect(transcript.scrollTop).toBe(500);
+      transcript.scrollTop = 0;
+
+      // Returning to the first session is a new selection and positions again.
+      setSessionID("first");
+      expect(frames.pending()).toBe(1);
+      frames.runNext();
+      expect(transcript.scrollTop).toBe(500);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("installs one selection listener for the component lifetime", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const add = vi.spyOn(document, "addEventListener");
+    const remove = vi.spyOn(document, "removeEventListener");
+    const selectionAdds = () =>
+      add.mock.calls.filter(([type]) => type === "selectionchange").length;
+    const selectionRemoves = () =>
+      remove.mock.calls.filter(([type]) => type === "selectionchange").length;
+    try {
+      const messages = userMessages("m", 80);
+      const { host, dispose } = mount(() => (
+        <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+      ));
+      expect(selectionAdds()).toBe(1);
+      expect(selectionRemoves()).toBe(0);
+
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(80);
+      expect(selectionAdds()).toBe(1);
+      expect(selectionRemoves()).toBe(0);
+
+      dispose();
+      expect(selectionAdds()).toBe(1);
+      expect(selectionRemoves()).toBe(1);
+    } finally {
+      add.mockRestore();
+      remove.mockRestore();
       vi.unstubAllGlobals();
     }
   });
@@ -974,48 +1703,6 @@ describe("TranscriptView", () => {
       dispose();
     } finally {
       attribute.mockRestore();
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it("keeps one selection listener across materializing batches and removes it at completion", () => {
-    stubResizeObserver();
-    const frames = stubAnimationFrames();
-    const add = vi.spyOn(document, "addEventListener");
-    const remove = vi.spyOn(document, "removeEventListener");
-    const selectionAdds = () =>
-      add.mock.calls.filter(([type]) => type === "selectionchange").length;
-    const selectionRemoves = () =>
-      remove.mock.calls.filter(([type]) => type === "selectionchange").length;
-    try {
-      const messages = userMessages("m", 80);
-      const { host, dispose } = mount(() => (
-        <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
-      ));
-      expect(selectionAdds()).toBe(1);
-      expect(selectionRemoves()).toBe(0);
-
-      let stableAcrossBatches = true;
-      let guard = 0;
-      while (host.querySelectorAll("[data-message-id]").length < messages.length) {
-        if (++guard > 20) throw new Error("materialization did not settle");
-        frames.runNext();
-        if (host.querySelectorAll("[data-message-id]").length < messages.length) {
-          // Advancing batches must not detach and reattach the listener.
-          stableAcrossBatches =
-            stableAcrossBatches && selectionAdds() === 1 && selectionRemoves() === 0;
-        }
-      }
-
-      expect(stableAcrossBatches).toBe(true);
-      expect(selectionAdds()).toBe(1);
-      expect(selectionRemoves()).toBe(1);
-      dispose();
-      expect(selectionAdds()).toBe(1);
-      expect(selectionRemoves()).toBe(1);
-    } finally {
-      add.mockRestore();
-      remove.mockRestore();
       vi.unstubAllGlobals();
     }
   });
@@ -1206,32 +1893,7 @@ describe("TranscriptView", () => {
 
   it("scrolls to the bottom the first time a delayed transcript opens", async () => {
     vi.useFakeTimers();
-    let notifyResize: (() => void) | undefined;
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        private target: Element | undefined;
-
-        constructor(callback: ResizeObserverCallback) {
-          notifyResize = () => {
-            if (this.target === undefined) throw new Error("No resize target was observed");
-            const entry: ResizeObserverEntry = {
-              target: this.target,
-              contentRect: new DOMRectReadOnly(0, 0, 0, 480),
-              borderBoxSize: [],
-              contentBoxSize: [],
-              devicePixelContentBoxSize: [],
-            };
-            callback([entry], this);
-          };
-        }
-        observe(target: Element) {
-          this.target = target;
-        }
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+    const resize = stubResizeObservers();
     const [loading, setLoading] = createSignal(true);
     const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>([]);
     const { host, dispose } = mount(() => (
@@ -1257,7 +1919,7 @@ describe("TranscriptView", () => {
     });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     scrollHeight = 480;
-    notifyResize?.();
+    resize.notify();
     expect(transcript.scrollTop).toBe(480);
 
     dispose();
