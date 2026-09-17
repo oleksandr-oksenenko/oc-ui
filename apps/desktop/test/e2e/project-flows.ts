@@ -160,7 +160,7 @@ async function expectFiles(files: readonly string[]): Promise<void> {
 }
 
 async function verifyReviewReload(): Promise<void> {
-  const renderedDiff = $(".pierre-diff-host diffs-container");
+  const renderedDiff = $(".diff-code-view diffs-container");
   const gutter = renderedDiff.shadow$('[data-column-number="1"][data-line-type="change-addition"]');
   await gutter.waitForDisplayed({ timeout: TIMEOUT });
   await gutter.moveTo();

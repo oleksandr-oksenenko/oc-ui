@@ -9,7 +9,7 @@ import { Titlebar } from "../src/renderer/components/App/ConnectedApp/Shell/Titl
 import { Workspace } from "../src/renderer/components/App/ConnectedApp/Shell/Workspace.tsx";
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
 import { ContextTitlebarRegion } from "../src/renderer/components/App/ConnectedApp/Shell/ContextTitlebarRegion.tsx";
-import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
+import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView.tsx";
 import { SessionSidebar } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";

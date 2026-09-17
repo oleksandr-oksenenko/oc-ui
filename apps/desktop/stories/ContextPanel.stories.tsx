@@ -1,11 +1,11 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
 import { createMemo, createSignal } from "solid-js";
 import type { Decorator, Meta, StoryObj } from "storybook-solidjs-vite";
-import { expect, userEvent, waitFor } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import type { SelectedLineRange } from "@pierre/diffs";
 
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
-import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
+import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView.tsx";
 import type { ReviewComment } from "../src/renderer/domain/review-drafts.ts";
 
 const diffFiles: readonly DiffFileData[] = [
@@ -212,6 +212,33 @@ deleted file mode 100644
   },
 };
 
+export const CollapseAll: Story = {
+  args: {
+    diff: { files: diffFiles, loading: false },
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+
+    await step("collapse every file", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Collapse all files" }));
+      await expect(canvas.getByRole("button", { name: "Expand all files" })).toBeVisible();
+      for (const file of diffFiles) {
+        const toggle = await canvas.findByRole("button", { name: `Expand ${file.file}` });
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      }
+    });
+
+    await step("expand every file", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Expand all files" }));
+      await expect(canvas.getByRole("button", { name: "Collapse all files" })).toBeVisible();
+      for (const file of diffFiles) {
+        const toggle = await canvas.findByRole("button", { name: `Collapse ${file.file}` });
+        await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      }
+    });
+  },
+};
+
 export const ComparisonControl: Story = {
   args: {
     diff: { files: diffFiles, loading: false },
@@ -371,24 +398,26 @@ export const LongPathTooltip: Story = {
     },
   },
   play: async ({ canvasElement, step }) => {
-    const paths = [...canvasElement.querySelectorAll<HTMLElement>(".diff-file-path")];
-    await expect(paths.map((path) => path.textContent)).toEqual([longPath, rtlLeadingPath]);
+    const paths = () => [...canvasElement.querySelectorAll<HTMLElement>(".diff-file-path")];
+    // CodeView renders its items on the next frame.
+    await waitFor(() => expect(paths()).toHaveLength(2));
+    await expect(paths().map((path) => path.textContent)).toEqual([longPath, rtlLeadingPath]);
 
     await step("clips the beginning while keeping the file name", async () => {
-      const ltr = measurePathEdges(paths[0]!);
+      const ltr = measurePathEdges(paths()[0]!);
       await expect(ltr.truncated).toBe(true);
       await expect(ltr.first).toBe(false);
       await expect(ltr.last).toBe(true);
 
       // Without the explicit LTR base direction the RTL-leading directory
       // takes over the paragraph direction and the file name is clipped.
-      const rtl = measurePathEdges(paths[1]!);
+      const rtl = measurePathEdges(paths()[1]!);
       await expect(rtl.truncated).toBe(true);
       await expect(rtl.last).toBe(true);
     });
 
     await step("reveals the complete path on hover for an expanded file", async () => {
-      await userEvent.hover(paths[0]!);
+      await userEvent.hover(paths()[0]!);
       await waitFor(
         async () => {
           const tooltip = document.querySelector('[data-component="tooltip-v2"]');
@@ -399,9 +428,9 @@ export const LongPathTooltip: Story = {
     });
 
     await step("keeps the disclosure operable under the tooltip trigger", async () => {
-      const disclosure = paths[0]?.closest(".diff-file-toggle");
+      const disclosure = paths()[0]?.closest(".diff-file-toggle");
       await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-      await userEvent.click(paths[0]!);
+      await userEvent.click(paths()[0]!);
       await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     });
   },

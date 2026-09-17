@@ -143,17 +143,18 @@ focus.
 `itemMetrics` matches the rendered CSS (`diffHeaderHeight: 30`,
 `lineHeight: 18` from `--oc-type-code-line-height`, default `spacing`) so
 virtualization estimates line up with measured content. `layout.gap` replaces
-the previous per-card margin, and the card outline uses an inset box-shadow so
-it adds no layout height. The CodeView root is the scroll viewport
+the previous per-card margin, and the card border is a pointer-transparent
+shadow pseudo-element so it adds no measured height. The CodeView root is the
+scroll viewport
 (`oc-scrollable`), is exposed as `role="region"` with an accessible
 "Changed files" label, and is the only scroll owner while files exist.
 
 ### Review interaction
 
 - Annotations: each item carries only its own comments. The existing
-  imperative annotation element (`makeAnnotation`) is unchanged and remains
-  slotted by Pierre; comment bodies stay out of the version signature so an
-  inline editor keeps its caret.
+  imperative annotation element (`createReviewAnnotation`) is unchanged and
+  remains slotted by Pierre; comment bodies stay out of the version signature
+  so an inline editor keeps its caret.
 - Gutter utility: `enableGutterUtility` is true while review is enabled and no
   editor is open; `onGutterUtilityClick` resolves the selected code through
   `getSelectedCode` before calling the owner.

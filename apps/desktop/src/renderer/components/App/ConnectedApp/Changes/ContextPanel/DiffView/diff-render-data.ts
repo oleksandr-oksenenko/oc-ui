@@ -2,7 +2,6 @@ import type { FileDiffInfo } from "@opencode/client";
 import { parseDiffFromFile, parsePatchFiles, processFile } from "@pierre/diffs";
 import type { FileContents, FileDiffMetadata, SelectedLineRange } from "@pierre/diffs";
 
-import type { ReviewComment } from "../../../../../../domain/review-drafts.ts";
 export type { ReviewComment } from "../../../../../../domain/review-drafts.ts";
 
 export type DiffRenderData = {
@@ -191,17 +190,6 @@ export function parseFilePatch(file: FileDiffInfo): FileDiffMetadata | undefined
     return undefined;
   }
 }
-
-export type DiffFileReview = {
-  readonly comments: readonly ReviewComment[];
-  readonly editingCommentID?: string;
-  readonly selection?: SelectedLineRange | null;
-  readonly onBeginComment?: (selection: SelectedLineRange, selectedCode: string) => void;
-  readonly onUpdateCommentBody?: (commentID: string, body: string) => void;
-  readonly onEditComment?: (commentID: string) => void;
-  readonly onFinishComment?: (commentID: string) => void;
-  readonly onRemoveComment?: (commentID: string, opener: HTMLElement) => void;
-};
 
 type DiffRenderLine = {
   readonly kind: "context" | "deletion" | "addition";

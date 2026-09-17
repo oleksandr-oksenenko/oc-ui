@@ -765,7 +765,7 @@ describe.sequential("production browser app", () => {
     await page.locator(".transcript-annotation-trigger").waitFor();
     if (await page.getByLabel("Show context", { exact: true }).count())
       await page.getByLabel("Show context", { exact: true }).click();
-    const diff = page.locator(".pierre-diff-host diffs-container").first();
+    const diff = page.locator(".diff-code-view diffs-container").first();
     await diff.locator('[data-column-number="1"][data-line-type="change-addition"]').hover();
     await diff.locator("[data-utility-button]").click();
     const review = "Browser review survives panel remount.";

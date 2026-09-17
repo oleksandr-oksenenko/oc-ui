@@ -1,14 +1,19 @@
 import { Button } from "@opencode/ui/button";
 import { DiffChanges } from "@opencode/ui/diff-changes";
 import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
 import { Loader } from "@opencode/ui/loader";
 import { Select } from "@opencode/ui/select";
+import type { FileDiffInfo } from "@opencode/client";
 import type { SelectedLineRange } from "@pierre/diffs";
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 
-import { DiffFile } from "./DiffView/DiffFile.tsx";
-import type { DiffFileData } from "./DiffView/DiffFile.tsx";
-import type { DiffFileReview, ReviewComment } from "./DiffView/diff-render-data.ts";
+import { DiffCodeView } from "./DiffView/DiffCodeView.tsx";
+import type { ReviewComment } from "./DiffView/diff-render-data.ts";
+
+export type DiffFileData = FileDiffInfo & {
+  readonly defaultExpanded?: boolean;
+};
 
 export type DiffReviewView = {
   readonly comments: readonly ReviewComment[];
@@ -54,6 +59,20 @@ export function DiffView(props: DiffViewProps) {
   const selectedComparison = () =>
     comparisonOptions().find((option) => option.value === comparison()) ?? comparisonOptions()[0];
 
+  const [expandedByPath, setExpandedByPath] = createSignal<ReadonlyMap<string, boolean>>(new Map());
+  const fileExpanded = (file: DiffFileData) =>
+    expandedByPath().get(file.file) ?? file.defaultExpanded ?? true;
+  const setFileExpanded = (path: string, expanded: boolean) => {
+    setExpandedByPath((current) => new Map(current).set(path, expanded));
+  };
+  const allCollapsed = createMemo(
+    () => props.files.length > 0 && props.files.every((file) => !fileExpanded(file)),
+  );
+  const toggleAll = () => {
+    const expanded = allCollapsed();
+    setExpandedByPath(new Map(props.files.map((file) => [file.file, expanded])));
+  };
+
   return (
     <section class="context-view diff-view" aria-label="Diff">
       <Show when={props.files.length > 0 || comparisonOptions().length > 1}>
@@ -86,6 +105,16 @@ export function DiffView(props: DiffViewProps) {
                 />
               </div>
             </div>
+            <IconButton
+              class="diff-collapse-toggle oc-focus-inset"
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              icon={<Icon name={allCollapsed() ? "expand" : "collapse"} size="small" />}
+              aria-label={allCollapsed() ? "Expand all files" : "Collapse all files"}
+              title={allCollapsed() ? "Expand all files" : "Collapse all files"}
+              onClick={toggleAll}
+            />
           </Show>
         </div>
       </Show>
@@ -151,38 +180,12 @@ export function DiffView(props: DiffViewProps) {
           <Show when={props.stale && !props.loading && !props.error}>
             <p class="diff-refresh-state">Showing cached changes</p>
           </Show>
-          <div class="diff-file-list">
-            <For each={props.files}>
-              {(file) => {
-                const review = () => props.review;
-                const fileReview: DiffFileReview | undefined = review()
-                  ? {
-                      get comments() {
-                        return (
-                          review()?.comments.filter((comment) => comment.path === file.file) ?? []
-                        );
-                      },
-                      get editingCommentID() {
-                        return review()?.editingCommentID;
-                      },
-                      get selection() {
-                        const selected = review()?.selectedLines;
-                        return selected?.path === file.file ? selected.range : null;
-                      },
-                      onBeginComment: (selection, selectedCode) =>
-                        review()?.onBeginComment?.(file.file, selection, selectedCode),
-                      onUpdateCommentBody: (commentID, body) =>
-                        review()?.onUpdateCommentBody?.(commentID, body),
-                      onEditComment: (commentID) => review()?.onEditComment?.(commentID),
-                      onFinishComment: (commentID) => review()?.onFinishComment?.(commentID),
-                      onRemoveComment: (commentID, opener) =>
-                        review()?.onRemoveComment?.(commentID, opener),
-                    }
-                  : undefined;
-                return <DiffFile file={file} review={fileReview} />;
-              }}
-            </For>
-          </div>
+          <DiffCodeView
+            files={props.files}
+            review={props.review}
+            expanded={fileExpanded}
+            onToggle={setFileExpanded}
+          />
         </>
       </Show>
     </section>

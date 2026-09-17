@@ -1,16 +1,35 @@
+import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { mount } from "../../../../../test/mount.ts";
+import { stubResizeObserver } from "../../../../../test/resize-observer.ts";
 import { DiffView } from "./DiffView.tsx";
+import type { DiffFileData } from "./DiffView.tsx";
 
-const malformedFile = {
+const malformedFile: DiffFileData = {
   file: "src/example.ts",
   patch: "",
   additions: 2,
   deletions: 1,
-  status: "modified" as const,
+  status: "modified",
 };
+
+const mixedFiles: readonly DiffFileData[] = [
+  { file: "src/opened.ts", patch: "", additions: 2, deletions: 1, status: "modified" },
+  {
+    file: "src/closed.ts",
+    patch: "",
+    additions: 1,
+    deletions: 0,
+    status: "added",
+    defaultExpanded: false,
+  },
+];
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("DiffView", () => {
   it("keeps the controlled comparison available while loading", async () => {
@@ -44,6 +63,7 @@ describe("DiffView", () => {
   });
 
   it("hides the comparison selector when only one comparison is available", () => {
+    stubResizeObserver();
     const { host, dispose } = mount(() => (
       <DiffView files={[malformedFile]} loading={false} comparison="working" />
     ));
@@ -91,7 +111,8 @@ describe("DiffView", () => {
     dispose();
   });
 
-  it("keeps cached files visible during a failed refresh", () => {
+  it("keeps cached files visible during a failed refresh", async () => {
+    stubResizeObserver();
     const onRetry = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <DiffView
@@ -103,15 +124,84 @@ describe("DiffView", () => {
       />
     ));
 
-    expect(host.textContent).toContain("src/example.ts");
     expect(host.textContent).toContain("The server is unavailable.");
     expect(host.textContent).toContain("1 file");
+    await vi.waitFor(() => expect(host.textContent).toContain("src/example.ts"));
     const retry = Array.from(host.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Retry",
     );
     expect(retry).toBeDefined();
     retry?.click();
     expect(onRetry).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it("collapses and expands every file from the summary control", async () => {
+    stubResizeObserver();
+    const { host, dispose } = mount(() => <DiffView files={mixedFiles} loading={false} />);
+
+    const trigger = (path: string) =>
+      host.querySelector<HTMLButtonElement>(`[aria-label$=" ${path}"]`);
+    const summaryToggle = () => host.querySelector<HTMLButtonElement>(".diff-collapse-toggle");
+
+    await vi.waitFor(() => expect(trigger("src/opened.ts")).not.toBeNull());
+    expect(trigger("src/opened.ts")?.getAttribute("aria-expanded")).toBe("true");
+    expect(trigger("src/closed.ts")?.getAttribute("aria-expanded")).toBe("false");
+
+    summaryToggle()?.click();
+    await vi.waitFor(() =>
+      expect(trigger("src/opened.ts")?.getAttribute("aria-label")).toBe("Expand src/opened.ts"),
+    );
+    expect(summaryToggle()?.getAttribute("aria-label")).toBe("Expand all files");
+    expect(trigger("src/opened.ts")?.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger("src/closed.ts")?.getAttribute("aria-expanded")).toBe("false");
+
+    summaryToggle()?.click();
+    await vi.waitFor(() =>
+      expect(trigger("src/closed.ts")?.getAttribute("aria-label")).toBe("Collapse src/closed.ts"),
+    );
+    expect(summaryToggle()?.getAttribute("aria-label")).toBe("Collapse all files");
+    expect(trigger("src/opened.ts")?.getAttribute("aria-expanded")).toBe("true");
+    expect(trigger("src/closed.ts")?.getAttribute("aria-expanded")).toBe("true");
+
+    trigger("src/closed.ts")?.click();
+    await vi.waitFor(() =>
+      expect(trigger("src/closed.ts")?.getAttribute("aria-expanded")).toBe("false"),
+    );
+    expect(summaryToggle()?.getAttribute("aria-label")).toBe("Collapse all files");
+    dispose();
+  });
+
+  it("keeps files collapsed when the same paths refresh", async () => {
+    stubResizeObserver();
+    const file: DiffFileData = {
+      file: "src/refresh.ts",
+      patch: "",
+      additions: 1,
+      deletions: 0,
+      status: "modified",
+    };
+    let update!: (next: readonly DiffFileData[]) => void;
+    const { host, dispose } = mount(() => {
+      const [files, setFiles] = createSignal<readonly DiffFileData[]>([file]);
+      update = setFiles;
+      return <DiffView files={files()} loading={false} />;
+    });
+
+    await vi.waitFor(() => expect(host.querySelector(".diff-collapse-toggle")).not.toBeNull());
+    host.querySelector<HTMLButtonElement>(".diff-collapse-toggle")?.click();
+    await vi.waitFor(() =>
+      expect(host.querySelector('[aria-label="Expand src/refresh.ts"]')).not.toBeNull(),
+    );
+
+    update([{ ...file, additions: 2 }]);
+
+    await vi.waitFor(() =>
+      expect(host.querySelector('[aria-label="Expand src/refresh.ts"]')).not.toBeNull(),
+    );
+    expect(
+      host.querySelector<HTMLButtonElement>(".diff-collapse-toggle")?.getAttribute("aria-label"),
+    ).toBe("Expand all files");
     dispose();
   });
 });
