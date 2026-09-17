@@ -152,8 +152,18 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     };
   };
 
-  const hitTest = (event: MouseEvent): AnnotationHighlight[] =>
-    input.sources().filter((item) => {
+  // Only annotations whose block is under the pointer can be hit. Narrowing
+  // before the geometry queries keeps pointer movement from forcing layout in
+  // distant, possibly skipped rows.
+  const hitTest = (event: MouseEvent): AnnotationHighlight[] => {
+    const target = event.target instanceof Element ? event.target : undefined;
+    const block = target?.closest<HTMLElement>("[data-annotation-block]");
+    if (!block) return [];
+    const messageID = block.closest<HTMLElement>("[data-message-id]")?.dataset.messageId;
+    const blockName = block.dataset.annotationBlock;
+    if (messageID === undefined || blockName === undefined) return [];
+    return input.sources().filter((item) => {
+      if (item.source.messageID !== messageID || item.source.block !== blockName) return false;
       const range = ranges.get(item.key);
       return (
         range !== undefined &&
@@ -167,6 +177,7 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
         )
       );
     });
+  };
 
   const scheduleRebuild = (): void => {
     revision += 1;

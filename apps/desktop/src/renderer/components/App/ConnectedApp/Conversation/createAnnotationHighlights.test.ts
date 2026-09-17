@@ -56,6 +56,42 @@ function mountHighlights(
   });
 }
 
+/** jsdom has no Range geometry; the hit test only iterates rects and anchors. */
+function stubRangeRects() {
+  const rect = new DOMRect(0, 0, 100, 100);
+  const list: DOMRectList = Object.assign([rect], {
+    item: (index: number) => (index === 0 ? rect : null),
+  });
+  const restores: Array<() => void> = [];
+  const define = (
+    name: "getClientRects" | "getBoundingClientRect",
+    value: (() => DOMRectList) | (() => DOMRect),
+  ) => {
+    const descriptor = Object.getOwnPropertyDescriptor(Range.prototype, name);
+    Object.defineProperty(Range.prototype, name, { value, configurable: true, writable: true });
+    restores.push(() => {
+      if (descriptor !== undefined) {
+        Object.defineProperty(Range.prototype, name, descriptor);
+        return;
+      }
+      Reflect.deleteProperty(Range.prototype, name);
+    });
+  };
+  const rects = vi.fn<() => DOMRectList>(() => list);
+  define("getClientRects", rects);
+  define("getBoundingClientRect", () => rect);
+  return {
+    rects,
+    restore: () => {
+      for (const restore of restores.toReversed()) restore();
+    },
+  };
+}
+
+function clickAt(target: Element): void {
+  target.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 10 }));
+}
+
 describe("createAnnotationHighlights", () => {
   it("rebuilds only when source descriptors or transcript DOM change", async () => {
     const { digestCall, registry, registrySet } = stubHighlightRuntime();
@@ -123,6 +159,103 @@ describe("createAnnotationHighlights", () => {
       expect(digestCall).toHaveBeenCalledTimes(digests + 1);
     } finally {
       result.dispose();
+      root.remove();
+    }
+  });
+
+  it("hit-tests only annotations in the block under the pointer", async () => {
+    const { registry } = stubHighlightRuntime();
+    const { rects, restore } = stubRangeRects();
+
+    const root = document.createElement("div");
+    root.innerHTML =
+      '<article data-message-id="one"><p data-annotation-block="a">alpha</p><span>plain</span></article>' +
+      '<article data-message-id="two"><p data-annotation-block="b">beta</p></article>';
+    document.body.append(root);
+    const onOpen = vi.fn<(keys: readonly string[], target: HTMLElement, anchor: DOMRect) => void>();
+    const result = createRoot((dispose) => {
+      const [sources] = createSignal<readonly AnnotationHighlight[]>([
+        {
+          key: "one",
+          source: { messageID: "one", block: "a", textDigest: digest, start: 0, end: 5 },
+        },
+        {
+          key: "two",
+          source: { messageID: "two", block: "b", textDigest: digest, start: 0, end: 4 },
+        },
+      ]);
+      const controller = createAnnotationHighlights({
+        sources,
+        canSelect: () => true,
+        onSelection: () => undefined,
+        onOpen,
+        onDismiss: () => undefined,
+      });
+      controller.attach(root);
+      return { dispose };
+    });
+    try {
+      await vi.waitFor(() => expect(registry.size).toBe(1));
+
+      const click = clickAt;
+
+      // A block without annotations performs no geometry queries.
+      click(root.querySelector('[data-message-id="one"] span')!);
+      expect(rects).not.toHaveBeenCalled();
+      expect(onOpen).not.toHaveBeenCalled();
+
+      // Only the annotation in the clicked block is measured and opened.
+      click(root.querySelector('[data-message-id="two"] p')!);
+      expect(rects).toHaveBeenCalledTimes(1);
+      expect(onOpen).toHaveBeenCalledTimes(1);
+      expect(onOpen.mock.calls[0]?.[0]).toEqual(["two"]);
+    } finally {
+      result.dispose();
+      restore();
+      root.remove();
+    }
+  });
+
+  it("opens overlapping annotations in the same block", async () => {
+    const { registry } = stubHighlightRuntime();
+    const { restore } = stubRangeRects();
+
+    const root = document.createElement("div");
+    root.innerHTML =
+      '<article data-message-id="one"><p data-annotation-block="a">alpha</p></article>';
+    document.body.append(root);
+    const onOpen = vi.fn<(keys: readonly string[], target: HTMLElement, anchor: DOMRect) => void>();
+    const result = createRoot((dispose) => {
+      const [sources] = createSignal<readonly AnnotationHighlight[]>([
+        {
+          key: "first",
+          source: { messageID: "one", block: "a", textDigest: digest, start: 0, end: 5 },
+        },
+        {
+          key: "second",
+          source: { messageID: "one", block: "a", textDigest: digest, start: 1, end: 4 },
+        },
+      ]);
+      const controller = createAnnotationHighlights({
+        sources,
+        canSelect: () => true,
+        onSelection: () => undefined,
+        onOpen,
+        onDismiss: () => undefined,
+      });
+      controller.attach(root);
+      return { dispose };
+    });
+    try {
+      await vi.waitFor(() => expect(registry.size).toBe(1));
+      root
+        .querySelector('[data-message-id="one"] p')!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 10 }));
+      expect(onOpen).toHaveBeenCalledTimes(1);
+      expect(onOpen.mock.calls[0]?.[0]).toEqual(["first", "second"]);
+    } finally {
+      result.dispose();
+      restore();
       root.remove();
     }
   });
