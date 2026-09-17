@@ -258,6 +258,30 @@ export const toolStates: readonly SessionMessageInfo[] = [
       },
       {
         type: "tool",
+        id: "completed-skill",
+        name: "skill",
+        time: { created: 14, ran: 14, completed: 15 },
+        state: {
+          status: "completed",
+          input: { id: "release-checklist" },
+          content: [{ type: "text", text: "Loaded the release checklist." }],
+        },
+      },
+      {
+        type: "tool",
+        id: "long-parameter",
+        name: "read",
+        time: { created: 14, ran: 14, completed: 15 },
+        state: {
+          status: "completed",
+          input: {
+            path: "src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/AssistantMessage/ToolCall.tsx",
+          },
+          content: [{ type: "text", text: "Read 1 file." }],
+        },
+      },
+      {
+        type: "tool",
         id: "image-output",
         name: "browser_capture",
         time: { created: 14, ran: 14, completed: 15 },

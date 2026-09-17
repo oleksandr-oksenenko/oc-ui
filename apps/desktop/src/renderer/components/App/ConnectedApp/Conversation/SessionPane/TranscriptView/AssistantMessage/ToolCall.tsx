@@ -15,6 +15,8 @@ import { annotationBlock } from "../../../annotation-source.ts";
 import { ImagePreview } from "../../../../../../../ui/ImagePreview.tsx";
 import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMount.ts";
 
+import { toolParameter } from "./toolParameter.ts";
+
 export type ToolCallProps = {
   readonly tool: SessionMessageAssistantTool;
 };
@@ -22,6 +24,7 @@ export type ToolCallProps = {
 export function ToolCall(props: ToolCallProps): JSX.Element {
   const content = createDeferredCollapsibleMount();
   const details = () => toolDetails(props.tool);
+  const parameter = () => toolParameter(props.tool);
   const status = () => props.tool.state.status;
   const statusLabel = () =>
     status() === "completed"
@@ -42,6 +45,9 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
         {renderToolIcon(props.tool.name)}
         <span class="transcript-tool-copy">
           <span class="transcript-tool-name">{props.tool.name}</span>
+          <Show when={parameter()}>
+            {(value) => <span class="transcript-tool-parameter">{value()}</span>}
+          </Show>
         </span>
         <span class="transcript-tool-status">
           <Show

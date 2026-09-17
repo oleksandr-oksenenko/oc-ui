@@ -90,7 +90,7 @@ export const ScrollPreservation: Story = {
     await waitFor(() =>
       expect(canvasElement.querySelectorAll(".transcript-message")).toHaveLength(40),
     );
-    const tool = canvas.getByRole("button", { name: "read Running" });
+    const tool = canvas.getByRole("button", { name: "read README.md Running" });
     const rows = [...canvasElement.querySelectorAll(".transcript-message")];
     const distanceFromBottom = () =>
       viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
@@ -110,7 +110,7 @@ export const ScrollPreservation: Story = {
     await settle();
     canvas.getByRole("button", { name: "Finish turn" }).click();
     await settle();
-    await expect(canvas.getByRole("button", { name: "read Completed" })).toBe(tool);
+    await expect(canvas.getByRole("button", { name: "read README.md Completed" })).toBe(tool);
     await expect(tool).toHaveAttribute("aria-expanded", "true");
     await expect(
       Math.abs(
@@ -216,6 +216,26 @@ export const ToolImageLongMetadata: Story = {
   render: renderNarrowTranscript,
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
+    await step("Clips long tool parameters to one line", async () => {
+      const parameters = [
+        ...canvasElement.querySelectorAll<HTMLElement>(".transcript-tool-parameter"),
+      ];
+      await expect(parameters.length).toBeGreaterThan(0);
+      for (const parameter of parameters) {
+        // A single line keeps the box at its line height; a wrapped value would
+        // grow it while still satisfying a scroll-height check.
+        const lineHeight = Number.parseFloat(getComputedStyle(parameter).lineHeight);
+        await expect(parameter.getBoundingClientRect().height).toBeLessThanOrEqual(lineHeight + 1);
+        const header = parameter.closest<HTMLElement>(".transcript-tool-header");
+        if (!header) throw new Error("Tool header is missing");
+        await expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth + 1);
+      }
+      // The long path fixture is wider than its box, so the ellipsis clips it
+      // instead of wrapping or widening the row.
+      const long = parameters.find((parameter) => parameter.textContent?.endsWith("…"));
+      if (!long) throw new Error("Long parameter fixture is missing");
+      await expect(long.scrollWidth).toBeGreaterThan(long.clientWidth + 1);
+    });
     await step("Keeps the image preview readable under long metadata", async () => {
       await userEvent.click(canvas.getByRole("button", { name: "browser_capture Completed" }));
       const thumbnail = await waitFor(() => {
@@ -311,9 +331,10 @@ export const CatalogInteractions: Story = {
     const canvas = within(canvasElement);
     for (const name of [
       "read Streaming",
-      "grep Running",
+      "grep TranscriptView Running",
       "apply_patch Completed",
-      "bash Error",
+      "bash pnpm build Error",
+      "skill release-checklist Completed",
       "pnpm watch Killed",
       "Compaction manual Failed",
       "Code review · 2 comments",
@@ -353,7 +374,9 @@ export const LongTranscriptMaterialization: Story = {
     await expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(2);
     const oldest = canvasElement.querySelector<HTMLElement>('[data-message-id="long-oldest"]');
     if (!oldest) throw new Error("The oldest materialized row is missing");
-    const trigger = within(oldest).getByRole("button", { name: /release-check Completed/ });
+    const trigger = within(oldest).getByRole("button", {
+      name: /release-check Completed/,
+    });
     trigger.focus();
     await userEvent.keyboard("{Enter}");
     await expect(trigger).toHaveAttribute("aria-expanded", "true");

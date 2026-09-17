@@ -12,6 +12,7 @@ import { mount } from "../../../../../test/mount.ts";
 import { stubResizeObserver } from "../../../../../test/resize-observer.ts";
 import { createAnnotationHighlights } from "../createAnnotationHighlights.ts";
 import { TranscriptView } from "./TranscriptView.tsx";
+import { TOOL_PARAMETER_LIMIT } from "./TranscriptView/AssistantMessage/toolParameter.ts";
 import { UserMessage } from "./TranscriptView/UserMessage.tsx";
 import { CODE_REVIEW_METADATA_KEY } from "../../../../../opencode/code-review.ts";
 
@@ -522,6 +523,75 @@ describe("TranscriptView", () => {
     expect(tool.classList.contains("transcript-tool-error")).toBe(true);
     expect(toolContent.querySelector(".transcript-tool-details")).not.toBeNull();
     expect(tool.querySelector(".transcript-tool-header")).toBe(toolTrigger);
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the parameter once the input is parsed and updates it in place", () => {
+    stubResizeObserver();
+    const path =
+      "src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/AssistantMessage/ToolCall.tsx";
+    const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
+      {
+        id: "assistant",
+        time: base,
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "p", id: "m" },
+        content: [
+          {
+            type: "tool",
+            id: "tool",
+            name: "read",
+            time: base,
+            state: { status: "streaming", input: '{"path":"src/renderer/' },
+          },
+        ],
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const row = host.querySelector<HTMLElement>('[data-message-id="assistant"]')!;
+    // Streamed input text is never inspected.
+    expect(row.querySelector(".transcript-tool-parameter")).toBeNull();
+
+    setMessages(0, "content", 0, {
+      type: "tool",
+      id: "tool",
+      name: "read",
+      time: base,
+      state: { status: "running", input: { path, offset: 1 }, metadata: {} },
+    });
+    const span = row.querySelector<HTMLElement>(".transcript-tool-parameter");
+    if (!span) throw new Error("Tool parameter did not render");
+    const text = span.textContent ?? "";
+    expect(text.length).toBeLessThanOrEqual(TOOL_PARAMETER_LIMIT);
+    expect(text.endsWith("…")).toBe(true);
+
+    setMessages(0, "content", 0, {
+      type: "tool",
+      id: "tool",
+      name: "read",
+      time: base,
+      state: {
+        status: "completed",
+        input: { path: "src/app.ts", offset: 1 },
+        content: [{ type: "text", text: "done" }],
+      },
+    });
+    expect(row.querySelector(".transcript-tool-parameter")).toBe(span);
+    expect(span.textContent).toBe("src/app.ts");
+
+    setMessages(0, "content", 0, {
+      type: "tool",
+      id: "tool",
+      name: "read",
+      time: base,
+      state: { status: "running", input: { offset: 1 }, metadata: {} },
+    });
+    expect(row.querySelector(".transcript-tool-parameter")).toBeNull();
 
     dispose();
     vi.unstubAllGlobals();

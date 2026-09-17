@@ -464,6 +464,17 @@
   font-size: var(--oc-type-body-size);
 }
 
+.transcript-tool-parameter {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--oc-text-muted);
+  font-family: var(--oc-font-mono);
+  font-size: var(--oc-type-body-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .transcript-tool-status {
   display: inline-flex;
   flex: none;
