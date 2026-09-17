@@ -27,7 +27,9 @@ vi.mock("@opencode/client/solid", () => ({
 }));
 vi.mock("./session-catalog", () => ({ createSessionCatalog: () => ({}) }));
 vi.mock("./vcs-diff", () => ({ createVcsDiffStore: () => ({}) }));
-vi.mock("./transcript", () => ({ createSessionTranscriptSync: () => () => Promise.resolve() }));
+vi.mock("./transcript", () => ({
+  createTranscriptLoader: () => ({ load: () => Effect.void }),
+}));
 
 const setup = () =>
   withTestWorkspace((effects) => ({

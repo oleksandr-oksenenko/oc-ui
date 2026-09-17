@@ -30,7 +30,7 @@ export type SessionWorkspaceRuntime = {
     };
   };
   readonly sessions: Pick<SessionCatalog, "ids" | "state" | "sync" | "remove">;
-  readonly syncTranscript: ConnectedRuntime["syncTranscript"];
+  readonly loader: ConnectedRuntime["loader"];
 };
 
 export type SessionWorkspace = {
@@ -137,16 +137,16 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   });
 
   const hydrate = (sessionID: string): Promise<void> => {
+    // A stale request must not replace the current selection's work or state.
+    if (selectedID() !== sessionID) return Promise.resolve();
     setTranscriptState({ sessionID, status: "loading" });
     const fiber = hydration.run(
       Effect.gen(function* () {
-        yield* Effect.tryPromise((signal) =>
-          input.runtime.syncTranscript(sessionID, {
-            isCurrent: () => !signal.aborted && selectedID() === sessionID,
-          }),
-        );
+        yield* input.runtime.loader.load(sessionID);
         if (selectedID() === sessionID) setTranscriptState({ sessionID, status: "ready" });
       }).pipe(
+        // Interruption bypasses this handler, so a superseded load cannot
+        // report a failure or a ready state.
         Effect.catch(() =>
           Effect.sync(() => {
             if (selectedID() === sessionID)
@@ -159,7 +159,7 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
         ),
       ),
     );
-    // UI cancellation settles the wait; the transcript worker still owns SDK cleanup.
+    // UI cancellation settles the wait; the loader still owns native cleanup.
     return effects.runPromise(Fiber.await(fiber)).then(
       () => undefined,
       () => undefined,

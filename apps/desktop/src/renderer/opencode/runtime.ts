@@ -9,7 +9,8 @@ import { mapConnectionFailure, type OpenCodeConnectionError } from "./connection
 import { createServerFileImages, type ServerFileImages } from "./file-images";
 import { createSessionCatalog } from "./session-catalog";
 import type { SessionCatalog } from "./session-catalog";
-import { createSessionTranscriptSync } from "./transcript";
+import { createTranscriptLoader } from "./transcript";
+import type { TranscriptLoader } from "./transcript";
 import { createVcsDiffStore } from "./vcs-diff";
 import type { VcsDiffStore } from "./vcs-diff";
 
@@ -38,10 +39,7 @@ export type ConnectedRuntime = {
   readonly onShellExited: (
     handler: (event: Extract<OpenCodeEvent, { type: "shell.exited" }>) => void,
   ) => () => void;
-  readonly syncTranscript: (
-    sessionID: string,
-    options?: { readonly isCurrent?: () => boolean },
-  ) => Promise<void>;
+  readonly loader: TranscriptLoader;
 };
 
 /**
@@ -109,7 +107,7 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
   );
   // A workspace can close before a view has subscribed to readiness.
   void ready.catch(() => undefined);
-  const syncTranscript = createSessionTranscriptSync(input.effects, data);
+  const loader = createTranscriptLoader(input.effects, data);
   const onShellExited = (
     handler: (event: Extract<OpenCodeEvent, { type: "shell.exited" }>) => void,
   ): (() => void) => events.on("shell.exited", handler);
@@ -125,6 +123,6 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     fileImages,
     ready,
     onShellExited,
-    syncTranscript,
+    loader,
   };
 }

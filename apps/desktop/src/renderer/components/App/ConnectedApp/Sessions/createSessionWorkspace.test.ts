@@ -49,9 +49,8 @@ function setup(initial: readonly SessionInfo[]) {
       sync: vi.fn<SessionWorkspaceRuntime["sessions"]["sync"]>(async () => undefined),
       remove: (id: string) => setIDs((current) => current.filter((item) => item !== id)),
     },
-    syncTranscript: vi.fn<SessionWorkspaceRuntime["syncTranscript"]>(async () => undefined),
+    loader: { load: vi.fn<SessionWorkspaceRuntime["loader"]["load"]>(() => Effect.void) },
   };
-
   return {
     runtime,
     setIDs,
@@ -136,7 +135,7 @@ describe("createSessionWorkspace", () => {
     workspace.select("one");
     workspace.select("one");
     await vi.waitFor(() => expect(workspace.selectedID()).toBe("one"));
-    expect(fixture.runtime.syncTranscript).toHaveBeenCalledTimes(2);
+    expect(fixture.runtime.loader.load).toHaveBeenCalledTimes(2);
     dispose();
   });
 
@@ -196,15 +195,23 @@ describe("createSessionWorkspace", () => {
     const fixture = setup([session("one", 1)]);
     const { workspace, dispose } = mount(fixture);
     await vi.waitFor(() => expect(workspace.transcriptLoading()).toBe(false));
-    const old = deferred();
-    vi.mocked(fixture.runtime.syncTranscript).mockReturnValueOnce(old.promise);
+    const first = deferred();
+    const second = deferred();
+    vi.mocked(fixture.runtime.loader.load)
+      .mockReturnValueOnce(Effect.promise(() => first.promise))
+      .mockReturnValueOnce(Effect.promise(() => second.promise));
+
     const obsolete = workspace.hydrate("one");
-    const isCurrent = vi.mocked(fixture.runtime.syncTranscript).mock.lastCall?.[1]?.isCurrent;
-    await workspace.hydrate("one");
-    expect(isCurrent?.()).toBe(false);
-    old.reject(new Error("obsolete failure"));
+    const replacement = workspace.hydrate("one");
+    await vi.waitFor(() => expect(fixture.runtime.loader.load).toHaveBeenCalledTimes(3));
+
+    first.resolve();
     await obsolete;
     expect(workspace.transcriptError()).toBeUndefined();
+    expect(workspace.transcriptLoading()).toBe(true);
+
+    second.resolve();
+    await replacement;
     expect(workspace.transcriptLoading()).toBe(false);
     dispose();
   });
@@ -217,9 +224,11 @@ describe("createSessionWorkspace", () => {
     vi.mocked(fixture.runtime.sessions.sync).mockImplementation(async () => {
       order.push("catalog");
     });
-    vi.mocked(fixture.runtime.syncTranscript).mockImplementation(async (id) => {
-      order.push(id);
-    });
+    vi.mocked(fixture.runtime.loader.load).mockImplementation((id) =>
+      Effect.sync(() => {
+        order.push(id);
+      }),
+    );
     await workspace.retryCatalog();
     expect(order).toEqual(["catalog", "child"]);
     dispose();
@@ -230,17 +239,17 @@ describe("createSessionWorkspace", () => {
     const { workspace, dispose } = mount(fixture);
     await vi.waitFor(() => expect(workspace.transcriptLoading()).toBe(false));
     const request = deferred();
-    vi.mocked(fixture.runtime.syncTranscript).mockReturnValueOnce(request.promise);
+    vi.mocked(fixture.runtime.loader.load).mockReturnValueOnce(
+      Effect.promise(() => request.promise),
+    );
     let settled = false;
     const pending = workspace.hydrate("one").then(() => {
       settled = true;
       return undefined;
     });
-    const isCurrent = vi.mocked(fixture.runtime.syncTranscript).mock.lastCall?.[1]?.isCurrent;
     dispose();
-    await vi.waitFor(() => expect(isCurrent?.()).toBe(false));
+    await vi.waitFor(() => expect(settled).toBe(true));
     await pending;
-    expect(settled).toBe(true);
     request.resolve();
   });
 });
