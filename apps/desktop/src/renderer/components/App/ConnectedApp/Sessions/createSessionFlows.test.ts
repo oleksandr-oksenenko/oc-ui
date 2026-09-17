@@ -132,6 +132,26 @@ describe("createSessionFlows", () => {
     dispose();
   });
 
+  it("hides the global project from the picker and its default selection", async () => {
+    const fixture = setup();
+    vi.spyOn(fixture.runtime.data.project, "list").mockReturnValue([
+      { id: "global", canonical: "/", time: { created: 3, updated: 3 }, sandboxes: [] },
+      {
+        id: "project",
+        canonical: "/srv/worktree",
+        time: { created: 1, updated: 1 },
+        sandboxes: [],
+      },
+    ]);
+    const { flows, dispose } = mount(fixture, vi.fn());
+    flows.openNewSession();
+    await vi.waitFor(() => expect(flows.newSession()?.state().projectsLoading).toBe(false));
+    const state = flows.newSession()?.state();
+    expect(state?.projects.map((project) => project.id)).toEqual(["project"]);
+    expect(state?.selectedProjectID).toBe("project");
+    dispose();
+  });
+
   it("releases status mounts whenever creation and deletion flows are dismissed", async () => {
     const fixture = setup();
     const registry = fixture.runtime.effects.registry;

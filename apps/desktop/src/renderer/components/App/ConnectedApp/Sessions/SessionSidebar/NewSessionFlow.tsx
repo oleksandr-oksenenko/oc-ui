@@ -4,6 +4,7 @@ import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../../workspace-owner.ts";
 import type { LocationRef, OpenCodeClient, Project, SessionInfo } from "@opencode/client";
 import type { Data } from "@opencode/client/solid";
+import { ProjectID } from "@opencode/schema/project-id";
 import { useDialog } from "@opencode/ui/context/dialog";
 import { showToast, toaster } from "@opencode/ui/toast";
 import { createEffect, createSignal, on, onCleanup } from "solid-js";
@@ -87,9 +88,11 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     | { readonly id: ReturnType<typeof showToast>; readonly location?: LocationRef }
     | undefined;
 
+  // The global project is OpenCode's system fallback, not a user location.
   const projects = (): readonly NewSessionProject[] =>
     props.runtime.data.project
       .list()
+      .filter((project) => project.id !== ProjectID.global)
       .map((project) => projectOption(project, props.runtime.defaultLocation.workspaceID));
 
   const selectedProject = () => {
