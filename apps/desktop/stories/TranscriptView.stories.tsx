@@ -519,3 +519,64 @@ export const LongTranscriptSelectionPause: Story = {
     await expect(anchor.contains(selection.anchorNode)).toBe(true);
   },
 };
+
+// A single unbroken line guarantees horizontal overflow regardless of width.
+const wideOutputLine = `result:${"0123456789abcdef".repeat(40)}`;
+
+export const WideOutputScrolling: Story = {
+  args: {
+    messages: [
+      ...longTranscript,
+      {
+        id: "wide-shell",
+        type: "shell",
+        shellID: "wide",
+        time: { created: 1_000, completed: 1_001 },
+        command: "cat wide.txt",
+        status: "exited",
+        exit: 0,
+        output: {
+          output: wideOutputLine,
+          cursor: wideOutputLine.length,
+          size: wideOutputLine.length,
+          truncated: false,
+        },
+      },
+    ],
+    sessionStatus: "idle",
+    loading: false,
+  },
+  render: renderNarrowTranscript,
+  play: async ({ canvasElement }) => {
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view");
+    if (!view) throw new Error("Transcript viewport is missing");
+    await waitFor(() => expect(view).toHaveAttribute("aria-busy", "false"));
+
+    const row = canvasElement.querySelector<HTMLElement>('[data-message-id="wide-shell"]');
+    if (!row) throw new Error("Shell row is missing");
+    const trigger = row.querySelector<HTMLButtonElement>(".transcript-context-trigger");
+    if (!trigger) throw new Error("Shell trigger is missing");
+    await userEvent.click(trigger);
+
+    const pre = await waitFor(() => {
+      const candidate = row.querySelector<HTMLElement>(".transcript-tool-output");
+      if (!candidate) throw new Error("Shell output is not mounted");
+      return candidate;
+    });
+    // Containment must not swallow the output's own horizontal scrolling.
+    await waitFor(() => expect(pre.scrollWidth).toBeGreaterThan(pre.clientWidth + 4));
+    pre.scrollLeft = 40;
+    await expect(pre.scrollLeft).toBeGreaterThan(0);
+
+    // The row is skipped while offscreen and rendered again on return; its
+    // inner scroll container has to keep working.
+    const viewRect = view.getBoundingClientRect();
+    view.scrollTop = 0;
+    await waitFor(() => expect(row.getBoundingClientRect().top).toBeGreaterThan(viewRect.bottom));
+    row.scrollIntoView({ block: "center" });
+    await waitFor(() => expect(pre.scrollWidth).toBeGreaterThan(pre.clientWidth + 4));
+    pre.scrollLeft = 0;
+    pre.scrollLeft = 40;
+    await expect(pre.scrollLeft).toBeGreaterThan(0);
+  },
+};
