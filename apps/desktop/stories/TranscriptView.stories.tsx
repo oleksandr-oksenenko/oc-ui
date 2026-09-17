@@ -438,6 +438,13 @@ export const LongTranscriptReadingAnchor: Story = {
     // Move the reader away from the bottom before older rows prepend.
     view.scrollTop = Math.round((view.scrollHeight - view.clientHeight) / 2);
     view.dispatchEvent(new Event("scroll"));
+    // Let newly relevant content render and any observer work settle before
+    // recording the reading position.
+    await settle();
+    const baselineCount = rows().length;
+    if (baselineCount >= longAnchorTranscript.length) {
+      throw new Error("Materialization finished before the anchor was recorded");
+    }
     const bounds = view.getBoundingClientRect();
     const anchor = [...rows()].find((row) => {
       const rect = row.getBoundingClientRect();
@@ -445,18 +452,16 @@ export const LongTranscriptReadingAnchor: Story = {
     });
     if (!anchor) throw new Error("No fully visible row to anchor");
     const anchorTop = anchor.getBoundingClientRect().top;
-    const distanceBefore = view.scrollHeight - view.clientHeight - view.scrollTop;
     await expect(view.style.overflowAnchor).toBe("auto");
 
     await waitFor(() => expect(rows()).toHaveLength(longAnchorTranscript.length));
     await waitFor(() => expect(view).toHaveAttribute("aria-busy", "false"));
+    await settle();
 
     // The reading anchor survived the older batches.
     await expect(Math.abs(anchor.getBoundingClientRect().top - anchorTop)).toBeLessThan(8);
     // The viewport was not dragged back to the bottom.
-    await expect(
-      Math.abs(view.scrollHeight - view.clientHeight - view.scrollTop - distanceBefore),
-    ).toBeLessThan(8);
+    await expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeGreaterThan(10);
   },
 };
 

@@ -681,3 +681,34 @@
   border-radius: var(--oc-radius);
   background: var(--oc-surface-control);
 }
+
+/*
+ * Let the browser skip layout and paint for rows far from the viewport. The
+ * intrinsic block size stands in while a row is skipped; `auto` replaces it
+ * with the row's last rendered size after its first render. The estimates come
+ * from a rendered-height census: header-only rows 22px, user rows mean ~44px,
+ * assistant rows mean ~73px (medians 48px with long tails). Kept at the end of
+ * the file because these child selectors outrank the plain row rules above.
+ */
+.transcript-document > .transcript-message {
+  content-visibility: auto;
+}
+
+.transcript-document > .transcript-context-message,
+.transcript-document > .transcript-shell-message,
+.transcript-document > .transcript-skill-message,
+.transcript-document > .transcript-compaction {
+  contain-intrinsic-block-size: auto 24px;
+}
+
+.transcript-document > .transcript-timeline-row {
+  contain-intrinsic-block-size: auto 32px;
+}
+
+.transcript-document > .transcript-user-message {
+  contain-intrinsic-block-size: auto 40px;
+}
+
+.transcript-document > .transcript-assistant-message {
+  contain-intrinsic-block-size: auto 72px;
+}
