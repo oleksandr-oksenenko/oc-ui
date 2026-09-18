@@ -1,4 +1,6 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
+/* oxlint-disable effecttsgo/global-timers -- Storybook interaction tests poll rendered state. */
+/* oxlint-disable effecttsgo/new-promise -- Storybook interaction tests wait on frames and timers. */
 import { createMemo, createSignal } from "solid-js";
 import type { Decorator, Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
@@ -59,6 +61,66 @@ new file mode 100644
 
 const longPath =
   "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DeeplyNestedFeatureWithAnIntentionallyLongFileName.tsx";
+
+/** More files than the panel can show at once, to exercise the render window. */
+const manyFiles: readonly DiffFileData[] = Array.from({ length: 24 }, (_, index) => {
+  const name = `src/generated/file-${String(index).padStart(2, "0")}.ts`;
+  return {
+    file: name,
+    additions: 1,
+    deletions: 1,
+    status: "modified",
+    patch: `@@ -1 +1 @@\n-old line ${index}\n+new line ${index}\n`,
+  };
+});
+
+const gutterFiles: readonly DiffFileData[] = [
+  {
+    file: "src/generated/added.ts",
+    additions: 8,
+    deletions: 0,
+    status: "added",
+    patch: `@@ -0,0 +1,8 @@\n${Array.from({ length: 8 }, (_, index) => `+line ${index + 1}\n`).join("")}`,
+  },
+  {
+    file: "src/generated/reversed.ts",
+    additions: 8,
+    deletions: 0,
+    status: "added",
+    patch: `@@ -0,0 +1,8 @@\n${Array.from({ length: 8 }, (_, index) => `+other line ${index + 1}\n`).join("")}`,
+  },
+  {
+    file: "src/generated/mixed.ts",
+    additions: 2,
+    deletions: 2,
+    status: "modified",
+    patch: "@@ -1,4 +1,4 @@\n first\n-second\n-third\n+second changed\n+third changed\n fourth\n",
+  },
+];
+
+/** Center point of an element, in the frame's client coordinates. */
+const center = (element: Element) => {
+  const rect = element.getBoundingClientRect();
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+};
+
+/** Pointer events with explicit coordinates for Pierre's gutter drag. */
+const pointer = (target: Element, type: string, coords: { x: number; y: number }) => {
+  target.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+      pointerId: 1,
+      pointerType: "mouse",
+      isPrimary: true,
+      button: 0,
+      buttons: type === "pointerup" ? 0 : 1,
+      clientX: coords.x,
+      clientY: coords.y,
+    }),
+  );
+};
 
 const meta = {
   title: "Context/ContextPanel",
@@ -243,6 +305,174 @@ export const CollapseAll: Story = {
         const toggle = await canvas.findByRole("button", { name: `Collapse ${file.file}` });
         await expect(toggle).toHaveAttribute("aria-expanded", "true");
       }
+    });
+  },
+};
+
+export const VirtualizedList: Story = {
+  args: {
+    diff: { files: manyFiles, loading: false },
+  },
+  play: async ({ canvasElement, step }) => {
+    const viewport = () => canvasElement.querySelector<HTMLElement>(".diff-code-view");
+    const rendered = () => canvasElement.querySelectorAll("diffs-container").length;
+    const path = (index: number) =>
+      [...canvasElement.querySelectorAll<HTMLElement>(".diff-file-path")].find(
+        (node) => node.textContent === `src/generated/file-${String(index).padStart(2, "0")}.ts`,
+      );
+
+    await step("renders only the visible window", async () => {
+      await waitFor(() => expect(path(0)).not.toBeUndefined());
+      await waitFor(() => expect(rendered()).toBeLessThan(manyFiles.length));
+      await expect(path(0)).not.toBeUndefined();
+      await expect(path(manyFiles.length - 1)).toBeUndefined();
+    });
+
+    await step("renders later items after scrolling", async () => {
+      const scroller = viewport();
+      await expect(scroller).not.toBeNull();
+      scroller!.scrollTop = scroller!.scrollHeight;
+      await waitFor(() => expect(path(manyFiles.length - 1)).not.toBeUndefined());
+      await expect(path(0)).toBeUndefined();
+      await expect(rendered()).toBeLessThan(manyFiles.length);
+    });
+
+    await step("reuses the window after scrolling back", async () => {
+      const scroller = viewport();
+      await expect(scroller).not.toBeNull();
+      scroller!.scrollTop = 0;
+      await waitFor(() => expect(path(0)).not.toBeUndefined());
+      await expect(rendered()).toBeLessThan(manyFiles.length);
+    });
+  },
+};
+
+export const GutterRangeSelection: Story = {
+  args: {
+    diff: { files: gutterFiles, loading: false },
+  },
+  render: () => {
+    const [selection, setSelection] = createSignal("");
+    return (
+      <div
+        style={{ display: "flex", "flex-direction": "column", height: "100%", "min-height": "0" }}
+      >
+        <output data-testid="gutter-selection" style={{ flex: "0 0 auto", padding: "4px" }}>
+          {selection()}
+        </output>
+        <div style={{ flex: "1 1 auto", "min-height": "0" }}>
+          <ContextPanel
+            diff={{
+              files: gutterFiles,
+              loading: false,
+              review: {
+                comments: [],
+                onBeginComment: (_path, range) =>
+                  setSelection(
+                    `${range.start}:${range.side}-${range.end}:${range.endSide ?? range.side}`,
+                  ),
+              },
+            }}
+          />
+        </div>
+      </div>
+    );
+  },
+  play: async ({ canvasElement, step }) => {
+    type LineType = "change-addition" | "change-deletion";
+    const item = (name: string) =>
+      [...canvasElement.querySelectorAll("diffs-container")].find((container) =>
+        [...container.querySelectorAll(".diff-file-path")].some(
+          (node) => node.textContent === name,
+        ),
+      );
+    const line = (name: string, lineNumber: number, type: LineType) =>
+      item(name)?.shadowRoot?.querySelector<HTMLElement>(
+        `[data-column-number="${lineNumber}"][data-line-type="${type}"]`,
+      );
+    const utility = (name: string) =>
+      item(name)?.shadowRoot?.querySelector<HTMLElement>("[data-utility-button]");
+    const captured = () =>
+      canvasElement.querySelector('[data-testid="gutter-selection"]')?.textContent;
+
+    /**
+     * Worker highlighting replaces the item's shadow contents after the first
+     * frame. Wait until the DOM has stopped changing before querying it.
+     */
+    const settle = async (name: string) => {
+      let previous = -1;
+      await waitFor(
+        async () => {
+          const current = item(name)?.shadowRoot?.innerHTML.length ?? 0;
+          const stable = current > 0 && current === previous;
+          previous = current;
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return stable;
+        },
+        { timeout: 10_000 },
+      );
+    };
+
+    const drag = async (
+      name: string,
+      from: { line: number; type: LineType },
+      to: { line: number; type: LineType },
+    ) => {
+      await settle(name);
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const start = line(name, from.line, from.type);
+        const end = line(name, to.line, to.type);
+        if (!start || !end) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          continue;
+        }
+        const before = captured();
+        pointer(start, "pointermove", center(start));
+        // The utility is repositioned on a later frame, so let it move before
+        // reading its coordinates.
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const button = utility(name);
+        if (!button) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          continue;
+        }
+        pointer(button, "pointerdown", center(button));
+        pointer(end, "pointermove", center(end));
+        pointer(end, "pointerup", center(end));
+        const matched = await waitFor(() => expect(captured()).not.toBe(before)).then(
+          () => true,
+          () => false,
+        );
+        if (matched) return;
+      }
+      throw new TypeError(`Gutter drag for ${name} did not produce a selection`);
+    };
+
+    await step("captures a forward range", async () => {
+      await drag(
+        "src/generated/added.ts",
+        { line: 1, type: "change-addition" },
+        { line: 6, type: "change-addition" },
+      );
+      await expect(captured()).toBe("1:additions-6:additions");
+    });
+
+    await step("captures a reverse range", async () => {
+      await drag(
+        "src/generated/reversed.ts",
+        { line: 6, type: "change-addition" },
+        { line: 1, type: "change-addition" },
+      );
+      await expect(captured()).toBe("6:additions-1:additions");
+    });
+
+    await step("captures a cross-side range", async () => {
+      await drag(
+        "src/generated/mixed.ts",
+        { line: 2, type: "change-deletion" },
+        { line: 3, type: "change-addition" },
+      );
+      await expect(captured()).toBe("2:deletions-3:additions");
     });
   },
 };
