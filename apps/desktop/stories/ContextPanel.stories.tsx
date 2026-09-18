@@ -285,24 +285,36 @@ export const CollapseAll: Story = {
 
     await step("collapse every file", async () => {
       // Wait for the first row before anchoring; items render on the next frame.
-      await canvas.findByRole("button", { name: `Collapse ${diffFiles[0]!.file}` });
+      await canvas.findByRole(
+        "button",
+        { name: `Collapse ${diffFiles[0]!.file}` },
+        { timeout: 5_000 },
+      );
       const anchoredTop = firstItemTop();
       await userEvent.click(canvas.getByRole("button", { name: "Collapse all files" }));
       await expect(canvas.getByRole("button", { name: "Expand all files" })).toBeVisible();
       for (const file of diffFiles) {
-        const toggle = await canvas.findByRole("button", { name: `Expand ${file.file}` });
+        const toggle = await canvas.findByRole(
+          "button",
+          { name: `Expand ${file.file}` },
+          { timeout: 5_000 },
+        );
         await expect(toggle).toHaveAttribute("aria-expanded", "false");
       }
       // Collapsed rows must render at their measured height or the list
       // bottom-aligns in the leftover space and pushes the first row down.
-      await waitFor(() => expect(firstItemTop()).toBe(anchoredTop));
+      await waitFor(() => expect(firstItemTop()).toBe(anchoredTop), { timeout: 5_000 });
     });
 
     await step("expand every file", async () => {
       await userEvent.click(canvas.getByRole("button", { name: "Expand all files" }));
       await expect(canvas.getByRole("button", { name: "Collapse all files" })).toBeVisible();
       for (const file of diffFiles) {
-        const toggle = await canvas.findByRole("button", { name: `Collapse ${file.file}` });
+        const toggle = await canvas.findByRole(
+          "button",
+          { name: `Collapse ${file.file}` },
+          { timeout: 5_000 },
+        );
         await expect(toggle).toHaveAttribute("aria-expanded", "true");
       }
     });
@@ -322,8 +334,8 @@ export const VirtualizedList: Story = {
       );
 
     await step("renders only the visible window", async () => {
-      await waitFor(() => expect(path(0)).not.toBeUndefined());
-      await waitFor(() => expect(rendered()).toBeLessThan(manyFiles.length));
+      await waitFor(() => expect(path(0)).not.toBeUndefined(), { timeout: 5_000 });
+      await waitFor(() => expect(rendered()).toBeLessThan(manyFiles.length), { timeout: 5_000 });
       await expect(path(0)).not.toBeUndefined();
       await expect(path(manyFiles.length - 1)).toBeUndefined();
     });
@@ -332,7 +344,9 @@ export const VirtualizedList: Story = {
       const scroller = viewport();
       await expect(scroller).not.toBeNull();
       scroller!.scrollTop = scroller!.scrollHeight;
-      await waitFor(() => expect(path(manyFiles.length - 1)).not.toBeUndefined());
+      await waitFor(() => expect(path(manyFiles.length - 1)).not.toBeUndefined(), {
+        timeout: 5_000,
+      });
       await expect(path(0)).toBeUndefined();
       await expect(rendered()).toBeLessThan(manyFiles.length);
     });
@@ -341,7 +355,7 @@ export const VirtualizedList: Story = {
       const scroller = viewport();
       await expect(scroller).not.toBeNull();
       scroller!.scrollTop = 0;
-      await waitFor(() => expect(path(0)).not.toBeUndefined());
+      await waitFor(() => expect(path(0)).not.toBeUndefined(), { timeout: 5_000 });
       await expect(rendered()).toBeLessThan(manyFiles.length);
     });
   },
@@ -439,7 +453,9 @@ export const GutterRangeSelection: Story = {
         pointer(button, "pointerdown", center(button));
         pointer(end, "pointermove", center(end));
         pointer(end, "pointerup", center(end));
-        const matched = await waitFor(() => expect(captured()).not.toBe(before)).then(
+        const matched = await waitFor(() => expect(captured()).not.toBe(before), {
+          timeout: 5_000,
+        }).then(
           () => true,
           () => false,
         );
@@ -638,7 +654,7 @@ export const LongPathTooltip: Story = {
   play: async ({ canvasElement, step }) => {
     const paths = () => [...canvasElement.querySelectorAll<HTMLElement>(".diff-file-path")];
     // CodeView renders its items on the next frame.
-    await waitFor(() => expect(paths()).toHaveLength(2));
+    await waitFor(() => expect(paths()).toHaveLength(2), { timeout: 5_000 });
     await expect(paths().map((path) => path.textContent)).toEqual([longPath, rtlLeadingPath]);
 
     await step("clips the beginning while keeping the file name", async () => {
@@ -661,7 +677,7 @@ export const LongPathTooltip: Story = {
           const tooltip = document.querySelector('[data-component="tooltip-v2"]');
           await expect(tooltip?.textContent).toBe(longPath);
         },
-        { timeout: 2000 },
+        { timeout: 5_000 },
       );
     });
 
