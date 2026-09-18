@@ -766,8 +766,25 @@ describe.sequential("production browser app", () => {
     if (await page.getByLabel("Show context", { exact: true }).count())
       await page.getByLabel("Show context", { exact: true }).click();
     const diff = page.locator(".diff-code-view diffs-container").first();
-    await diff.locator('[data-column-number="1"][data-line-type="change-addition"]').hover();
-    await diff.locator("[data-utility-button]").click();
+    // Worker highlighting re-renders the item, which can detach the gutter
+    // button between hover and click. Retry until the editor is open.
+    const editor = page.getByLabel("Comment on working.txt");
+    await expect
+      .poll(
+        async () => {
+          if ((await editor.count()) > 0) return true;
+          await diff
+            .locator('[data-column-number="1"][data-line-type="change-addition"]')
+            .hover()
+            .catch(() => undefined);
+          const utility = diff.locator("[data-utility-button]");
+          if ((await utility.count()) === 0) return false;
+          await utility.click({ timeout: 1_000 }).catch(() => undefined);
+          return (await editor.count()) > 0;
+        },
+        { timeout: 20_000, interval: 200 },
+      )
+      .toBe(true);
     const review = "Browser review survives panel remount.";
     await page.getByLabel("Comment on working.txt").fill(review);
     await page.keyboard.press("Escape");
