@@ -3,6 +3,7 @@ import { Effect, Exit, Scope } from "effect";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { withTestWorkspace } from "../../../../test/workspace.ts";
+import { createSessionReads } from "../../../../opencode/session-reads.ts";
 import { createSessionInbox } from "./createSessionInbox.ts";
 
 type Input = Parameters<typeof createSessionInbox>[0];
@@ -27,6 +28,7 @@ function setup(mutate: Input["api"]["session"]["inbox"]["cancel"] = async () => 
       effects,
       selectedID,
       connected,
+      reads: createSessionReads(),
       data: {
         session: {
           pending: {

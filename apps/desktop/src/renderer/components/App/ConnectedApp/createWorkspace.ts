@@ -126,6 +126,7 @@ export function createWorkspaceModel(
     effects: runtime.effects,
     data: runtime.data,
     api: runtime.api,
+    reads: runtime.reads,
     selectedID: sessions.selectedID,
     connected,
   });

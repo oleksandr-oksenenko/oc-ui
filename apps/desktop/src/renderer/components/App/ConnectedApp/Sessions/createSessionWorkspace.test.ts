@@ -49,6 +49,7 @@ function setup(initial: readonly SessionInfo[]) {
       sync: vi.fn<SessionWorkspaceRuntime["sessions"]["sync"]>(async () => undefined),
       remove: (id: string) => setIDs((current) => current.filter((item) => item !== id)),
     },
+    memory: { touchSelection: vi.fn<SessionWorkspaceRuntime["memory"]["touchSelection"]>() },
     loader: { load: vi.fn<SessionWorkspaceRuntime["loader"]["load"]>(() => Effect.void) },
   };
   return {
@@ -78,6 +79,44 @@ function mount(fixture: ReturnType<typeof setup>) {
 }
 
 describe("createSessionWorkspace", () => {
+  it("records every selection path in the eviction policy", async () => {
+    const fixture = setup([session("one", 1), session("two", 2)]);
+    const { workspace, dispose } = mount(fixture);
+
+    await vi.waitFor(() =>
+      expect(fixture.runtime.memory.touchSelection).toHaveBeenCalledWith("two"),
+    );
+    workspace.select("one");
+    await vi.waitFor(() =>
+      expect(fixture.runtime.memory.touchSelection).toHaveBeenCalledWith("one"),
+    );
+    workspace.markCreated("fresh");
+    await vi.waitFor(() =>
+      expect(fixture.runtime.memory.touchSelection).toHaveBeenCalledWith("fresh"),
+    );
+    dispose();
+  });
+
+  it("requests the transcript on each selection, including a return", async () => {
+    const fixture = setup([session("one", 1), session("two", 2)]);
+    const { workspace, dispose } = mount(fixture);
+    await vi.waitFor(() => expect(workspace.transcriptLoading()).toBe(false));
+    const load = vi.mocked(fixture.runtime.loader.load);
+    load.mockClear();
+
+    workspace.select("one");
+    await vi.waitFor(() => expect(workspace.selectedID()).toBe("one"));
+    workspace.select("two");
+    await vi.waitFor(() => expect(workspace.selectedID()).toBe("two"));
+    workspace.select("one");
+    await vi.waitFor(() => expect(workspace.selectedID()).toBe("one"));
+
+    // The loader owns refetching; the workspace must ask it again on every
+    // selection, including a return after a family was evicted.
+    expect(load.mock.calls.map((call) => call[0])).toEqual(["one", "two", "one"]);
+    dispose();
+  });
+
   it("interrupts the selected running session and serializes repeated stops", async () => {
     const fixture = setup([session("one", 1)]);
     let resolveInterrupt!: () => void;

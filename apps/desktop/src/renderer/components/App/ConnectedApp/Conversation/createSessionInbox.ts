@@ -4,6 +4,7 @@ import { Effect, Semaphore } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { Accessor } from "solid-js";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
+import type { SessionReads } from "../../../../opencode/session-reads.ts";
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 
 /** The SDK owns inbox contents. The workspace owns mutation settlement and errors. */
@@ -11,6 +12,7 @@ export function createSessionInbox(input: {
   readonly effects: WorkspaceOwner;
   readonly data: { readonly session: Pick<ConnectedRuntime["data"]["session"], "pending"> };
   readonly api: { readonly session: Pick<ConnectedRuntime["api"]["session"], "inbox"> };
+  readonly reads: Pick<SessionReads, "track">;
   readonly selectedID: Accessor<string | undefined>;
   readonly connected: Accessor<boolean>;
 }) {
@@ -30,7 +32,10 @@ export function createSessionInbox(input: {
   };
   const refresh = Effect.fn("SessionInbox.refresh")(function* (sessionID: string) {
     input.data.session.pending.invalidate(sessionID);
-    yield* effects.request(() => input.data.session.pending.sync(sessionID));
+    yield* input.reads.track(
+      sessionID,
+      effects.request(() => input.data.session.pending.sync(sessionID)),
+    );
   });
   const reportError = (sessionID: string, message: string) =>
     Effect.sync(() => {

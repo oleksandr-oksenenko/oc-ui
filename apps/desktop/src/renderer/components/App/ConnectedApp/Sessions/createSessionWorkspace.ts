@@ -3,7 +3,7 @@ import type { DataSessionStatus } from "@opencode/client/solid";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect, Fiber, Semaphore } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { createEffect, createMemo, on, type Accessor } from "solid-js";
+import { createEffect, createMemo, on, untrack, type Accessor } from "solid-js";
 
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 
@@ -30,6 +30,7 @@ export type SessionWorkspaceRuntime = {
     };
   };
   readonly sessions: Pick<SessionCatalog, "ids" | "state" | "sync" | "remove">;
+  readonly memory: Pick<ConnectedRuntime["memory"], "touchSelection">;
   readonly loader: ConnectedRuntime["loader"];
 };
 
@@ -257,6 +258,14 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     selectedID();
     effects.registry.set(stopErrorAtom, undefined);
   });
+
+  // One observer covers every selection writer: direct selection, creation,
+  // catalog fallback, and clearing. Keep policy reads out of the dependency graph.
+  createEffect(
+    on(selectedID, (id) => {
+      untrack(() => input.runtime.memory.touchSelection(id));
+    }),
+  );
 
   createEffect(() => {
     if (input.runtime.sessions.state() !== "ready") return;

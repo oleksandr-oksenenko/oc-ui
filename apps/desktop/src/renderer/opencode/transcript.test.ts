@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { withTestWorkspace } from "../test/workspace.ts";
 import { deferred } from "../test/deferred.ts";
 import type { WorkspaceRequestError } from "../workspace-owner.ts";
+import { createSessionReads } from "./session-reads.ts";
 import { createTranscriptLoader } from "./transcript.ts";
 
 const makeData = (more: () => boolean) => {
@@ -19,15 +20,19 @@ const makeData = (more: () => boolean) => {
       message: { sync: syncMessages, more, loadMore },
     },
   };
-  return withTestWorkspace((effects) => ({
-    effects,
-    data,
-    syncSession,
-    syncPending,
-    syncMessages,
-    loadMore,
-    loader: createTranscriptLoader(effects, data),
-  }));
+  return withTestWorkspace((effects) => {
+    const reads = createSessionReads();
+    return {
+      effects,
+      data,
+      reads,
+      syncSession,
+      syncPending,
+      syncMessages,
+      loadMore,
+      loader: createTranscriptLoader(effects, data, reads),
+    };
+  });
 };
 
 type Fixture = ReturnType<typeof makeData>;
@@ -213,6 +218,54 @@ describe("createTranscriptLoader", () => {
     await Promise.all([first, queued, closing]);
     expect(closed).toBe(true);
     expect(fixture.syncMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces a session idle only after its last overlapping read settles", async () => {
+    const fixture = makeData(() => false);
+    const idle: string[] = [];
+    const stop = fixture.reads.onIdleChange((sessionID) => idle.push(sessionID));
+    const first = deferred();
+    const second = deferred();
+
+    const one = fixture.effects.runPromise(
+      fixture.reads.track(
+        "session",
+        Effect.promise(() => first.promise),
+      ),
+    );
+    const two = fixture.effects.runPromise(
+      fixture.reads.track(
+        "session",
+        Effect.promise(() => second.promise),
+      ),
+    );
+    expect(fixture.reads.active("session")).toBe(true);
+
+    first.resolve();
+    await one;
+    expect(fixture.reads.active("session")).toBe(true);
+    expect(idle).toEqual([]);
+
+    second.resolve();
+    await two;
+    expect(fixture.reads.active("session")).toBe(false);
+    expect(idle).toEqual(["session"]);
+    stop();
+  });
+
+  it("isolates a throwing settle observer and still notifies the rest", async () => {
+    const fixture = makeData(() => false);
+    const seen: string[] = [];
+    const stopThrowing = fixture.reads.onIdleChange(() => {
+      throw new Error("observer failed");
+    });
+    const stopRecording = fixture.reads.onIdleChange((sessionID) => seen.push(sessionID));
+
+    await load(fixture, "session");
+
+    expect(seen).toEqual(["session"]);
+    stopThrowing();
+    stopRecording();
   });
 
   it("releases idle session gates instead of accumulating workspace finalizers", async () => {

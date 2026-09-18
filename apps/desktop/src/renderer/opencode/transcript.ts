@@ -2,6 +2,7 @@ import type { Data } from "@opencode/client/solid";
 import { Effect, RcMap, Scope, Semaphore } from "effect";
 
 import type { WorkspaceOwner, WorkspaceRequestError } from "../workspace-owner.ts";
+import type { SessionReads } from "./session-reads.ts";
 
 type SessionTranscriptData = {
   readonly session: Pick<Data["session"], "sync"> & {
@@ -30,27 +31,31 @@ export type TranscriptLoader = {
 export function createTranscriptLoader(
   effects: WorkspaceOwner,
   data: SessionTranscriptData,
+  reads: SessionReads,
 ): TranscriptLoader {
   const gates = effects.runSync(RcMap.make({ lookup: () => Semaphore.make(1) }));
 
   const load = Effect.fn("loadTranscript")(function* (sessionID: string) {
     const gate = yield* RcMap.get(gates, sessionID);
     yield* gate.withPermits(1)(
-      Effect.gen(function* () {
-        yield* Effect.all(
-          [
-            effects.request(() => data.session.sync(sessionID)),
-            effects.request(() => data.session.pending.sync(sessionID)),
-            effects.request(() => data.session.message.sync(sessionID)),
-          ],
-          { concurrency: "unbounded" },
-        );
-        if (data.session.message.more(sessionID)) {
-          yield* effects.request((signal) =>
-            data.session.message.loadMore(sessionID, { all: true, signal }),
+      reads.track(
+        sessionID,
+        Effect.gen(function* () {
+          yield* Effect.all(
+            [
+              effects.request(() => data.session.sync(sessionID)),
+              effects.request(() => data.session.pending.sync(sessionID)),
+              effects.request(() => data.session.message.sync(sessionID)),
+            ],
+            { concurrency: "unbounded" },
           );
-        }
-      }),
+          if (data.session.message.more(sessionID)) {
+            yield* effects.request((signal) =>
+              data.session.message.loadMore(sessionID, { all: true, signal }),
+            );
+          }
+        }),
+      ),
     );
   });
 

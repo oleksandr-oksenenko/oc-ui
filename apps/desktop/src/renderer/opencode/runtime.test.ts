@@ -30,6 +30,7 @@ vi.mock("@opencode/client/solid", () => ({
   },
 }));
 vi.mock("./session-catalog", () => ({ createSessionCatalog: () => ({}) }));
+vi.mock("./session-memory", () => ({ createSessionMemory: () => ({ touchSelection: () => {} }) }));
 vi.mock("./vcs-diff", () => ({ createVcsDiffStore: () => ({}) }));
 vi.mock("./transcript", () => ({
   createTranscriptLoader: () => ({ load: () => Effect.void }),
