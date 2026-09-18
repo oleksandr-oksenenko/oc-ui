@@ -8,7 +8,7 @@ import { useDiffHighlight } from "../../../../../../ui/DiffHighlightProvider.tsx
 import { useTheme } from "../../../../../../ui/ThemeProvider.tsx";
 
 import type { DiffFileData, DiffReviewView } from "../DiffView.tsx";
-import { DiffFileHeader } from "./DiffFileHeader.tsx";
+import { DiffFileHeader } from "./DiffCodeView/DiffFileHeader.tsx";
 import {
   createDiffCodeViewItem,
   diffItemSignature,

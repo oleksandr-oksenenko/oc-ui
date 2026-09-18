@@ -142,7 +142,8 @@ describe("DiffCodeView", () => {
     expect(cleanUp).toHaveBeenCalledTimes(2);
   });
 
-  it("renders headers that toggle through the owner and restores focus after refresh", async () => {
+  it("keeps the focused header through a refresh and toggles through the owner", async () => {
+    const setItems = vi.spyOn(CodeView.prototype, "setItems");
     const onToggle = vi.fn<(path: string, expanded: boolean) => void>();
     const [files, setFiles] = createSignal<readonly DiffFileData[]>([file()]);
     const { host, dispose } = mount(() => (
@@ -160,19 +161,15 @@ describe("DiffCodeView", () => {
     expect(onToggle).toHaveBeenCalledWith("src/example.ts", false);
 
     setFiles([file({ patch: "@@ -1 +1 @@\n-old\n+changed\n" })]);
-    await waitFor(() => {
-      // Wait for the header to be replaced, not just for it to exist.
-      const next = host.querySelector<HTMLButtonElement>(
-        '[data-diff-file-toggle="src/example.ts"]',
-      );
-      expect(next).not.toBeNull();
-      expect(next).not.toBe(toggle);
-      expect(document.activeElement).toBe(next);
-    });
+    await waitFor(() => expect(setItems).toHaveBeenCalledTimes(2));
+    // The header root is reused, so the focused control survives the refresh.
+    expect(host.querySelector('[data-diff-file-toggle="src/example.ts"]')).toBe(toggle);
+    expect(document.activeElement).toBe(toggle);
     dispose();
   });
 
   it("does not steal focus after an unchanged refresh", async () => {
+    const setItems = vi.spyOn(CodeView.prototype, "setItems");
     const [files, setFiles] = createSignal<readonly DiffFileData[]>([file()]);
     const { host, dispose } = mount(() => (
       <DiffCodeView files={files()} expanded={() => true} onToggle={() => undefined} />
@@ -189,16 +186,14 @@ describe("DiffCodeView", () => {
     // An identical refresh republishes the same version, so it must not arm a
     // focus request that a later render could consume.
     setFiles([file()]);
-    await Promise.resolve();
+    await waitFor(() => expect(setItems).toHaveBeenCalledTimes(2));
 
     const elsewhere = document.createElement("button");
     document.body.append(elsewhere);
     elsewhere.focus();
 
     setFiles([file({ patch: "@@ -1 +1 @@\n-old\n+changed\n" })]);
-    await waitFor(() =>
-      expect(host.querySelector('[data-diff-file-toggle="src/example.ts"]')).not.toBe(toggle),
-    );
+    await waitFor(() => expect(setItems).toHaveBeenCalledTimes(3));
     expect(document.activeElement).toBe(elsewhere);
 
     elsewhere.remove();

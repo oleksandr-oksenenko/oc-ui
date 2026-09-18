@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { mount } from "../../../../../../test/mount.ts";
+import { mount } from "../../../../../../../test/mount.ts";
 
 import { DiffFileHeader } from "./DiffFileHeader.tsx";
 
