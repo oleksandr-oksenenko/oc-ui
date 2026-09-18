@@ -47,6 +47,9 @@ function typingTarget(target: EventTarget | null): boolean {
 const scrollKeys = new Set(["End", "PageDown", "ArrowDown", "ArrowUp", "PageUp", "Home"]);
 const downwardKeys = new Set(["End", "PageDown", "ArrowDown"]);
 const TOUCH_THRESHOLD = 8;
+// Matches the follow hook's settling window: growth within it is still pinned
+// to the bottom, so only a position that survives it is reported as lost.
+const POSITION_SETTLE_MS = 300;
 
 /** Wheel input that navigates the transcript, excluding zoom, pan, fields. */
 function navigationWheel(event: WheelEvent): boolean {
@@ -89,6 +92,11 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   };
   let positioning: Positioning | undefined;
   const [readerPaused, setReaderPaused] = createSignal(false);
+  // Whether the newest content is within the near-bottom threshold. Scrolls
+  // update it immediately; resize-driven reads wait out the follow policy's
+  // settling window so a lagging follow scroll cannot flash the control.
+  const [atLatest, setAtLatest] = createSignal(true);
+  let awayTimer: number | undefined;
   const working = () => props.sessionStatus === "running";
   const loading = createMemo(() => props.loading === true);
 
@@ -153,9 +161,47 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   // room left; otherwise it must be confirmed by real downward movement.
   const atBottom = () => !canScroll() || nearBottom();
 
+  const positioningSettled = () =>
+    positioning !== undefined &&
+    positioning.sessionID === props.sessionID &&
+    positioning.status !== "unpositioned";
+
+  const cancelAwayTimer = () => {
+    if (awayTimer === undefined) return;
+    clearTimeout(awayTimer);
+    awayTimer = undefined;
+  };
+
+  const markAtLatest = () => {
+    cancelAwayTimer();
+    setAtLatest(true);
+  };
+
+  // Reports settled geometry. Delayed reads wait out the follow policy's
+  // settling window, so a lagging follow scroll cannot flash the control; a
+  // deliberate reader scroll reports immediately.
+  const readGeometry = (delayAway: boolean) => {
+    if (!positioningSettled()) return;
+    if (atBottom()) {
+      markAtLatest();
+      return;
+    }
+    if (!delayAway) {
+      cancelAwayTimer();
+      setAtLatest(false);
+      return;
+    }
+    if (!atLatest() || awayTimer !== undefined) return;
+    awayTimer = window.setTimeout(() => {
+      awayTimer = undefined;
+      if (positioningSettled() && !atBottom()) setAtLatest(false);
+    }, POSITION_SETTLE_MS);
+  };
+
   const resumeAtBottom = () => {
     cancelScrollIntent();
     setReaderPaused(false);
+    markAtLatest();
     // Clear upstream follow state so a return to the bottom is deliberate.
     resume();
   };
@@ -164,6 +210,9 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     cancelResumeFrame();
     if (positioning !== undefined) {
       positioning = { sessionID: positioning.sessionID, status: "relinquished" };
+      // The reader owns the position now; report it even if the gesture
+      // arrives before the initial placement frame could run.
+      readGeometry(false);
     }
   };
 
@@ -175,6 +224,17 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     if (direction === "older") return;
     if (atBottom()) resumeAtBottom();
     else armScrollIntent();
+  };
+
+  // The control is one deliberate return to the newest content: it cancels
+  // initial positioning and resumes follow even while a selection is present.
+  // The viewport takes focus because the control unmounts on arrival, and a
+  // keyboard reader must not drop back to the document.
+  const scrollToLatest = (event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
+    const controlFocused = event.currentTarget === document.activeElement;
+    relinquishPositioning();
+    resumeAtBottom();
+    if (controlFocused) viewport?.focus({ preventScroll: true });
   };
 
   const handleWheel = (event: WheelEvent) => {
@@ -221,6 +281,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   // Created before the upstream hook's observer so a paused view can latch the
   // follow state before the hook's resize callback runs.
   const pauseObserver = new ResizeObserver(() => {
+    readGeometry(true);
     if (!readerPaused()) return;
     untrack(() => {
       if (canScroll()) pause();
@@ -232,6 +293,9 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     // clamping scroll; the reader pause stays authoritative until a deliberate
     // gesture resumes it.
     if (!readerPaused()) handleScroll();
+    // The hook has seen this scroll by now, so a stopped follow reports
+    // immediately while a layout scroll waits out the settling window.
+    readGeometry(!userScrolled());
     const baseline = scrollIntentBaseline;
     if (scrollIntentTimer === undefined || baseline === undefined) return;
     if (viewport !== undefined && viewport.scrollTop <= baseline) {
@@ -242,13 +306,14 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     if (canScroll() && nearBottom()) resumeAtBottom();
   };
 
-  const { contentRef, handleScroll, pause, resume, scrollRef } = createAutoScroll({
+  const { contentRef, handleScroll, pause, resume, scrollRef, userScrolled } = createAutoScroll({
     working: autoScrollActive,
     onUserInteracted: relinquishPositioning,
   });
 
   onCleanup(() => {
     cancelResumeFrame();
+    cancelAwayTimer();
     cancelScrollIntent();
     pauseObserver.disconnect();
     detachWheel?.();
@@ -286,6 +351,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
         cancelScrollIntent();
         touchStart = undefined;
         setReaderPaused(false);
+        markAtLatest();
       },
       { defer: true },
     ),
@@ -313,10 +379,14 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
       if (loading()) return;
       if (readerPaused() || selectionInViewport()) {
         positioning = { sessionID, status: "relinquished" };
+        // Declined positioning leaves the reader wherever layout placed them;
+        // report that settled geometry instead of the previous session's.
+        readGeometry(false);
         return;
       }
       positioning = { sessionID, status: "positioned" };
       resume();
+      readGeometry(false);
     });
     resumeFrame = frame;
   });
@@ -335,6 +405,9 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     <div
       ref={(element) => {
         viewport = element;
+        // A window resize can move the newest content out of view without
+        // resizing the document or firing a scroll.
+        pauseObserver.observe(element);
         // Bubble phase, registered before the upstream hook's wheel listener:
         // rejected gestures stop there without blocking descendant handlers,
         // which have already received the event.
@@ -403,6 +476,19 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
               <span>{props.workingLabel ?? "Working"}</span>
             </output>
           </Show>
+        </div>
+      </Show>
+      <Show when={!atLatest() && canScroll()}>
+        <div class="transcript-scroll-anchor">
+          <button
+            class="transcript-scroll-to-bottom"
+            type="button"
+            aria-label="Scroll to bottom"
+            title="Scroll to bottom"
+            onClick={scrollToLatest}
+          >
+            <Icon name="arrow-down-to-line" aria-hidden="true" />
+          </button>
         </div>
       </Show>
     </div>

@@ -755,6 +755,196 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows the return-to-latest control only while the newest content is out of view", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 20);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    const control = () => host.querySelector<HTMLButtonElement>(".transcript-scroll-to-bottom");
+    const scrollTo = (top: number) => {
+      view.scrollTop = top;
+      view.dispatchEvent(new Event("scroll"));
+    };
+    try {
+      frames.runAll();
+      expect(control()).toBeNull();
+
+      // The reader leaves the newest rows.
+      scrollTo(0);
+      expect(control()).not.toBeNull();
+
+      // Returning to the bottom hides the control again.
+      scrollTo(400);
+      expect(control()).toBeNull();
+
+      // A layout scroll without real movement is not a return to the bottom.
+      scrollTo(120);
+      expect(control()).not.toBeNull();
+      view.dispatchEvent(new Event("scroll"));
+      expect(control()).not.toBeNull();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("shows the control when idle content grows below the viewport", () => {
+    vi.useFakeTimers();
+    const resize = stubResizeObservers();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 20);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    let scrollHeight = 500;
+    Object.defineProperty(view, "scrollHeight", {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    const control = () => host.querySelector<HTMLButtonElement>(".transcript-scroll-to-bottom");
+    try {
+      frames.runAll();
+      // Let the hook's follow-settling window expire so growth is not followed.
+      vi.advanceTimersByTime(400);
+      view.scrollTop = 400;
+      view.dispatchEvent(new Event("scroll"));
+      expect(control()).toBeNull();
+
+      scrollHeight = 800;
+      resize.notify();
+      // Growth is not reported as lost until the follow policy's settling
+      // window passes.
+      expect(control()).toBeNull();
+      vi.advanceTimersByTime(300);
+      expect(control()).not.toBeNull();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows the control when the viewport shrinks below the reading position", () => {
+    vi.useFakeTimers();
+    const resize = stubResizeObservers();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 20);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    let clientHeight = 100;
+    Object.defineProperty(view, "clientHeight", {
+      get: () => clientHeight,
+      configurable: true,
+    });
+    const control = () => host.querySelector<HTMLButtonElement>(".transcript-scroll-to-bottom");
+    try {
+      frames.runAll();
+      vi.advanceTimersByTime(400);
+      view.scrollTop = 400;
+      view.dispatchEvent(new Event("scroll"));
+      expect(control()).toBeNull();
+
+      // A window resize shrinks the viewport; the document and scroll
+      // position are unchanged, and no scroll event fires.
+      clientHeight = 60;
+      resize.notify();
+      expect(control()).toBeNull();
+      vi.advanceTimersByTime(300);
+      expect(control()).not.toBeNull();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the control hidden when growth is followed to the bottom", () => {
+    vi.useFakeTimers();
+    const resize = stubResizeObservers();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 20);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    let scrollHeight = 500;
+    Object.defineProperty(view, "scrollHeight", {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    const control = () => host.querySelector<HTMLButtonElement>(".transcript-scroll-to-bottom");
+    try {
+      frames.runAll();
+      view.scrollTop = 400;
+      view.dispatchEvent(new Event("scroll"));
+      expect(control()).toBeNull();
+
+      // The upstream observer follows the growth; the settling read only sees
+      // the followed bottom.
+      scrollHeight = 800;
+      resize.notify();
+      expect(view.scrollTop).toBe(800);
+      expect(control()).toBeNull();
+      vi.advanceTimersByTime(300);
+      expect(control()).toBeNull();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it("stays hidden for a selection made at the bottom and returns to the latest content when used", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 20);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    const control = () => host.querySelector<HTMLButtonElement>(".transcript-scroll-to-bottom");
+    const scrollTo = (top: number) => {
+      view.scrollTop = top;
+      view.dispatchEvent(new Event("scroll"));
+    };
+    try {
+      frames.runAll();
+      scrollTo(400);
+
+      // Pausing the reader at the bottom does not report a lost position.
+      selectNodeContents(host.querySelector('[data-message-id="m10"]')!);
+      expect(control()).toBeNull();
+
+      // Leaving the bottom while paused offers the control.
+      scrollTo(120);
+      expect(control()).not.toBeNull();
+
+      // The control is a deliberate return even with the selection present.
+      control()!.focus();
+      control()!.click();
+      expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(10);
+      expect(control()).toBeNull();
+      expect(document.activeElement).toBe(view);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("does not resume while the user has an active selection", () => {
     stubResizeObserver();
     const frames = stubAnimationFrames();

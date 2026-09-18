@@ -416,6 +416,41 @@ export const LongTranscriptMaterialization: Story = {
   },
 };
 
+export const ReturnToLatest: Story = {
+  args: { messages: longTranscript, sessionStatus: "idle", loading: false },
+  render: renderConstrainedTranscript,
+  play: async ({ canvasElement }) => {
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view");
+    if (!view) throw new Error("Transcript viewport is missing");
+    await waitFor(() =>
+      expect(canvasElement.querySelectorAll("[data-message-id]")).toHaveLength(
+        longTranscript.length,
+      ),
+    );
+    await waitFor(() => expect(view).toHaveAttribute("aria-busy", "false"));
+    const control = () => canvasElement.querySelector<HTMLElement>(".transcript-scroll-to-bottom");
+    await expect(control()).toBeNull();
+
+    // The reader leaves the newest rows and receives the control.
+    view.scrollTop = 0;
+    view.dispatchEvent(new Event("scroll"));
+    const button = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>(".transcript-scroll-to-bottom");
+      if (!element) throw new Error("The return-to-latest control did not appear");
+      return element;
+    });
+
+    // Using it restores the bottom and dismisses the control; focus stays in
+    // the transcript because the control unmounts on arrival.
+    await userEvent.click(button);
+    await waitFor(() => expect(control()).toBeNull());
+    await waitFor(() =>
+      expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(2),
+    );
+    await expect(view).toHaveFocus();
+  },
+};
+
 export const LongTranscriptReadingAnchor: Story = {
   args: { messages: longAnchorTranscript, sessionStatus: "idle", loading: false },
   render: renderConstrainedTranscript,
