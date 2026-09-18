@@ -165,6 +165,30 @@ export function createReviewAnnotation(
   return wrapper;
 }
 
+const observedShadowRoots = new WeakSet<ShadowRoot>();
+
+/** Pierre's hover-only gutter button ships without an accessible name. */
+function labelGutterUtility(button: Element): void {
+  if (button.getAttribute("aria-label") !== null) return;
+  button.setAttribute("aria-label", "Add review comment");
+}
+
+function observeGutterUtility(shadow: ShadowRoot): void {
+  if (observedShadowRoots.has(shadow)) return;
+  observedShadowRoots.add(shadow);
+  new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (node.matches("[data-utility-button]")) labelGutterUtility(node);
+        for (const button of node.querySelectorAll("[data-utility-button]")) {
+          labelGutterUtility(button);
+        }
+      }
+    }
+  }).observe(shadow, { childList: true, subtree: true });
+}
+
 /** Add keyboard access and truthful labels to Pierre's rendered controls. */
 export function enhanceRenderedDiff(node: HTMLElement): void {
   const shadow = node.shadowRoot;
@@ -173,6 +197,11 @@ export function enhanceRenderedDiff(node: HTMLElement): void {
   for (const code of shadow.querySelectorAll<HTMLElement>("code[data-code]")) {
     code.tabIndex = 0;
   }
+
+  for (const button of shadow.querySelectorAll<HTMLElement>("[data-utility-button]")) {
+    labelGutterUtility(button);
+  }
+  observeGutterUtility(shadow);
 
   for (const button of shadow.querySelectorAll<HTMLElement>("[data-expand-button]")) {
     const label = button.hasAttribute("data-expand-all-button")

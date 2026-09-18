@@ -253,18 +253,35 @@ describe("enhanceRenderedDiff", () => {
     const all = document.createElement("button");
     all.dataset.expandButton = "";
     all.dataset.expandAllButton = "";
-    shadow.append(code, above, all);
+    const utility = document.createElement("button");
+    utility.dataset.utilityButton = "";
+    shadow.append(code, above, all, utility);
 
     enhanceRenderedDiff(container);
 
     expect(code.tabIndex).toBe(0);
     expect(above.getAttribute("aria-label")).toBe("Expand unchanged lines above");
     expect(all.getAttribute("aria-label")).toBe("Expand all unchanged lines");
+    expect(utility.getAttribute("aria-label")).toBe("Add review comment");
     expect(above.tabIndex).toBe(0);
 
     const click = vi.spyOn(above, "click");
     above.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(click).toHaveBeenCalledOnce();
+  });
+
+  it("labels a gutter utility button that appears after a render", async () => {
+    const container = document.createElement("div");
+    const shadow = container.attachShadow({ mode: "open" });
+    enhanceRenderedDiff(container);
+
+    const utility = document.createElement("button");
+    utility.dataset.utilityButton = "";
+    shadow.append(utility);
+
+    await vi.waitFor(() => {
+      expect(utility.getAttribute("aria-label")).toBe("Add review comment");
+    });
   });
 });
 
