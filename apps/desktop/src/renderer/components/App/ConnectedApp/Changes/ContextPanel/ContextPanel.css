@@ -116,13 +116,28 @@
   background: var(--oc-status-danger-surface);
 }
 
-.diff-comparison-select[data-component="select-v2"] {
-  width: auto;
+.diff-summary [data-component="select-v2-root"] {
   min-width: 0;
   max-width: 100%;
   flex: 0 1 auto;
   margin-right: auto;
+}
+
+.diff-comparison-select[data-component="select-v2"] {
+  width: 100%;
+  min-width: 0;
   font-family: var(--oc-font-sans);
+}
+
+.diff-comparison-select [data-slot="select-v2-value"] {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.diff-comparison-select [data-slot="select-v2-value-text"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .diff-summary-changes,

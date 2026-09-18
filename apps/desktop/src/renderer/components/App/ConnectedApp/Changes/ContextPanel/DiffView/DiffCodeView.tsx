@@ -282,7 +282,11 @@ export function DiffCodeView(props: DiffCodeViewProps) {
   createEffect(on(items, () => syncItems(), { defer: true }));
   createEffect(on(selection, () => syncSelection(), { defer: true }));
   createEffect(
-    on([() => theme(), gutterEnabled], () => view?.setOptions(optionsFor()), { defer: true }),
+    on(
+      [() => theme(), () => props.review !== undefined, gutterEnabled],
+      () => view?.setOptions(optionsFor()),
+      { defer: true },
+    ),
   );
   createEffect(() => {
     const ids = new Set(props.files.map((file) => file.file));

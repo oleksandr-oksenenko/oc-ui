@@ -7,6 +7,9 @@ import { stubResizeObserver } from "../../../../../test/resize-observer.ts";
 import { DiffView } from "./DiffView.tsx";
 import type { DiffFileData } from "./DiffView.tsx";
 
+/** CodeView renders on the next frame and highlights asynchronously. */
+const waitFor = <T,>(assertion: () => T | Promise<T>) => vi.waitFor(assertion, { timeout: 5_000 });
+
 const malformedFile: DiffFileData = {
   file: "src/example.ts",
   patch: "",
@@ -126,7 +129,7 @@ describe("DiffView", () => {
 
     expect(host.textContent).toContain("The server is unavailable.");
     expect(host.textContent).toContain("1 file");
-    await vi.waitFor(() => expect(host.textContent).toContain("src/example.ts"));
+    await waitFor(() => expect(host.textContent).toContain("src/example.ts"));
     const retry = Array.from(host.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Retry",
     );
@@ -144,12 +147,12 @@ describe("DiffView", () => {
       host.querySelector<HTMLButtonElement>(`[aria-label$=" ${path}"]`);
     const summaryToggle = () => host.querySelector<HTMLButtonElement>(".diff-collapse-toggle");
 
-    await vi.waitFor(() => expect(trigger("src/opened.ts")).not.toBeNull());
+    await waitFor(() => expect(trigger("src/opened.ts")).not.toBeNull());
     expect(trigger("src/opened.ts")?.getAttribute("aria-expanded")).toBe("true");
     expect(trigger("src/closed.ts")?.getAttribute("aria-expanded")).toBe("false");
 
     summaryToggle()?.click();
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(trigger("src/opened.ts")?.getAttribute("aria-label")).toBe("Expand src/opened.ts"),
     );
     expect(summaryToggle()?.getAttribute("aria-label")).toBe("Expand all files");
@@ -157,7 +160,7 @@ describe("DiffView", () => {
     expect(trigger("src/closed.ts")?.getAttribute("aria-expanded")).toBe("false");
 
     summaryToggle()?.click();
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(trigger("src/closed.ts")?.getAttribute("aria-label")).toBe("Collapse src/closed.ts"),
     );
     expect(summaryToggle()?.getAttribute("aria-label")).toBe("Collapse all files");
@@ -165,7 +168,7 @@ describe("DiffView", () => {
     expect(trigger("src/closed.ts")?.getAttribute("aria-expanded")).toBe("true");
 
     trigger("src/closed.ts")?.click();
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(trigger("src/closed.ts")?.getAttribute("aria-expanded")).toBe("false"),
     );
     expect(summaryToggle()?.getAttribute("aria-label")).toBe("Collapse all files");
@@ -188,15 +191,15 @@ describe("DiffView", () => {
       return <DiffView files={files()} loading={false} />;
     });
 
-    await vi.waitFor(() => expect(host.querySelector(".diff-collapse-toggle")).not.toBeNull());
+    await waitFor(() => expect(host.querySelector(".diff-collapse-toggle")).not.toBeNull());
     host.querySelector<HTMLButtonElement>(".diff-collapse-toggle")?.click();
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(host.querySelector('[aria-label="Expand src/refresh.ts"]')).not.toBeNull(),
     );
 
     update([{ ...file, additions: 2 }]);
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(host.querySelector('[aria-label="Expand src/refresh.ts"]')).not.toBeNull(),
     );
     expect(

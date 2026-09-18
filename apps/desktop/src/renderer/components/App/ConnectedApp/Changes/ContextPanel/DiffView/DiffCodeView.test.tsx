@@ -9,6 +9,9 @@ import { DiffHighlightProvider } from "../../../../../../ui/DiffHighlightProvide
 import type { DiffFileData, DiffReviewView } from "../DiffView.tsx";
 import { DiffCodeView } from "./DiffCodeView.tsx";
 
+/** CodeView renders on the next frame and highlights asynchronously. */
+const waitFor = <T,>(assertion: () => T | Promise<T>) => vi.waitFor(assertion, { timeout: 5_000 });
+
 // Any pool method a renderer calls is a no-op; this test only needs identity.
 const fakeManager = new Proxy(WorkerPoolManager.prototype, {
   get: () => () => undefined,
@@ -146,7 +149,7 @@ describe("DiffCodeView", () => {
       <DiffCodeView files={files()} expanded={() => true} onToggle={onToggle} />
     ));
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(host.querySelector('[data-diff-file-toggle="src/example.ts"]')).not.toBeNull(),
     );
     const toggle = host.querySelector<HTMLButtonElement>(
@@ -157,7 +160,7 @@ describe("DiffCodeView", () => {
     expect(onToggle).toHaveBeenCalledWith("src/example.ts", false);
 
     setFiles([file({ patch: "@@ -1 +1 @@\n-old\n+changed\n" })]);
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const next = host.querySelector<HTMLButtonElement>(
         '[data-diff-file-toggle="src/example.ts"]',
       );
@@ -173,14 +176,14 @@ describe("DiffCodeView", () => {
       <DiffCodeView files={[file()]} expanded={() => expanded()} onToggle={() => undefined} />
     ));
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(host.querySelector("diffs-container")?.hasAttribute("data-diff-file-collapsed")).toBe(
         true,
       );
     });
 
     setExpanded(true);
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(host.querySelector("diffs-container")?.hasAttribute("data-diff-file-collapsed")).toBe(
         false,
       );
@@ -198,13 +201,13 @@ describe("DiffCodeView", () => {
       />
     ));
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(host.querySelector<HTMLElement>(".diff-review-annotation")?.dataset.commentId).toBe(
         "comment-1",
       );
     });
     expect(host.querySelector(".diff-review-text")?.textContent).toBe("Check this");
-    await vi.waitFor(() => {
+    await waitFor(() => {
       const fallback = host.querySelector<HTMLElement>(".diff-file-unavailable");
       expect(fallback).not.toBeNull();
       expect(fallback?.shadowRoot?.textContent).toContain("This patch could not be displayed.");
