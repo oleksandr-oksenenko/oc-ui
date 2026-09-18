@@ -131,7 +131,17 @@ new test that merely restates its CSS or markup.
 - **Electron:** launch with `pnpm dev` from the root for native integration and
   host-dependent layout. The in-app browser cannot attach to the Electron window.
   Use existing WebdriverIO acceptance for repeatable DOM interaction and computer
-  use for exploratory native checks.
+  use for exploratory native checks. Every `pnpm dev` launch exposes localhost
+  profiling attach points (set a port variable to an empty string to opt out):
+  - renderer: Chrome DevTools Protocol at `http://127.0.0.1:9222` (`REMOTE_DEBUGGING_PORT`)
+  - main process: V8 inspector at `127.0.0.1:9229` (`V8_INSPECTOR_PORT`)
+  - built-in OpenCode child: V8 inspector at `127.0.0.1:9230` (`OCUI_OPENCODE_INSPECTOR_PORT`)
+
+  Attach with `chrome://inspect` or any CDP client for CPU profiles, heap
+  snapshots, and traces. Automatic defaults are scoped to real development
+  launches; the packaged app does not enable them automatically. An explicit
+  port variable can still enable one for other unpackaged runs.
+
 - **Packaged acceptance:** `pnpm test:acceptance:mac` builds and tests the macOS
   arm64 app using WebdriverIO, the real pinned OpenCode server, disposable state,
   and a scripted local provider. It is separate from `pnpm test` and `pnpm ready`.

@@ -39,11 +39,12 @@ const children: Child[] = [];
 const healthy = (pid = 4242, version = LOCAL_OPENCODE_VERSION): Response =>
   Response.json({ healthy: true, version, pid });
 const runtimes: ManagedRuntime.ManagedRuntime<LocalOpenCode, never>[] = [];
-const create = async () => {
+const create = async (options: { inspectorPort?: string } = {}) => {
   const runtime = ManagedRuntime.make(
     LocalOpenCode.layer({
       userDataPath: "/private/test-ocui",
       workerPath: "/private/runtime/opencode-worker.mjs",
+      inspectorPort: options.inspectorPort,
     }),
   );
   runtimes.push(runtime);
@@ -120,6 +121,19 @@ describe("owned OpenCode worker", () => {
     await Promise.all([shutdown, concurrentShutdown]);
     expect(service.needsQuitConfirmation()).toBe(false);
     await expect(service.connect()).rejects.toMatchObject({ reason: "start-failed" });
+  });
+
+  it("forwards a development inspector port to the built-in worker", async () => {
+    const service = await create({ inspectorPort: "9230" });
+    const connected = service.connect();
+    expect(fork).toHaveBeenCalledExactlyOnceWith("/private/runtime/opencode-worker.mjs", [], {
+      serviceName: "Ocui built-in OpenCode",
+      stdio: "pipe",
+      execArgv: ["--inspect=9230"],
+    });
+    child().listen();
+    await connected;
+    await service.shutdown();
   });
 
   it("keeps shared startup alive when one caller cancels its wait", async () => {

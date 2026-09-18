@@ -12,6 +12,15 @@ const configDirectory = dirname(fileURLToPath(import.meta.url));
 const rendererDirectory = resolve(configDirectory, "src/renderer");
 const runtimeDirectory = resolve(configDirectory, "out/opencode-runtime");
 
+// Every `electron-vite dev` launch exposes localhost profiling attach points
+// through the env variables electron-vite forwards to Electron: the renderer
+// over the Chrome DevTools Protocol and the main process over the V8 inspector.
+// `??=` keeps an explicit override, and an empty string disables one.
+if (process.env.NODE_ENV_ELECTRON_VITE === "development") {
+  process.env.REMOTE_DEBUGGING_PORT ??= "9222";
+  process.env.V8_INSPECTOR_PORT ??= "9229";
+}
+
 export default defineConfig({
   main: {
     plugins: [

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { utilityProcess } from "electron";
-import type { UtilityProcess } from "electron";
+import type { ForkOptions, UtilityProcess } from "electron";
 import { Context, Deferred, Effect, Fiber, Layer, Option, Schema, Scope } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http";
 
@@ -49,7 +49,12 @@ export class LocalOpenCode extends Context.Service<
     readonly onUnavailable: (listener: () => void) => () => void;
   }
 >()("desktop/main/LocalOpenCode") {
-  static layer(options: { readonly userDataPath: string; readonly workerPath: string }) {
+  static layer(options: {
+    readonly userDataPath: string;
+    readonly workerPath: string;
+    /** Development-only V8 inspector port for the built-in server child. */
+    readonly inspectorPort?: string;
+  }) {
     return Layer.effect(
       LocalOpenCode,
       Effect.gen(function* () {
@@ -114,12 +119,15 @@ export class LocalOpenCode extends Context.Service<
               }
               return yield* restore(Deferred.await(current.ready));
             }
+            const forkOptions: ForkOptions = {
+              serviceName: "Ocui built-in OpenCode",
+              stdio: "pipe",
+            };
+            if (options.inspectorPort !== undefined) {
+              forkOptions.execArgv = [`--inspect=${options.inspectorPort}`];
+            }
             const child = yield* Effect.try({
-              try: () =>
-                utilityProcess.fork(options.workerPath, [], {
-                  serviceName: "Ocui built-in OpenCode",
-                  stdio: "pipe",
-                }),
+              try: () => utilityProcess.fork(options.workerPath, [], forkOptions),
               catch: () => LocalOpenCodeUnavailableError.fromReason("start-failed"),
             });
             const password = randomBytes(32).toString("base64url");

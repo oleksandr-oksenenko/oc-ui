@@ -19,6 +19,7 @@ import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electr
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 
 import { BrowserHost } from "./browser/host.ts";
+import { resolveDevProfiling } from "./dev-profiling.ts";
 import { BROWSER_CHANNELS, BrowserRequest } from "../shared/browser-api.ts";
 
 import type { SaveTargetInput } from "../shared/desktop-api.ts";
@@ -41,6 +42,23 @@ const appSessionData = resolveSessionDataPath(appUserData);
 mkdirSync(appSessionData, { recursive: true });
 app.setPath("userData", appUserData);
 app.setPath("sessionData", appSessionData);
+
+// Development only: expose localhost profiling attach points. The renderer is
+// reachable through the Chrome DevTools Protocol, the main process through the
+// V8 inspector (electron-vite forwards V8_INSPECTOR_PORT), and the built-in
+// OpenCode child through its own inspector. Automatic defaults require a real
+// development launch; an explicit port variable opts in elsewhere. A packaged
+// app enables none of this, and an empty port variable disables one.
+const profilingPorts = resolveDevProfiling({
+  isPackaged: app.isPackaged,
+  developmentUrl: process.env.ELECTRON_RENDERER_URL,
+  remoteDebuggingPort: process.env.REMOTE_DEBUGGING_PORT,
+  openCodeInspectorPort: process.env.OCUI_OPENCODE_INSPECTOR_PORT,
+  hasRemoteDebuggingSwitch: app.commandLine.hasSwitch("remote-debugging-port"),
+});
+if (profilingPorts.remoteDebuggingPort !== undefined) {
+  app.commandLine.appendSwitch("remote-debugging-port", profilingPorts.remoteDebuggingPort);
+}
 
 // Must run before app.ready so Chromium knows this is a secure, standard origin.
 protocol.registerSchemesAsPrivileged([
@@ -384,6 +402,7 @@ const start = async (): Promise<void> => {
       LocalOpenCode.layer({
         userDataPath: app.getPath("userData"),
         workerPath: resolveDesktopRuntimeEnvironment().workerPath,
+        inspectorPort: profilingPorts.openCodeInspectorPort,
       }),
     ),
   );
