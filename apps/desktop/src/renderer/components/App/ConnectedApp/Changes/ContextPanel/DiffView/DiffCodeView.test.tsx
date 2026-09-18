@@ -161,12 +161,47 @@ describe("DiffCodeView", () => {
 
     setFiles([file({ patch: "@@ -1 +1 @@\n-old\n+changed\n" })]);
     await waitFor(() => {
+      // Wait for the header to be replaced, not just for it to exist.
       const next = host.querySelector<HTMLButtonElement>(
         '[data-diff-file-toggle="src/example.ts"]',
       );
       expect(next).not.toBeNull();
+      expect(next).not.toBe(toggle);
       expect(document.activeElement).toBe(next);
     });
+    dispose();
+  });
+
+  it("does not steal focus after an unchanged refresh", async () => {
+    const [files, setFiles] = createSignal<readonly DiffFileData[]>([file()]);
+    const { host, dispose } = mount(() => (
+      <DiffCodeView files={files()} expanded={() => true} onToggle={() => undefined} />
+    ));
+
+    await waitFor(() =>
+      expect(host.querySelector('[data-diff-file-toggle="src/example.ts"]')).not.toBeNull(),
+    );
+    const toggle = host.querySelector<HTMLButtonElement>(
+      '[data-diff-file-toggle="src/example.ts"]',
+    );
+    toggle?.focus();
+
+    // An identical refresh republishes the same version, so it must not arm a
+    // focus request that a later render could consume.
+    setFiles([file()]);
+    await Promise.resolve();
+
+    const elsewhere = document.createElement("button");
+    document.body.append(elsewhere);
+    elsewhere.focus();
+
+    setFiles([file({ patch: "@@ -1 +1 @@\n-old\n+changed\n" })]);
+    await waitFor(() =>
+      expect(host.querySelector('[data-diff-file-toggle="src/example.ts"]')).not.toBe(toggle),
+    );
+    expect(document.activeElement).toBe(elsewhere);
+
+    elsewhere.remove();
     dispose();
   });
 
@@ -188,6 +223,29 @@ describe("DiffCodeView", () => {
         false,
       );
     });
+    dispose();
+  });
+
+  it("keeps the annotation editor mounted while its body changes", async () => {
+    const [body, setBody] = createSignal("Draft");
+    const { host, dispose } = mount(() => (
+      <DiffCodeView
+        files={[file()]}
+        review={review({
+          editingCommentID: "comment-1",
+          comments: [{ ...comment, body: body() }],
+        })}
+        expanded={() => true}
+        onToggle={() => undefined}
+      />
+    ));
+
+    await waitFor(() => expect(host.querySelector(".diff-review-editor")).not.toBeNull());
+    const editor = host.querySelector(".diff-review-editor");
+    setBody("Draft updated");
+    await Promise.resolve();
+    // A body-only change must not replace the textarea and its caret.
+    expect(host.querySelector(".diff-review-editor")).toBe(editor);
     dispose();
   });
 

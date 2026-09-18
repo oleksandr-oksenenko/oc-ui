@@ -1,5 +1,5 @@
 import { CodeView } from "@pierre/diffs";
-import type { CodeViewOptions } from "@pierre/diffs";
+import type { CodeViewItem, CodeViewOptions } from "@pierre/diffs";
 import { createEffect, createMemo, createSignal, on, onCleanup, untrack } from "solid-js";
 import { render } from "solid-js/web";
 
@@ -66,8 +66,13 @@ const UNSAFE_CSS = `
     outline-offset: var(--oc-focus-ring-inset-offset);
   }
 
-  :host([data-diff-file-unavailable]) [data-line] {
+  :host(.diff-file-unavailable) [data-line],
+  :host(.diff-file-unavailable) [data-line] span {
     color: var(--oc-text-muted);
+  }
+
+  :host(.diff-file-unavailable) [data-utility-button] {
+    display: none;
   }
 
   [data-gutter-buffer="annotation"] {
@@ -174,7 +179,7 @@ export function DiffCodeView(props: DiffCodeViewProps) {
     prepared().map(({ file, renderData }) => {
       const expanded = props.expanded(file);
       const signature = diffItemSignature({
-        path: file.file,
+        file,
         renderData,
         expanded,
         review: props.review,
@@ -210,6 +215,7 @@ export function DiffCodeView(props: DiffCodeViewProps) {
     enableGutterUtility: gutterEnabled(),
     enableLineSelection: props.review !== undefined,
     controlledSelection: false,
+    lineHoverHighlight: "both",
     unsafeCSS: UNSAFE_CSS,
     renderCustomHeader: (_input, context) => {
       const file = filesById().get(context.item.id);
@@ -243,21 +249,36 @@ export function DiffCodeView(props: DiffCodeViewProps) {
       syncGutterCommentIcons(container);
       if (pendingFocusPath !== context.item.id) return;
       pendingFocusPath = undefined;
-      container.querySelector<HTMLElement>("[data-diff-file-toggle]")?.focus();
+      container
+        .querySelector<HTMLElement>("[data-diff-file-toggle]")
+        ?.focus({ preventScroll: true });
     },
   });
 
-  const captureFocus = (): void => {
+  /**
+   * Arm focus restoration only when the focused header's item is about to be
+   * republished. An unchanged `setItems` does not re-render, so arming there
+   * would leave a request that a later unrelated render could consume.
+   */
+  const captureFocus = (nextItems: readonly CodeViewItem<AnnotationMetadata>[]): void => {
+    pendingFocusPath = undefined;
     const active = document.activeElement;
     if (!(active instanceof HTMLElement)) return;
     const path = active.dataset.diffFileToggle;
-    if (path !== undefined) pendingFocusPath = path;
+    if (path === undefined) return;
+    const current = view?.getItem(path)?.version;
+    const next = nextItems.find((item) => item.id === path)?.version;
+    if (next !== undefined && next !== current) pendingFocusPath = path;
   };
 
   const syncItems = (): void => {
     if (!view) return;
-    captureFocus();
-    view.setItems(items());
+    const nextItems = items();
+    captureFocus(nextItems);
+    view.setItems(nextItems);
+    // Re-publish the app-owned selection in case Pierre dropped it when the
+    // selected item left the item list and then returned.
+    syncSelection();
   };
 
   const syncSelection = (): void => {

@@ -49,19 +49,24 @@ function selectionKey(selection: { start: number; end: number; side?: string; en
  * letting Pierre replace the textarea and its caret.
  */
 export function diffItemSignature(input: {
-  readonly path: string;
+  readonly file: DiffFileData;
   readonly renderData: DiffRenderData | undefined;
   readonly expanded: boolean;
   readonly review: DiffReviewView | undefined;
 }): string {
   const review = input.review;
-  const comments = commentsForPath(review, input.path);
+  const comments = commentsForPath(review, input.file.file);
   const editing = comments.some((comment) => comment.id === review?.editingCommentID)
     ? (review?.editingCommentID ?? "")
     : "";
-  const selection = review?.selectedLines?.path === input.path ? review.selectedLines.range : null;
+  const selection =
+    review?.selectedLines?.path === input.file.file ? review.selectedLines.range : null;
   return [
-    input.renderData?.fileDiff.cacheKey ?? `unavailable:${input.path}`,
+    input.renderData?.fileDiff.cacheKey ?? `unavailable:${input.file.file}`,
+    // The header shows these server values, so they must republish the item
+    // even when the patch content itself is unchanged.
+    input.file.status,
+    `${input.file.additions}:${input.file.deletions}`,
     input.expanded ? "expanded" : "collapsed",
     review === undefined ? "plain" : "review",
     editing,

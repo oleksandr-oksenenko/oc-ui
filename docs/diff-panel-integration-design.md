@@ -150,7 +150,8 @@ bottom-aligns in the leftover space and pushes the first row down. Every item
 therefore ends with the same 8 px — the body's bottom padding, or a collapsed
 header's restored padding — so `layout.gap` is 0 and that trailing 8 px is the
 card gap. The card border is a pointer-transparent shadow pseudo-element that
-stops above it, which keeps every header exactly 30 px in both states. The
+stops above it, which keeps every header exactly 30 px in both states. Line
+hover highlighting stays `both`, matching the previous per-file renderer. The
 CodeView root is the scroll viewport
 (`oc-scrollable`), is exposed as `role="region"` with an accessible
 "Changed files" label, and is the only scroll owner while files exist.
@@ -265,8 +266,14 @@ Coverage:
 - collapse and expand from the header, Collapse all / Expand all across mixed
   default expansion, the summary label after a single file toggle, and
   collapse survival across a same-path refresh;
-- refresh, replacement, removal, and focus restoration through `onPostRender`;
-- collapsed, off-screen, and disposed `CodeView` cleanup.
+- focus restoration to a replaced header, and no restoration after an
+  unchanged refresh once focus moved elsewhere;
+- collapsed-row markers and `CodeView` construction, recreation on a highlight
+  manager change, and disposal cleanup.
+
+Removal and off-screen behavior are covered by the browser acceptance
+scenario that deletes and recreates a file, and by `CodeView`'s own element
+pooling; no unit test drives the virtualization window directly.
 
 The ContextPanel, AppShell, and AMOLED stories use real unified patch fixtures,
 including mixed `defaultExpanded` values and a fallback row. Browser

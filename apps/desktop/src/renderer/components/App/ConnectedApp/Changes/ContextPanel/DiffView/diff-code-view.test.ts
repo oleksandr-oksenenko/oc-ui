@@ -28,7 +28,7 @@ const review = (overrides: Partial<DiffReviewView> = {}): DiffReviewView => ({
 describe("diffItemSignature", () => {
   const prepared = prepareDiffRender(file());
   const base = {
-    path: "src/example.ts",
+    file: file(),
     renderData: prepared,
     expanded: true,
     review: review({
@@ -71,6 +71,15 @@ describe("diffItemSignature", () => {
         renderData: prepareDiffRender(file({ patch: "@@ -1 +1 @@\n-old\n+changed\n" })),
       }),
     ).not.toBe(diffItemSignature(base));
+  });
+
+  it("changes when only the server totals or status change", () => {
+    expect(diffItemSignature({ ...base, file: file({ additions: 5 }) })).not.toBe(
+      diffItemSignature(base),
+    );
+    expect(diffItemSignature({ ...base, file: file({ status: "deleted" }) })).not.toBe(
+      diffItemSignature(base),
+    );
   });
 
   it("keeps the editing state specific to the file that owns the comment", () => {
