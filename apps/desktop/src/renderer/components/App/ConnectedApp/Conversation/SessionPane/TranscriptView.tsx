@@ -67,6 +67,8 @@ export type TranscriptViewProps = {
   readonly sessionID: string;
   /** Resolves `file:` images in assistant Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
+  /** Filesystem root of the session; tool path parameters inside it are shown relative. */
+  readonly directory?: string;
   readonly annotationRootRef?: (element: HTMLDivElement) => (() => void) | void;
   readonly onOpenAnnotation?: UserMessageProps["onOpenAnnotation"];
   readonly messages: readonly SessionMessageInfo[];
@@ -505,7 +507,10 @@ function isRenderableMessage(message: SessionMessageInfo): message is Renderable
 
 function renderMessage(
   message: RenderableMessage,
-  props: Pick<TranscriptViewProps, "sessionStatus" | "onOpenAnnotation" | "readFileImage">,
+  props: Pick<
+    TranscriptViewProps,
+    "sessionStatus" | "onOpenAnnotation" | "readFileImage" | "directory"
+  >,
 ): JSX.Element {
   switch (message.type) {
     case "user":
@@ -516,6 +521,7 @@ function renderMessage(
           message={message}
           sessionStatus={props.sessionStatus}
           readFileImage={props.readFileImage}
+          directory={props.directory}
         />
       );
     case "shell":

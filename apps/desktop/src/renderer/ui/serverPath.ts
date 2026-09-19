@@ -46,6 +46,21 @@ export function serverPathChild(directory: string, relativeEntry: string): strin
   return `${base}${separator}${child}`;
 }
 
+/**
+ * A path inside `directory` as a relative path; the directory itself, paths
+ * outside it, and relative paths are unchanged.
+ */
+export function serverPathRelative(directory: string, path: string): string {
+  const base = trimTrailingSeparators(directory);
+  if (base === "" || serverPathRoot(base) === "") return path;
+  const prefix = base.endsWith("/") ? base : `${base}/`;
+  const normalized = serverPathSeparator(directory) === "\\" ? path.replaceAll("\\", "/") : path;
+  if (!normalized.startsWith(prefix)) return path;
+  // Replacement is length-preserving, so the original slice keeps its style.
+  const relative = path.slice(prefix.length);
+  return relative === "" ? path : relative;
+}
+
 export function serverPathParent(directory: string): string {
   const separator = serverPathSeparator(directory);
   const normalized = directory.replaceAll("\\", "/");

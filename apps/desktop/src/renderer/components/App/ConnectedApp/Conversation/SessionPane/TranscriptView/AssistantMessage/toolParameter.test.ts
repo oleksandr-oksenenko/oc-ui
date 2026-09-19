@@ -54,6 +54,46 @@ describe("toolParameter", () => {
     expect(toolParameter(running("write", { path: "notes.md", content: "text" }))).toBe("notes.md");
   });
 
+  it("shows file tool paths relative to the session directory", () => {
+    const directory = "/srv/worktrees/misty-rocket";
+    expect(toolParameter(running("read", { path: `${directory}/src/index.ts` }), directory)).toBe(
+      "src/index.ts",
+    );
+    expect(toolParameter(completed("edit", { path: `${directory}/src/app.ts` }), directory)).toBe(
+      "src/app.ts",
+    );
+    expect(toolParameter(running("write", { path: `${directory}/notes.md` }), directory)).toBe(
+      "notes.md",
+    );
+    expect(toolParameter(running("read", { path: `${directory}/src/index.ts` }))).toBe(
+      `${directory}/src/index.ts`,
+    );
+  });
+
+  it("keeps paths outside the session directory absolute", () => {
+    const directory = "/srv/worktrees/misty-rocket";
+    expect(
+      toolParameter(running("read", { path: "/srv/projects/other/index.ts" }), directory),
+    ).toBe("/srv/projects/other/index.ts");
+    expect(toolParameter(running("read", { path: `${directory}-archive/a.ts` }), directory)).toBe(
+      `${directory}-archive/a.ts`,
+    );
+    expect(toolParameter(running("read", { path: directory }), directory)).toBe(directory);
+  });
+
+  it("rebases Windows separators and leaves non-path inputs verbatim", () => {
+    const directory = "C:\\Users\\alex\\worktree";
+    expect(toolParameter(running("read", { path: `${directory}\\src\\app.ts` }), directory)).toBe(
+      "src\\app.ts",
+    );
+    expect(
+      toolParameter(running("shell", { command: `cd ${directory} && pnpm test` }), directory),
+    ).toBe(`cd ${directory} && pnpm test`);
+    expect(toolParameter(running("grep", { pattern: `${directory}/src` }), directory)).toBe(
+      `${directory}/src`,
+    );
+  });
+
   it("shows the query for search tools", () => {
     expect(toolParameter(running("grep", { pattern: "unused", include: "*.ts" }))).toBe("unused");
     expect(toolParameter(running("glob", { pattern: "**/*.tsx" }))).toBe("**/*.tsx");

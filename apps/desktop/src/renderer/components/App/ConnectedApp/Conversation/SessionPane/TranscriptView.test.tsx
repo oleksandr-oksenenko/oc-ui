@@ -650,6 +650,45 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows tool paths relative to the session directory", () => {
+    stubResizeObserver();
+    const directory = "/srv/worktrees/misty-rocket";
+    const messages: readonly SessionMessageInfo[] = [
+      {
+        id: "assistant",
+        time: base,
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "p", id: "m" },
+        content: [
+          {
+            type: "tool",
+            id: "tool",
+            name: "read",
+            time: base,
+            state: {
+              status: "completed",
+              input: { path: `${directory}/src/app.ts` },
+              content: [{ type: "text", text: "done" }],
+            },
+          },
+        ],
+      },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID="session"
+        messages={messages}
+        sessionStatus="idle"
+        directory={directory}
+      />
+    ));
+    expect(host.querySelector(".transcript-tool-parameter")?.textContent).toBe("src/app.ts");
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
   it("defers the initial resume to the next animation frame", () => {
     stubResizeObserver();
     const frames = stubAnimationFrames();

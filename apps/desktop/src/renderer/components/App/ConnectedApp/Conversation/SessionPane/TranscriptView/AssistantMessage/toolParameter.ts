@@ -1,6 +1,8 @@
 import type { JsonValue, SessionMessageAssistantTool } from "@opencode/client";
 import { Predicate } from "effect";
 
+import { serverPathRelative } from "../../../../../../../ui/serverPath.ts";
+
 /** Longest parameter summary shown beside a tool name; longer values are truncated. */
 export const TOOL_PARAMETER_LIMIT = 64;
 
@@ -28,19 +30,24 @@ type ToolInput = { readonly [key: string]: JsonValue };
 /**
  * One-line parameter summary for a tool header. Returns undefined until the
  * SDK hands over a parsed input object; streamed JSON text is never inspected.
+ * A path input inside `directory` is shown relative to it.
  */
 export function toolParameter(
   tool: Pick<SessionMessageAssistantTool, "name" | "state">,
+  directory?: string,
 ): string | undefined {
   if (tool.state.status === "streaming") return undefined;
-  const value = inputParameter(tool.name, tool.state.input);
+  const value = inputParameter(tool.name, tool.state.input, directory);
   return value === undefined ? undefined : singleLine(value);
 }
 
-function inputParameter(name: string, input: ToolInput): string | undefined {
+function inputParameter(name: string, input: ToolInput, directory?: string): string | undefined {
   for (const key of PRIMARY_KEYS.get(name) ?? []) {
     const value = input[key];
-    if (isText(value)) return displayText(name, value);
+    if (!isText(value)) continue;
+    const rebased =
+      key === "path" && directory !== undefined ? serverPathRelative(directory, value) : value;
+    return displayText(name, rebased);
   }
   return undefined;
 }

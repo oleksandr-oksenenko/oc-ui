@@ -471,3 +471,32 @@ describe("ConversationRegion composer context", () => {
     mounted.dispose();
   });
 });
+
+describe("ConversationRegion transcript", () => {
+  it("shows tool paths relative to the selected session location", () => {
+    const tool: SessionMessageAssistant["content"][number] = {
+      type: "tool",
+      id: "tool",
+      name: "read",
+      time: { created: 1 },
+      state: {
+        status: "completed",
+        input: { path: "/workspace/src/app.ts" },
+        content: [{ type: "text", text: "done" }],
+      },
+    };
+    const assistant: SessionMessageAssistant = {
+      id: "assistant",
+      time: { created: 1 },
+      type: "assistant",
+      agent: "build",
+      model: { providerID: "p", id: "m" },
+      content: [tool],
+    };
+    const mounted = setup([], [], { transcript: () => [assistant] });
+    expect(mounted.host.querySelector(".transcript-tool-parameter")?.textContent).toBe(
+      "src/app.ts",
+    );
+    mounted.dispose();
+  });
+});

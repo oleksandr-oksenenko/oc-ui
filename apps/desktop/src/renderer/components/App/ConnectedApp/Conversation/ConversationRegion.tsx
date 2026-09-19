@@ -265,6 +265,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
             <TranscriptView
               sessionID={props.workspace.selectedID()!}
               readFileImage={readFileImage()}
+              directory={props.workspace.selectedSession()?.location.directory}
               annotationRootRef={annotationUI.attach}
               onOpenAnnotation={annotationUI.openSent}
               messages={visibleTranscript()}

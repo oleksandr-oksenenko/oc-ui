@@ -19,12 +19,13 @@ import { toolParameter } from "./toolParameter.ts";
 
 export type ToolCallProps = {
   readonly tool: SessionMessageAssistantTool;
+  readonly directory?: string;
 };
 
 export function ToolCall(props: ToolCallProps): JSX.Element {
   const content = createDeferredCollapsibleMount();
   const details = () => toolDetails(props.tool);
-  const parameter = () => toolParameter(props.tool);
+  const parameter = () => toolParameter(props.tool, props.directory);
   const status = () => props.tool.state.status;
   const statusLabel = () =>
     status() === "completed"

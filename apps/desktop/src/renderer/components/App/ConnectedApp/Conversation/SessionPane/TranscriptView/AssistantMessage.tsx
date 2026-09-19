@@ -14,6 +14,7 @@ export type AssistantMessageProps = {
   readonly sessionStatus: DataSessionStatus;
   /** Resolves `file:` images in Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
+  readonly directory?: string;
 };
 
 export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
@@ -71,7 +72,7 @@ function renderContent(
         />
       );
     case "tool":
-      return <ToolCall tool={content} />;
+      return <ToolCall tool={content} directory={props.directory} />;
     default: {
       const unreachable: never = content;
       return unreachable;

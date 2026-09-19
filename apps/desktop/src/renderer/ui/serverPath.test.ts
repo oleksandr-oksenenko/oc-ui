@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { serverFilePathFromFileUrl, serverPathChild, serverPathParent } from "./serverPath.ts";
+import {
+  serverFilePathFromFileUrl,
+  serverPathChild,
+  serverPathParent,
+  serverPathRelative,
+} from "./serverPath.ts";
 
 describe("serverPath", () => {
   it.each([
@@ -26,6 +31,36 @@ describe("serverPath", () => {
     ["\\\\server\\share\\", "\\\\server\\share\\"],
   ])("resolves the parent of %s", (directory, expected) => {
     expect(serverPathParent(directory)).toBe(expected);
+  });
+
+  it.each([
+    ["/srv/projects/oc-ui", "/srv/projects/oc-ui/src/app.ts", "src/app.ts"],
+    ["/srv/projects/oc-ui/", "/srv/projects/oc-ui/src/app.ts", "src/app.ts"],
+    ["/srv/projects/oc-ui", "/srv/projects/oc-ui/src/", "src/"],
+    [
+      "/srv/projects/oc-ui",
+      "/srv/projects/oc-ui-archive/src/app.ts",
+      "/srv/projects/oc-ui-archive/src/app.ts",
+    ],
+    ["/srv/projects/oc-ui", "/srv/other/src/app.ts", "/srv/other/src/app.ts"],
+    ["/srv/projects/oc-ui", "/srv/projects/oc-ui", "/srv/projects/oc-ui"],
+    ["/srv/projects/oc-ui", "src/app.ts", "src/app.ts"],
+    // A backslash is an ordinary character on a POSIX server, not a separator.
+    ["/srv/projects/oc-ui", "/srv/projects/oc-ui/src/app\\name.ts", "src/app\\name.ts"],
+    [
+      "/srv/projects/oc-ui",
+      "/srv/projects/oc-ui\\archive/app.ts",
+      "/srv/projects/oc-ui\\archive/app.ts",
+    ],
+    ["/", "/srv/projects/app.ts", "srv/projects/app.ts"],
+    ["", "/srv/projects/app.ts", "/srv/projects/app.ts"],
+    ["C:\\", "C:\\src\\app.ts", "src\\app.ts"],
+    ["C:\\Users\\alex\\code", "C:\\Users\\alex\\code\\src\\app.ts", "src\\app.ts"],
+    ["C:\\Users\\alex\\code", "C:/Users/alex/code/src/app.ts", "src/app.ts"],
+    ["\\\\server\\share", "\\\\server\\share\\code\\app.ts", "code\\app.ts"],
+    ["\\\\server\\share\\code", "\\\\server\\share\\code\\src\\app.ts", "src\\app.ts"],
+  ])("rebases %s + %s", (directory, path, expected) => {
+    expect(serverPathRelative(directory, path)).toBe(expected);
   });
 
   it.each([
