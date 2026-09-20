@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/
 import { build, preview } from "vite-plus";
 import { chromium } from "playwright";
 import { access, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { startScriptedProvider } from "./scripted-provider.mjs";
 import { git, prepareProjectFixture } from "./project-fixture.ts";
@@ -19,6 +19,7 @@ let browser;
 let context;
 let project;
 let secondaryProject;
+let addedProject;
 let page;
 let uiUrl;
 let api;
@@ -50,9 +51,11 @@ beforeAll(async () => {
   provider = await startScriptedProvider();
   project = join(profile.paths.app, "acceptance-project");
   secondaryProject = join(profile.paths.app, "permission-secondary", "acceptance-project");
+  addedProject = join(profile.paths.app, "added-project");
   await Promise.all([
     prepareProjectFixture(project),
     preparePermissionProject(secondaryProject, "Secondary permission project"),
+    mkdir(addedProject, { recursive: true }),
   ]);
   for (const name of ["review", "testing"]) {
     const directory = join(project, ".agents", "skills", name);
@@ -1518,6 +1521,61 @@ describe.sequential("production browser app", () => {
       if (alpha) await api.session.remove({ sessionID: alpha.id });
       if (beta) await api.session.remove({ sessionID: beta.id });
       if (previousTitle) await selectSession(previousTitle);
+    }
+  });
+
+  it("adds a previously unseen server directory as a selectable project", async () => {
+    const addedDirectory = await realpath(addedProject);
+    const existing = await api.project.list();
+    expect(existing.some((candidate) => candidate.canonical === addedDirectory)).toBe(false);
+
+    await ensureConnected();
+    const selectedRow = page.locator('.shell-session-main[aria-current="page"]');
+    const previousTitle =
+      (await selectedRow.count()) === 1
+        ? await selectedRow.locator(".shell-session-title").textContent()
+        : undefined;
+    let created;
+    try {
+      await page.getByRole("button", { name: "Create session", exact: true }).click();
+      await page.getByRole("button", { name: "Add project", exact: true }).click();
+      const directory = page.locator(".server-directory-browser-path");
+      await expect.poll(() => directory.textContent()).toBe(await realpath(project));
+      await page.getByLabel("Go to parent directory").click();
+      await expect.poll(() => directory.textContent()).toBe(dirname(await realpath(project)));
+      await page
+        .getByRole("button", { name: "Browse directory added-project/", exact: true })
+        .click();
+      await expect.poll(() => directory.textContent()).toBe(addedDirectory);
+      await page.locator('.server-flow-dialog button[type="submit"]').click();
+
+      // The refreshed server-backed list must publish the resolved project, not
+      // fall back to the picker's empty selection.
+      const projectPicker = page.locator(".new-session-project-trigger");
+      await expect
+        .poll(() => projectPicker.getAttribute("aria-label"))
+        .toBe("Project: added-project");
+      await expect.poll(() => projectPicker.textContent()).toContain(addedDirectory);
+
+      await page.locator('.server-flow-dialog button[type="submit"]').click();
+      await page.getByLabel("Prompt", { exact: true }).waitFor();
+      const added = await api.project.current({ location: { directory: addedDirectory } });
+      await expect
+        .poll(async () =>
+          (await api.session.list({ limit: 100, directory: addedDirectory })).data.some(
+            (session) =>
+              session.projectID === added.id && session.location.directory === addedDirectory,
+          ),
+        )
+        .toBe(true);
+      created = (await api.session.list({ limit: 100, directory: addedDirectory })).data.find(
+        (session) => session.projectID === added.id,
+      );
+    } finally {
+      if (created) {
+        await api.session.remove({ sessionID: created.id });
+        if (previousTitle) await selectSession(previousTitle);
+      }
     }
   });
 

@@ -39,7 +39,7 @@ export type NewSessionFlowRuntime = {
   readonly api: NewSessionFlowApi;
   readonly onShellExited: SessionWorktreeInput["onShellExited"];
   readonly data: {
-    readonly project: Pick<Data["project"], "list" | "sync">;
+    readonly project: Pick<Data["project"], "list" | "sync" | "invalidate">;
     readonly session: Pick<Data["session"], "create" | "sync"> & {
       readonly get: (sessionID: string) => SessionInfo | undefined;
     };
@@ -309,7 +309,14 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
         ),
       )
       .pipe(
-        Effect.tap(() => effects.request(() => props.runtime.data.project.sync())),
+        Effect.tap(() =>
+          Effect.gen(function* () {
+            // The SDK memoizes a completed project sync, and resolving a project
+            // does not emit a project event, so force the refreshed list.
+            props.runtime.data.project.invalidate();
+            yield* effects.request(() => props.runtime.data.project.sync());
+          }),
+        ),
         Effect.result,
       );
     update({ addingProject: false });
@@ -323,7 +330,8 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     setSelectedLocation(location);
     if (projects().find((project) => project.id === result.success.id)?.vcs !== "git")
       setMode("direct");
-    update({ error: undefined });
+    // The refreshed list supersedes any earlier loading failure.
+    update({ error: undefined, projectsError: undefined, projectsLoading: false });
     update({ dialog: "session" });
   });
 

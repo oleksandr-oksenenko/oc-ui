@@ -3,7 +3,9 @@ import { Effect, Exit, Scope } from "effect";
 import { withTestWorkspace } from "../../../../../test/workspace.ts";
 import { deferred } from "../../../../../test/deferred.ts";
 import { sessionFixture } from "../../../../../test/session-fixture.ts";
-import type { FileListOutput, Project, SessionInfo } from "@opencode/client";
+import { OpenCode } from "@opencode/client";
+import { createData } from "@opencode/client/solid";
+import type { FileListOutput, OpenCodeClient, Project, SessionInfo } from "@opencode/client";
 import * as toastModule from "@opencode/ui/toast";
 import { Show, createSignal } from "solid-js";
 import { mount as mountView } from "../../../../../test/mount.ts";
@@ -101,6 +103,7 @@ function fakeRuntime(
   const projectSync = vi.fn<NewSessionFlowRuntime["data"]["project"]["sync"]>(() =>
     Promise.resolve(),
   );
+  const projectInvalidate = vi.fn<NewSessionFlowRuntime["data"]["project"]["invalidate"]>();
   const projectCurrent = vi.fn<NewSessionFlowRuntime["api"]["project"]["current"]>(() =>
     Promise.resolve({ id: project.id, directory: project.canonical, canonical: project.canonical }),
   );
@@ -143,7 +146,11 @@ function fakeRuntime(
     },
     onShellExited: vi.fn<NewSessionFlowRuntime["onShellExited"]>(() => () => undefined),
     data: {
-      project: { list: () => [...(options.projects ?? [project])], sync: projectSync },
+      project: {
+        list: () => [...(options.projects ?? [project])],
+        sync: projectSync,
+        invalidate: projectInvalidate,
+      },
       session: { create: sessionCreate, sync: sessionSync, get: sessionGet },
     },
     defaultLocation: options.defaultLocation ?? { directory: "/srv/projects" },
@@ -156,10 +163,42 @@ function fakeRuntime(
     sessionSync,
     sessionGet,
     projectSync,
+    projectInvalidate,
     projectCurrent,
     fileList,
     admit,
     remove,
+  };
+}
+
+/** A project the mocked server registers when `project.current` resolves it. */
+function docsProject(): Project {
+  return {
+    id: "docs",
+    canonical: "/srv/projects/docs",
+    name: "docs",
+    vcs: "git",
+    time: { created: 2, updated: 2 },
+    sandboxes: [],
+  };
+}
+
+/** A flow runtime whose project data is the real SDK data layer. */
+function sdkBackedRuntime(api: OpenCodeClient): NewSessionFlowRuntime {
+  const fake = fakeRuntime([]);
+  const workspace = withTestWorkspace((effects) => ({
+    effects,
+    data: createData({
+      api: () => api,
+      directory: "/srv/projects",
+      event: { on: () => () => undefined, listen: () => () => undefined },
+    }),
+  }));
+  return {
+    ...fake.runtime,
+    effects: workspace.effects,
+    api,
+    data: { ...fake.runtime.data, project: workspace.data.project },
   };
 }
 
@@ -431,6 +470,7 @@ describe("NewSessionFlow", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(fake.projectSync).toHaveBeenCalledTimes(2);
+    expect(fake.projectInvalidate).toHaveBeenCalledOnce();
     submit(mounted.root);
     await flushDialogClose();
     expect(fake.sessionCreate).toHaveBeenCalledWith({
@@ -438,6 +478,138 @@ describe("NewSessionFlow", () => {
       location: { directory: "/srv/projects/worktrees" },
     });
     mounted.dispose();
+  });
+
+  it("publishes a project added through the server-backed list", async () => {
+    const projects: Project[] = [project];
+    const added = docsProject();
+    const api = OpenCode.make({ baseUrl: "http://new-session-flow.test" });
+    vi.spyOn(api.project, "list").mockImplementation(async () => [...projects]);
+    // The server resolves and persists the project on `project.current`; later
+    // project list reads include it.
+    vi.spyOn(api.project, "current").mockImplementation(async () => {
+      if (!projects.some((candidate) => candidate.id === added.id)) projects.push(added);
+      return { id: added.id, directory: added.canonical, canonical: added.canonical };
+    });
+    const operation = controller(sdkBackedRuntime(api));
+    await vi.waitFor(() => expect(operation.flow.current().projectsLoading).toBe(false));
+
+    operation.flow.openAddProject();
+    operation.flow.addProject({ directory: added.canonical });
+    await vi.waitFor(() => expect(operation.flow.current().dialog).toBe("session"));
+
+    expect(api.project.current).toHaveBeenCalledWith(
+      { location: { directory: added.canonical } },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(operation.flow.state().projects.map((candidate) => candidate.id)).toEqual([
+      added.id,
+      project.id,
+    ]);
+    expect(operation.flow.state().selectedProjectID).toBe(added.id);
+    operation.dispose();
+  });
+
+  it("keeps the add-project dialog open when the refreshed list fails, then retries", async () => {
+    const projects: Project[] = [project];
+    const added = docsProject();
+    let currentCalls = 0;
+    let failNextList = false;
+    const api = OpenCode.make({ baseUrl: "http://new-session-flow.test" });
+    vi.spyOn(api.project, "list").mockImplementation(async () => {
+      if (failNextList) {
+        failNextList = false;
+        throw new Error("The project list is unavailable.");
+      }
+      return [...projects];
+    });
+    vi.spyOn(api.project, "current").mockImplementation(async () => {
+      currentCalls += 1;
+      if (!projects.some((candidate) => candidate.id === added.id)) projects.push(added);
+      failNextList = currentCalls === 1;
+      return { id: added.id, directory: added.canonical, canonical: added.canonical };
+    });
+    const operation = controller(sdkBackedRuntime(api));
+    await vi.waitFor(() => expect(operation.flow.current().projectsLoading).toBe(false));
+
+    operation.flow.openAddProject();
+    operation.flow.addProject({ directory: added.canonical });
+    await vi.waitFor(() =>
+      expect(operation.flow.current().addProjectError?.kind).toBe("add-project"),
+    );
+    expect(operation.flow.current().dialog).toBe("project");
+    expect(operation.flow.current().addingProject).toBe(false);
+
+    operation.flow.addProject({ directory: added.canonical });
+    await vi.waitFor(() => expect(operation.flow.current().dialog).toBe("session"));
+
+    expect(operation.flow.state().projects.map((candidate) => candidate.id)).toEqual([
+      added.id,
+      project.id,
+    ]);
+    expect(operation.flow.state().selectedProjectID).toBe(added.id);
+    expect(projects.filter((candidate) => candidate.id === added.id)).toHaveLength(1);
+    operation.dispose();
+  });
+
+  it("waits for a fresh project read when adding during the initial load", async () => {
+    const projects: Project[] = [project];
+    const added = docsProject();
+    let releaseInitial!: () => void;
+    const initialGate = new Promise<void>((resolve) => {
+      releaseInitial = resolve;
+    });
+    let listCalls = 0;
+    const api = OpenCode.make({ baseUrl: "http://new-session-flow.test" });
+    vi.spyOn(api.project, "list").mockImplementation(async () => {
+      listCalls += 1;
+      const snapshot = [...projects];
+      if (listCalls === 1) await initialGate;
+      return snapshot;
+    });
+    vi.spyOn(api.project, "current").mockImplementation(async () => {
+      if (!projects.some((candidate) => candidate.id === added.id)) projects.push(added);
+      return { id: added.id, directory: added.canonical, canonical: added.canonical };
+    });
+    const operation = controller(sdkBackedRuntime(api));
+    expect(listCalls).toBe(1);
+
+    operation.flow.openAddProject();
+    operation.flow.addProject({ directory: added.canonical });
+    releaseInitial();
+    await vi.waitFor(() => expect(operation.flow.current().dialog).toBe("session"));
+
+    expect(listCalls).toBe(2);
+    expect(operation.flow.state().projects.map((candidate) => candidate.id)).toEqual([
+      added.id,
+      project.id,
+    ]);
+    expect(operation.flow.state().selectedProjectID).toBe(added.id);
+    operation.dispose();
+  });
+
+  it("clears a stale project loading error after a successful add", async () => {
+    const fake = fakeRuntime([], { projects: [project, nonGitProject] });
+    fake.projectSync.mockRejectedValueOnce(new Error("The project list is unavailable."));
+    fake.projectCurrent.mockResolvedValueOnce({
+      id: nonGitProject.id,
+      directory: nonGitProject.canonical,
+      canonical: nonGitProject.canonical,
+    });
+    const operation = controller(fake.runtime);
+    await vi.waitFor(() => expect(operation.flow.current().projectsError).toBeDefined());
+
+    operation.flow.openAddProject();
+    operation.flow.addProject({ directory: nonGitProject.canonical });
+    await vi.waitFor(() => expect(operation.flow.current().dialog).toBe("session"));
+
+    expect(operation.flow.current().projectsError).toBeUndefined();
+    expect(operation.flow.state().projects.map((candidate) => candidate.id)).toEqual([
+      project.id,
+      nonGitProject.id,
+    ]);
+    expect(operation.flow.state().selectedProjectID).toBe(nonGitProject.id);
+    operation.dispose();
   });
 
   it("clears the failed session error after adding a project", async () => {
