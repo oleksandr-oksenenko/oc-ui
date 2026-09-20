@@ -754,6 +754,84 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps the initial placement through the layout scrolls of a session switch", () => {
+    const resize = stubResizeObservers();
+    const frames = stubAnimationFrames();
+    const [sessionID, setSessionID] = createSignal("first");
+    const [messages, setMessages] = createSignal(userMessages("a", 30));
+    const [loading, setLoading] = createSignal(false);
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID={sessionID()}
+        messages={messages()}
+        sessionStatus="idle"
+        loading={loading()}
+      />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    let scrollHeight = 1000;
+    let clientHeight = 100;
+    let scrollTop = 0;
+    Object.defineProperty(view, "scrollHeight", { get: () => scrollHeight, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => clientHeight, configurable: true });
+    // Model the browser: a scroll position never exceeds the scrollable extent.
+    Object.defineProperty(view, "scrollTop", {
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = Math.max(0, Math.min(value, Math.max(0, scrollHeight - clientHeight)));
+      },
+      configurable: true,
+    });
+    try {
+      frames.runAll();
+      expect(view.scrollTop).toBe(900);
+
+      // The reader leaves the first session scrolled away from the bottom, so
+      // the follow policy starts the switch with its stop latch set.
+      wheelAt(view, { deltaY: -1 });
+      view.scrollTop = 200;
+      view.dispatchEvent(new Event("scroll"));
+      expect(view.scrollTop).toBe(200);
+
+      // The next session's history is not resident: the pane collapses to an
+      // unscrollable document, the browser clamps the viewport to the top, and
+      // that clamp scroll is dispatched while the pane is still empty.
+      batch(() => {
+        setSessionID("second");
+        setMessages([]);
+        setLoading(true);
+      });
+      scrollHeight = 100;
+      clientHeight = 100;
+      view.scrollTop = 200;
+      expect(view.scrollTop).toBe(0);
+      view.dispatchEvent(new Event("scroll"));
+
+      // The history arrives, the rows mount, and the browser's coalesced clamp
+      // scroll is delivered before the placement frame runs.
+      batch(() => {
+        setMessages(userMessages("b", 60));
+        setLoading(false);
+      });
+      scrollHeight = 4000;
+      view.dispatchEvent(new Event("scroll"));
+
+      expect(frames.pending()).toBeGreaterThan(0);
+      frames.runAll();
+      expect(view.scrollTop).toBe(3900);
+      expect(host.querySelector(".transcript-scroll-to-bottom")).toBeNull();
+
+      // Growth inside the follow policy's settling window still pins the newest
+      // content after the placement.
+      scrollHeight = 5000;
+      resize.notify();
+      expect(view.scrollTop).toBe(4900);
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("cancels a still-pending resume when the transcript unmounts", () => {
     stubResizeObserver();
     const frames = stubAnimationFrames();
@@ -784,6 +862,10 @@ describe("TranscriptView", () => {
     transcript.scrollTop = 0;
 
     expect(frames.pending()).toBe(1);
+    // Reader input relinquishes the pending placement. The scroll event that
+    // follows is not what cancels it: a bare layout scroll must not move a
+    // reader, so only deliberate input can take the position over.
+    wheelAt(transcript, { deltaY: 1 });
     transcript.scrollTop = 120;
     transcript.dispatchEvent(new Event("scroll"));
 
@@ -1113,7 +1195,9 @@ describe("TranscriptView", () => {
     Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
     view.scrollTop = 120;
     try {
-      // The user scrolls away before the deferred resume runs.
+      // The user scrolls away before the deferred resume runs; reader input is
+      // what relinquishes it, not the layout scroll that follows.
+      wheelAt(view, { deltaY: -1 });
       view.dispatchEvent(new Event("scroll"));
 
       frames.runAll();
@@ -1321,6 +1405,35 @@ describe("TranscriptView", () => {
       expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
     } finally {
       window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("stops following synchronously on older keyboard navigation", () => {
+    const resize = stubResizeObservers();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 30);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    let scrollHeight = 500;
+    Object.defineProperty(view, "scrollHeight", { get: () => scrollHeight, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      frames.runAll();
+      view.scrollTop = 400;
+
+      view.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true }));
+      view.scrollTop = 200;
+
+      // A content resize arrives before the gesture's scroll event: the reader
+      // already owns the position, so the resize must not pin it back.
+      scrollHeight = 800;
+      resize.notify();
+      expect(view.scrollTop).toBe(200);
+    } finally {
       dispose();
       vi.unstubAllGlobals();
     }
@@ -1564,6 +1677,41 @@ describe("TranscriptView", () => {
       expect(frames.pending()).toBe(0);
       frames.runAll();
       expect(host.querySelectorAll("[data-message-id]")).toHaveLength(20);
+    } finally {
+      window.getSelection()?.removeAllRanges();
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("latches the pause when only the placement frame sees the selection", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const messages = userMessages("m", 170);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const view = host.querySelector<HTMLElement>(".transcript-view")!;
+    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+    Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+    try {
+      // A selection appears without a delivered selectionchange: the placement
+      // frame is the only observer. Declining must still hold the same pause.
+      const range = document.createRange();
+      range.selectNodeContents(host.querySelector('[data-message-id="m150"]')!);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      expect(frames.pending()).toBeGreaterThan(0);
+
+      frames.runAll();
+      const rendered = host.querySelectorAll("[data-message-id]").length;
+      expect(rendered).toBeLessThan(170);
+      expect(view.style.overflowAnchor).toBe("auto");
+
+      // The paused reader keeps the range it has; no older batch may mount.
+      frames.runAll();
+      expect(host.querySelectorAll("[data-message-id]")).toHaveLength(rendered);
     } finally {
       window.getSelection()?.removeAllRanges();
       dispose();
@@ -1820,6 +1968,7 @@ describe("TranscriptView", () => {
     transcript.scrollTop = 120;
     try {
       // The reader scrolls up before the deferred resume, relinquishing it.
+      wheelAt(transcript, { deltaY: -1 });
       transcript.dispatchEvent(new Event("scroll"));
       expect(frames.pending()).toBe(0);
 

@@ -219,11 +219,17 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   };
 
   // One authoritative gesture consequence: any transcript navigation
-  // relinquishes initial positioning, and only movement toward newer content
-  // can return to the bottom.
+  // relinquishes initial positioning. Older navigation also stops following
+  // immediately: a content resize that lands before the gesture's scroll event
+  // would otherwise pin the reader back to the bottom (upward wheel already
+  // stops through the hook's own listener, so this covers keys and touch).
+  // Only movement toward newer content can return to the bottom.
   const handleReaderNavigation = (direction: "older" | "newer") => {
     relinquishPositioning();
-    if (direction === "older") return;
+    if (direction === "older") {
+      pause();
+      return;
+    }
     if (atBottom()) resumeAtBottom();
     else armScrollIntent();
   };
@@ -293,8 +299,11 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   const handleViewportScroll = () => {
     // While paused, upstream must not clear its follow latch from a layout or
     // clamping scroll; the reader pause stays authoritative until a deliberate
-    // gesture resumes it.
-    if (!readerPaused()) handleScroll();
+    // gesture resumes it. Before the selected session is placed, a bare scroll
+    // cannot distinguish layout from reader input, so initial placement keeps
+    // ownership: explicit gestures relinquish it directly, and only a settled
+    // session feeds the follow policy's own interaction inference.
+    if (!readerPaused() && positioningSettled()) handleScroll();
     // The hook has seen this scroll by now, so a stopped follow reports
     // immediately while a layout scroll waits out the settling window.
     readGeometry(!userScrolled());
@@ -312,6 +321,17 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     working: autoScrollActive,
     onUserInteracted: relinquishPositioning,
   });
+
+  // One operation owns a selection's claim on the transcript: it cancels
+  // placement and scroll intent, holds materialization, and stops following.
+  // The listener and the placement frame both use it, so a selection latched
+  // from `selectionchange` and one found by the frame cannot diverge.
+  const pauseForSelection = () => {
+    cancelScrollIntent();
+    setReaderPaused(true);
+    relinquishPositioning();
+    untrack(pause);
+  };
 
   onCleanup(() => {
     cancelResumeFrame();
@@ -332,10 +352,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   createEffect(() => {
     const latchSelectionPause = () => {
       if (!selectionInViewport()) return;
-      cancelScrollIntent();
-      setReaderPaused(true);
-      relinquishPositioning();
-      untrack(pause);
+      pauseForSelection();
     };
     untrack(latchSelectionPause);
     document.addEventListener("selectionchange", latchSelectionPause);
@@ -380,10 +397,9 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
       if (props.sessionID !== sessionID) return;
       if (loading()) return;
       if (readerPaused() || selectionInViewport()) {
-        positioning = { sessionID, status: "relinquished" };
-        // Declined positioning leaves the reader wherever layout placed them;
-        // report that settled geometry instead of the previous session's.
-        readGeometry(false);
+        // The frame can find a selection the listener has not latched yet;
+        // route it through the same operation so the pause always holds.
+        pauseForSelection();
         return;
       }
       positioning = { sessionID, status: "positioned" };
