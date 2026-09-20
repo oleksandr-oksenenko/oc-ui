@@ -356,8 +356,8 @@ async function addAnnotation(body) {
   await page.getByLabel("Discard 1 annotations").waitFor();
 }
 
-async function selectSession(title) {
-  const session = page.getByRole("button", { name: new RegExp(`^${title},`, "u") });
+async function selectSession(title, target = page) {
+  const session = target.getByRole("button", { name: new RegExp(`^${title},`, "u") });
   await session.waitFor();
   await session.click();
   await expect.poll(() => session.getAttribute("aria-current")).toBe("page");
@@ -1102,6 +1102,9 @@ describe.sequential("production browser app", () => {
     const before = await git(project, "worktree", "list", "--porcelain");
     await page.getByLabel("Create session", { exact: true }).click();
     await page.getByRole("button", { name: "Start in worktree", exact: true }).click();
+    // A newly created session starts with the context panel closed.
+    if (await page.getByLabel("Show context", { exact: true }).count())
+      await page.getByLabel("Show context", { exact: true }).click();
     await page.getByText("No working tree changes", { exact: true }).waitFor();
     const after = await git(project, "worktree", "list", "--porcelain");
     const worktree = after
@@ -1433,6 +1436,89 @@ describe.sequential("production browser app", () => {
     // The sanitized markup never gives the browser a loadable file: source.
     expect(await image.getAttribute("src")).toMatch(/^blob:/u);
     expect(errors).toEqual([]);
+  });
+
+  it("remembers the context panel per session across reloads", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const previousTitle = await page.locator(".titlebar-session-title").textContent();
+    let alpha;
+    let beta;
+    try {
+      alpha = await api.session.create({ title: "Panel memory alpha", location });
+      beta = await api.session.create({ title: "Panel memory beta", location });
+      await selectSession(alpha.title);
+      // First visit: the context panel starts closed.
+      await page.getByLabel("Show context", { exact: true }).waitFor();
+      await page.getByLabel("Show context", { exact: true }).click();
+      await page.getByLabel("Hide context panel").waitFor();
+
+      await selectSession(beta.title);
+      await page.getByLabel("Show context", { exact: true }).waitFor();
+
+      await selectSession(alpha.title);
+      await page.getByLabel("Hide context panel").waitFor();
+
+      // The per-session layout survives a reload and reconnect.
+      await page.reload();
+      await page.getByRole("heading", { name: "Connect to OpenCode" }).waitFor();
+      await connect();
+      await selectSession(alpha.title);
+      await page.getByLabel("Hide context panel").waitFor();
+      await selectSession(beta.title);
+      await page.getByLabel("Show context", { exact: true }).waitFor();
+    } finally {
+      if (alpha) await api.session.remove({ sessionID: alpha.id });
+      if (beta) await api.session.remove({ sessionID: beta.id });
+      if (previousTitle) await selectSession(previousTitle);
+    }
+  });
+
+  it("keeps per-session panel layouts isolated between browser tabs", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const previousTitle = await page.locator(".titlebar-session-title").textContent();
+    let alpha;
+    let beta;
+    let second;
+    try {
+      alpha = await api.session.create({ title: "Tab isolation alpha", location });
+      beta = await api.session.create({ title: "Tab isolation beta", location });
+
+      // Both tabs load before any panel write. Isolation is proven by the
+      // event-free unit test; this scenario covers the integrated behavior.
+      second = await context.newPage();
+      await second.goto(uiUrl);
+      await connect(second);
+      await selectSession(beta.title, second);
+      await second.getByLabel("Show context", { exact: true }).click();
+      await second.getByLabel("Hide context panel").waitFor();
+
+      await selectSession(alpha.title);
+      await page.getByLabel("Show context", { exact: true }).click();
+      await page.getByLabel("Hide context panel").waitFor();
+
+      // The first tab sees the other tab's change without reloading.
+      await selectSession(beta.title);
+      await expect.poll(() => page.getByLabel("Hide context panel").count()).toBe(1);
+      await selectSession(alpha.title);
+      await page.getByLabel("Hide context panel").waitFor();
+
+      // A reload keeps both sessions' layouts: the first tab's write of alpha
+      // did not erase the second tab's write of beta.
+      await page.reload();
+      await page.getByRole("heading", { name: "Connect to OpenCode" }).waitFor();
+      await connect();
+      await selectSession(alpha.title);
+      await page.getByLabel("Hide context panel").waitFor();
+      await selectSession(beta.title);
+      await page.getByLabel("Hide context panel").waitFor();
+    } finally {
+      await second?.close();
+      if (alpha) await api.session.remove({ sessionID: alpha.id });
+      if (beta) await api.session.remove({ sessionID: beta.id });
+      if (previousTitle) await selectSession(previousTitle);
+    }
   });
 
   it("recovers from browser navigation and unavailable storage without stopping the server", async () => {

@@ -74,8 +74,9 @@ parent path operations; renderer code never uses the Electron host's path rules.
   upstream toast region so errors survive dialog dismissal.
 - `ConnectedApp` owns OpenCode-backed controller state: catalog hydration, selection, drafts,
   prompt submission, reconnection, and opening the new-session flow.
-- `ConnectedApp` owns the production left/right visibility signals; the full showcase owns its own
-  fixture visibility signals.
+- `ConnectedApp` owns the production left sidebar visibility signal and the shell-owned per-session
+  context panel layout (open/closed and Diff/Browser, persisted in local storage); the full showcase
+  owns its own fixture visibility signals.
 - `AppShell` is the presentation-only frame. `Titlebar` renders the selected session title, panel
   callbacks, and the friendly server selector.
 - `Workspace` renders the three-pane grid from controlled visibility props. Its caller decides when

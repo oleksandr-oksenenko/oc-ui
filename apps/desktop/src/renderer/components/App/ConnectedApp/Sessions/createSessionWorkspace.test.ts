@@ -7,6 +7,11 @@ import { deferred } from "../../../../test/deferred.ts";
 import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { createSessionWorkspace, type SessionWorkspaceRuntime } from "./createSessionWorkspace.ts";
+import { createShellPanelState } from "../Shell/createShellPanelState.ts";
+import {
+  createSessionPanelLayouts,
+  DEFAULT_SESSION_PANEL_LAYOUT,
+} from "../Shell/sessionPanelLayouts.ts";
 
 const session = (id: string, updated: number, parentID?: string): SessionInfo =>
   sessionFixture({
@@ -76,6 +81,28 @@ function mount(fixture: ReturnType<typeof setup>) {
       void Effect.runPromise(Scope.close(effects.scope, Exit.void));
     },
   }));
+}
+
+function mountWithPanels(fixture: ReturnType<typeof setup>) {
+  return withTestWorkspace((effects, dispose) => {
+    const layouts = createSessionPanelLayouts({ effects, storage: null });
+    const workspace = createSessionWorkspace({
+      effects,
+      runtime: fixture.runtime,
+      connected: fixture.connected,
+      bootstrapped: fixture.bootstrapped,
+    });
+    const panels = createShellPanelState({ selectedID: workspace.selectedID, layouts });
+    return {
+      workspace,
+      panels,
+      layouts,
+      dispose: () => {
+        dispose();
+        void Effect.runPromise(Scope.close(effects.scope, Exit.void));
+      },
+    };
+  });
 }
 
 describe("createSessionWorkspace", () => {
@@ -176,6 +203,39 @@ describe("createSessionWorkspace", () => {
     await vi.waitFor(() => expect(workspace.selectedID()).toBe("one"));
     expect(fixture.runtime.loader.load).toHaveBeenCalledTimes(2);
     dispose();
+  });
+
+  it("writes the browser-open layout to the session selected in the same update", async () => {
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      media: "",
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    try {
+      const fixture = setup([session("one", 1), session("two", 2)]);
+      const { workspace, panels, layouts, dispose } = mountWithPanels(fixture);
+      await vi.waitFor(() => expect(workspace.selectedID()).toBe("two"));
+
+      workspace.select("one");
+      panels.setContextView("browser");
+      panels.setRightPanelOpen(true);
+      expect(panels.contextView()).toBe("browser");
+      expect(panels.rightPanelOpen()).toBe(true);
+      expect(layouts.layout("one")).toEqual({ open: true, view: "browser" });
+
+      workspace.select("two");
+      expect(panels.rightPanelOpen()).toBe(false);
+      expect(panels.contextView()).toBe("diff");
+      expect(layouts.layout("two")).toEqual(DEFAULT_SESSION_PANEL_LAYOUT);
+
+      workspace.select("one");
+      expect(panels.rightPanelOpen()).toBe(true);
+      expect(panels.contextView()).toBe("browser");
+      dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("falls back to an ancestor and clears when the catalog empties", async () => {

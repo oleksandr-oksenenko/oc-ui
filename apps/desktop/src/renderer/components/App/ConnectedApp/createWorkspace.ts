@@ -20,6 +20,7 @@ import { createSessionFlows } from "./Sessions/createSessionFlows.ts";
 import { createSessionAttention } from "./Sessions/createSessionAttention.ts";
 import { createSessionWorkspace } from "./Sessions/createSessionWorkspace.ts";
 import { createShellPanelState } from "./Shell/createShellPanelState.ts";
+import { createSessionPanelLayouts } from "./Shell/sessionPanelLayouts.ts";
 import { createConnectedLifecycle } from "./createConnectedLifecycle.ts";
 
 /** Construct once in the workspace's retained Solid root, independently of views. */
@@ -27,7 +28,6 @@ export function createWorkspaceModel(
   runtime: ConnectedRuntime,
   browserConnection?: { api: BrowserApi; serverUrl: string; password: string },
 ) {
-  const panels = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
   const connected = () => runtime.stream.status() === "connected";
   const globalForms = createGlobalForms({
     effects: runtime.effects,
@@ -47,6 +47,12 @@ export function createWorkspaceModel(
     runtime,
     connected,
     bootstrapped,
+  });
+  const layouts = createSessionPanelLayouts({ effects: runtime.effects });
+  const panels = createShellPanelState({
+    leftSidebarOpen: true,
+    selectedID: sessions.selectedID,
+    layouts,
   });
   const attentionForSession = createSessionAttention({
     listLocations: runtime.api.debug.location.list,
