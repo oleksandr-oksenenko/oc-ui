@@ -12,12 +12,8 @@ export type AnnotationPopoverProps = {
 };
 
 export function AnnotationPopover(props: AnnotationPopoverProps): JSX.Element {
-  let restoreOnTriggerFocus = false;
   const state = () => props.controller.state();
   const open = createMemo(() => state().kind === "comments");
-  createEffect(() => {
-    if (open()) restoreOnTriggerFocus = false;
-  });
   createEffect(() => {
     if (!props.controller.selection()) return;
     const abort = new AbortController();
@@ -43,9 +39,6 @@ export function AnnotationPopover(props: AnnotationPopoverProps): JSX.Element {
 
   const closeFromPopover = (nextOpen: boolean) => {
     if (nextOpen) return;
-    // OpenCode suppresses trigger autofocus for outside clicks. Forward the
-    // remaining close autofocus (Escape) from our virtual trigger to its opener.
-    restoreOnTriggerFocus = true;
     props.controller.close();
   };
 
@@ -107,8 +100,11 @@ export function AnnotationPopover(props: AnnotationPopoverProps): JSX.Element {
           "aria-hidden": true,
           class: "annotation-popover-anchor",
           onFocus: () => {
-            if (!restoreOnTriggerFocus || state().kind !== "closed") return;
-            restoreOnTriggerFocus = false;
+            // OpenCode focuses this hidden trigger when a close does not come
+            // from an outside click, including controller-driven dismissals
+            // (transcript update, resize, scroll, navigation). Forward that
+            // focus to a real target so it never rests on the anchor.
+            if (state().kind !== "closed") return;
             const target = props.controller.focusTarget();
             if (!target) return;
             if (target.tabIndex < 0) target.tabIndex = -1;
@@ -134,7 +130,6 @@ export function AnnotationPopover(props: AnnotationPopoverProps): JSX.Element {
                   onFinish={() => props.controller.finishEditing(key)}
                   onSubmit={() => {
                     // Enter finishes the edit and dismisses the popup like Escape.
-                    restoreOnTriggerFocus = true;
                     props.controller.close();
                   }}
                   onInput={(body) => props.controller.updateBody(item().annotation.id, body)}

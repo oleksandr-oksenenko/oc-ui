@@ -208,7 +208,7 @@ function TranscriptAnnotationsContent(
     sessionID: selectedID,
     messages: currentMessages,
     drafts,
-    enabled: () => !composer.disabled(),
+    enabled: () => !composer.disabled() && !running(),
   });
   const count = () => drafts.get(selectedID()).length;
 

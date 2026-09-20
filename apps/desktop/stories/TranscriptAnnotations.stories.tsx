@@ -142,8 +142,74 @@ export const Comparison: Story = {
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       await expect(canvas.getByRole("button", { name: "Annotations · 3 comments" })).toBeVisible();
     });
+
+    await step("A controller-driven dismissal returns focus to the opener", async () => {
+      const opener = canvas.getByRole("button", { name: "Annotations · 3 comments" });
+      await userEvent.click(opener);
+      const dialog = await screen.findByRole("dialog", { name: "Annotation comments" });
+      await waitFor(() => expect(dialog).toBeVisible());
+      // Transcript updates and layout changes close the anchored popup through
+      // the controller rather than an outside interaction. Focus must follow to
+      // the opener instead of resting on the hidden anchor.
+      window.dispatchEvent(new Event("resize"));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await waitFor(() => expect(opener).toHaveFocus());
+    });
+
+    await step("A transcript update does not close the open editor", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Annotations · 3 comments" }));
+      const dialog = await screen.findByRole("dialog", { name: "Annotation comments" });
+      await userEvent.click(screen.getByRole("button", { name: /Second line updated/ }));
+      const editor = within(dialog).getByRole<HTMLTextAreaElement>("textbox", {
+        name: "Annotation comment",
+      });
+      await waitFor(() => expect(editor).toHaveFocus());
+      const probe = document.createElement("span");
+      source.append(probe);
+      // The transcript observer delivers its mutation callback in a microtask.
+      await Promise.resolve();
+      await Promise.resolve();
+      await expect(within(dialog).getByRole("textbox", { name: "Annotation comment" })).toBe(
+        editor,
+      );
+      await expect(editor).toHaveFocus();
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+      await userEvent.keyboard(" Keep");
+      await expect(editor.value).toContain(" Keep");
+      probe.remove();
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
   },
 };
 export const AfterSending: Story = { args: { initialSent: true } };
-export const RunningTurn: Story = { args: { initialRunning: true } };
+export const RunningTurn: Story = {
+  args: { initialRunning: true },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const source = canvasElement.querySelector(
+      '[data-message-id="assistant-annotations"] .transcript-markdown',
+    );
+    if (!source) throw new Error("Missing source passage");
+
+    await step("A running turn offers no new note", async () => {
+      select(source);
+      await expect(canvas.queryByRole("button", { name: "Add note" })).toBeNull();
+      window.getSelection()?.removeAllRanges();
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+
+    await step("Existing comments stay readable but not editable", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Annotations · 2 comments" }));
+      const dialog = await screen.findByRole("dialog", { name: "Annotation comments" });
+      await expect(
+        within(dialog).getByRole("button", {
+          name: "Show just one count in the composer, like code review comments.",
+        }),
+      ).toBeDisabled();
+      for (const remove of within(dialog).getAllByRole("button", { name: "Remove comment" }))
+        await expect(remove).toBeDisabled();
+    });
+  },
+};
 export const NarrowMode: Story = { args: { narrow: true } };

@@ -105,6 +105,23 @@ export function createTranscriptAnnotations(input: {
     setInteraction({ kind: "comments", keys, anchor });
   }
 
+  // The element the action/popup is anchored to right now. The selected
+  // candidate's block, the opener, and the resolved source block are distinct
+  // resolutions; focus return keeps its own fallback chain in `focusTarget`.
+  function activeAnchor(): HTMLElement | undefined {
+    const current = interaction();
+    switch (current.kind) {
+      case "selected":
+      case "opening":
+        return current.selection.block.isConnected ? current.selection.block : undefined;
+      case "comments":
+        if (opener?.isConnected === true) return opener;
+        return focusSource === undefined ? undefined : highlights.findSource(focusSource);
+      default:
+        return undefined;
+    }
+  }
+
   const highlights = createAnnotationHighlights({
     sources: () => comments().map(({ key, annotation }) => ({ key, source: annotation.source })),
     canSelect: () =>
@@ -113,6 +130,16 @@ export function createTranscriptAnnotations(input: {
       setInteraction(selection ? { kind: "selected", selection } : { kind: "closed" }),
     onOpen: openComments,
     onDismiss: close,
+    onMutation: () => {
+      const current = interaction();
+      if (current.kind === "closed") return;
+      // Transcript updates must not tear down an editor the user is typing in.
+      // Keep it while its anchor still exists; only a removed anchor (message
+      // or source block gone, e.g. after a session remount) dismisses.
+      if (activeAnchor() !== undefined) return;
+      close();
+    },
+    anchor: activeAnchor,
   });
 
   async function openCandidate() {

@@ -41,6 +41,8 @@ function mountHighlights(
   root: HTMLDivElement,
   sources: readonly AnnotationHighlight[],
   onDismiss: () => void = () => undefined,
+  onMutation: () => void = () => undefined,
+  anchor: () => HTMLElement | undefined = () => undefined,
 ) {
   return createRoot((dispose) => {
     const [current, setSources] = createSignal<readonly AnnotationHighlight[]>(sources);
@@ -50,6 +52,8 @@ function mountHighlights(
       onSelection: () => undefined,
       onOpen: () => undefined,
       onDismiss,
+      onMutation,
+      anchor,
     });
     controller.attach(root);
     return { controller, dispose, setSources };
@@ -128,7 +132,7 @@ describe("createAnnotationHighlights", () => {
     }
   });
 
-  it("skips the rebuild for mutations outside annotated messages", async () => {
+  it("notifies mutations without dismissing or rebuilding outside annotated messages", async () => {
     const { digestCall, registry, registrySet } = stubHighlightRuntime();
 
     const root = document.createElement("div");
@@ -137,18 +141,21 @@ describe("createAnnotationHighlights", () => {
       '<article data-message-id="other"><p>streaming</p></article>';
     document.body.append(root);
     const onDismiss = vi.fn<() => void>();
-    const result = mountHighlights(root, [source()], onDismiss);
+    const onMutation = vi.fn<() => void>();
+    const result = mountHighlights(root, [source()], onDismiss, onMutation);
 
     try {
       await vi.waitFor(() => expect(registry.size).toBe(1));
       const rebuilds = registrySet.mock.calls.length;
       const digests = digestCall.mock.calls.length;
 
-      // Streaming in an unannotated message dismisses the popover but leaves
-      // the highlight and its digest untouched.
+      // Streaming in an unannotated message leaves the highlight and its digest
+      // untouched. The controller, not this observer, decides whether the
+      // mutation invalidates an open popup.
       root.querySelector<HTMLElement>('[data-message-id="other"] p')!.textContent =
         "streaming more";
-      await vi.waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(onMutation).toHaveBeenCalled());
+      expect(onDismiss).not.toHaveBeenCalled();
       expect(registrySet).toHaveBeenCalledTimes(rebuilds);
       expect(digestCall).toHaveBeenCalledTimes(digests);
       expect(registry.size).toBe(1);
@@ -160,6 +167,50 @@ describe("createAnnotationHighlights", () => {
     } finally {
       result.dispose();
       root.remove();
+    }
+  });
+
+  it("dismisses only for scrolls that can move the anchor", async () => {
+    const { registry } = stubHighlightRuntime();
+
+    const pane = document.createElement("div");
+    const outer = document.createElement("div");
+    const root = document.createElement("div");
+    root.innerHTML =
+      '<article data-message-id="message"><p data-annotation-block="text">hello</p></article>';
+    outer.append(root);
+    document.body.append(pane, outer);
+    const anchor = root.querySelector<HTMLElement>("p")!;
+    const onDismiss = vi.fn<() => void>();
+    const result = mountHighlights(
+      root,
+      [source()],
+      onDismiss,
+      () => undefined,
+      () => anchor,
+    );
+
+    try {
+      await vi.waitFor(() => expect(registry.size).toBe(1));
+
+      // Scrolling an unrelated pane leaves the popup in place.
+      pane.dispatchEvent(new Event("scroll"));
+      await Promise.resolve();
+      expect(onDismiss).not.toHaveBeenCalled();
+
+      // The anchored element's own scroller, the transcript's ancestors and
+      // the window can all move the anchor and dismiss.
+      anchor.dispatchEvent(new Event("scroll"));
+      await vi.waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
+      outer.dispatchEvent(new Event("scroll"));
+      await vi.waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(2));
+      window.dispatchEvent(new Event("scroll"));
+      await vi.waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(3));
+    } finally {
+      result.dispose();
+      root.remove();
+      outer.remove();
+      pane.remove();
     }
   });
 

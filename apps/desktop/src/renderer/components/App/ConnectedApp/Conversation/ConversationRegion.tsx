@@ -59,7 +59,10 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
     messages: visibleTranscript,
     drafts: props.annotationDrafts,
     fallbackFocus: () => annotationButton,
-    enabled: () => !props.composer.disabled(),
+    // Annotation work is idle-only: adding, editing and removal stay disabled
+    // while a turn runs, so streaming transcript updates cannot interrupt or
+    // close an editor mid-edit. Selection and copying remain available.
+    enabled: () => !props.composer.disabled() && !props.workspace.running(),
   });
   const annotationCount = () => {
     const sessionID = props.workspace.selectedID();

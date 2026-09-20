@@ -22,6 +22,10 @@ type AnnotationHighlightsInput = {
   readonly onSelection: (value: AnnotationSelection | undefined) => void;
   readonly onOpen: (keys: readonly string[], target: HTMLElement, anchor: DOMRect) => void;
   readonly onDismiss: () => void;
+  /** A transcript mutation that may invalidate an open popup's anchor. */
+  readonly onMutation?: () => void;
+  /** The element the action/popup is currently anchored to, when there is one. */
+  readonly anchor?: () => HTMLElement | undefined;
 };
 
 let instanceNumber = 0;
@@ -296,15 +300,33 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     suppressClick = false;
   };
 
+  // Only scroll containers that can move the current anchor dismiss: the
+  // window/document, the transcript or one of its ancestors, or an ancestor of
+  // the anchored element (which includes scrollers nested around it). Scrolling
+  // unrelated panes leaves the popup in place.
+  const scrollMovesAnchor = (target: EventTarget | null): boolean => {
+    const root = mountedRoot;
+    if (root === undefined) return false;
+    // Identity against the module's globals is unreliable under proxied test
+    // environments, so classify by DOM shape: an element owns its scroller, a
+    // non-element Node is the document, and a non-Node target is the window.
+    if (!(target instanceof Element))
+      return target instanceof Node ? target.nodeType === Node.DOCUMENT_NODE : target !== null;
+    if (target.contains(root)) return true;
+    const anchor = input.anchor?.();
+    return anchor !== undefined && anchor.isConnected && target.contains(anchor);
+  };
+
   const onScroll = (event: Event): void => {
     if (suppressScroll) return;
     if (event.target instanceof Element && event.target.closest(".annotation-popover")) return;
+    if (!scrollMovesAnchor(event.target)) return;
     input.onDismiss();
   };
 
   // Only mutations that can change an annotated block or its message require a
-  // rebuild; unrelated streaming still dismisses the popover but leaves the
-  // existing highlights and digests untouched.
+  // rebuild; unrelated streaming leaves the existing highlights and digests
+  // untouched.
   const affectsAnnotations = (records: readonly MutationRecord[]): boolean => {
     const annotated = new Set(input.sources().map((item) => item.source.messageID));
     if (annotated.size === 0) return false;
@@ -331,7 +353,10 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     document.head.append(style);
 
     const observer = new MutationObserver((records) => {
-      input.onDismiss();
+      // Streaming output, async rendering and transcript re-syncs mutate the
+      // transcript all the time. Only a mutation that removes the popup's
+      // anchor should dismiss it; the controller makes that call.
+      input.onMutation?.();
       if (affectsAnnotations(records)) scheduleRebuild();
     });
     observer.observe(nextRoot, {

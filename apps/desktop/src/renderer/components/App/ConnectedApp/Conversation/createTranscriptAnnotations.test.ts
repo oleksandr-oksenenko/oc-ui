@@ -7,7 +7,10 @@ import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
 import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { createTranscriptAnnotations } from "./createTranscriptAnnotations.ts";
 
-function setup(messages: Accessor<readonly SessionMessageInfo[]> = () => []) {
+function setup(
+  messages: Accessor<readonly SessionMessageInfo[]> = () => [],
+  enabled: Accessor<boolean> = () => true,
+) {
   const host = document.createElement("div");
   host.innerHTML =
     '<article data-message-id="message"><p data-annotation-block="text">A useful passage.</p></article>';
@@ -19,7 +22,7 @@ function setup(messages: Accessor<readonly SessionMessageInfo[]> = () => []) {
       sessionID,
       drafts,
       messages,
-      enabled: () => true,
+      enabled,
     });
     controller.attach(host);
     return { controller, drafts, setSessionID, dispose };
@@ -35,6 +38,7 @@ function setup(messages: Accessor<readonly SessionMessageInfo[]> = () => []) {
   };
   return {
     ...result,
+    host,
     select,
     dispose: () => {
       result.dispose();
@@ -158,6 +162,96 @@ describe("createTranscriptAnnotations", () => {
       root.controller.close();
       expect(root.drafts.get("first")).toHaveLength(0);
     } finally {
+      root.dispose();
+    }
+  });
+
+  it("closes the popup and clears the candidate when annotation availability turns off", async () => {
+    const digest = vi.fn<SubtleCrypto["digest"]>(() => Promise.resolve(new Uint8Array(32).buffer));
+    vi.stubGlobal("crypto", { randomUUID: crypto.randomUUID.bind(crypto), subtle: { digest } });
+    const [enabled, setEnabled] = createSignal(true);
+    const root = setup(() => [], enabled);
+    try {
+      root.select();
+      expect(root.controller.selection()).toBeDefined();
+      setEnabled(false);
+      expect(root.controller.selection()).toBeUndefined();
+      expect(root.controller.state().kind).toBe("closed");
+
+      setEnabled(true);
+      root.select();
+      await root.controller.openCandidate();
+      const draft = root.drafts.get("first")[0]!;
+      root.controller.updateBody(draft.id, "Keep this note.");
+      setEnabled(false);
+      expect(root.controller.state().kind).toBe("closed");
+      expect(root.drafts.get("first")[0]?.body).toBe("Keep this note.");
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it("keeps an open editor through transcript updates while its source remains", async () => {
+    const root = setup();
+    try {
+      root.select();
+      await root.controller.openCandidate();
+      const draft = root.drafts.get("first")[0]!;
+      root.controller.updateBody(draft.id, "Still typing.");
+      // A re-render or streaming update changes the annotated block's text.
+      root.host.querySelector("p")!.textContent = "A useful passage, updated.";
+      await Promise.resolve();
+      expect(root.controller.state().kind).toBe("comments");
+      expect(root.drafts.get("first")[0]?.body).toBe("Still typing.");
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it("dismisses the popup when a transcript update removes its anchor", async () => {
+    const root = setup();
+    try {
+      root.select();
+      await root.controller.openCandidate();
+      root.host.querySelector("p")!.remove();
+      await Promise.resolve();
+      expect(root.controller.state().kind).toBe("closed");
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it("clears the Add note candidate when a transcript update removes its block", async () => {
+    const root = setup();
+    try {
+      root.select();
+      expect(root.controller.selection()).toBeDefined();
+      root.host.querySelector("p")!.remove();
+      await Promise.resolve();
+      expect(root.controller.selection()).toBeUndefined();
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it("keeps the popup when an unrelated pane scrolls", async () => {
+    const root = setup();
+    const pane = document.createElement("div");
+    document.body.append(pane);
+    try {
+      root.select();
+      await root.controller.openCandidate();
+      root.controller.updateBody(root.drafts.get("first")[0]!.id, "Keep this note.");
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      pane.dispatchEvent(new Event("scroll"));
+      await Promise.resolve();
+      expect(root.controller.state().kind).toBe("comments");
+      root.host.dispatchEvent(new Event("scroll"));
+      await Promise.resolve();
+      expect(root.controller.state().kind).toBe("closed");
+      expect(root.drafts.get("first")[0]?.body).toBe("Keep this note.");
+    } finally {
+      pane.remove();
       root.dispose();
     }
   });
