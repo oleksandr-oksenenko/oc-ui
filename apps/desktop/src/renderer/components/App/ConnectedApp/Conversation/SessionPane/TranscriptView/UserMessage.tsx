@@ -4,6 +4,7 @@ import { For, Show, createMemo } from "solid-js";
 import { unwrap } from "solid-js/store";
 
 import { AnnotationCard } from "./UserMessage/AnnotationCard.tsx";
+import { PromptInstruction } from "./UserMessage/PromptInstruction.tsx";
 import { annotationBlock } from "../../annotation-source.ts";
 import { CodeReviewCard } from "./UserMessage/CodeReviewCard.tsx";
 import { ImagePreview, promptFileImageSource } from "../../../../../../ui/ImagePreview.tsx";
@@ -46,21 +47,6 @@ export function UserMessage(props: UserMessageProps): JSX.Element {
       return true;
     });
   });
-  const instructionContent = () => {
-    const text = instruction() ?? "";
-    const parts: JSX.Element[] = [];
-    let end = 0;
-    for (const skill of inlineSkills()) {
-      const mention = skill.mention!;
-      parts.push(
-        text.slice(end, mention.start),
-        <span class="transcript-skill-chip">{skill.name}</span>,
-      );
-      end = mention.end;
-    }
-    parts.push(text.slice(end));
-    return parts;
-  };
   const attachments = (): TranscriptAttachment[] => [
     ...(props.message.files?.map((file): TranscriptAttachment => {
       const source = promptFileImageSource(file);
@@ -84,7 +70,7 @@ export function UserMessage(props: UserMessageProps): JSX.Element {
         <div class="transcript-user-bubble">
           {instruction() !== undefined && (
             <div data-annotation-block={annotationBlock("user", "text")}>
-              {instructionContent()}
+              <PromptInstruction text={instruction()!} skills={inlineSkills()} />
             </div>
           )}
           {reviewComments().length > 0 && <CodeReviewCard comments={reviewComments()} />}

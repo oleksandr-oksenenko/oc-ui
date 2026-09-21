@@ -1,10 +1,7 @@
 import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
 import { List, type ListRef } from "@opencode/ui/list";
-import { baseKeymap, splitBlock } from "prosemirror-commands";
-import { closeHistory, history, redo, undo } from "prosemirror-history";
-import { keymap } from "prosemirror-keymap";
-import { Slice } from "prosemirror-model";
+import { closeHistory } from "prosemirror-history";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import {
@@ -19,8 +16,17 @@ import {
   type JSX,
 } from "solid-js";
 import { render } from "solid-js/web";
+import type { PromptSkillAttachment } from "@opencode/client";
 import type { ComposerProps } from "../Composer.tsx";
-import { fromDraft, schema, slashQuery, toDraft } from "./PromptEditor/document.ts";
+import {
+  fromDraft,
+  pasteContent,
+  schema,
+  serializeSlice,
+  slashQuery,
+  toDraft,
+} from "./PromptEditor/document.ts";
+import { promptPlugins } from "./PromptEditor/plugins.ts";
 import "prosemirror-view/style/prosemirror.css";
 import "./PromptEditor/PromptEditor.css";
 
@@ -51,23 +57,38 @@ type SuggestionSection = {
   readonly items: readonly Suggestion[];
 };
 
+/** Compares the skill attachments that belong with a draft value. */
+function sameSkills(
+  left: readonly PromptSkillAttachment[],
+  right: readonly PromptSkillAttachment[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((skill, index) => {
+    const other = right[index];
+    if (other === undefined || skill.id !== other.id || skill.name !== other.name) return false;
+    const before = skill.mention;
+    const after = other.mention;
+    if (before === undefined || after === undefined) return before === after;
+    return before.start === after.start && before.end === after.end;
+  });
+}
+
 /** ProseMirror owns editing; Solid owns suggestions and each skill's node view. */
 export function PromptEditor(props: EditorProps) {
   let host!: HTMLDivElement;
   let view: EditorView | undefined;
   let list: ListRef | undefined;
   let sessionID = props.sessionID;
+  // The draft the editor last emitted, so its own controlled echo never
+  // reparses over live editing.
+  let emitted: { text: string; skills: readonly PromptSkillAttachment[] } | undefined;
   const [query, setQuery] = createSignal<ReturnType<typeof slashQuery>>();
   const [selectable, setSelectable] = createSignal(false);
   const close = () => {
     setQuery(undefined);
     setSelectable(false);
   };
-  const plugins = [
-    history(),
-    keymap({ "Mod-z": undo, "Shift-Mod-z": redo, "Mod-y": redo, "Shift-Enter": splitBlock }),
-    keymap(baseKeymap),
-  ];
+  const plugins = promptPlugins();
   const sections = createMemo<SuggestionSection[]>(() => {
     const current = query();
     const result: SuggestionSection[] = [];
@@ -161,6 +182,7 @@ export function PromptEditor(props: EditorProps) {
           setQuery(instance.composing ? undefined : slashQuery(instance.state));
           if (tr.docChanged) {
             const draft = toDraft(instance.state.doc);
+            emitted = { text: draft.text, skills: draft.skills };
             batch(() => props.onInput(draft.text, draft.skills));
           }
         },
@@ -204,19 +226,20 @@ export function PromptEditor(props: EditorProps) {
           },
         },
         handlePaste(editor, event) {
-          // File payloads are owned by the composer's capture listener. Only
-          // meaningful plain text is inserted here; an absent format returns an
+          // Plain text stays the pasted representation. The policy itself is
+          // owned by `pasteContent`: a code block takes it literally, and
+          // anywhere else it is parsed as draft Markdown so pasted lists,
+          // quotes and emphasis arrive as formatting. HTML-only payloads keep
+          // ProseMirror's schema-based DOM handling. File payloads are owned
+          // by the composer's capture listener; an absent format returns an
           // empty string, and treating it as text would replace the selection
           // with an empty slice and suppress ProseMirror's own URI handling.
           const text = event.clipboardData?.getData("text/plain");
           if (!text) return false;
-          editor.dispatch(
-            editor.state.tr.replaceSelection(new Slice(fromDraft(text, []).content, 1, 1)),
-          );
+          editor.dispatch(pasteContent(editor.state, text));
           return true;
         },
-        clipboardTextSerializer: (slice) =>
-          slice.content.textBetween(0, slice.content.size, "\n", (node) => node.attrs.name),
+        clipboardTextSerializer: (slice) => serializeSlice(slice.content),
         nodeViews: {
           skill(node, editor, getPos) {
             const dom = document.createElement("span");
@@ -271,11 +294,26 @@ export function PromptEditor(props: EditorProps) {
     view = instance;
     createEffect(() => {
       instance.dom.dataset.placeholder = props.placeholder;
-      instance.dom.dataset.empty = String(props.value.length === 0);
-      const doc = fromDraft(props.value, props.skills ?? []);
+      const value = props.value;
+      const skills = props.skills ?? [];
+      instance.dom.dataset.empty = String(value.length === 0);
       const changedSession = sessionID !== props.sessionID;
       sessionID = props.sessionID;
-      if (!changedSession && doc.eq(instance.state.doc)) return;
+      // The editor's own draft echoed through the composer is not an external
+      // edit; reparsing it would replace live formatting and the caret.
+      if (
+        !changedSession &&
+        emitted !== undefined &&
+        value === emitted.text &&
+        sameSkills(skills, emitted.skills)
+      )
+        return;
+      const doc = fromDraft(value, skills);
+      if (!changedSession && doc.eq(instance.state.doc)) {
+        emitted = { text: value, skills };
+        return;
+      }
+      emitted = { text: value, skills };
       instance.updateState(EditorState.create({ schema, doc, plugins }));
       close();
     });

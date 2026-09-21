@@ -104,3 +104,56 @@
 .prompt-editor-input p {
   margin: 0;
 }
+
+.prompt-editor-input :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0;
+  font-size: inherit;
+  font-weight: var(--oc-type-heading-weight);
+}
+
+.prompt-editor-input :is(ul, ol) {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.prompt-editor-input ul {
+  list-style: disc outside;
+}
+
+.prompt-editor-input ol {
+  list-style: decimal outside;
+}
+
+.prompt-editor-input blockquote {
+  margin: 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--oc-border-emphasis);
+  color: var(--oc-text-base);
+}
+
+.prompt-editor-input code {
+  font-family: var(--oc-font-mono);
+  font-size: var(--oc-type-code-size);
+}
+
+.prompt-editor-input :not(pre) > code {
+  padding: 1px 4px;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+}
+
+.prompt-editor-input pre {
+  margin: 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+}
+
+.prompt-editor-input a {
+  color: var(--oc-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}

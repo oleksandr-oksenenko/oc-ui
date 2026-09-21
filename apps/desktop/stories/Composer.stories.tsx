@@ -206,6 +206,53 @@ export const DroppedFiles: Story = {
   },
 };
 
+export const MarkdownDraft: Story = {
+  render: () => {
+    const [value, setValue] = createSignal("");
+    return (
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={setValue}
+        onSubmit={() => undefined}
+      />
+    );
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+
+    await step("Continue a list with Shift+Enter", async () => {
+      await userEvent.type(prompt, "- first{Shift>}{Enter}{/Shift}second");
+      const items = prompt.querySelectorAll("li");
+      await expect(items).toHaveLength(2);
+      await expect(items[0]).toHaveTextContent("first");
+      await expect(items[1]).toHaveTextContent("second");
+    });
+
+    await step("Leave the list and write inline marks", async () => {
+      // An empty item steps out of the list, then emphasis applies as typed.
+      await userEvent.type(prompt, "{Shift>}{Enter}{/Shift}", { skipClick: true });
+      await userEvent.type(prompt, "{Shift>}{Enter}{/Shift}", { skipClick: true });
+      await userEvent.type(prompt, "**bold** and *em*", { skipClick: true });
+      await expect(prompt.querySelector("strong")).toHaveTextContent("bold");
+      await expect(prompt.querySelector("em")).toHaveTextContent("em");
+      await expect(prompt.querySelectorAll("li")).toHaveLength(2);
+    });
+
+    await step("Start a quote on a new line", async () => {
+      // One Shift+Enter breaks the line, the next starts a paragraph, so the
+      // quote rule can begin the block.
+      await userEvent.type(prompt, "{Shift>}{Enter}{/Shift}", { skipClick: true });
+      await userEvent.type(prompt, "{Shift>}{Enter}{/Shift}> quoted", { skipClick: true });
+      await expect(prompt.querySelector("blockquote")).toHaveTextContent("quoted");
+    });
+  },
+};
+
 export const ImageAttachment: Story = {
   render: () => {
     const [files, setFiles] = createSignal<readonly File[]>([previewImageFile("Screenshot.png")]);

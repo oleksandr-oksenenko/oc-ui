@@ -78,11 +78,10 @@ export const KeyboardAndActions: Story = {
     await step("Cmd+Enter queues and Shift+Enter keeps a newline", async () => {
       await userEvent.type(input, "Check mobile.");
       await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
-      await userEvent.type(input, "Then desktop.");
-      await expect(Array.from(input.querySelectorAll("p"), (line) => line.textContent)).toEqual([
-        "Check mobile.",
-        "Then desktop.",
-      ]);
+      await userEvent.type(input, "Then desktop.", { skipClick: true });
+      await expect(input.querySelectorAll("p")).toHaveLength(1);
+      await expect(input.querySelector("br")).not.toBeNull();
+      await expect(input).toHaveTextContent("Check mobile.Then desktop.");
       await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
       await expect(input).toHaveTextContent("");
       await expect(canvas.getAllByText("Queued")).toHaveLength(3);

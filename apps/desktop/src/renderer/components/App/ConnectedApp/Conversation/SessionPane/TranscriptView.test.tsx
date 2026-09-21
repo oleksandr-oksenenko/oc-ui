@@ -2473,7 +2473,94 @@ describe("TranscriptView", () => {
     dispose();
   });
 
-  it("falls back to exact user text when review metadata is malformed", () => {
+  it("renders the instruction as Markdown with inline skill chips", () => {
+    const instruction = "- **review** the change\n\n> quoted";
+    const { host, dispose } = renderUserMessage({
+      id: "markdown-instruction",
+      time: base,
+      type: "user",
+      text: instruction,
+      skills: [{ id: "review", name: "review", mention: { start: 4, end: 10, text: "review" } }],
+    });
+
+    const bubble = host.querySelector<HTMLElement>(".transcript-user-bubble")!;
+    expect(bubble.querySelector('[data-annotation-block=\'["user","text"]\']')).not.toBeNull();
+    expect(bubble.querySelector("ul li strong")).not.toBeNull();
+    expect(bubble.querySelector(".transcript-skill-chip")?.textContent).toBe("review");
+    expect(bubble.textContent).toContain("review the change");
+    expect(bubble.querySelector("blockquote")?.textContent).toContain("quoted");
+    dispose();
+  });
+
+  it("keeps a literal placeholder in the instruction text", () => {
+    const instruction = "\uE000k0\uE000 review this";
+    const { host, dispose } = renderUserMessage({
+      id: "literal-marker",
+      time: base,
+      type: "user",
+      text: instruction,
+      skills: [{ id: "review", name: "review", mention: { start: 5, end: 11, text: "review" } }],
+    });
+
+    const bubble = host.querySelector<HTMLElement>(".transcript-user-bubble")!;
+    expect(bubble.querySelectorAll(".transcript-skill-chip")).toHaveLength(1);
+    expect(bubble.textContent).toBe(instruction);
+    dispose();
+  });
+
+  it("keeps an encoded marker from becoming another chip", () => {
+    const instruction = "&#xE000;abc/0&#xE000; review";
+    const { host, dispose } = renderUserMessage({
+      id: "encoded-marker",
+      time: base,
+      type: "user",
+      text: instruction,
+      skills: [{ id: "review", name: "review", mention: { start: 22, end: 28, text: "review" } }],
+    });
+
+    const bubble = host.querySelector<HTMLElement>(".transcript-user-bubble")!;
+    expect(bubble.querySelectorAll(".transcript-skill-chip")).toHaveLength(1);
+    dispose();
+  });
+
+  it("renders out-of-range references without failing", () => {
+    const { host, dispose } = renderUserMessage({
+      id: "range-reference",
+      time: base,
+      type: "user",
+      text: "&#9999999; and &#x110000; stay",
+    });
+
+    // Markdown and HTML parsing agree: out-of-range references become the
+    // replacement character rather than throwing.
+    const bubble = host.querySelector<HTMLElement>(".transcript-user-bubble")!;
+    expect(bubble.textContent).toContain("\uFFFD and \uFFFD stay");
+    dispose();
+  });
+
+  it("re-renders the chip when the instruction and skill change", () => {
+    const [message, setMessage] = createSignal<SessionMessageUser>({
+      id: "changing-chip",
+      time: base,
+      type: "user",
+      text: "review this",
+      skills: [{ id: "review", name: "review", mention: { start: 0, end: 6, text: "review" } }],
+    });
+    const { host, dispose } = mount(() => <UserMessage message={message()} />);
+
+    expect(host.querySelector(".transcript-skill-chip")?.textContent).toBe("review");
+    setMessage({
+      id: "changing-chip",
+      time: base,
+      type: "user",
+      text: "testing this",
+      skills: [{ id: "testing", name: "testing", mention: { start: 0, end: 7, text: "testing" } }],
+    });
+    expect(host.querySelector(".transcript-skill-chip")?.textContent).toBe("testing");
+    dispose();
+  });
+
+  it("falls back to the user text when review metadata is malformed", () => {
     const text = " \n Original prompt with malformed metadata\t ";
     const { host, dispose } = renderUserMessage({
       id: "malformed-review",
@@ -2483,7 +2570,9 @@ describe("TranscriptView", () => {
       metadata: { [CODE_REVIEW_METADATA_KEY]: { kind: "code-review", version: 2 } },
     });
 
-    expect(host.querySelector(".transcript-user-bubble")?.textContent).toBe(text);
+    expect(host.querySelector(".transcript-user-bubble")?.textContent).toContain(
+      "Original prompt with malformed metadata",
+    );
     expect(host.querySelector(".transcript-code-review-card")).toBeNull();
     dispose();
   });

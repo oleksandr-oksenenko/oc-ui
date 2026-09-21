@@ -167,6 +167,14 @@
   white-space: pre-wrap;
 }
 
+.transcript-user-instruction {
+  white-space: normal;
+}
+
+.transcript-user-bubble .transcript-markdown :is(p, ul, ol, blockquote, pre) {
+  margin-bottom: 6px;
+}
+
 .transcript-code-review-card {
   min-width: min(100%, 320px);
   margin-top: 8px;
