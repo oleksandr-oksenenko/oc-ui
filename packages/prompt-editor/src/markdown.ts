@@ -32,31 +32,40 @@ type MarkdownSkill = {
 
 /**
  * The composer's schema is the bundled `prosemirror-markdown` schema plus the
- * app's inline skill atom. Lists, headings, code blocks, images, links and
- * their attributes keep the bundled behavior, and the parser and serializer
- * below are built against this exact instance.
+ * app's inline skill atom. Lists, code blocks, images, links and their
+ * attributes keep the bundled behavior, and the parser and serializer below
+ * are built against this exact instance.
+ *
+ * The bundled heading allows only text and images, but a mention in a heading
+ * parses into a skill atom, so headings admit the atom as well. The rest of
+ * the bundled heading spec (attrs, parseDOM, toDOM, defining) is unchanged.
  */
 export const schema: Schema = new Schema({
-  nodes: baseSchema.spec.nodes.append({
-    skill: {
-      inline: true,
-      group: "inline",
-      atom: true,
-      selectable: true,
-      attrs: { id: {}, name: {} },
-      toDOM: (node) => [
-        "span",
-        { "data-skill-id": node.attrs.id, "data-skill-name": node.attrs.name },
-        node.attrs.name,
-      ],
-      parseDOM: [
-        {
-          tag: "span[data-skill-id]",
-          getAttrs: (el) => ({ id: el.dataset.skillId, name: el.dataset.skillName }),
-        },
-      ],
-    },
-  }),
+  nodes: baseSchema.spec.nodes
+    .update("heading", {
+      ...baseSchema.spec.nodes.get("heading")!,
+      content: "(text | image | skill)*",
+    })
+    .append({
+      skill: {
+        inline: true,
+        group: "inline",
+        atom: true,
+        selectable: true,
+        attrs: { id: {}, name: {} },
+        toDOM: (node) => [
+          "span",
+          { "data-skill-id": node.attrs.id, "data-skill-name": node.attrs.name },
+          node.attrs.name,
+        ],
+        parseDOM: [
+          {
+            tag: "span[data-skill-id]",
+            getAttrs: (el) => ({ id: el.dataset.skillId, name: el.dataset.skillName }),
+          },
+        ],
+      },
+    }),
   marks: baseSchema.spec.marks,
 });
 

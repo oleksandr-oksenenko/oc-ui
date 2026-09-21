@@ -224,6 +224,56 @@ describe("prompt document", () => {
     }
   });
 
+  it("allows a skill atom at every heading level", () => {
+    for (const level of [1, 2, 3, 4, 5, 6]) {
+      const marker = "#".repeat(level);
+      const text = `${marker} review`;
+      const skills = [mention("review", marker.length + 1)];
+      const doc = parse(text, skills);
+      expect(doc.firstChild?.type.name).toBe("heading");
+      expect(doc.firstChild?.attrs.level).toBe(level);
+      expect(roundTrip(text, skills)).toEqual({ text, skills });
+    }
+  });
+
+  it("round-trips marked skills in headings", () => {
+    for (const [text, start] of [
+      ["# **review** now", 4],
+      ["## *review* now", 4],
+      ["### ***review*** now", 7],
+      ["#### [review](https://x.dev)", 6],
+    ] as const) {
+      const skills = [mention("review", start)];
+      expect(roundTrip(text, skills)).toEqual({ text, skills });
+    }
+  });
+
+  it("keeps headings valid when transactions insert and remove a skill", () => {
+    const doc = parse("# review now", [mention("review", 2)]);
+    const state = EditorState.create({ schema, doc });
+
+    // The suggestion menu replaces the typed query with a skill atom and text.
+    const inserted = state.apply(
+      state.tr.replaceWith(6, 6, [
+        schema.node("skill", { id: "other", name: "other" }),
+        schema.text(" now"),
+      ]),
+    ).doc;
+    inserted.check();
+    const draft = toDraft(inserted);
+    expect(draft).toEqual({
+      text: "# review nowother now",
+      skills: [mention("review", 2), mention("other", 12)],
+    });
+    expect(fromDraft(draft.text, draft.skills).eq(inserted)).toBe(true);
+
+    // The chip's remove button deletes the atom and one following space.
+    const removed = state.apply(state.tr.delete(1, 3)).doc;
+    removed.check();
+    expect(removed.firstChild?.type.name).toBe("heading");
+    expect(toDraft(removed)).toEqual({ text: "# now", skills: [] });
+  });
+
   it("keeps a mention inside code as text instead of an atom", () => {
     const text = "```\nreview\n```";
     const doc = parse(text, [mention("review", 4)]);

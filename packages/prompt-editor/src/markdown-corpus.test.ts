@@ -146,6 +146,7 @@ const corpus: ReadonlyArray<readonly [string, PMNode]> = [
   // Skill atoms.
   ["skill", parse("review this", [mention("review", 0)])],
   ["skill in strong", parse("**review** now", [mention("review", 2)])],
+  ["skill in heading", parse("# review", [mention("review", 2)])],
   ["skill in list", parse("- review this", [mention("review", 2)])],
   ["skill in quote", parse("> review this", [mention("review", 2)])],
   ["skill in code mark", parse("`review`", [mention("review", 1)])],
