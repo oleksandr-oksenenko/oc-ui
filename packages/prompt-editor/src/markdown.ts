@@ -10,7 +10,7 @@ import {
   type MarkdownSerializerState,
 } from "prosemirror-markdown";
 
-import { decodeNumericEntities } from "../../../../../../../markdown-text.ts";
+import { decodeNumericEntities } from "./markdown-text.ts";
 
 /**
  * Drafts are CommonMark: the same text the model receives. Parsing and

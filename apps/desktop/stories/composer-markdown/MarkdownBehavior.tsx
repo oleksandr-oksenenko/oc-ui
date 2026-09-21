@@ -2,10 +2,7 @@ import type { PromptSkillAttachment } from "@opencode/client";
 import { createSignal, Show } from "solid-js";
 
 import { Composer } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
-import {
-  fromDraft,
-  toDraft,
-} from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer/PromptEditor/document.ts";
+import { fromDraft, toDraft } from "@oc-ui/prompt-editor";
 import { composerAgentSelection, composerModelSelection } from "../composer-fixtures.ts";
 import "./markdown-behavior.css";
 

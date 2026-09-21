@@ -1,0 +1,8 @@
+{
+  "extends": "../../apps/desktop/tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*.ts", "vite.config.ts"]
+}

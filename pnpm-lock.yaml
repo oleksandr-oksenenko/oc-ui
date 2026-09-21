@@ -227,6 +227,9 @@ importers:
       '@kobalte/core':
         specifier: 'catalog:'
         version: 0.13.13(solid-js@1.9.15)
+      '@oc-ui/prompt-editor':
+        specifier: workspace:*
+        version: link:../../packages/prompt-editor
       '@opencode/client':
         specifier: 'catalog:'
         version: 2.0.3(effect@4.0.0-rc.112)(solid-js@1.9.15)
@@ -260,33 +263,12 @@ importers:
       lighthouse:
         specifier: 'catalog:'
         version: 13.4.1(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.214.0(@opentelemetry/api@1.9.1))(supports-color@8.1.1)(yauzl@2.10.0)
-      markdown-it:
-        specifier: 'catalog:'
-        version: 14.3.2
       marked:
         specifier: 'catalog:'
         version: 18.0.7
-      prosemirror-commands:
-        specifier: 'catalog:'
-        version: 1.7.2
       prosemirror-history:
         specifier: 'catalog:'
         version: 1.5.0
-      prosemirror-inputrules:
-        specifier: 'catalog:'
-        version: 1.5.1
-      prosemirror-keymap:
-        specifier: 'catalog:'
-        version: 1.2.3
-      prosemirror-markdown:
-        specifier: 'catalog:'
-        version: 1.13.7
-      prosemirror-model:
-        specifier: 'catalog:'
-        version: 1.25.11
-      prosemirror-schema-list:
-        specifier: 'catalog:'
-        version: 1.5.1
       prosemirror-state:
         specifier: 'catalog:'
         version: 1.4.4
@@ -312,9 +294,6 @@ importers:
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 6.9.1
-      '@types/markdown-it':
-        specifier: 'catalog:'
-        version: 14.2.0
       '@types/mocha':
         specifier: 'catalog:'
         version: 10.0.10
@@ -400,6 +379,52 @@ importers:
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.3.0(@opentelemetry/api@1.9.1)(@types/node@26.3.0)(@vitest/browser-playwright@4.1.11)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.3.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.4.0))(tsx@4.23.13)(typescript@7.0.2)(yaml@2.9.0)
+
+  packages/prompt-editor:
+    dependencies:
+      '@opencode/client':
+        specifier: 'catalog:'
+        version: 2.0.3(effect@4.0.0-rc.112)(solid-js@1.9.15)
+      markdown-it:
+        specifier: 'catalog:'
+        version: 14.3.2
+      prosemirror-commands:
+        specifier: 'catalog:'
+        version: 1.7.2
+      prosemirror-history:
+        specifier: 'catalog:'
+        version: 1.5.0
+      prosemirror-inputrules:
+        specifier: 'catalog:'
+        version: 1.5.1
+      prosemirror-keymap:
+        specifier: 'catalog:'
+        version: 1.2.3
+      prosemirror-markdown:
+        specifier: 'catalog:'
+        version: 1.13.7
+      prosemirror-model:
+        specifier: 'catalog:'
+        version: 1.25.11
+      prosemirror-schema-list:
+        specifier: 'catalog:'
+        version: 1.5.1
+      prosemirror-state:
+        specifier: 'catalog:'
+        version: 1.4.4
+    devDependencies:
+      '@types/markdown-it':
+        specifier: 'catalog:'
+        version: 14.2.0
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.0.1(@noble/hashes@2.4.0)
+      prosemirror-view:
+        specifier: 'catalog:'
+        version: 1.42.3
       vite-plus:
         specifier: 'catalog:'
         version: 0.3.0(@opentelemetry/api@1.9.1)(@types/node@26.3.0)(@vitest/browser-playwright@4.1.11)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.3.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(yaml@2.9.0))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.4.0))(tsx@4.23.13)(typescript@7.0.2)(yaml@2.9.0)

@@ -1,7 +1,7 @@
 import type { PromptSkillAttachment } from "@opencode/client";
 import { createEffect } from "solid-js";
 
-import { decodeNumericEntities } from "../../../../../../../markdown-text.ts";
+import { decodeNumericEntities } from "@oc-ui/prompt-editor/markdown-text";
 import { renderMarkdownCached } from "../AssistantMessage/Markdown/markdown.ts";
 
 const placeholderStart = "\uE000";

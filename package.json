@@ -29,7 +29,7 @@
     "make:mac": "pnpm --filter desktop make:mac",
     "test:acceptance:mac": "pnpm --filter desktop test:acceptance:mac",
     "test:acceptance:chat:mac": "pnpm --filter desktop test:acceptance:chat:mac",
-    "test": "vp run @oc-ui/opencode-session-tools#test && vp run desktop#test"
+    "test": "vp run @oc-ui/prompt-editor#test && vp run @oc-ui/opencode-session-tools#test && vp run desktop#test"
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:",

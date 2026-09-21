@@ -1,0 +1,32 @@
+{
+  "name": "@oc-ui/prompt-editor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Markdown codec, schema, and editor policy for the prompt composer.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./markdown-text": "./src/markdown-text.ts"
+  },
+  "scripts": {
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@opencode/client": "catalog:",
+    "markdown-it": "catalog:",
+    "prosemirror-commands": "catalog:",
+    "prosemirror-history": "catalog:",
+    "prosemirror-inputrules": "catalog:",
+    "prosemirror-keymap": "catalog:",
+    "prosemirror-markdown": "catalog:",
+    "prosemirror-model": "catalog:",
+    "prosemirror-schema-list": "catalog:",
+    "prosemirror-state": "catalog:"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "catalog:",
+    "jsdom": "catalog:",
+    "prosemirror-view": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

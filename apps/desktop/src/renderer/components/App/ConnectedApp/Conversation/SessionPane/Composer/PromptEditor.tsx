@@ -21,12 +21,12 @@ import type { ComposerProps } from "../Composer.tsx";
 import {
   fromDraft,
   pasteContent,
+  promptPlugins,
   schema,
   serializeSlice,
   slashQuery,
   toDraft,
-} from "./PromptEditor/document.ts";
-import { promptPlugins } from "./PromptEditor/plugins.ts";
+} from "@oc-ui/prompt-editor";
 import "prosemirror-view/style/prosemirror.css";
 import "./PromptEditor/PromptEditor.css";
 
