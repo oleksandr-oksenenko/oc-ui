@@ -14,7 +14,7 @@ Connection.changeServer()          → leave workspace, return to selection
 Connection.forgetTarget()          → leave workspace, clear saved choice
 Workspace.selectSession(id)        → select, load relevant data
 Workspace.submit(session, input)   → admit work, track acknowledgement and failure
-Desktop.quit()                    → confirm, stop child, cancel Settings work, settle IPC, dispose
+Desktop.quit()                    → stop child, cancel Settings work, settle IPC, dispose
 ```
 
 Changing or forgetting the connection never stops the built-in server. Submitting a prompt waits for the relevant admission/acknowledgement, not completion of the agent's entire run.
@@ -44,7 +44,7 @@ These are responsibility boundaries, not a service or class for every item. Use 
 
 | Owner             | Authoritative state and decisions                                                                                                                                             |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop lifecycle | Accepted IPC, Quit confirmation, shutdown order and whether new work can enter.                                                                                               |
+| Desktop lifecycle | Accepted IPC, Quit shutdown order and whether new work can enter.                                                                                                             |
 | Settings          | Saved local/remote choice, encrypted remote password and serialized persistence. Reads observe earlier accepted writes.                                                       |
 | Built-in server   | Current child, shared startup/stop, verified endpoint, temporary HTTP password and failure notification. Only confirmed exit releases process ownership.                      |
 | Worker / OpenCode | Worker owns preparation and its retained scope. Upstream owns server resources, database, provider credentials, configuration discovery and ongoing server work.              |
@@ -76,7 +76,7 @@ Revisit the SDK boundary only if OpenCode ships suitable Effect-based helpers an
 
 **Reconnect or crash.** The OpenCode SDK owns transport reconnection and event reconciliation. Workspace owns application recovery order: refresh location, then session and selected-feature data. Initial setup failure returns to connection selection with an actionable error. A built-in process crash invalidates a selected local connection and requires explicit restart; it does not disturb a selected remote connection.
 
-**Quit.** Main owns one attempt: block new local connects during the attempt; confirm if a child is retained; stop the child and observe exit. Then close the renderer and invoke Settings shutdown: reject new jobs, discard pending jobs and settle their callers as canceled, request active-job cancellation, and await actual I/O and cleanup. Only then wait for remaining tracked IPC settlements, remove handlers and dispose services. Waiting for IPC before canceling its pending Settings jobs can deadlock. Cancel Quit leaves the server running and allows connects again; failed child termination keeps its owner available for another Quit and does not begin Settings shutdown. Preserve the current rule that local connects remain closed once child shutdown has started, even if stopping fails. Distinguish a child-stop failure from a later cleanup failure.
+**Quit.** Main owns one attempt: block new local connects during the attempt; stop the child and observe exit. Then close the renderer and invoke Settings shutdown: reject new jobs, discard pending jobs and settle their callers as canceled, request active-job cancellation, and await actual I/O and cleanup. Only then wait for remaining tracked IPC settlements, remove handlers and dispose services. Waiting for IPC before canceling its pending Settings jobs can deadlock. Failed child termination keeps its owner available for another Quit and does not begin Settings shutdown. Preserve the current rule that local connects remain closed once child shutdown has started, even if stopping fails. Distinguish a child-stop failure from a later cleanup failure.
 
 Closing the last macOS window may leave main and the child alive. Reopening creates a fresh renderer. UI subscriber loss does not end an application operation, but destroying the renderer process necessarily ends its local execution. Work already accepted by OpenCode belongs to the server; stronger delivery guarantees across renderer destruction would require a separate contract.
 

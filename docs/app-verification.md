@@ -145,8 +145,8 @@ new test that merely restates its CSS or markup.
 - **Packaged acceptance:** `pnpm test:acceptance:mac` builds and tests the macOS
   arm64 app using WebdriverIO, the real pinned OpenCode server, disposable state,
   and a scripted local provider. It is separate from `pnpm test` and `pnpm ready`.
-  Native Quit confirmation and keychain behavior use test substitutes; this does
-  not prove the appearance of native dialogs or real OS credential integration.
+  Native dialogs and keychain behavior use test substitutes; this does not prove
+  the appearance of native dialogs or real OS credential integration.
 
 Browser mode has its own explicit entrypoint and settings adapter. Do not open the
 Electron renderer URL as a substitute. Storybook remains the surface for controlled
@@ -198,7 +198,7 @@ wired into the runner's explicit phase selection; a filename alone is insufficie
 Use WDIO element actions, `waitForDisplayed`, `waitForClickable`, and `waitUntil`
 for observable results. Use `browser.electron.execute` only for native setup or
 evidence that DOM interaction cannot provide, such as owned process state. Keep
-native substitutes explicit: mocked Quit dialogs and keychain behavior cannot
+native substitutes explicit: mocked native dialogs and keychain behavior cannot
 prove the appearance of a native dialog or real OS credential integration.
 
 From the root, run `pnpm test:acceptance:mac` for the packaged scripted-provider

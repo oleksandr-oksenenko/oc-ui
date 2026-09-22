@@ -85,7 +85,7 @@ Main has no separate Settings Promise queue. The shared `runIpc` boundary retain
 
 After the local child has stopped successfully, main cleanup closes the renderer, calls Settings shutdown, waits for remaining tracked IPC settlements, removes handlers, and disposes the runtime. Calling shutdown before awaiting pending IPC allows queued callers to be canceled instead of deadlocking cleanup.
 
-Cancel Quit and a failed child stop leave Settings operational. Preserve the current rule that local connects remain closed once child shutdown has started, even if stopping fails. Distinguish a child-stop failure from a later cleanup failure.
+A failed child stop leaves Settings operational. Preserve the current rule that local connects remain closed once child shutdown has started, even if stopping fails. Distinguish a child-stop failure from a later cleanup failure.
 
 ## Verification
 
@@ -98,7 +98,7 @@ Use `@effect/vitest` and the public service with controlled Promise gates and re
 - Cancellation across the temporary-write/rename handoff cannot orphan the owned temporary file. A collision during directory acquisition, including one settling after cancellation, preserves the other creator’s directory and contents.
 - Shutdown discards pending requests, rejects new work, and makes simultaneous callers wait for active cleanup.
 - Scope disposal and admission/shutdown races settle callers at ordinary and reduced scheduler budgets.
-- Main tests retain Settings-before-IPC ordering, Cancel Quit, failed child stop, and distinct cleanup failures.
+- Main tests retain Settings-before-IPC ordering, failed child stop, and distinct cleanup failures.
 
 Unexpected private-worker termination is source-reviewed through its finalizer; tests do not expose a private worker solely for injection. Cooperative scheduler tests exercise interleavings without claiming exhaustive concurrency proof.
 
