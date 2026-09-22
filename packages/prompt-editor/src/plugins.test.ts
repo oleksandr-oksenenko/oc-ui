@@ -160,6 +160,24 @@ describe("prompt editor plugins", () => {
     instance.dispose();
   });
 
+  it("keeps code only between the span boundaries", () => {
+    // The position at the end of the span is ordinary text.
+    const end = editor("`code`");
+    const endParagraph = end.view.state.doc.firstChild!;
+    end.select(endParagraph.nodeSize - 1, endParagraph.nodeSize - 1);
+    end.type("x");
+    expect(end.marksOf("x")).toEqual([]);
+    end.dispose();
+
+    // A position between the span's characters stays code; equal marks merge
+    // into one text node, so the whole run is asserted.
+    const inside = editor("`code`");
+    inside.select(3, 3);
+    inside.type("x");
+    expect(inside.marksOf("coxde")).toEqual(["code"]);
+    inside.dispose();
+  });
+
   it("applies Markdown inline shortcuts without losing content or marks", () => {
     const strong = editor();
     strong.type("**bold**");
@@ -245,10 +263,12 @@ describe("prompt editor plugins", () => {
     expect(span.marksOf("**x**")).toEqual(["code"]);
     span.dispose();
 
-    const toggled = editor();
-    toggled.press("e", primaryModifier());
-    toggled.type("**x**");
+    // A toggle over a selection marks the whole run as code.
+    const toggled = editor("\\*\\*x\\*\\*");
+    toggled.select(1, toggled.view.state.doc.firstChild!.nodeSize - 1);
+    expect(toggled.press("e", primaryModifier())).toBe(true);
     expect(toggled.draft().text).toBe("`**x**`");
+    expect(toggled.marksOf("**x**")).toEqual(["code"]);
     toggled.dispose();
 
     // A run-delimited span is left as literal text rather than consuming its
@@ -368,18 +388,6 @@ describe("prompt editor plugins", () => {
     const draft = toggled.draft();
     expect(draft.text).toBe("`a`\n`b`");
     toggled.dispose();
-
-    // Shift+Enter while the code mark is active.
-    const active = editor();
-    active.press("e", primaryModifier());
-    active.type("a");
-    expect(active.press("Enter", { shiftKey: true })).toBe(true);
-    active.type("b");
-    expect(active.marksOf("a")).toEqual(["code"]);
-    expect(active.marksOf("b")).toEqual(["code"]);
-    expect(secondChildMarks(active.view.state.doc)).toEqual(["code"]);
-    expect(active.draft().text).toBe("`a`\n`b`");
-    active.dispose();
 
     // A transaction that adds the code mark directly, as paste or another
     // command would.

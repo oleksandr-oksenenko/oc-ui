@@ -34,6 +34,11 @@ type MarkdownSkill = {
  * The bundled heading allows only text and images, but a mention in a heading
  * parses into a skill atom, so headings admit the atom as well. The rest of
  * the bundled heading spec (attrs, parseDOM, toDOM, defining) is unchanged.
+ *
+ * The code mark is exclusive at its boundaries: the positions just before and
+ * just after a span are ordinary text, while positions between its characters
+ * stay code. Arrow keys therefore move in and out of the span, and typing
+ * follows the cursor rather than a hidden state.
  */
 export const schema: Schema = new Schema({
   nodes: baseSchema.spec.nodes
@@ -61,7 +66,10 @@ export const schema: Schema = new Schema({
         ],
       },
     }),
-  marks: baseSchema.spec.marks,
+  marks: baseSchema.spec.marks.update("code", {
+    ...baseSchema.spec.marks.get("code")!,
+    inclusive: false,
+  }),
 });
 
 // The bundled defaults apply: images parse into image nodes, tables and
