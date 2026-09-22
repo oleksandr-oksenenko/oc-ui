@@ -1,7 +1,6 @@
-export { schema, type PromptDraft } from "./markdown.ts";
+export { schema } from "./markdown.ts";
 export {
   fromDraft,
-  fromPlainText,
   pasteContent,
   pastePlainText,
   serializeSlice,

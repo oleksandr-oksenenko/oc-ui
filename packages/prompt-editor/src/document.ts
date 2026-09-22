@@ -1,31 +1,16 @@
-import type { PromptSkillAttachment } from "@opencode/client";
-import { Slice, type Fragment, type Node, type Node as PMNode } from "prosemirror-model";
+import { Slice, type Node as PMNode } from "prosemirror-model";
 import type { EditorState, Transaction } from "prosemirror-state";
-import {
-  parseDraft,
-  schema,
-  serializeDraft,
-  serializeSlice as serializeSliceContent,
-} from "./markdown.ts";
+import { parseDraft, schema } from "./markdown.ts";
 
 export { schema } from "./markdown.ts";
 
 /**
- * Rebuilds a document from draft text. Skill mentions that still match the
- * text become atoms; stale or overlapping mentions stay ordinary text.
+ * The public codec names. `fromDraft` rebuilds a document from draft text
+ * (mentions that still match become atoms; stale or overlapping mentions stay
+ * ordinary text), `toDraft` serializes a document back to draft text, and
+ * `serializeSlice` writes clipboard slice content with skill atoms as names.
  */
-export function fromDraft(text: string, skills: readonly PromptSkillAttachment[] = []) {
-  return parseDraft(text, skills);
-}
-
-export function toDraft(doc: Node) {
-  return serializeDraft(doc);
-}
-
-/** Serializes clipboard slice content with skill atoms written as names. */
-export function serializeSlice(content: Fragment): string {
-  return serializeSliceContent(content);
-}
+export { parseDraft as fromDraft, serializeDraft as toDraft, serializeSlice } from "./markdown.ts";
 
 /**
  * The Markdown paste policy: a code block takes the text literally, while
@@ -36,7 +21,7 @@ export function pasteContent(state: EditorState, text: string): Transaction {
   if (state.selection.$from.parent.type.spec.code) {
     return state.tr.insertText(text, from, to);
   }
-  return state.tr.replaceSelection(Slice.maxOpen(fromDraft(text).content));
+  return state.tr.replaceSelection(Slice.maxOpen(parseDraft(text).content));
 }
 
 /**
