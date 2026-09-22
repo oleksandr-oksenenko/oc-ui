@@ -63,6 +63,10 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
     await git(projectDirectory, "rev-parse", "refs/heads/main"),
   );
   assert.ok((await git(projectDirectory, "worktree", "list", "--porcelain")).includes(worktree));
+  // A newly created session starts with the context panel closed.
+  if (await $('[aria-label="Show context"]').isExisting()) {
+    await $('[aria-label="Show context"]').click();
+  }
   await $("p=No working tree changes").waitForDisplayed({ timeout: TIMEOUT });
   // A session worktree is detached, so it reports no current branch. The Diff
   // panel must still offer the comparison against the default branch. Commit a
