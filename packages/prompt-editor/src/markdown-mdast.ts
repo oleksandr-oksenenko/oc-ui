@@ -322,9 +322,11 @@ const listTypes = new Set(["bullet_list", "ordered_list"]);
 
 /**
  * Adjacent lists of the same type are one list in Markdown, so they are
- * serialized as one; the parser then rebuilds a single list. Separating them
- * would need a different bullet character, and the composer keeps the
- * canonical `-` bullet.
+ * serialized as one; the parser then rebuilds a single list. A different
+ * ordered-list start is not a separator either: the merged list keeps the
+ * first list's `order` and the later items continue its numbering. Separating
+ * bullet lists would need a different bullet character, and the composer keeps
+ * the canonical `-` bullet.
  */
 function mergeAdjacentLists(doc: PMNode): PMNode {
   const merged: PMNode[] = [];

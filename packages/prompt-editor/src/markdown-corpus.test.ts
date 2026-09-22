@@ -46,7 +46,18 @@ function afterBreak(marker: string): PMNode {
   ]);
 }
 
-const KNOWN_LOSSES = new Set(["adjacent bullet lists"]);
+/** An ordered list of single-line items, starting at `order`. */
+function orderedList(order: number, ...items: string[]): PMNode {
+  return schema.node(
+    "ordered_list",
+    { order, tight: true },
+    items.map((item) =>
+      schema.node("list_item", null, [schema.node("paragraph", null, [schema.text(item)])]),
+    ),
+  );
+}
+
+const KNOWN_LOSSES = new Set(["adjacent bullet lists", "adjacent ordered lists"]);
 
 /**
  * Cases whose draft is not yet a fixed point. Empty since the mdast
@@ -85,6 +96,10 @@ const corpus: ReadonlyArray<readonly [string, PMNode]> = [
   ["item with second paragraph", parse("- item\n\n  second paragraph")],
   ["item with following code block", parse("- item\n  ```\n  code\n  ```")],
   ["adjacent bullet lists", parse("* one\n+ two")],
+  [
+    "adjacent ordered lists",
+    schema.node("doc", null, [orderedList(3, "three", "four"), orderedList(1, "one", "two")]),
+  ],
   ["setext heading", parse("Title\n===")],
   ["ordered paren marker", parse("1) item")],
   ["tilde fence", parse("~~~\ncode\n~~~")],
@@ -103,7 +118,11 @@ const corpus: ReadonlyArray<readonly [string, PMNode]> = [
   ["code span edge spaces", parse("keep `  spaced  ` code")],
   ["code span one-sided spaces", parse("` a` and `b `")],
   ["hard break inside emphasis", parse("**a\nb**")],
-  ["heading with hard break", parse("a\nb\n===")],
+  // The parser drops the whole setext heading: its text would contain a hard
+  // break, which the heading schema forbids, so only an empty paragraph
+  // remains. The corpus pins that empty result; the parser test below states
+  // the loss directly. This is not heading-with-break coverage.
+  ["setext heading with hard break loses content", parse("a\nb\n===")],
   [
     "spaced strong",
     schema.node("doc", null, [
@@ -186,6 +205,27 @@ describe("markdown corpus", () => {
       const { reparsed } = roundTrip(doc);
       expect(reparsed.eq(doc), `${name} unexpectedly round-trips`).toBe(false);
     }
+    // Adjacent ordered lists merge into the first list, and its start is kept:
+    // the second list's items continue the first list's numbering. Markdown
+    // has no spelling that separates two ordered lists at the same indent.
+    const merged = roundTrip(
+      schema.node("doc", null, [orderedList(3, "three", "four"), orderedList(1, "one", "two")]),
+    );
+    expect(merged.draft.text).toBe("3. three\n4. four\n5. one\n6. two");
+    expect(merged.reparsed.childCount).toBe(1);
+    expect(merged.reparsed.firstChild!.attrs.order).toBe(3);
+    expect(merged.reparsed.textContent).toBe("threefouronetwo");
+  });
+
+  it("documents the setext heading content loss at parse time", () => {
+    // The setext heading's text spans two lines, so the parsed heading would
+    // contain a hard break. The heading schema forbids it, and the parser
+    // discards the invalid node, leaving only an empty paragraph: the source
+    // text is lost before any serialization happens.
+    const doc = parse("a\nb\n===");
+    expect(doc.textContent).toBe("");
+    expect(doc.toJSON()).toEqual({ type: "doc", content: [{ type: "paragraph" }] });
+    expect(toDraft(doc).text).toBe("");
   });
 
   it("is stable under serialize, parse, serialize, except for the documented instabilities", () => {
