@@ -159,7 +159,7 @@ describe("prompt editor plugins", () => {
     // GFM strikethrough.
     expect(strike.view.state.doc.textContent).toBe("~~gone~~");
     expect(strike.marksOf("gone")).toBeUndefined();
-    expect(strike.draft().text).toBe("\\~~gone\\~\\~");
+    expect(strike.draft().text).toBe("\\~\\~gone\\~\\~");
     strike.dispose();
 
     const link = editor();

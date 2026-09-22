@@ -46,8 +46,8 @@ describe("renderMarkdown", () => {
   });
 
   it("renders the composer's escaped tilde text literally, not as strikethrough", () => {
-    // The composer writes a literal `~~b~~` as `\~\~b\~\~` and a literal
-    // `~text~` at the start of a line as `\~text~`; both must stay text.
+    // The composer writes every literal tilde escaped: `~~b~~` becomes
+    // `\~\~b\~\~` and `~text~` becomes `\~text\~`; both must stay text.
     const pair = renderMarkdown("\\~\\~b\\~\\~");
     expect(pair).toContain("~~b~~");
     expect(pair).not.toContain("<del>");
@@ -61,8 +61,8 @@ describe("renderMarkdown", () => {
     // `marked` runs with its default GFM dialect (tables, task lists,
     // autolinks, strikethrough) plus `breaks: true`, and its `del` tokenizer
     // accepts one or two tildes. An unescaped `~text~` therefore renders as
-    // `<del>`, including mid-line, where the composer's tilde-pair escaping
-    // does not reach. This pins the dialect, not a desired outcome.
+    // `<del>`. The composer escapes every literal tilde, so drafts cannot
+    // produce this form; this pins the dialect, not a desired outcome.
     expect(renderMarkdown("~text~")).toContain("<del>text</del>");
     expect(renderMarkdown("a ~text~ c")).toContain("<del>text</del>");
   });

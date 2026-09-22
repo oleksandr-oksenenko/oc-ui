@@ -254,6 +254,7 @@ describe("markdown corpus", () => {
     expect(toDraft(parse("~~~\ncode\n~~~")).text).toBe("```\ncode\n```");
     expect(toDraft(parse("* one\n+ two")).text).toBe("- one\n- two");
     expect(toDraft(parse("a ~~b~~ c")).text).toBe("a \\~\\~b\\~\\~ c");
+    expect(toDraft(parse("~text~")).text).toBe("\\~text\\~");
   });
 
   it("parses every case into a schema-valid document", () => {

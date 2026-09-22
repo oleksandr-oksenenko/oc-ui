@@ -45,13 +45,10 @@ export const mdastOptions: ToMarkdownOptions = {
   rule: "-",
   ruleRepetition: 3,
   // The transcript renders GFM strikethrough, but the composer has no
-  // strikethrough mark, so a literal `~~` pair must stay literal on the wire.
-  // The library escapes `~` only at the start of a line; mark tilde pairs in
-  // phrasing as unsafe as well.
-  unsafe: [
-    { character: "~", inConstruct: "phrasing", after: "~" },
-    { character: "~", inConstruct: "phrasing", before: "~" },
-  ],
+  // strikethrough mark, so literal tildes must stay literal on the wire.
+  // marked's `del` tokenizer accepts one or two tildes, so every tilde in
+  // phrasing text is escaped, not just adjacent pairs.
+  unsafe: [{ character: "~", inConstruct: "phrasing" }],
   handlers: {
     // The composer reads a single newline as a line break, so a break is
     // written as a plain newline rather than the library's backslash hard
