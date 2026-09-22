@@ -1186,6 +1186,125 @@ describe.sequential("production browser app", () => {
     expect(await recovery.count()).toBe(0);
   });
 
+  it("bounds the attachments one draft holds and reports the refusal", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Bounded attachments",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    const attachments = page.locator('[aria-label="Images and files"] li');
+    const pasteText = (text) =>
+      prompt.evaluate((input, payload) => {
+        const clipboardData = new DataTransfer();
+        clipboardData.setData("text/plain", payload);
+        input.dispatchEvent(
+          new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+        );
+      }, text);
+
+    // Each paste is over the 16 KiB routing threshold, so it becomes a text
+    // attachment rather than draft content.
+    for (let index = 1; index <= 16; index += 1) {
+      await pasteText(`pasted ${index} ${"a".repeat(17_000)}`);
+    }
+    await expect.poll(() => attachments.count()).toBe(16);
+
+    // The draft is at the stated count bound: the next paste is refused with a
+    // notice that names the release action instead of silently dropping it.
+    await pasteText(`refused ${"b".repeat(17_000)}`);
+    await page
+      .getByRole("alert")
+      .filter({ hasText: "the draft can hold 16 attachments" })
+      .waitFor();
+    expect(await attachments.count()).toBe(16);
+
+    // Removing one attachment frees the slot for the next paste.
+    await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).click();
+    await expect.poll(() => attachments.count()).toBe(15);
+    await pasteText(`accepted ${"c".repeat(17_000)}`);
+    await expect.poll(() => attachments.count()).toBe(16);
+    expect(errors).toEqual([]);
+  });
+
+  it("bounds paste recovery retention and survives adversarial pasted markup", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Adversarial paste",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    await prompt.click();
+
+    // A rejected paste past the retention bound is not kept at all, so an
+    // arbitrarily large clipboard string cannot pin renderer memory.
+    const overRetention = `${"a".repeat(4 * 1024 * 1024 + 1)}RETENTION-PAYLOAD`;
+    await prompt.evaluate((input, payload) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", payload);
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+    }, overRetention);
+    await page.getByRole("alert").filter({ hasText: "too large to keep" }).waitFor();
+    expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(0);
+    expect(await prompt.textContent()).toBe("");
+
+    // Deeply nested HTML is refused before parsing; the text flavor lands and
+    // the editor stays responsive.
+    const deepHtml = `${"<div>".repeat(20_000)}DEEP-ACCEPTANCE${"</div>".repeat(20_000)}`;
+    const deepElapsed = await prompt.evaluate((input, html) => {
+      const started = performance.now();
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/html", html);
+      clipboardData.setData("text/plain", "DEEP-ACCEPTANCE fallback");
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+      return performance.now() - started;
+    }, deepHtml);
+    expect(deepElapsed).toBeLessThan(2_000);
+    await expect.poll(() => prompt.textContent()).toContain("DEEP-ACCEPTANCE fallback");
+    expect(await prompt.locator("div").count()).toBe(0);
+
+    // Many anchored elements parse within the same bound and are not dropped.
+    const anchorHtml = Array.from(
+      { length: 1_000 },
+      (_, index) =>
+        `<p><a href="https://x.dev/${index}" title="link ${index}">ANCHOR-${index}</a></p>`,
+    ).join("");
+    const anchorElapsed = await prompt.evaluate((input, html) => {
+      const started = performance.now();
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/html", html);
+      clipboardData.setData("text/plain", "ANCHORS fallback");
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+      return performance.now() - started;
+    }, anchorHtml);
+    expect(anchorElapsed).toBeLessThan(5_000);
+    await expect.poll(() => prompt.textContent()).toContain("ANCHOR-999");
+
+    // Malformed markup neither throws nor hangs; its text survives.
+    const malformed = `${"<p>".repeat(200)}unclosed <b>bold ${"</div>".repeat(100)}<script>alert(1)</script>`;
+    const malformedElapsed = await prompt.evaluate((input, html) => {
+      const started = performance.now();
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/html", html);
+      clipboardData.setData("text/plain", "MALFORMED fallback");
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+      return performance.now() - started;
+    }, malformed);
+    expect(malformedElapsed).toBeLessThan(2_000);
+    await expect.poll(() => prompt.textContent()).toContain("unclosed bold");
+    expect(errors).toEqual([]);
+  });
+
   it("pastes literally from the host clipboard after Mod+Shift+V and the context action", async () => {
     await ensureConnected();
     const session = await api.session.create({

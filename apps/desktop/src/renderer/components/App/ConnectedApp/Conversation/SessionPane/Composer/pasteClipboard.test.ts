@@ -6,6 +6,7 @@ import {
   readClipboardFiles,
   readClipboardText,
 } from "./pasteClipboard.ts";
+import { MAX_HTML_NESTING } from "./pasteHtml.ts";
 
 /** A clipboard whose `types` match the provided flavors unless overridden. */
 const clipboard = (
@@ -72,6 +73,32 @@ describe("readClipboardText", () => {
     expect(bounded.htmlOversize).toBe(undefined);
   });
 
+  it("does not expose HTML nested past the inspection bound", () => {
+    const deep = `${"<div>".repeat(20_000)}<p>hidden</p>${"</div>".repeat(20_000)}`;
+    const read = readClipboardText(
+      clipboard({ "text/html": deep, "text/plain": "fallback" }),
+      context,
+    );
+    expect(read.html).toBe(undefined);
+    expect(read.htmlOversize).toBe(true);
+    // The text flavor still routes normally.
+    expect(read.text).toBe("fallback");
+
+    // With no plain flavor there is nothing to derive without parsing the
+    // deep tree, so the payload is left uninspected instead.
+    const blank = readClipboardText(clipboard({ "text/html": deep }), context);
+    expect(blank.html).toBe(undefined);
+    expect(blank.htmlOversize).toBe(true);
+    expect(blank.text).toBe("");
+  });
+
+  it("keeps HTML exactly at the nesting bound parseable", () => {
+    const atBound = `${"<div>".repeat(MAX_HTML_NESTING)}deep${"</div>".repeat(MAX_HTML_NESTING)}`;
+    const read = readClipboardText(clipboard({ "text/html": atBound }), context);
+    expect(read.html).toBe(atBound);
+    expect(read.htmlOversize).toBe(undefined);
+  });
+
   it("derives the effective text from HTML when the plain flavor is blank", () => {
     const read = readClipboardText(
       clipboard({ "text/plain": "   ", "text/html": "<h1>Title</h1><p>Body text</p>" }),
@@ -107,6 +134,12 @@ describe("htmlToPlainText", () => {
     expect(htmlToPlainText("<table><tr><td>a</td><td>b</td></tr></table>")).toBe("a\n\nb");
     expect(htmlToPlainText("<p>unclosed <b>bold")).toBe("unclosed bold");
     expect(htmlToPlainText("")).toBe("");
+  });
+
+  it("keeps text from markup nested past the recursion bound", () => {
+    const depth = MAX_HTML_NESTING + 5;
+    const deep = `${"<div>".repeat(depth)}<p>deep text</p>${"</div>".repeat(depth)}`;
+    expect(htmlToPlainText(deep)).toBe("deep text");
   });
 });
 

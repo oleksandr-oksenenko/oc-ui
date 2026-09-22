@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { sanitizePastedHtml } from "./pasteHtml.ts";
+import { MAX_HTML_NESTING, sanitizePastedHtml } from "./pasteHtml.ts";
 
 describe("sanitizePastedHtml", () => {
   it("keeps allowed links and images with web URLs", () => {
@@ -51,5 +51,53 @@ describe("sanitizePastedHtml", () => {
     expect(sanitized).toContain("cell");
     expect(sanitized).not.toContain("alert");
     expect(sanitized).not.toContain("color");
+  });
+});
+
+describe("sanitizePastedHtml adversarial input", () => {
+  it("refuses markup nested past the bound before parsing it", () => {
+    const html = `${"<div>".repeat(50_000)}deep${"</div>".repeat(50_000)}`;
+    const started = performance.now();
+    const sanitized = sanitizePastedHtml(html);
+    const elapsed = performance.now() - started;
+    expect(sanitized).toBe("");
+    // Without the depth guard this parse costs seconds and can overflow the
+    // serializer's call stack.
+    expect(elapsed).toBeLessThan(1_000);
+  });
+
+  it("still parses markup exactly at the nesting bound", () => {
+    const html = `${"<div>".repeat(MAX_HTML_NESTING)}deep${"</div>".repeat(MAX_HTML_NESTING)}`;
+    const started = performance.now();
+    const sanitized = sanitizePastedHtml(html);
+    expect(sanitized).toContain("deep");
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  it("sanitizes very many elements and attributes within a bounded time", () => {
+    const html = Array.from(
+      { length: 10_000 },
+      (_, index) =>
+        `<p><a href="https://x.dev/${index}" title="link ${index}" rel="nofollow">anchor ${index}</a></p>`,
+    ).join("");
+    const started = performance.now();
+    const sanitized = sanitizePastedHtml(html);
+    const elapsed = performance.now() - started;
+    expect(sanitized).toContain("anchor 9999");
+    // Disallowed attributes are dropped instead of copied through.
+    expect(sanitized).not.toContain("rel=");
+    expect(elapsed).toBeLessThan(3_000);
+  });
+
+  it("survives malformed markup without throwing", () => {
+    const html =
+      `${"<p>".repeat(400)}unclosed <b>bold <a href="https://x.dev/a(b)">link</a>` +
+      `${"</div>".repeat(200)}<<!-- --><>&#x110000;&notanentity;<script>alert(1)</script>`;
+    const started = performance.now();
+    const sanitized = sanitizePastedHtml(html);
+    const elapsed = performance.now() - started;
+    expect(sanitized).toContain("unclosed");
+    expect(sanitized).not.toContain("alert");
+    expect(elapsed).toBeLessThan(2_000);
   });
 });

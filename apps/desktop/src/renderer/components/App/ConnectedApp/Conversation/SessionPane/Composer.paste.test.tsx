@@ -304,6 +304,73 @@ describe("Composer paste routing", () => {
   });
 });
 
+describe("Composer adversarial paste", () => {
+  it("falls back to the text flavor for markup nested past the inspection bound", () => {
+    setPlatform("macos");
+    const harness = openComposer({ value: "keep this" });
+    const text = "deep paste fallback";
+    const html = `${"<div>".repeat(20_000)}${text}${"</div>".repeat(20_000)}`;
+    const started = performance.now();
+    const event = pasteClipboard(harness.editor, { html, text });
+    const elapsed = performance.now() - started;
+    expect(event.defaultPrevented).toBe(true);
+    // The payload is never parsed as markup, so the draft keeps its text and
+    // gains the fallback instead of a deep element tree.
+    expect(harness.draft()).toContain("keep this");
+    expect(harness.draft()).toContain(text);
+    expect(harness.editor.querySelector("div div div")).toBeNull();
+    expect(elapsed).toBeLessThan(1_000);
+    harness.dispose();
+  });
+
+  it("keeps the draft and explains a deep markup payload with no text flavor", () => {
+    setPlatform("macos");
+    const harness = openComposer({ value: "keep this" });
+    const html = `${"<div>".repeat(20_000)}${"</div>".repeat(20_000)}`;
+    const event = pasteClipboard(harness.editor, { html });
+    expect(event.defaultPrevented).toBe(true);
+    expect(textOf(harness.editor)).toBe("keep this");
+    expect(harness.draft()).toBeUndefined();
+    expect(harness.notice()).toContain("not inserted");
+    harness.dispose();
+  });
+
+  it("parses very many anchors and attributes within a bounded time", () => {
+    setPlatform("macos");
+    const harness = openComposer();
+    const html = Array.from(
+      { length: 2_000 },
+      (_, index) =>
+        `<p><a href="https://x.dev/${index}" title="link ${index}" rel="nofollow">anchor ${index}</a></p>`,
+    ).join("");
+    const started = performance.now();
+    const event = pasteClipboard(harness.editor, { html, text: "anchors fallback" });
+    const elapsed = performance.now() - started;
+    expect(event.defaultPrevented).toBe(true);
+    expect(harness.draft()).toContain("anchor 1999");
+    expect(harness.editor.querySelectorAll("a")).toHaveLength(2_000);
+    expect(elapsed).toBeLessThan(2_000);
+    harness.dispose();
+  });
+
+  it("survives malformed markup and keeps its text", () => {
+    setPlatform("macos");
+    const harness = openComposer();
+    const html =
+      `${"<p>".repeat(200)}unclosed <b>bold <a href="https://x.dev/a(b)">link</a>` +
+      `${"</div>".repeat(100)}<<script>alert(1)</script>`;
+    const started = performance.now();
+    const event = pasteClipboard(harness.editor, { html, text: "malformed fallback" });
+    const elapsed = performance.now() - started;
+    expect(event.defaultPrevented).toBe(true);
+    expect(textOf(harness.editor)).toContain("unclosed");
+    expect(textOf(harness.editor)).toContain("bold");
+    expect(harness.notice()).toBe("");
+    expect(elapsed).toBeLessThan(2_000);
+    harness.dispose();
+  });
+});
+
 describe("Composer literal paste gesture", () => {
   it("inserts the host clipboard text literally and leaves routing untouched", async () => {
     setPlatform("macos");

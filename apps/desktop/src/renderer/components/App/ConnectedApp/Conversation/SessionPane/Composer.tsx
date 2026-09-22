@@ -71,7 +71,7 @@ const isLiteralPasteChord = (event: KeyboardEvent): boolean => {
 };
 
 const HTML_TOO_LARGE_NOTICE =
-  "The copied content is too large to inspect, so it was not inserted. Copy a smaller part and paste again.";
+  "The copied content is too large or too deeply nested to inspect, so it was not inserted. Copy a smaller part and paste again.";
 
 const UNSUPPORTED_HTML_NOTICE =
   "That copied content has no text this editor can hold. Copy it as plain text and paste again.";

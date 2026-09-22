@@ -45,7 +45,7 @@ export type PastePayload = {
   readonly literal?: boolean;
   /** The caret sits in a code block, where every paste is implicitly literal. */
   readonly codeBlock?: boolean;
-  /** The HTML flavor was present but exceeded the inspection bound. */
+  /** The HTML flavor was present but exceeded a size or nesting inspection bound. */
   readonly htmlOversize?: boolean;
 };
 
