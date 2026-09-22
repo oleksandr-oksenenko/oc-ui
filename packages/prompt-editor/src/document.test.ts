@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { PromptSkillAttachment } from "@opencode/client";
-import { Fragment, type Node as PMNode } from "prosemirror-model";
+import { Fragment, Slice, type Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import {
   fromDraft,
+  fromPlainText,
   pasteContent,
+  pastePlainText,
   schema,
   serializeSlice,
   slashQuery,
+  sliceHasInsertableContent,
   toDraft,
 } from "./document.ts";
 
@@ -57,6 +60,26 @@ function literal(text: string) {
     schema.node("paragraph", null, text === "" ? [] : [schema.text(text)]),
   ]);
 }
+
+/** Block type names and text of a pasted document, in order. */
+function blocks(doc: PMNode): { type: string; text: string; breaks: number }[] {
+  const result: { type: string; text: string; breaks: number }[] = [];
+  doc.forEach((node) => {
+    let breaks = 0;
+    node.descendants((child) => {
+      if (child.type.name === "hard_break") breaks += 1;
+      return true;
+    });
+    result.push({ type: node.type.name, text: node.textContent, breaks });
+  });
+  return result;
+}
+
+/** A paragraph node with the given inline content. */
+const paragraphBlock = (content: PMNode[]) => schema.node("paragraph", null, content);
+
+/** A closed slice containing exactly one node. */
+const singleNodeSlice = (node: PMNode) => new Slice(Fragment.from(node), 0, 0);
 
 describe("prompt document", () => {
   it("keeps plain text and single newlines canonical", () => {
@@ -513,5 +536,87 @@ describe("prompt document", () => {
     const pasted = pasteContent(emptyState, "- one\n- two").doc;
     pasted.check();
     expect(toDraft(pasted)).toEqual({ text: "- one\n- two", skills: [] });
+  });
+
+  it("pastes plain text with hard breaks and paragraph breaks, not Markdown", () => {
+    const empty = fromDraft("");
+    const state = EditorState.create({
+      schema,
+      doc: empty,
+      selection: TextSelection.atEnd(empty),
+    });
+    const pasted = pastePlainText(state, "first line\nsecond line\n\n# not a heading").doc;
+    pasted.check();
+    expect(blocks(pasted)).toEqual([
+      { type: "paragraph", text: "first linesecond line", breaks: 1 },
+      { type: "paragraph", text: "# not a heading", breaks: 0 },
+    ]);
+    expect(toDraft(pasted)).toEqual({
+      // The serializer escapes the leading marker so reparsing keeps it literal.
+      text: "first line\nsecond line\n\n\\# not a heading",
+      skills: [],
+    });
+
+    // Markers that Markdown would interpret stay literal characters: a list is
+    // not a list and emphasis is not a mark.
+    const markers = pastePlainText(state, "- one\n- two\n\n**bold**").doc;
+    markers.check();
+    expect(blocks(markers)).toEqual([
+      { type: "paragraph", text: "- one- two", breaks: 1 },
+      { type: "paragraph", text: "**bold**", breaks: 0 },
+    ]);
+    let marks = 0;
+    markers.descendants((node) => {
+      marks += node.marks.length;
+      return true;
+    });
+    expect(marks).toBe(0);
+  });
+
+  it("keeps literal whitespace and drops only structural blank lines", () => {
+    const trailing = fromPlainText("a  \nb");
+    trailing.check();
+    expect(blocks(trailing)).toEqual([{ type: "paragraph", text: "a  b", breaks: 1 }]);
+
+    // Leading, trailing and repeated blank lines create no empty paragraphs.
+    const padded = fromPlainText("\n\nfirst\n\n\n\nsecond\n\n");
+    padded.check();
+    expect(blocks(padded)).toEqual([
+      { type: "paragraph", text: "first", breaks: 0 },
+      { type: "paragraph", text: "second", breaks: 0 },
+    ]);
+
+    // Carriage returns normalize, so a Windows clipboard paste keeps its lines.
+    const windows = fromPlainText("one\r\ntwo\rthree");
+    windows.check();
+    expect(blocks(windows)).toEqual([{ type: "paragraph", text: "onetwothree", breaks: 2 }]);
+  });
+
+  it("pastes raw newlines into a code block", () => {
+    const code = fromDraft("```\na\n```");
+    const codeState = EditorState.create({
+      schema,
+      doc: code,
+      selection: TextSelection.atEnd(code),
+    });
+    expect(pastePlainText(codeState, "b\nc").doc.textContent).toBe("ab\nc");
+    expect(pastePlainText(codeState, "*x*").doc.textContent).toBe("a*x*");
+  });
+
+  it("treats empty and whitespace-only slices as nothing to insert", () => {
+    expect(sliceHasInsertableContent(Slice.empty)).toBe(false);
+    expect(sliceHasInsertableContent(singleNodeSlice(paragraphBlock([])))).toBe(false);
+    expect(sliceHasInsertableContent(singleNodeSlice(paragraphBlock([schema.text("   ")])))).toBe(
+      false,
+    );
+    expect(sliceHasInsertableContent(singleNodeSlice(paragraphBlock([schema.text("hi")])))).toBe(
+      true,
+    );
+    // An image is content even though it carries no text.
+    expect(
+      sliceHasInsertableContent(
+        singleNodeSlice(schema.node("image", { src: "https://example.com/a.png" })),
+      ),
+    ).toBe(true);
   });
 });
