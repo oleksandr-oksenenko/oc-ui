@@ -383,7 +383,7 @@ describe("createSessionComposer", () => {
     root.dispose();
   });
 
-  it("bounds the aggregate attachment bytes per draft and refuses the excess", () => {
+  it("retains an aggregate-byte over-budget paste for recovery", () => {
     const root = setup();
     root.setSelectedID("session");
     // Text attachments at the per-file cap fill the byte budget exactly; the
@@ -394,9 +394,81 @@ describe("createSessionComposer", () => {
     }
     expect(root.composer.files()).toHaveLength(count);
 
-    root.composer.attachText("x".repeat(MAX_TEXT_ATTACHMENT_BYTES));
+    const rejected = "x".repeat(MAX_TEXT_ATTACHMENT_BYTES);
+    root.composer.attachText(rejected);
     expect(root.composer.files()).toHaveLength(count);
-    expect(root.composer.error()).toContain(`hold ${MAX_DRAFT_ATTACHMENTS} attachments`);
+    // The refused text is retained through the recovery surface, not dropped.
+    const recovery = root.composer.pasteRecovery();
+    expect(recovery?.message).toContain(`${MAX_DRAFT_ATTACHMENT_BYTES / (1024 * 1024)} MiB`);
+    expect(recovery?.message).toContain("Restore");
+    expect(recovery?.take()).toBe(rejected);
+    expect(root.composer.files()).toHaveLength(count);
+    root.dispose();
+  });
+
+  it("retains a count-exhausted paste for recovery instead of dropping it", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const files = Array.from(
+      { length: MAX_DRAFT_ATTACHMENTS },
+      (_, index) => new File([`file ${index}`], `file-${index}.txt`),
+    );
+    root.composer.attachFiles(files);
+    expect(root.composer.files()).toHaveLength(MAX_DRAFT_ATTACHMENTS);
+
+    root.composer.attachText("kept for restore");
+    expect(root.composer.files()).toHaveLength(MAX_DRAFT_ATTACHMENTS);
+    expect(root.composer.files().map((file) => file.name)).not.toContain("pasted-text.txt");
+    const recovery = root.composer.pasteRecovery();
+    expect(recovery?.message).toContain(`hold ${MAX_DRAFT_ATTACHMENTS} attachments`);
+    expect(recovery?.message).toContain("Restore");
+    expect(recovery?.take()).toBe("kept for restore");
+    root.dispose();
+  });
+
+  it("keeps a budget-rejected paste with its origin session across navigation", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const files = Array.from(
+      { length: MAX_DRAFT_ATTACHMENTS },
+      (_, index) => new File([`file ${index}`], `file-${index}.txt`),
+    );
+    root.composer.attachFiles(files);
+    root.composer.attachText("belongs to session");
+
+    root.setSelectedID("other");
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+    expect(root.composer.files()).toEqual([]);
+    root.setSelectedID("session");
+    expect(root.composer.pasteRecovery()?.take()).toBe("belongs to session");
+    root.dispose();
+  });
+
+  it("keeps an existing recovery when a later budget-rejected paste arrives", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const files = Array.from(
+      { length: MAX_DRAFT_ATTACHMENTS },
+      (_, index) => new File([`file ${index}`], `file-${index}.txt`),
+    );
+    root.composer.attachFiles(files);
+    root.composer.attachText("first rejected");
+    root.composer.attachText("second rejected");
+    expect(root.composer.error()).toContain("Restore text or Dismiss");
+    // The newest rejection must not overwrite the retained source.
+    expect(root.composer.pasteRecovery()?.take()).toBe("first rejected");
+
+    // Dismissing releases the recovery; the next paste is refused by the still
+    // exhausted budget and retained again.
+    root.composer.attachText("third rejected");
+    root.composer.pasteRecovery()?.dismiss();
+    root.composer.attachText("fourth rejected");
+    expect(root.composer.pasteRecovery()?.take()).toBe("fourth rejected");
+
+    // Freeing a slot lets the next paste attach normally.
+    root.composer.removeFile(root.composer.files()[0]!);
+    root.composer.attachText("fits now");
+    expect(root.composer.files().map((file) => file.name)).toContain("pasted-text.txt");
     expect(root.composer.pasteRecovery()).toBeUndefined();
     root.dispose();
   });

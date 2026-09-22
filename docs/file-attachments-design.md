@@ -198,9 +198,11 @@ The server rejects decoded bytes over `MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024`
 Count/aggregate size is bounded per session: at most 16 draft attachments and
 24 MiB total, and at most one retained paste recovery of
 `MAX_RETAINED_PASTE_UNITS = 4 Mi` UTF-16 code units (`MAX_TEXT_ATTACHMENT_BYTES`
-bounds each attached text separately). A payload past the recovery bound is not
-retained at all rather than truncated, and a paste while a recovery is pending is
-refused until it is restored or dismissed.
+bounds each attached text separately). A text paste that cannot become an
+attachment - over the per-file cap or past the aggregate budget - is retained
+through the recovery surface with a message that names its reason; a payload
+past the recovery bound is not retained at all rather than truncated. A paste
+while a recovery is pending is refused until it is restored or dismissed.
 
 ### Encoding
 

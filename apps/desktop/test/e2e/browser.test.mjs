@@ -1211,14 +1211,23 @@ describe.sequential("production browser app", () => {
     }
     await expect.poll(() => attachments.count()).toBe(16);
 
-    // The draft is at the stated count bound: the next paste is refused with a
-    // notice that names the release action instead of silently dropping it.
+    // The draft is at the stated count bound: the next paste is retained for
+    // restore instead of being dropped, and the surface names the release
+    // action.
     await pasteText(`refused ${"b".repeat(17_000)}`);
     await page
       .getByRole("alert")
       .filter({ hasText: "the draft can hold 16 attachments" })
       .waitFor();
     expect(await attachments.count()).toBe(16);
+    expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(1);
+
+    // Dismissing releases the recovery without inserting the refused text.
+    await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await expect
+      .poll(() => page.getByRole("button", { name: "Restore text", exact: true }).count())
+      .toBe(0);
+    expect(await prompt.textContent()).toBe("");
 
     // Removing one attachment frees the slot for the next paste.
     await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).click();
