@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/async-function */
 
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
@@ -709,6 +709,58 @@ export const PasteRecovery: Story = {
       await waitFor(() => expect(prompt).toHaveTextContent("# recovered heading"));
       await expect(prompt.querySelector("h1")).toBeNull();
       await expect(canvas.queryByRole("alert")).toBeNull();
+    });
+  },
+};
+
+export const OversizedLiteralPaste: Story = {
+  render: () => {
+    const [value, setValue] = createSignal("");
+    const [attached, setAttached] = createSignal<string | undefined>();
+    const huge = "x".repeat(16_384);
+    return (
+      <div>
+        <Composer
+          value={value()}
+          disabled={false}
+          action="send"
+          readClipboardText={async () => huge}
+          onAttachText={(text) => setAttached(text)}
+          modelSelection={composerModelSelection()}
+          agentSelection={composerAgentSelection()}
+          onInput={setValue}
+          onSubmit={() => undefined}
+        />
+        <Show when={attached()} fallback={<p data-testid="attached-summary">no attachment yet</p>}>
+          {(text) => (
+            <p data-testid="attached-summary">attached {text().length} characters as a text file</p>
+          )}
+        </Show>
+      </div>
+    );
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+
+    await step("The oversized literal paste becomes an attachment", async () => {
+      prompt.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "v",
+          metaKey: true,
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await waitFor(() =>
+        expect(canvas.getByTestId("attached-summary")).toHaveTextContent(
+          "attached 16384 characters as a text file",
+        ),
+      );
+      // The clipboard text never entered the editor.
+      await expect(prompt.textContent).toBe("");
     });
   },
 };
