@@ -96,7 +96,7 @@ export function PromptEditor(props: EditorProps) {
     dismissed = current === undefined ? undefined : { ...current };
     setQuery(undefined);
   };
-  const refreshQuery = (next: ReturnType<typeof slashQuery>, docChanged: boolean) => {
+  const refreshQuery = (next: ReturnType<typeof slashQuery>) => {
     if (next === undefined) {
       dismissed = undefined;
       setQuery(undefined);
@@ -105,7 +105,7 @@ export function PromptEditor(props: EditorProps) {
     if (dismissed !== undefined) {
       const same =
         dismissed.from === next.from && dismissed.to === next.to && dismissed.text === next.text;
-      if (same || !docChanged) return;
+      if (same) return;
     }
     dismissed = undefined;
     setQuery(next);
@@ -198,7 +198,7 @@ export function PromptEditor(props: EditorProps) {
         },
         dispatchTransaction(tr) {
           instance.updateState(instance.state.apply(tr));
-          refreshQuery(instance.composing ? undefined : slashQuery(instance.state), tr.docChanged);
+          refreshQuery(instance.composing ? undefined : slashQuery(instance.state));
           if (tr.docChanged) {
             const draft = toDraft(instance.state.doc);
             emitted = { text: draft.text, skills: draft.skills };

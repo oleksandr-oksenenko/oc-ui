@@ -395,6 +395,26 @@ describe("Composer menu ownership", () => {
     expect(harness.menu()).not.toBeNull();
     expect(harness.draft()).toBe("/buildmore");
 
+    // A selection-only caret move that changes the query is a new interaction.
+    // jsdom does not move carets for arrow keys, so drive the DOM selection
+    // the way a browser would and let ProseMirror sync it.
+    harness.press("Escape");
+    expect(harness.menu()).toBeNull();
+    harness.editor.focus();
+    const paragraph = harness.editor.querySelector("p");
+    const textNode = paragraph?.firstChild;
+    if (textNode) {
+      const range = document.createRange();
+      range.setStart(textNode, Math.max(0, (textNode.textContent ?? "").length - 1));
+      range.collapse(true);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    }
+    await harness.settle();
+    expect(harness.menu()).not.toBeNull();
+
     harness.dispose();
   });
 });
