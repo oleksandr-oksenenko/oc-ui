@@ -5,6 +5,11 @@ import { mount } from "../../../../../test/mount.ts";
 import type { FileTransferLike } from "../../../../../opencode/attachments.ts";
 import { Composer } from "./Composer.tsx";
 import type { ComposerProps } from "./Composer.tsx";
+import {
+  inertPasteProps,
+  unavailableAgentSelection,
+  unavailableSelection,
+} from "./composer-test-fixtures.ts";
 
 // The renderer sets this signal before mounting (mount-app.tsx); the tests
 // choose the platform explicitly.
@@ -16,30 +21,6 @@ afterEach(() => {
   delete document.documentElement.dataset.platform;
 });
 
-const unavailableSelection = {
-  state: "failed" as const,
-  switching: false,
-  disabled: false,
-  models: [],
-  variants: [],
-  onSelectModel: () => undefined,
-  onSelectVariant: () => undefined,
-};
-
-const unavailableAgentSelection = {
-  state: "failed" as const,
-  switching: false,
-  disabled: false,
-  agents: [],
-  onSelectAgent: () => undefined,
-};
-
-/** Inert paste callbacks; routing tests override them on their own mount. */
-const pasteProps = {
-  onAttachText: () => undefined,
-  readClipboardText: () => Promise.resolve(undefined),
-};
-
 const tooltipText = () => document.body.querySelector('[data-component="tooltip-v2"]')?.textContent;
 
 const dragEvent = (type: string, dataTransfer: FileTransferLike): Event => {
@@ -47,6 +28,21 @@ const dragEvent = (type: string, dataTransfer: FileTransferLike): Event => {
   Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
   return event;
 };
+
+/** Mounts a composer whose only variable is the agent selection. */
+const renderAgentComposer = (agentSelection: ComposerProps["agentSelection"]) =>
+  mount(() => (
+    <Composer
+      {...inertPasteProps}
+      value=""
+      disabled={false}
+      action="send"
+      modelSelection={unavailableSelection}
+      agentSelection={agentSelection}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
+  ));
 
 describe("Composer", () => {
   it("attaches pasted files and inserts ordinary text paste", () => {
@@ -56,7 +52,7 @@ describe("Composer", () => {
     const screenshot = new File(["image"], "screenshot.png", { type: "image/png" });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         files={[screenshot]}
         onAttachFiles={paste}
@@ -97,7 +93,7 @@ describe("Composer", () => {
     const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         onAttachFiles={attach}
         action="send"
@@ -134,7 +130,7 @@ describe("Composer", () => {
     const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         onAttachFiles={attach}
         action="send"
@@ -170,7 +166,7 @@ describe("Composer", () => {
   it("hides the drop state when the drag leaves without dropping", () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         onAttachFiles={() => undefined}
         action="send"
@@ -194,7 +190,7 @@ describe("Composer", () => {
     const attach = vi.fn<(files: readonly File[]) => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         onAttachFiles={attach}
         action="send"
@@ -225,7 +221,7 @@ describe("Composer", () => {
     const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         onAttachFiles={attach}
         action="send"
@@ -256,7 +252,7 @@ describe("Composer", () => {
     const submit = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action={action()}
@@ -285,7 +281,7 @@ describe("Composer", () => {
     const submit = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value="Send this"
         action="sending"
         disabled={false}
@@ -307,7 +303,7 @@ describe("Composer", () => {
   it("shows independent loading states", () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -333,25 +329,11 @@ describe("Composer", () => {
   });
 
   it("keeps agent empty, missing, and failed states honest", () => {
-    const renderComposer = (agentSelection: ComposerProps["agentSelection"]) =>
-      mount(() => (
-        <Composer
-          {...pasteProps}
-          value=""
-          disabled={false}
-          action="send"
-          modelSelection={unavailableSelection}
-          agentSelection={agentSelection}
-          onInput={() => undefined}
-          onSubmit={() => undefined}
-        />
-      ));
-
-    const empty = renderComposer({ ...unavailableAgentSelection, state: "ready" });
+    const empty = renderAgentComposer({ ...unavailableAgentSelection, state: "ready" });
     expect(empty.host.textContent).toContain("No agents");
     empty.dispose();
 
-    const missing = renderComposer({
+    const missing = renderAgentComposer({
       ...unavailableAgentSelection,
       state: "ready",
       agents: [{ id: "build", label: "Build" }],
@@ -360,7 +342,7 @@ describe("Composer", () => {
     expect(missing.host.textContent).toContain("Agent unavailable");
     missing.dispose();
 
-    const failed = renderComposer(unavailableAgentSelection);
+    const failed = renderAgentComposer(unavailableAgentSelection);
     expect(failed.host.textContent).toContain("Agents unavailable");
     failed.dispose();
   });
@@ -375,7 +357,7 @@ describe("Composer", () => {
     });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -456,7 +438,7 @@ describe("Composer", () => {
   it("gives unselected picker triggers coherent accessible names", () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -494,7 +476,7 @@ describe("Composer", () => {
     });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -542,7 +524,7 @@ describe("Composer", () => {
     });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -583,7 +565,7 @@ describe("Composer", () => {
   it("disables every picker and send while either selection switches", () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value="send this"
         disabled={false}
         action="send"
@@ -620,7 +602,7 @@ describe("Composer", () => {
   it("closes the agent picker with Escape and restores trigger focus", async () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -660,7 +642,7 @@ describe("Composer", () => {
     const [switching, setSwitching] = createSignal(false);
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -709,7 +691,7 @@ describe("Composer", () => {
     const discard = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -747,7 +729,7 @@ describe("Composer", () => {
     const discard = vi.fn<(opener: HTMLButtonElement) => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -786,7 +768,7 @@ describe("Composer", () => {
     const [count, setCount] = createSignal(2);
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -818,7 +800,7 @@ describe("Composer", () => {
     const submit = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value={value()}
         disabled={disabled()}
         action="send"
@@ -850,7 +832,7 @@ describe("Composer", () => {
     const [action, setAction] = createSignal<ComposerProps["action"]>("send");
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value="send this"
         disabled={false}
         action={action()}
@@ -882,7 +864,7 @@ describe("Composer", () => {
     const [onQueue, setOnQueue] = createSignal<(() => void) | undefined>(() => undefined);
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value="send this"
         disabled={false}
         action={action()}
@@ -925,7 +907,7 @@ describe("Composer", () => {
     vi.useFakeTimers();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value="send this"
         disabled={false}
         action="send"
@@ -960,7 +942,7 @@ describe("Composer", () => {
       const queue = vi.fn<() => void>();
       const { host, dispose } = mount(() => (
         <Composer
-          {...pasteProps}
+          {...inertPasteProps}
           value="send this"
           disabled={false}
           action="send"
@@ -987,7 +969,7 @@ describe("Composer", () => {
     const submit = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value="send this"
         disabled={false}
         action="send"
@@ -1021,7 +1003,7 @@ describe("Composer", () => {
       const queue = vi.fn<() => void>();
       const { host, dispose } = mount(() => (
         <Composer
-          {...pasteProps}
+          {...inertPasteProps}
           value={props.value}
           disabled={props.disabled}
           action="send"
@@ -1048,7 +1030,7 @@ describe("Composer", () => {
     vi.useFakeTimers();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="running"
@@ -1076,7 +1058,7 @@ describe("Composer", () => {
     const submit = vi.fn<() => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value="two\nlines"
         disabled={false}
         action="send"
@@ -1102,7 +1084,7 @@ describe("Composer", () => {
     vi.useFakeTimers();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -1135,7 +1117,7 @@ describe("Composer", () => {
   it("renders an empty context ring without a fill", () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -1158,7 +1140,7 @@ describe("Composer", () => {
   it("keeps attachments available while submission is disabled", () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled
         action="send"
@@ -1179,7 +1161,7 @@ describe("Composer", () => {
   it("does not advertise or consume attachments without a callback", () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -1213,7 +1195,7 @@ describe("Composer", () => {
     const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         sessionID={sessionID()}
         disabled={false}
@@ -1249,7 +1231,7 @@ describe("Composer", () => {
     const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -1280,7 +1262,7 @@ describe("Composer", () => {
   it("keeps the drop state across nested drag transitions", () => {
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -1310,7 +1292,7 @@ describe("Composer", () => {
     const [canAttach, setCanAttach] = createSignal(true);
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"
@@ -1336,7 +1318,7 @@ describe("Composer", () => {
     const onInput = vi.fn<(value: string) => void>();
     const { host, dispose } = mount(() => (
       <Composer
-        {...pasteProps}
+        {...inertPasteProps}
         value=""
         disabled={false}
         action="send"

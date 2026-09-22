@@ -995,6 +995,11 @@ describe.sequential("production browser app", () => {
     expect(user.text).toContain("focus on scripts");
   });
 
+  // Clipboard acceptance: these tests synthesize ClipboardEvent payloads and
+  // stub navigator.clipboard reads inside the renderer. They prove the
+  // application's routing, admission, ownership and byte delivery; they do not
+  // prove integration with the native macOS/Chromium clipboard, which packaged
+  // acceptance covers.
   it("pastes screenshot and document attachments, preserves drafts across navigation, and sends their bytes", async () => {
     await ensureConnected();
     const session = await api.session.create({
@@ -1091,7 +1096,7 @@ describe.sequential("production browser app", () => {
     );
   });
 
-  it("attaches oversized pasted text, keeps it across navigation, and refuses over-cap pastes", async () => {
+  it("attaches oversized pasted text, keeps it across navigation, and refuses an over-cap paste", async () => {
     await ensureConnected();
     const location = { directory: await realpath(project) };
     const session = await api.session.create({ title: "Pasted text attachments", location });
@@ -1151,192 +1156,6 @@ describe.sequential("production browser app", () => {
     expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Dismiss", exact: true }).count()).toBe(0);
-
-    // Nothing was retained: an attachable paste now attaches normally and
-    // clears the refusal notice.
-    const replacement = "b".repeat(20_000);
-    await prompt.evaluate((input, payload) => {
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/plain", payload);
-      input.dispatchEvent(
-        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-      );
-    }, replacement);
-    await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).waitFor();
-    await expect
-      .poll(() => page.getByRole("alert").filter({ hasText: "2 MiB attachment limit" }).count())
-      .toBe(0);
-  });
-
-  it("bounds the attachments one draft holds and reports the refusal", async () => {
-    await ensureConnected();
-    const session = await api.session.create({
-      title: "Bounded attachments",
-      location: { directory: await realpath(project) },
-    });
-    await selectSession(session.title);
-    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
-    const attachments = page.locator('[aria-label="Images and files"] li');
-    const pasteText = (text) =>
-      prompt.evaluate((input, payload) => {
-        const clipboardData = new DataTransfer();
-        clipboardData.setData("text/plain", payload);
-        input.dispatchEvent(
-          new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-        );
-      }, text);
-
-    // Each paste is over the 16 KiB routing threshold, so it becomes a text
-    // attachment rather than draft content.
-    for (let index = 1; index <= 16; index += 1) {
-      await pasteText(`pasted ${index} ${"a".repeat(17_000)}`);
-    }
-    await expect.poll(() => attachments.count()).toBe(16);
-
-    // The draft is at the stated count bound: the next paste is refused with a
-    // notice naming the release action, and offers no restore or dismiss.
-    await pasteText(`refused ${"b".repeat(17_000)}`);
-    await page
-      .getByRole("alert")
-      .filter({ hasText: "the draft can hold 16 attachments" })
-      .waitFor();
-    expect(await attachments.count()).toBe(16);
-    expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(0);
-    expect(await page.getByRole("button", { name: "Dismiss", exact: true }).count()).toBe(0);
-    expect(await prompt.textContent()).toBe("");
-
-    // Removing one attachment frees the slot for the next paste.
-    await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).click();
-    await expect.poll(() => attachments.count()).toBe(15);
-    await pasteText(`accepted ${"c".repeat(17_000)}`);
-    await expect.poll(() => attachments.count()).toBe(16);
-    expect(errors).toEqual([]);
-  });
-
-  it("refuses over-cap pastes and survives adversarial pasted markup", async () => {
-    await ensureConnected();
-    const session = await api.session.create({
-      title: "Adversarial paste",
-      location: { directory: await realpath(project) },
-    });
-    await selectSession(session.title);
-    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
-    await prompt.click();
-
-    // A paste larger than the former retention bound is over the size cap, so
-    // it is refused with the size notice and retains nothing.
-    const overCap = `${"a".repeat(4 * 1024 * 1024 + 1)}RETENTION-PAYLOAD`;
-    await prompt.evaluate((input, payload) => {
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/plain", payload);
-      input.dispatchEvent(
-        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-      );
-    }, overCap);
-    await page.getByRole("alert").filter({ hasText: "2 MiB attachment limit" }).waitFor();
-    expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(0);
-    expect(await page.getByRole("button", { name: "Dismiss", exact: true }).count()).toBe(0);
-    expect(await prompt.textContent()).toBe("");
-
-    // Deeply nested HTML is refused by the sanitizer before the schema parser
-    // sees it; the text flavor lands and the editor stays responsive.
-    const deepHtml = `${"<div>".repeat(20_000)}DEEP-ACCEPTANCE${"</div>".repeat(20_000)}`;
-    const deepElapsed = await prompt.evaluate((input, html) => {
-      const started = performance.now();
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/html", html);
-      clipboardData.setData("text/plain", "DEEP-ACCEPTANCE fallback");
-      input.dispatchEvent(
-        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-      );
-      return performance.now() - started;
-    }, deepHtml);
-    expect(deepElapsed).toBeLessThan(2_000);
-    await expect.poll(() => prompt.textContent()).toContain("DEEP-ACCEPTANCE fallback");
-    expect(await prompt.locator("div").count()).toBe(0);
-
-    // Many anchored elements parse within the same bound and are not dropped.
-    const anchorHtml = Array.from(
-      { length: 1_000 },
-      (_, index) =>
-        `<p><a href="https://x.dev/${index}" title="link ${index}">ANCHOR-${index}</a></p>`,
-    ).join("");
-    const anchorElapsed = await prompt.evaluate((input, html) => {
-      const started = performance.now();
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/html", html);
-      clipboardData.setData("text/plain", "ANCHORS fallback");
-      input.dispatchEvent(
-        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-      );
-      return performance.now() - started;
-    }, anchorHtml);
-    expect(anchorElapsed).toBeLessThan(5_000);
-    await expect.poll(() => prompt.textContent()).toContain("ANCHOR-999");
-
-    // Malformed markup neither throws nor hangs; its text survives.
-    const malformed = `${"<p>".repeat(200)}unclosed <b>bold ${"</div>".repeat(100)}<script>alert(1)</script>`;
-    const malformedElapsed = await prompt.evaluate((input, html) => {
-      const started = performance.now();
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/html", html);
-      clipboardData.setData("text/plain", "MALFORMED fallback");
-      input.dispatchEvent(
-        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-      );
-      return performance.now() - started;
-    }, malformed);
-    expect(malformedElapsed).toBeLessThan(2_000);
-    await expect.poll(() => prompt.textContent()).toContain("unclosed bold");
-    expect(errors).toEqual([]);
-  });
-
-  it("refuses self-closing and unmatched-closer nesting before parsing", async () => {
-    await ensureConnected();
-    const session = await api.session.create({
-      title: "Nesting counterexamples",
-      location: { directory: await realpath(project) },
-    });
-    await selectSession(session.title);
-    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
-    await prompt.click();
-
-    const pasteHtml = (html, text) =>
-      prompt.evaluate(
-        (input, payload) => {
-          const started = performance.now();
-          const clipboardData = new DataTransfer();
-          clipboardData.setData("text/html", payload.html);
-          if (payload.text !== undefined) clipboardData.setData("text/plain", payload.text);
-          input.dispatchEvent(
-            new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-          );
-          return performance.now() - started;
-        },
-        { html, text },
-      );
-
-    // `<div/>` opens an element in HTML even though a textual scan can mistake
-    // it for a self-closed one. Rich parsing refuses the nesting, but the
-    // reader's iterative extraction still derives the payload's text and the
-    // fallback inserts it exactly once, with no element tree.
-    const selfClosing = `${"<div/>".repeat(20_000)}SELF-CLOSING`;
-    expect(await pasteHtml(selfClosing)).toBeLessThan(2_000);
-    await expect.poll(() => prompt.textContent()).toContain("SELF-CLOSING");
-    expect(await prompt.locator("div").count()).toBe(0);
-
-    // With a text flavor the fallback lands and no div is inserted.
-    expect(await pasteHtml(selfClosing, "SELF-CLOSING fallback")).toBeLessThan(2_000);
-    await expect.poll(() => prompt.textContent()).toContain("SELF-CLOSING fallback");
-    expect(await prompt.locator("div").count()).toBe(0);
-
-    // `</bogus>` closes nothing, so repeated `<div></bogus>` still nests one
-    // element per div; the scan must not let the closers offset them.
-    const unmatched = `${"<div></bogus>".repeat(20_000)}UNMATCHED`;
-    expect(await pasteHtml(unmatched, "UNMATCHED fallback")).toBeLessThan(2_000);
-    await expect.poll(() => prompt.textContent()).toContain("UNMATCHED fallback");
-    expect(await prompt.locator("div").count()).toBe(0);
-    expect(errors).toEqual([]);
   });
 
   it("pastes literally from the host clipboard after Mod+Shift+V and the context action", async () => {

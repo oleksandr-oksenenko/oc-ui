@@ -261,6 +261,33 @@ export const MarkdownDraft: Story = {
   },
 };
 
+export const ClipboardCopy: Story = {
+  render: () => (
+    <Composer
+      {...composerPasteProps}
+      value="**bold** and *em*"
+      disabled={false}
+      action="send"
+      modelSelection={composerModelSelection()}
+      agentSelection={composerAgentSelection()}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const prompt = within(canvasElement).getByRole("textbox", { name: "Prompt" });
+    await userEvent.click(prompt);
+    await userEvent.keyboard(
+      /Mac/.test(navigator.platform) ? "{Meta>}a{/Meta}" : "{Control>}a{/Control}",
+    );
+    const clipboard = new DataTransfer();
+    prompt.dispatchEvent(
+      new ClipboardEvent("copy", { clipboardData: clipboard, bubbles: true, cancelable: true }),
+    );
+    await expect(clipboard.getData("text/plain")).toBe("**bold** and *em*");
+  },
+};
+
 export const ImageAttachment: Story = {
   render: () => {
     const [files, setFiles] = createSignal<readonly File[]>([previewImageFile("Screenshot.png")]);
@@ -648,7 +675,6 @@ export const PasteRouting: Story = {
         action="send"
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection()}
-        readClipboardText={async () => "# not a heading\n\n- not a list"}
         onInput={setValue}
         onSubmit={() => undefined}
       />
@@ -675,24 +701,6 @@ export const PasteRouting: Story = {
       await expect(prompt.querySelectorAll("br").length).toBe(1);
       await expect(prompt.textContent).toContain("first linesecond line");
     });
-
-    await step("The literal gesture inserts the clipboard text verbatim", async () => {
-      const lists = prompt.querySelectorAll("li").length;
-      prompt.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "v",
-          metaKey: true,
-          ctrlKey: true,
-          shiftKey: true,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-      await waitFor(() => expect(prompt.textContent).toContain("# not a heading"));
-      // The Markdown markers and the clipboard's HTML flavor add no structure.
-      await expect(prompt.querySelectorAll("li").length).toBe(lists);
-      await expect(prompt.textContent).toContain("- not a list");
-    });
   },
 };
 
@@ -700,8 +708,6 @@ export const OversizedLiteralPaste: Story = {
   render: () => {
     const [value, setValue] = createSignal("");
     const [files, setFiles] = createSignal<readonly File[]>([]);
-    const payloads = ["x".repeat(16_384), "y".repeat(16_384)] as const;
-    let read = 0;
     return (
       <Composer
         {...composerPasteProps}
@@ -709,18 +715,14 @@ export const OversizedLiteralPaste: Story = {
         disabled={false}
         action="send"
         files={files()}
-        readClipboardText={async () => {
-          const index = Math.min(read, payloads.length - 1);
-          read += 1;
-          return payloads[index] ?? payloads[0];
-        }}
-        onAttachText={(text) => {
-          const existing = files();
-          const name =
-            existing.length === 0 ? "pasted-text.txt" : `pasted-text-${existing.length + 1}.txt`;
-          setFiles([...existing, new File([text], name, { type: "text/plain" })]);
-        }}
-        onRemoveFile={(file) => setFiles(files().filter((entry) => entry !== file))}
+        readClipboardText={async () => "x".repeat(16_384)}
+        // The attachment owner names pasted text; this story shows the chip the
+        // composer renders for that name. The naming rule itself belongs to
+        // createSessionComposer and is covered by its controller tests.
+        onAttachText={(text) =>
+          setFiles([new File([text], "pasted-text.txt", { type: "text/plain" })])
+        }
+        onRemoveFile={() => setFiles([])}
         modelSelection={composerModelSelection()}
         agentSelection={composerAgentSelection()}
         onInput={setValue}
@@ -743,12 +745,16 @@ export const OversizedLiteralPaste: Story = {
         }),
       );
 
-    await step("Each oversized literal paste becomes its own attachment", async () => {
+    await step("An oversized literal paste becomes a named attachment", async () => {
       pressChord();
       await waitFor(() => expect(canvas.getByText("pasted-text.txt")).not.toBeNull());
-      pressChord();
-      await waitFor(() => expect(canvas.getByText("pasted-text-2.txt")).not.toBeNull());
       // The clipboard text never entered the editor.
+      await expect(prompt.textContent).toBe("");
+    });
+
+    await step("Removing the attachment returns the draft to empty", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Remove pasted-text.txt" }));
+      await expect(canvas.queryByRole("list", { name: "Images and files" })).toBeNull();
       await expect(prompt.textContent).toBe("");
     });
   },

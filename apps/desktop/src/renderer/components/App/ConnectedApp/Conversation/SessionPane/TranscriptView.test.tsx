@@ -2492,6 +2492,36 @@ describe("TranscriptView", () => {
     dispose();
   });
 
+  it("places each inline skill chip exactly at its mention range", () => {
+    const instruction = "Use review and testing now";
+    const { host, dispose } = renderUserMessage({
+      id: "chip-ranges",
+      time: base,
+      type: "user",
+      text: instruction,
+      skills: [
+        { id: "sk-a", name: "review", mention: { start: 4, end: 10, text: "review" } },
+        { id: "sk-b", name: "testing", mention: { start: 15, end: 22, text: "testing" } },
+      ],
+    });
+
+    const bubble = host.querySelector<HTMLElement>(".transcript-user-bubble")!;
+    const instructionRoot = bubble.querySelector<HTMLElement>(".transcript-user-instruction")!;
+    const chips = [...instructionRoot.querySelectorAll<HTMLElement>(".transcript-skill-chip")];
+    expect(chips.map((chip) => chip.textContent)).toEqual(["review", "testing"]);
+
+    // Replacing each chip with a unique token reconstructs the instruction with
+    // the token exactly where the mention range was.
+    const tokens = ["\u0001a\u0001", "\u0001b\u0001"];
+    const clone = instructionRoot.cloneNode(true);
+    if (!(clone instanceof HTMLElement)) throw new Error("cloneNode lost the element type");
+    [...clone.querySelectorAll<HTMLElement>(".transcript-skill-chip")].forEach((chip, index) => {
+      chip.replaceWith(clone.ownerDocument.createTextNode(tokens[index]!));
+    });
+    expect(clone.textContent).toBe("Use \u0001a\u0001 and \u0001b\u0001 now");
+    dispose();
+  });
+
   it("keeps a literal placeholder in the instruction text", () => {
     const instruction = "\uE000k0\uE000 review this";
     const { host, dispose } = renderUserMessage({

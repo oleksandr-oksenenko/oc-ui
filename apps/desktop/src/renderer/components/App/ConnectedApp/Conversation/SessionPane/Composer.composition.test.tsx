@@ -4,6 +4,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { mount } from "../../../../../test/mount.ts";
 import { Composer } from "./Composer.tsx";
 import type { ComposerCatalog } from "./Composer.tsx";
+import {
+  inertPasteProps,
+  unavailableAgentSelection,
+  unavailableSelection,
+} from "./composer-test-fixtures.ts";
 
 // The suggestion menu scrolls its active option; jsdom has no scrollTo.
 beforeAll(() => {
@@ -20,30 +25,6 @@ afterAll(() => {
 // prove how the handlers react to composition events and to keydown payloads
 // that browsers produce around a composition. The native protocol covers the
 // event order and payloads real IMEs emit.
-
-const unavailableSelection = {
-  state: "failed" as const,
-  switching: false,
-  disabled: false,
-  models: [],
-  variants: [],
-  onSelectModel: () => undefined,
-  onSelectVariant: () => undefined,
-};
-
-const unavailableAgentSelection = {
-  state: "failed" as const,
-  switching: false,
-  disabled: false,
-  agents: [],
-  onSelectAgent: () => undefined,
-};
-
-/** Inert paste callbacks; routing tests override them on their own mount. */
-const pasteProps = {
-  onAttachText: () => undefined,
-  readClipboardText: () => Promise.resolve(undefined),
-};
 
 const catalog: ComposerCatalog = {
   commands: {
@@ -85,7 +66,7 @@ function openComposer(composerCatalog: ComposerCatalog = catalog) {
   const [value, setValue] = createSignal("");
   const { host, dispose } = mount(() => (
     <Composer
-      {...pasteProps}
+      {...inertPasteProps}
       value={value()}
       disabled={false}
       action="send"
@@ -423,5 +404,28 @@ describe("Composer menu ownership", () => {
     expect(harness.menu()).not.toBeNull();
 
     harness.dispose();
+  });
+});
+
+describe("Composer suggestion routing", () => {
+  it("suggests commands only at the start of the message", async () => {
+    // A mid-message query has no command section, even when a command matches.
+    const midMessage = openComposer();
+    midMessage.paste("Update /bu");
+    await midMessage.settle();
+    expect(midMessage.menu()).not.toBeNull();
+    expect(midMessage.host.textContent).not.toContain("Commands");
+    expect(midMessage.host.textContent).not.toContain("/build");
+    midMessage.dispose();
+
+    // A query in a later paragraph is not at the start either, and the skill
+    // section still offers its matches.
+    const laterParagraph = openComposer();
+    laterParagraph.paste("first\n\n/re");
+    await laterParagraph.settle();
+    expect(laterParagraph.menu()).not.toBeNull();
+    expect(laterParagraph.host.textContent).not.toContain("Commands");
+    expect(laterParagraph.host.textContent).toContain("/review");
+    laterParagraph.dispose();
   });
 });

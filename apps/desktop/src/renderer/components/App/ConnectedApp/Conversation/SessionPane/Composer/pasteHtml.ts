@@ -103,16 +103,16 @@ const VOID_TAGS = new Set([
 ]);
 
 /**
- * Whether the payload nests elements deeper than `limit`. The scan is textual
- * and conservative: it tracks a stack of open tag names so only a closer that
- * matches the innermost open element closes it — unmatched closers and void
- * elements are ignored — and a non-void self-closing spelling (`<div/>`) opens
- * an element, exactly as HTML reads it. Ambiguous markup may over-count;
- * over-counting only sends a payload to the text fallback. The scan never
- * under-counts the opens it can see, and the sanitizer's size and exception
- * guards backstop the rest.
+ * Whether the payload nests elements deeper than {@link MAX_HTML_NESTING}. The
+ * scan is textual and conservative: it tracks a stack of open tag names so only
+ * a closer that matches the innermost open element closes it — unmatched
+ * closers and void elements are ignored — and a non-void self-closing spelling
+ * (`<div/>`) opens an element, exactly as HTML reads it. Ambiguous markup may
+ * over-count; over-counting only sends a payload to the text fallback. The scan
+ * never under-counts the opens it can see, and the sanitizer's size and
+ * exception guards backstop the rest.
  */
-export function exceedsHtmlNesting(html: string, limit = MAX_HTML_NESTING): boolean {
+function exceedsHtmlNesting(html: string): boolean {
   const open: string[] = [];
   for (const match of html.matchAll(TAG_TOKEN)) {
     const name = match[2]!.toLowerCase();
@@ -124,7 +124,7 @@ export function exceedsHtmlNesting(html: string, limit = MAX_HTML_NESTING): bool
     }
     if (VOID_TAGS.has(name)) continue;
     open.push(name);
-    if (open.length > limit) return true;
+    if (open.length > MAX_HTML_NESTING) return true;
   }
   return false;
 }

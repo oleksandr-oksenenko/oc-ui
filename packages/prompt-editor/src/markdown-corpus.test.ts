@@ -7,9 +7,11 @@ import { fromDraft, schema, toDraft } from "./document.ts";
 /**
  * Frozen markdown corpus for the composer codec.
  *
- * This is the contract the serializer must satisfy. It is intentionally
- * independent of any particular serializer implementation: it asserts document
- * round-trips, draft stability, composer conventions, and skill offsets.
+ * This is the golden-output contract the serializer must satisfy: it pins
+ * document round-trips, draft stability, composer conventions, and skill
+ * offsets. Every document is built with the same codec it checks, so this is
+ * not independent parsing evidence; parse-structure claims live in
+ * `document.test.ts`.
  *
  * Cases listed in `KNOWN_LOSSES` are representational losses that Markdown
  * cannot express, or delimiter-boundary limitations the codec cannot yet

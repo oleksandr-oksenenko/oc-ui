@@ -53,8 +53,11 @@ In the app:
 ## Rules
 
 - No imports from `apps/desktop` in this package.
-- `src/markdown-corpus.test.ts` is the frozen contract. Documented losses and
-  instabilities may only shrink, and every change to them must be explicit.
+- `src/markdown-corpus.test.ts` is the frozen golden-output contract; it is not
+  independent parsing evidence, because its documents are built with the same
+  codec it checks. Direct parse-structure claims live in `src/document.test.ts`.
+  Documented losses and instabilities may only shrink, and every change to them
+  must be explicit.
 
 ## App-side bounds
 

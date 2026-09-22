@@ -4,24 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { mount } from "../../../../../test/mount.ts";
 import { Composer } from "./Composer.tsx";
 import { MAX_HTML_INSPECTION_UNITS, MAX_HTML_NESTING } from "./Composer/pasteHtml.ts";
-
-const unavailableSelection = {
-  state: "failed" as const,
-  switching: false,
-  disabled: false,
-  models: [],
-  variants: [],
-  onSelectModel: () => undefined,
-  onSelectVariant: () => undefined,
-};
-
-const unavailableAgentSelection = {
-  state: "failed" as const,
-  switching: false,
-  disabled: false,
-  agents: [],
-  onSelectAgent: () => undefined,
-};
+import { unavailableAgentSelection, unavailableSelection } from "./composer-test-fixtures.ts";
 
 const setPlatform = (platform: "macos" | "other") => {
   document.documentElement.dataset.platform = platform;

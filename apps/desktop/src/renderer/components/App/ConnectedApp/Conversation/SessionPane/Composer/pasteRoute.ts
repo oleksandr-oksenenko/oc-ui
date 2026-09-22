@@ -71,7 +71,7 @@ export type PasteDecision = {
 export const TEXT_ATTACHMENT_LIMIT = 16_384;
 
 /** Total Markdown signal weight needed before the text is parsed as Markdown. */
-export const MARKDOWN_ROUTE_SCORE = 2;
+const MARKDOWN_ROUTE_SCORE = 2;
 
 // Richness evidence only: tags that mean the HTML flavor is more than an inline
 // wrapper (a copied link or a styled text run), so its structure should be
@@ -112,7 +112,7 @@ const MARKDOWN_LINE_SIGNALS = new Set([
 ]);
 
 /** Markdown signals whose match is meaningful only at the start of a line. */
-export function markdownSignals(text: string): readonly string[] {
+function markdownSignals(text: string): readonly string[] {
   const lines = text.split(/\r?\n/);
   return MARKDOWN_SIGNALS.filter((signal) =>
     MARKDOWN_LINE_SIGNALS.has(signal.name)
@@ -122,7 +122,7 @@ export function markdownSignals(text: string): readonly string[] {
 }
 
 /** Total weight of the matched signals; Markdown needs at least one strong or two weak. */
-export function markdownScore(signals: readonly string[]): number {
+function markdownScore(signals: readonly string[]): number {
   return signals.reduce(
     (total, name) => total + (MARKDOWN_SIGNALS.find((signal) => signal.name === name)?.weight ?? 0),
     0,
@@ -130,7 +130,7 @@ export function markdownScore(signals: readonly string[]): number {
 }
 
 /** HTML worth parsing: it has tags and at least one block-level element. */
-export function isRichHtml(html: string | undefined): boolean {
+function isRichHtml(html: string | undefined): boolean {
   const value = html?.trim() ?? "";
   return value !== "" && HTML_TAG.test(value) && RICH_HTML_EVIDENCE_TAG.test(value);
 }

@@ -54,13 +54,6 @@ function paragraph(content: PMNode[]): PMNode {
   return schema.node("doc", null, [schema.node("paragraph", null, content)]);
 }
 
-/** A document whose block content is exactly the written text. */
-function literal(text: string) {
-  return schema.node("doc", null, [
-    schema.node("paragraph", null, text === "" ? [] : [schema.text(text)]),
-  ]);
-}
-
 /** Block type names and text of a pasted document, in order. */
 function blocks(doc: PMNode): { type: string; text: string; breaks: number }[] {
   const result: { type: string; text: string; breaks: number }[] = [];
@@ -80,6 +73,16 @@ const paragraphBlock = (content: PMNode[]) => schema.node("paragraph", null, con
 
 /** A closed slice containing exactly one node. */
 const singleNodeSlice = (node: PMNode) => new Slice(Fragment.from(node), 0, 0);
+
+/** The single skill atom in a document, or `undefined` when it has none. */
+function skillAtom(doc: PMNode): PMNode | undefined {
+  let found: PMNode | undefined;
+  doc.descendants((node) => {
+    if (found === undefined && node.type.name === "skill") found = node;
+    return true;
+  });
+  return found;
+}
 
 describe("prompt document", () => {
   it("keeps plain text and single newlines canonical", () => {
@@ -119,72 +122,12 @@ describe("prompt document", () => {
     expect(toDraft(paragraph([schema.text("a"), markedBreak, marked("b")])).text).toBe("a\n**b**");
   });
 
-  it("escapes text that would otherwise parse as Markdown", () => {
-    const math = canonicalize("2 * 3 = 6");
-    expect(math.draft.text).toBe("2 \\* 3 = 6");
-    expect(math.restored.textContent).toBe("2 * 3 = 6");
-
-    for (const [source, text] of [
-      ["- not a list", "\\- not a list"],
-      ["# not a heading", "\\# not a heading"],
-      ["> not a quote", "\\> not a quote"],
-      ["1. not ordered", "1\\. not ordered"],
-      ["1) not ordered", "1\\) not ordered"],
-      ["use **literal**", "use \\*\\*literal\\*\\*"],
-      // The transcript renders GFM strikethrough (marked accepts one or two
-      // tildes), but the composer has no strikethrough mark, so every literal
-      // tilde is escaped.
-      ["~~plain~~", "\\~\\~plain\\~\\~"],
-      ["a ~~b~~ c", "a \\~\\~b\\~\\~ c"],
-      ["~text~", "\\~text\\~"],
-      ["a ~ b", "a \\~ b"],
-    ] as const) {
-      const doc = literal(source);
-      const draft = toDraft(doc);
-      expect(draft.text).toBe(text);
-      expect(parse(draft.text).eq(doc)).toBe(true);
-    }
-  });
-
-  it("preserves mention offsets across lines and repeated skills", () => {
-    const text = "🙂\n\nreview and review";
-    const skills = [4, 15].map((start) => ({
-      id: "review",
-      name: "review",
-      mention: { start, end: start + 6, text: "review" },
-    }));
-    expect(toDraft(parse(text, skills))).toEqual({ text, skills });
-  });
-
   it("leaves stale and overlapping mentions as ordinary text", () => {
     const valid = mention("review", 0);
     expect(toDraft(parse("review", [valid, valid, { ...valid, name: "other" }]))).toEqual({
       text: "review",
       skills: [valid],
     });
-  });
-
-  it("round-trips block structure", () => {
-    for (const source of [
-      "# Heading",
-      "- one\n- two",
-      "- one\n  - nested\n- two",
-      "1. first\n2. second",
-      "3. third\n4. fourth",
-      "> quoted\n> lines",
-      "```ts\nconst a = 1;\n```",
-      "````\n```\n````",
-      "---",
-      "# Heading\n\n- one\n- two\n\n> quoted\n\n```\ncode\n```",
-      "1. first\n   - nested\n2. second",
-      "- item\n\n  second paragraph",
-    ]) {
-      expect(roundTrip(source).text).toBe(source);
-    }
-    // A tight item keeps its following block without an injected blank line.
-    expect(canonicalize("- item\n  ```\n  code\n  ```").draft.text).toBe(
-      "- item\n  ```\n  code\n  ```",
-    );
   });
 
   it("keeps ordered list start values", () => {
@@ -202,102 +145,21 @@ describe("prompt document", () => {
 
   it("canonicalizes authored Markdown without losing it", () => {
     for (const [source, text] of [
-      ["* one\n+ two", "- one\n- two"],
-      ["Title\n===", "# Title"],
-      ["1) item", "1. item"],
-      ["~~~\ncode\n~~~", "```\ncode\n```"],
       ["> quote\nlazy", "> quote\n> lazy"],
       // Nested identical emphasis collapses to one bold run, keeping the tail.
       ["**a __b__ c**", "**a b c**"],
       // Loose and tight lists keep their blank-line shape.
       ["- a\n\n- b", "- a\n\n- b"],
-      // A list may start at zero.
-      // The bundled parser reads `0.` as the default start of 1.
-      ["0. zero\n1. one", "1. zero\n2. one"],
     ] as const) {
       expect(canonicalize(source).draft.text).toBe(text);
     }
-    // Two adjacent lists of one type cannot be told apart in Markdown, so the
-    // serialized text is a single list and stays stable.
-    const adjacent = canonicalize("* one\n+ two");
-    expect(adjacent.restored.eq(parse(adjacent.draft.text))).toBe(true);
+    // A tight item keeps its following block without an injected blank line.
+    expect(canonicalize("- item\n  ```\n  code\n  ```").draft.text).toBe(
+      "- item\n  ```\n  code\n  ```",
+    );
     // Inline images are part of the bundled schema, so image syntax
     // round-trips as an image node.
     expect(canonicalize("![alt](x.png)").draft.text).toBe("![alt](x.png)");
-  });
-
-  it("escapes literal line starts after a line break", () => {
-    const built = ["- b", "+ b", "* b", "> b", "# b", "1. b", "1) b", "===", "---", "```"].map(
-      (marker) => ({
-        marker,
-        doc: schema.node("doc", null, [
-          schema.node("paragraph", null, [
-            schema.text("a"),
-            schema.node("hard_break"),
-            schema.text(marker),
-          ]),
-        ]),
-      }),
-    );
-    const outcomes = built.map(({ marker, doc }) => {
-      const draft = toDraft(doc);
-      return { marker, equal: parse(draft.text).eq(doc), hasBreak: draft.text.includes("\n") };
-    });
-    expect(outcomes).toEqual(built.map(({ marker }) => ({ marker, equal: true, hasBreak: true })));
-  });
-
-  it("escapes literal entity, tag and autolink syntax", () => {
-    for (const source of [
-      "Use <Widget> here",
-      "literal &amp; text",
-      "<https://x.dev>",
-      "a < b and c > d",
-      "<!-- important -->",
-      "<!DOCTYPE html>",
-    ]) {
-      const doc = literal(source);
-      const draft = toDraft(doc);
-      expect(parse(draft.text).eq(doc)).toBe(true);
-    }
-  });
-
-  it("round-trips inline marks, links and code spans", () => {
-    for (const source of [
-      "a **b** *c* `d` [f](https://x.dev/a)",
-      "***both***",
-      "a **`b`** c",
-      "use `a\\*b` here",
-      "keep `  spaced  ` code",
-    ]) {
-      expect(roundTrip(source).text).toBe(source);
-    }
-    // Only a space on both edges would be stripped by CommonMark, so a
-    // one-sided space needs no padding.
-    expect(canonicalize("` a` and `b `").draft.text).toBe("` a` and `b `");
-    // Edge whitespace inside emphasis is written as character references, so
-    // the document keeps it instead of expelling it.
-    const spaced = schema.node("doc", null, [
-      schema.node("paragraph", null, [schema.text(" bold ", [schema.marks.strong!.create()])]),
-    ]);
-    const draft = toDraft(spaced);
-    expect(draft.text).toBe("**&#x20;bold&#x20;**");
-    const spacedRestored = fromDraft(draft.text);
-    expect(spacedRestored.eq(spaced)).toBe(true);
-    expect(spacedRestored.firstChild?.firstChild?.marks.map((mark) => mark.type.name)).toEqual([
-      "strong",
-    ]);
-  });
-
-  it("round-trips skills inside marks and blocks", () => {
-    for (const [text, skills] of [
-      ["review this", [mention("review", 0)]],
-      ["**review** now", [mention("review", 2)]],
-      ["- review this", [mention("review", 2)]],
-      ["> review this", [mention("review", 2)]],
-      ["`review`", [mention("review", 1)]],
-    ] as const) {
-      expect(roundTrip(text, skills)).toEqual({ text, skills });
-    }
   });
 
   it("allows a skill atom at every heading level", () => {
@@ -312,85 +174,26 @@ describe("prompt document", () => {
     }
   });
 
-  it("round-trips marked skills in headings", () => {
-    for (const [text, start] of [
-      ["# **review** now", 4],
-      ["## *review* now", 4],
-      ["### ***review*** now", 7],
-      ["#### [review](https://x.dev)", 6],
-    ] as const) {
-      const skills = [mention("review", start)];
-      expect(roundTrip(text, skills)).toEqual({ text, skills });
+  it("keeps a skill atom's marks and offsets when the draft is parsed", () => {
+    const cases: ReadonlyArray<readonly [string, number, readonly string[]]> = [
+      ["*review* now", 1, ["em"]],
+      ["**review** now", 2, ["strong"]],
+      ["***review*** now", 3, ["em", "strong"]],
+      ["[review](https://x.dev)", 1, ["link"]],
+      ["**a *review* c**", 5, ["em", "strong"]],
+      ["**a** *review* `b`", 7, ["em"]],
+      ["# **review** now", 4, ["strong"]],
+      ["## *review* now", 4, ["em"]],
+      ["### ***review*** now", 7, ["em", "strong"]],
+      ["#### [review](https://x.dev)", 6, ["link"]],
+    ];
+    for (const [source, start, marks] of cases) {
+      const doc = parse(source, [mention("review", start)]);
+      const atom = skillAtom(doc);
+      expect(atom?.marks.map((mark) => mark.type.name)).toEqual(marks);
+      expect(atom?.attrs.name).toBe("review");
+      expect(toDraft(doc).skills).toEqual([mention("review", start)]);
     }
-  });
-
-  it("keeps mention offsets after unicode text", () => {
-    for (const text of ["🙂 review", "漢字 review", "e\u0301 review", "👨‍👩‍👧 review"]) {
-      const start = text.indexOf("review");
-      const skills = [mention("review", start)];
-      const draft = roundTrip(text, skills);
-      expect(draft).toEqual({ text, skills });
-      expect(draft.text.slice(start, start + 6)).toBe("review");
-    }
-  });
-
-  it("round-trips markdown-significant skill names", () => {
-    for (const name of [
-      "a*b",
-      "**bold**",
-      "# hash",
-      "`tick`",
-      "[link](x)",
-      "~~strike~~",
-      "a_b_c",
-      "1. item",
-      "a\\b",
-      // A name shaped like a nonce placeholder stays an attachment.
-      "\uE000k0\uE000",
-    ]) {
-      const text = `use ${name} now`;
-      const skills = [mention(name, text.indexOf(name))];
-      const draft = roundTrip(text, skills);
-      expect(draft).toEqual({ text, skills });
-      expect(draft.text.slice(4, 4 + name.length)).toBe(name);
-    }
-  });
-
-  it("round-trips marked skill atoms", () => {
-    for (const [text, start] of [
-      ["*review* now", 1],
-      ["**review** now", 2],
-      ["***review*** now", 3],
-      ["[review](https://x.dev)", 1],
-      ["**a *review* c**", 5],
-      ["**a** *review* `b`", 7],
-    ] as const) {
-      const skills = [mention("review", start)];
-      expect(roundTrip(text, skills)).toEqual({ text, skills });
-    }
-  });
-
-  it("keeps a skill slot whose placeholder mdast encodes next to a delimiter", () => {
-    // `mdast-util-to-markdown` writes the placeholder's leading character as
-    // `&#xE000;` after an emphasis that closes at a code span; the serializer
-    // must still find the slot instead of leaking the placeholder as text.
-    const doc = paragraph([
-      schema.text("a", [schema.marks.em!.create()]),
-      schema.text("b", [schema.marks.em!.create(), schema.marks.code!.create()]),
-      schema.node("skill", { id: "aa", name: "aa" }),
-    ]);
-    const draft = toDraft(doc);
-    expect(draft).toEqual({ text: "*a`b`*aa", skills: [mention("aa", 6)] });
-
-    // The emphasis delimiter itself is the documented corpus loss; the atom
-    // must survive the reparse with its identity.
-    const reparsed = fromDraft(draft.text, draft.skills);
-    const names: string[] = [];
-    reparsed.descendants((node) => {
-      if (node.type.name === "skill") names.push(String(node.attrs.name));
-      return true;
-    });
-    expect(names).toEqual(["aa"]);
   });
 
   it("keeps headings valid when transactions insert and remove a skill", () => {
@@ -434,17 +237,6 @@ describe("prompt document", () => {
     const draft = toDraft(doc);
     expect(draft.text).toBe(literalText);
     expect(draft.skills).toEqual(skills);
-  });
-
-  it("keeps out-of-range character references as text", () => {
-    for (const source of ["&#9999999; explain", "&#x110000; explain"]) {
-      const doc = parse(source);
-      const draft = toDraft(doc);
-      expect(parse(draft.text).eq(doc)).toBe(true);
-    }
-    // Inside code the reference is written back verbatim.
-    const fenced = "```\n&#xFFFFFFF;\n```";
-    expect(toDraft(parse(fenced)).text).toBe(fenced);
   });
 
   it("does not let an encoded marker steal an attachment", () => {

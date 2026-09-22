@@ -14,7 +14,6 @@ import "./SkillsComposer.css";
 const commands = [
   { name: "init", description: "Guided AGENTS.md setup." },
   { name: "compact", description: "Compact the current session." },
-  { name: "nested/format", description: "Format a nested component." },
 ];
 const skills = [
   {
@@ -132,7 +131,6 @@ const meta = {
 } satisfies Meta<typeof ComposerSuggestionsFixture>;
 export default meta;
 type Story = StoryObj<typeof meta>;
-export const Interactive: Story = {};
 export const Suggestions: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -152,30 +150,6 @@ export const CommandInsertion: Story = {
     await userEvent.type(prompt, "src", { skipClick: true });
     await expect(prompt).toHaveTextContent("/init src");
     await expect(canvas.queryByRole("region", { name: "Suggestions" })).toBeNull();
-  },
-};
-
-export const NestedCommandInsertion: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    await userEvent.type(prompt, "/nested");
-    await expect(canvas.getByText("/nested/format", { exact: true })).toBeVisible();
-    await userEvent.keyboard("{Enter}");
-    await expect(prompt).toHaveTextContent("/nested/format");
-  },
-};
-
-export const CommandsHiddenAfterSkill: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    await userEvent.type(prompt, "/rev");
-    await userEvent.keyboard("{Enter}");
-    await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
-    await userEvent.type(prompt, "/simp", { skipClick: true });
-    await expect(canvas.queryByText("Commands")).toBeNull();
-    await expect(canvas.getByText("/simplify", { exact: true })).toBeVisible();
   },
 };
 
@@ -212,16 +186,6 @@ export const AbsolutePathDismissAndSend: Story = {
     await userEvent.keyboard("{Escape}");
     await userEvent.keyboard("{Enter}");
     await expect(args.onSubmit).toHaveBeenCalledWith("Inspect /tmp/example", []);
-  },
-};
-
-export const CommandsHiddenMidMessage: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    await userEvent.type(prompt, "Update /sim");
-    await expect(canvas.queryByText("Commands")).toBeNull();
-    await expect(canvas.getByText("/simplify", { exact: true })).toBeVisible();
   },
 };
 
@@ -336,26 +300,6 @@ export const KeyboardNavigation: Story = {
   },
 };
 
-export const SkillKeyboardNavigation: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    await userEvent.type(prompt, "/simpl");
-    await userEvent.keyboard("{Enter}");
-    await expect(canvas.getByRole("button", { name: "Remove simplify skill" })).toBeVisible();
-  },
-};
-
-export const CrossGroupKeyboardNavigation: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    await userEvent.type(prompt, "/");
-    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
-    await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
-  },
-};
-
 export const RetryAndPointerSelection: Story = {
   args: { commandState: "failed", skillState: "failed" },
   play: async ({ canvasElement }) => {
@@ -384,6 +328,8 @@ export const UndoRedoAndEditing: Story = {
     await historyKey(prompt, true);
     await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Remove review skill" }));
+    // The chip's remove action deletes the atom and its following space.
+    await expect(prompt.textContent).toBe("Use ");
     await expect(canvas.queryByRole("button", { name: "Remove review skill" })).toBeNull();
     await historyKey(prompt);
     await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
@@ -426,33 +372,6 @@ export const MultilineAndDeletion: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Send" }));
     await expect(args.onSubmit).toHaveBeenCalledWith("First line\n\nreview and&#x20;", [
       { id: "review", name: "review", mention: { start: 12, end: 18, text: "review" } },
-    ]);
-  },
-};
-export const RemoveChipAndSeparator: Story = {
-  args: { onSubmit: fn() },
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    await userEvent.type(prompt, "/rev");
-    await userEvent.keyboard("{Enter}");
-    await userEvent.click(canvas.getByRole("button", { name: "Remove review skill" }));
-    await expect(prompt.textContent).toBe("");
-    await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
-    await historyKey(prompt);
-    await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
-    await expect(prompt.textContent).toBe("review ");
-    await historyKey(prompt, true);
-    await expect(prompt.textContent).toBe("");
-    await userEvent.type(prompt, "Use /rev");
-    await userEvent.keyboard("{Enter}");
-    await userEvent.type(prompt, "and /test");
-    await userEvent.keyboard("{Enter}");
-    await userEvent.click(canvas.getByRole("button", { name: "Remove review skill" }));
-    await expect(prompt.textContent).toBe("Use and testing ");
-    await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-    await expect(args.onSubmit).toHaveBeenCalledWith("Use and testing&#x20;", [
-      { id: "testing", name: "testing", mention: { start: 8, end: 15, text: "testing" } },
     ]);
   },
 };

@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  MAX_HTML_INSPECTION_UNITS,
-  MAX_HTML_NESTING,
-  exceedsHtmlNesting,
-  sanitizePastedHtml,
-} from "./pasteHtml.ts";
+import { MAX_HTML_INSPECTION_UNITS, MAX_HTML_NESTING, sanitizePastedHtml } from "./pasteHtml.ts";
 
 describe("sanitizePastedHtml", () => {
   it("keeps allowed links and images with web URLs", () => {
@@ -59,26 +54,28 @@ describe("sanitizePastedHtml", () => {
   });
 });
 
-describe("exceedsHtmlNesting", () => {
+describe("sanitizePastedHtml nesting bounds", () => {
   it("counts a non-void self-closing tag as an open element", () => {
     // HTML reads `<div/>` as an open element; only void tags self-close.
-    expect(exceedsHtmlNesting("<div/>".repeat(3), 2)).toBe(true);
-    expect(exceedsHtmlNesting('<div class="x"/>'.repeat(3), 2)).toBe(true);
-    expect(exceedsHtmlNesting("<div/>".repeat(2), 2)).toBe(false);
+    expect(sanitizePastedHtml(`${"<div/>".repeat(MAX_HTML_NESTING + 1)}deep`)).toBe("");
+    expect(sanitizePastedHtml(`${'<div class="x"/>'.repeat(MAX_HTML_NESTING + 1)}deep`)).toBe("");
+    expect(sanitizePastedHtml(`${"<div/>".repeat(MAX_HTML_NESTING)}deep`)).toContain("deep");
     // Void elements never nest, whatever their spelling.
-    expect(exceedsHtmlNesting("<br/>".repeat(600))).toBe(false);
-    expect(exceedsHtmlNesting("<img>".repeat(600))).toBe(false);
+    expect(sanitizePastedHtml(`${"<br/>".repeat(600)}deep`)).toContain("deep");
+    expect(sanitizePastedHtml(`${"<img>".repeat(600)}deep`)).toContain("deep");
   });
 
   it("ignores a closer that does not match the innermost open element", () => {
     // HTML ignores `</bogus>` instead of closing the div, so repeated
     // `<div></bogus>` still nests one element per div.
-    expect(exceedsHtmlNesting("<div></bogus><div>", 1)).toBe(true);
-    expect(exceedsHtmlNesting("<div><span></bogus></bogus><div>", 2)).toBe(true);
+    expect(sanitizePastedHtml(`${"<div></bogus>".repeat(MAX_HTML_NESTING + 1)}deep`)).toBe("");
+    expect(
+      sanitizePastedHtml(`${"<div><span></bogus></bogus>".repeat(MAX_HTML_NESTING + 1)}deep`),
+    ).toBe("");
     // A closer that matches the innermost element still closes it.
-    expect(exceedsHtmlNesting("<div></div><div>", 1)).toBe(false);
+    expect(sanitizePastedHtml(`${"<div></div>".repeat(MAX_HTML_NESTING)}deep`)).toContain("deep");
     // An outer closer cannot reach past the innermost element.
-    expect(exceedsHtmlNesting("<div><span></div><div><span>", 2)).toBe(true);
+    expect(sanitizePastedHtml(`${"<div><span></div>".repeat(MAX_HTML_NESTING)}deep`)).toBe("");
   });
 });
 
