@@ -12,6 +12,7 @@ export type BrowserPaneProps = {
   readonly onReconnect: () => void;
   readonly onCommand: (action: Browser.Action) => void;
   readonly viewport?: JSX.Element;
+  readonly annotation?: JSX.Element;
 };
 
 export function BrowserPane(props: BrowserPaneProps) {
@@ -138,6 +139,7 @@ export function BrowserPane(props: BrowserPaneProps) {
             Go
           </Button>
         </form>
+        {props.annotation}
         <Show
           when={tab()}
           fallback={

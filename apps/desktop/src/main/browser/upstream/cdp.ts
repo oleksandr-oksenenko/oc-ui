@@ -4,9 +4,17 @@ import { protocolError } from "./errors.ts";
 
 export type Cdp = ReturnType<typeof createCdp>;
 
+/**
+ * The debugger adapter owns every application-facing command promise. Chromium
+ * cannot cancel a `sendCommand`, so terminal closure rejects the wrappers
+ * instead of waiting for the renderer to answer: callers settle, the target is
+ * retired, and a late raw response cannot reach a newer operation.
+ */
 export function createCdp(contents: WebContents) {
   const listeners = new Map<string, Set<(params: unknown, sessionID?: string) => void>>();
   const sessions = new Set([""]);
+  const pending = new Set<PromiseWithResolvers<unknown>>();
+  let terminal: Error | undefined;
   const receive = (_event: Electron.Event, name: string, params: unknown, sessionID?: string) => {
     if (!sessions.has(sessionID ?? "")) return;
     if (name === "Target.attachedToTarget") {
@@ -18,23 +26,44 @@ export function createCdp(contents: WebContents) {
     listeners.get(name)?.forEach((callback) => callback(params, sessionID || undefined));
   };
   contents.debugger.on("message", receive);
+  const close = (reason: Error) => {
+    if (terminal) return;
+    terminal = reason;
+    for (const entry of pending) entry.reject(reason);
+    pending.clear();
+    contents.debugger.off("message", receive);
+    listeners.clear();
+    if (!contents.isDestroyed() && contents.debugger.isAttached()) contents.debugger.detach();
+  };
   return {
-    async send<Method extends keyof ProtocolMapping.Commands>(
+    send<Method extends keyof ProtocolMapping.Commands>(
       method: Method,
       params: object = {},
       sessionID?: string,
     ): Promise<ProtocolMapping.Commands[Method]["returnType"]> {
+      if (terminal) return Promise.reject(terminal);
       if (contents.isDestroyed())
-        throw new Error(
-          "Browser tab was closed. Call browser.tabs.list({}) and choose an existing tabID, or browser.tabs.open({}) if no tabs remain.",
+        return Promise.reject(
+          new Error(
+            "Browser tab was closed. Call browser.tabs.list({}) and choose an existing tabID, or browser.tabs.open({}) if no tabs remain.",
+          ),
         );
-      // attach can throw synchronously; sendCommand can reject asynchronously.
-      try {
-        if (!contents.debugger.isAttached()) contents.debugger.attach("1.3");
-        return await contents.debugger.sendCommand(method, params, sessionID);
-      } catch (error) {
-        throw protocolError(method, error);
-      }
+      const outcome = Promise.withResolvers<ProtocolMapping.Commands[Method]["returnType"]>();
+      const entry = outcome as PromiseWithResolvers<unknown>;
+      pending.add(entry);
+      void (async () => {
+        // attach can throw synchronously; sendCommand can reject asynchronously.
+        try {
+          if (!contents.debugger.isAttached()) contents.debugger.attach("1.3");
+          const value = await contents.debugger.sendCommand(method, params, sessionID);
+          pending.delete(entry);
+          outcome.resolve(value);
+        } catch (error) {
+          pending.delete(entry);
+          outcome.reject(terminal ?? protocolError(method, error));
+        }
+      })();
+      return outcome.promise;
     },
     on<Method extends keyof ProtocolMapping.Events>(
       method: Method,
@@ -50,10 +79,8 @@ export function createCdp(contents: WebContents) {
         if (!handlers.size) listeners.delete(method);
       };
     },
-    dispose() {
-      contents.debugger.off("message", receive);
-      listeners.clear();
-    },
+    /** Fence the connection: reject every pending and future application-facing command. */
+    close,
   };
 }
 

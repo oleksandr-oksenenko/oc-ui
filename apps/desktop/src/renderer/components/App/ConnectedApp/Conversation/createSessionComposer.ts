@@ -145,6 +145,8 @@ export type SessionComposerController = {
   readonly files: Accessor<readonly File[]>;
   readonly attachFiles: (files: readonly File[]) => void;
   readonly removeFile: (file: File) => void;
+  /** Append annotation text and its screenshots together, or make no change. */
+  readonly appendBatch: (sessionID: string, text: string, files: readonly File[]) => void;
   readonly disabled: Accessor<boolean>;
   readonly submitting: Accessor<boolean>;
   readonly error: Accessor<string | undefined>;
@@ -200,6 +202,22 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     );
     clearCommandAttachmentNotice(sessionID);
     clearAttachmentNotice(sessionID);
+  };
+  const appendBatch = (sessionID: string, text: string, incoming: readonly File[]) => {
+    const body = text.trim();
+    if (!sessionID) throw new Error("Annotations need a target conversation.");
+    if (!body) throw new Error("Annotations need at least one comment.");
+    if (incoming.length === 0) throw new Error("Annotations need at least one screenshot.");
+    const oversized = incoming.find((file) => file.size > MAX_ATTACHMENT_BYTES);
+    if (oversized) throw new Error(`"${oversized.name}" is larger than the attachment limit.`);
+    const current = drafts.get(sessionID);
+    drafts.set(
+      sessionID,
+      current ? `${current.trimEnd()}\n\n${body}` : body,
+      drafts.skills(sessionID),
+    );
+    const existing = effects.registry.get(fileDrafts)[sessionID] ?? [];
+    setFiles(sessionID, [...existing, ...incoming]);
   };
   const admission = Atom.make<AdmissionState>({
     active: undefined,
@@ -557,6 +575,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     files,
     attachFiles,
     removeFile,
+    appendBatch,
     disabled,
     submitting,
     error: () => {

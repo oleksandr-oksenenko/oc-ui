@@ -1304,3 +1304,37 @@ describe("command submissions", () => {
     root.dispose();
   });
 });
+
+describe("annotation batches", () => {
+  it("appends text and screenshots without dropping skill mentions", () => {
+    const root = setup();
+    root.setSelectedID("one");
+    root.composer.input("  review the pricing page", [
+      { id: "review-id", name: "review", mention: { start: 2, end: 8, text: "review" } },
+    ]);
+    const screenshot = new File([new Uint8Array([1, 2, 3])], "annotation-1.png", {
+      type: "image/png",
+    });
+    root.composer.appendBatch("one", "### Annotation 1: make it wider", [screenshot]);
+    expect(root.composer.value()).toBe(
+      "  review the pricing page\n\n### Annotation 1: make it wider",
+    );
+    expect(root.composer.skills()).toHaveLength(1);
+    expect(root.composer.files()).toEqual([screenshot]);
+    root.dispose();
+  });
+
+  it("rejects an incomplete batch without changing the draft", () => {
+    const root = setup();
+    root.setSelectedID("one");
+    root.composer.input("keep this");
+    const screenshot = new File([new Uint8Array([1])], "annotation-1.png", {
+      type: "image/png",
+    });
+    expect(() => root.composer.appendBatch("one", "   ", [screenshot])).toThrow(/comment/);
+    expect(() => root.composer.appendBatch("one", "note", [])).toThrow(/screenshot/);
+    expect(root.composer.value()).toBe("keep this");
+    expect(root.composer.files()).toEqual([]);
+    root.dispose();
+  });
+});

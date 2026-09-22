@@ -111,6 +111,7 @@ function setup(
     skills: () => [],
     attachFiles: () => undefined,
     removeFile: () => undefined,
+    appendBatch: () => undefined,
     value: () => "",
     disabled: () => false,
     submitting: () => false,

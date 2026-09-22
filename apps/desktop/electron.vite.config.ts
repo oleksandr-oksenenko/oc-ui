@@ -79,7 +79,10 @@ export default defineConfig({
       externalizeDeps: false,
       isolatedEntries: true,
       rollupOptions: {
-        input: resolve(configDirectory, "src/preload/index.ts"),
+        input: {
+          index: resolve(configDirectory, "src/preload/index.ts"),
+          "browser-annotator": resolve(configDirectory, "src/preload/browser-annotator.ts"),
+        },
         output: { format: "cjs" },
       },
     },

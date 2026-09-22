@@ -2,8 +2,26 @@ import { Browser } from "@opencode/plugin-browser/rpc";
 import electron, { type BrowserWindow, type WebContents } from "electron";
 import type { Protocol } from "devtools-protocol";
 import { Schema } from "effect";
+import { fileURLToPath } from "node:url";
 import { createCdp, abortError, waitFor } from "./cdp.ts";
+import { createNativeOperation, type NativeOperation } from "./operation.ts";
 import { createBrowserFiles } from "./files.ts";
+import {
+  createAnnotationPicker,
+  type AnnotationCaptureInput,
+  type AnnotationElementInfo,
+} from "./annotation.ts";
+import { requestAnnotationComment } from "./annotation-comment.ts";
+import {
+  annotationCaptureScale,
+  detectChannelOrder,
+  drawAnnotationMarker,
+  type ChannelOrder,
+} from "./annotation-image.ts";
+import {
+  BROWSER_ANNOTATOR_CHANNEL,
+  BrowserAnnotatorReply,
+} from "../../../shared/browser-annotator.ts";
 import { createDiagnostics } from "./diagnostics.ts";
 import { createProfiling } from "./profiling.ts";
 import type { BrowserNetwork } from "../network.ts";
@@ -25,6 +43,73 @@ const retainedOperations = new Set<Browser.Method>([
   "heap.object",
   "heap.compare",
 ]);
+const boundsFunction =
+  "function() { const r = this.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; }";
+
+/** Runs against the selected node; page values are bounded here and re-validated by the shared schema. */
+const annotationContext = String.raw`function() {
+  const bounds = this.getBoundingClientRect();
+  const path = [];
+  let node = this;
+  while (node && node.nodeType === 1 && path.length < 8) {
+    const tag = node.localName;
+    if (node.id) {
+      path.unshift(tag + "#" + CSS.escape(node.id));
+      break;
+    }
+    const parent = node.parentElement;
+    const siblings = parent ? Array.from(parent.children).filter((item) => item.localName === tag) : [];
+    path.unshift(siblings.length > 1 ? tag + ":nth-of-type(" + (siblings.indexOf(node) + 1) + ")" : tag);
+    node = parent;
+  }
+  return {
+    frameUrl: (this.ownerDocument.URL || "").slice(0, 16384),
+    selector: path.join(" > ").slice(0, 4096),
+    tag: (this.localName || "").slice(0, 256),
+    text: (this.textContent || "").replace(/\s+/g, " ").trim().slice(0, 4096),
+    role: (this.getAttribute("role") || "").slice(0, 256),
+    label: (this.getAttribute("aria-label") || "").slice(0, 1024),
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    topFrame: window === window.top,
+  };
+}`;
+const AnnotationContext = Schema.Struct({
+  frameUrl: Schema.String,
+  selector: Schema.String,
+  tag: Schema.String,
+  text: Schema.String,
+  role: Schema.String,
+  label: Schema.String,
+  x: Schema.Finite,
+  y: Schema.Finite,
+  width: Schema.Finite,
+  height: Schema.Finite,
+  topFrame: Schema.Boolean,
+});
+const ANNOTATION_MAX_BYTES = 1_200_000;
+const STOPPED_RESPONDING =
+  "The browser tab stopped responding while cancelling an operation and was closed. Open the page again.";
+/** Viewport rect shared by pointer-operation geometry and annotation composition. */
+const ViewportRectSchema = Schema.Struct({
+  x: Schema.Finite,
+  y: Schema.Finite,
+  width: Schema.Finite,
+  height: Schema.Finite,
+});
+type ViewportRect = { x: number; y: number; width: number; height: number };
+/** A one-pixel red PNG; identifies which bitmap channel holds red on this platform. */
+const RED_PIXEL_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+let annotationOrder: ChannelOrder | undefined;
+function annotationChannelOrder() {
+  annotationOrder ??= detectChannelOrder(
+    electron.nativeImage.createFromDataURL(RED_PIXEL_DATA_URL).toBitmap(),
+  );
+  return annotationOrder;
+}
 export type BrowserPage = ReturnType<typeof createBrowserPage>;
 
 export function createBrowserPage(
@@ -34,7 +119,7 @@ export function createBrowserPage(
     partition: string;
     network: BrowserNetwork;
     publish: (error?: string) => void;
-    fail: () => void;
+    fail: (reason?: string) => void;
     popup: (options: Electron.BrowserWindowConstructorOptions) => WebContents;
     popupOptions?: Electron.BrowserWindowConstructorOptions;
   },
@@ -48,6 +133,9 @@ export function createBrowserPage(
     webviewTag: false,
     devTools: false,
     backgroundThrottling: false,
+    // The annotation popover is the only oc-ui code in a page; it is isolated
+    // from page scripts and draws only its own closed shadow root.
+    preload: fileURLToPath(new URL("../preload/browser-annotator.cjs", import.meta.url)),
     // Agent navigation, including in hidden tabs, must not take the user's keyboard focus.
     focusOnNavigation: false,
   };
@@ -80,11 +168,13 @@ export function createBrowserPage(
   const sessions = new Map<string, string>();
   const parents = new Map<string, string>();
   const contexts = new Map<string, { id: number; sessionID?: string }>();
-  const pendingOperations = new Map<Promise<Browser.Result>, AbortController>();
+  const pendingOperations = new Map<Promise<Browser.Result>, NativeOperation>();
   const dialogs = new Set<() => void>();
   let dialog: { type: string; message: string; defaultValue: string } | null = null;
   let generation = 0;
   let closed = false;
+  let fenced = false;
+  let terminal: Error | undefined;
   const state = (): Browser.Tab => ({
     id: options.id,
     url: contents.getURL().slice(0, 16_384),
@@ -95,10 +185,31 @@ export function createBrowserPage(
     generation,
   });
   const publish = () => {
-    if (!closed) options.publish();
+    if (!closed && !terminal) options.publish();
   };
+  /** Close the target before awaiting CDP-dependent cleanup, so callers settle. */
+  const fence = (reason: Error) => {
+    if (fenced) return;
+    fenced = true;
+    // A concurrent owner disposal must not mask the terminal reason.
+    cdp.close(terminal ?? reason);
+    if (!contents.isDestroyed()) contents.close({ waitForBeforeUnload: false });
+  };
+  // Created before navigation handlers so cancelling a pick does not race a page reload.
+  const annotation = createAnnotationPicker({
+    contents,
+    cdp,
+    state,
+    ready: () => ready,
+    retired: () => terminal,
+    retire,
+    element: annotationElement,
+    capture: annotationCapture,
+    comment: annotationComment,
+  });
   const reset = (event: Electron.Event<{ isMainFrame: boolean; isSameDocument: boolean }>) => {
     if (!event.isMainFrame || event.isSameDocument) return;
+    annotation.cancel();
     generation++;
     refs.clear();
     diagnostics.clear();
@@ -109,10 +220,10 @@ export function createBrowserPage(
   contents.on("did-navigate-in-page", publish);
   contents.on("page-title-updated", publish);
   contents.on("render-process-gone", () => {
-    if (!closed) options.fail();
+    if (!closed && !terminal) options.fail();
   });
   contents.debugger.on("detach", () => {
-    if (!closed) options.fail();
+    if (!closed && !terminal) options.fail();
   });
   contents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
     callback(false),
@@ -228,11 +339,14 @@ export function createBrowserPage(
     }),
   ]).then(() => undefined);
 
+  // Everything below this return is hoisted function declarations only; runtime
+  // state and schema declarations must appear before it or they never initialize.
   return {
     view,
     contents,
     state,
     ready,
+    annotation,
     async execute(command: Browser.Command, signal: AbortSignal): Promise<Browser.Result> {
       await ready;
       abortError(signal);
@@ -240,6 +354,10 @@ export function createBrowserPage(
         throw new Error(
           "Browser tab was closed. Call browser.tabs.list({}) and choose an existing tabID; do not reuse the closed tab's refs.",
         );
+      if (terminal) throw terminal;
+      // A command owns the page while it runs; a pending element pick must not race its input.
+      await annotation.stop();
+      if (terminal) throw terminal;
       if (dialog && command.action.type !== "dialog")
         throw new Error(
           'A JavaScript dialog is open. Inspect it with browser.dialog({tabID,action:"get"}), then explicitly accept or dismiss it before continuing.',
@@ -258,9 +376,10 @@ export function createBrowserPage(
       // signal before each further step, so a validation alert on one field stops the rest.
       // A navigation is left alone: its beforeunload dialog is answered through browser.dialog
       // and the pending load then proceeds or not.
-      const run = new AbortController();
+      // External cancellation drains: an abandoned action must settle or the page retires.
+      // A dialog abandons the action without treating the page as terminal.
+      const operation = createNativeOperation(signal, () => retire(STOPPED_RESPONDING));
       const cancel = () => {
-        run.abort();
         cancelled.reject(
           new Error(
             "Browser operation was cancelled. Inspect the tab before deciding to repeat an action; cancellation does not undo changes already made.",
@@ -269,7 +388,7 @@ export function createBrowserPage(
       };
       signal.addEventListener("abort", cancel, { once: true });
       const reject = () => {
-        if (command.action.type !== "navigate") run.abort();
+        if (command.action.type !== "navigate") operation.abort();
         modal.reject(
           new Error(
             'A JavaScript dialog opened while the action was running. Inspect it with browser.dialog({tabID,action:"get"}) and accept or dismiss it. Do not repeat the original action just to close the dialog.',
@@ -277,14 +396,22 @@ export function createBrowserPage(
         );
       };
       if (command.action.type !== "dialog") dialogs.add(reject);
-      const pending = execute(command.action, command.files, run.signal);
-      pendingOperations.set(pending, run);
-      void pending.then(
-        () => pendingOperations.delete(pending),
-        () => pendingOperations.delete(pending),
+      const pending = execute(command.action, command.files, operation.signal);
+      pendingOperations.set(pending, operation);
+      const finished = pending.then(
+        (value) => {
+          pendingOperations.delete(pending);
+          operation.finish();
+          return value;
+        },
+        (error: unknown) => {
+          pendingOperations.delete(pending);
+          operation.finish();
+          throw error;
+        },
       );
       try {
-        return await Promise.race([pending, modal.promise, cancelled.promise]);
+        return await Promise.race([finished, modal.promise, cancelled.promise]);
       } finally {
         signal.removeEventListener("abort", cancel);
         dialogs.delete(reject);
@@ -293,14 +420,15 @@ export function createBrowserPage(
     async dispose() {
       if (closed) return;
       closed = true;
+      // Fence the target first: CDP-dependent cleanup must not hold the WebContents open.
+      fence(new Error("Browser tab was closed."));
       detachNetwork();
       contents.session.off("will-download", download);
-      pendingOperations.forEach((run) => run.abort());
+      pendingOperations.forEach((operation) => operation.cancel());
+      await annotation.dispose();
       await profiling.dispose();
-      cdp.dispose();
       refs.clear();
       if (!win.isDestroyed()) win.contentView.removeChildView(view);
-      if (!contents.isDestroyed()) contents.close({ waitForBeforeUnload: false });
       await Promise.allSettled(pendingOperations.keys());
       await files.dispose();
     },
@@ -667,6 +795,203 @@ export function createBrowserPage(
     return value;
   }
 
+  function frameIDForSession(sessionID: string) {
+    for (const [frameID, session] of sessions) if (session === sessionID) return frameID;
+    return undefined;
+  }
+
+  /** Terminal failure: notify the native owner, fence the connection, and close the page. */
+  function retire(reason: string) {
+    if (terminal) return;
+    const error = new Error(reason);
+    terminal = error;
+    options.fail(reason);
+    fence(error);
+  }
+
+  async function annotationElement(
+    target: { backendNodeId: number; sessionID?: string },
+    signal: AbortSignal,
+  ): Promise<AnnotationElementInfo> {
+    abortError(signal);
+    const resolved = await cdp
+      .send("DOM.resolveNode", { backendNodeId: target.backendNodeId }, target.sessionID)
+      .catch(() => undefined);
+    const objectId = resolved?.object.objectId;
+    if (!objectId) throw new Error("Selected element is no longer available.");
+    let raw: unknown;
+    try {
+      const result = await cdp.send(
+        "Runtime.callFunctionOn",
+        { objectId, functionDeclaration: annotationContext, returnByValue: true },
+        target.sessionID,
+      );
+      if (result.exceptionDetails)
+        throw new Error(
+          result.exceptionDetails.exception?.description ?? result.exceptionDetails.text,
+        );
+      raw = result.result.value;
+    } finally {
+      await cdp
+        .send("Runtime.releaseObject", { objectId }, target.sessionID)
+        .catch(() => undefined);
+    }
+    const value = Schema.decodeUnknownSync(AnnotationContext)(raw);
+    const local = { x: value.x, y: value.y, width: value.width, height: value.height };
+    let topFrame = value.topFrame;
+    let bounds = local;
+    if (!topFrame && target.sessionID) {
+      const frameID = frameIDForSession(target.sessionID);
+      if (frameID) {
+        try {
+          bounds = await composeRect(frameID, { ...local });
+          topFrame = true;
+        } catch {
+          topFrame = false;
+        }
+      }
+    }
+    const viewport = await cdp
+      .send("Page.getLayoutMetrics")
+      .then((metrics) => metrics.cssLayoutViewport)
+      .catch(() => undefined);
+    const visible =
+      !topFrame ||
+      !viewport ||
+      (bounds.x < viewport.clientWidth &&
+        bounds.y < viewport.clientHeight &&
+        bounds.x + bounds.width > 0 &&
+        bounds.y + bounds.height > 0);
+    return {
+      selection: {
+        frameUrl: value.frameUrl,
+        selector: value.selector,
+        tag: value.tag,
+        text: value.text,
+        role: value.role,
+        label: value.label,
+        bounds,
+        topFrame,
+      },
+      visible,
+    };
+  }
+
+  async function annotationCapture(
+    input: AnnotationCaptureInput,
+    signal: AbortSignal,
+  ): Promise<Browser.File> {
+    abortError(signal);
+    await waitFor(
+      () => view.getVisible() && win.isVisible() && !win.isMinimized(),
+      signal,
+      3_000,
+    ).catch((error) => {
+      if (signal.aborted) throw error;
+      throw new Error(
+        "Screenshot needs a visible tab. Focus the browser tab and keep its desktop window visible.",
+      );
+    });
+    const metrics = await cdp.send("Page.getLayoutMetrics");
+    const viewport = metrics.cssVisualViewport;
+    const bounds = {
+      x: viewport.pageX,
+      y: viewport.pageY,
+      width: viewport.clientWidth,
+      height: viewport.clientHeight,
+    };
+    if (bounds.width <= 0 || bounds.height <= 0)
+      throw new Error("The browser viewport has no visible area to capture.");
+    const pixelRatio =
+      contents.getZoomFactor() * electron.screen.getDisplayMatching(win.getBounds()).scaleFactor;
+    // Capture at the display's real resolution, with no width cap. The pixel
+    // budget only protects main from an unbounded bitmap on very large
+    // displays, and it scales the capture instead of refusing it.
+    const { clipScale, imageScale } = annotationCaptureScale(
+      bounds.width,
+      bounds.height,
+      pixelRatio,
+    );
+    const capture = await cdp.send("Page.captureScreenshot", {
+      format: "png",
+      captureBeyondViewport: true,
+      clip: { ...bounds, scale: clipScale },
+    });
+    abortError(signal);
+    const source = electron.nativeImage.createFromBuffer(Buffer.from(capture.data, "base64"));
+    const size = source.getSize();
+    if (size.width <= 0 || size.height <= 0)
+      throw new Error("Annotation screenshot could not be decoded.");
+    const bitmap = source.toBitmap();
+    if (input.markerBounds)
+      drawAnnotationMarker(
+        bitmap,
+        size.width,
+        size.height,
+        { mode: input.mode, bounds: input.markerBounds, number: input.number, scale: imageScale },
+        annotationChannelOrder(),
+      );
+    const composed = electron.nativeImage.createFromBitmap(bitmap, {
+      width: size.width,
+      height: size.height,
+      scaleFactor: 1,
+    });
+    let data = composed.toPNG();
+    let mime = "image/png";
+    let name = `annotation-${input.number}.png`;
+    if (data.length > ANNOTATION_MAX_BYTES) {
+      // JPEG at high quality only wins when PNG is large (noisy or photographic
+      // pages); flat UI stays on the lossless PNG path.
+      data = composed.toJPEG(90);
+      mime = "image/jpeg";
+      name = `annotation-${input.number}.jpg`;
+    }
+    // The IPC event carries typed bytes; an oversized capture would be dropped by
+    // schema decoding, so fail here where the user gets a message.
+    if (data.length > Browser.MAX_FILE_BYTES)
+      throw new Error(
+        "The annotated screenshot is too large to attach. Select a smaller area and try again.",
+      );
+    return {
+      // oxlint-disable-next-line effecttsgo/crypto-random-uuid -- The pinned Effect RC has no UUID API; use platform correlation IDs.
+      id: Browser.FileID.make(`file_${crypto.randomUUID()}`),
+      name,
+      mime,
+      data,
+    };
+  }
+
+  async function annotationComment(
+    anchor: { x: number; y: number; width: number; height: number },
+    signal: AbortSignal,
+  ) {
+    return requestAnnotationComment(
+      {
+        send: (message) => contents.send(BROWSER_ANNOTATOR_CHANNEL, message),
+        onReply: (listener) => {
+          const receive = (event: Electron.IpcMainEvent, channel: string, ...args: unknown[]) => {
+            if (channel !== BROWSER_ANNOTATOR_CHANNEL) return;
+            // Only the top frame's preload may answer for this interaction.
+            if (event.senderFrame !== contents.mainFrame) return;
+            let reply: typeof BrowserAnnotatorReply.Type;
+            try {
+              reply = Schema.decodeUnknownSync(BrowserAnnotatorReply)(args[0]);
+            } catch {
+              // A malformed or foreign message is ignored rather than escaping the picker.
+              return;
+            }
+            listener(reply);
+          };
+          contents.on("ipc-message", receive);
+          return () => contents.off("ipc-message", receive);
+        },
+        focus: () => contents.focus(),
+      },
+      anchor,
+      signal,
+    );
+  }
+
   async function frames() {
     const root = await cdp.send("Page.getFrameTree");
     const result: { id: string; parentID?: string; url: string; name: string }[] = [];
@@ -729,6 +1054,40 @@ export function createBrowserPage(
     }
   }
 
+  async function localRect(element: Element, functionDeclaration = boundsFunction) {
+    return Schema.decodeUnknownSync(ViewportRectSchema)(await call(element, functionDeclaration));
+  }
+
+  /** Composes a frame-local rect into top-viewport coordinates. */
+  async function composeRect(frameID: string, source: ViewportRect): Promise<ViewportRect> {
+    const value = { ...source };
+    const tree = await frames();
+    let frame = tree.find((item) => item.id === frameID);
+    while (frame?.parentID) {
+      const parent = { frameID: frame.parentID, sessionID: sessionFor(frame.parentID, tree) };
+      const owner = await cdp.send("DOM.getFrameOwner", { frameId: frame.id }, parent.sessionID);
+      // A CSS transform on the iframe scales its content box; the child's own coordinates are unscaled.
+      const box = Schema.decodeUnknownSync(
+        Schema.Struct({
+          ...ViewportRectSchema.fields,
+          scaleX: Schema.Finite,
+          scaleY: Schema.Finite,
+        }),
+      )(
+        await call(
+          { backendID: owner.backendNodeId, ...parent },
+          "function() { const r = this.getBoundingClientRect(); const sx = this.offsetWidth ? r.width / this.offsetWidth : 1; const sy = this.offsetHeight ? r.height / this.offsetHeight : 1; return {x:r.x+this.clientLeft*sx,y:r.y+this.clientTop*sy,width:r.width,height:r.height,scaleX:sx,scaleY:sy}; }",
+        ),
+      );
+      value.x = box.x + value.x * box.scaleX;
+      value.y = box.y + value.y * box.scaleY;
+      value.width *= box.scaleX;
+      value.height *= box.scaleY;
+      frame = tree.find((item) => item.id === frame?.parentID);
+    }
+    return value;
+  }
+
   async function rect(element: Element, signal?: AbortSignal) {
     if (signal) {
       await cdp.send(
@@ -755,41 +1114,7 @@ export function createBrowserPage(
       );
       abortError(signal);
     }
-    const shape = Schema.Struct({
-      x: Schema.Finite,
-      y: Schema.Finite,
-      width: Schema.Finite,
-      height: Schema.Finite,
-    });
-    const value = {
-      ...Schema.decodeUnknownSync(shape)(
-        await call(
-          element,
-          "function() { const r = this.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; }",
-        ),
-      ),
-    };
-    const tree = await frames();
-    let frame = tree.find((frame) => frame.id === element.frameID);
-    while (frame?.parentID) {
-      const parent = { frameID: frame.parentID, sessionID: sessionFor(frame.parentID, tree) };
-      const owner = await cdp.send("DOM.getFrameOwner", { frameId: frame.id }, parent.sessionID);
-      // A CSS transform on the iframe scales its content box; the child's own coordinates are unscaled.
-      const box = Schema.decodeUnknownSync(
-        Schema.Struct({ ...shape.fields, scaleX: Schema.Finite, scaleY: Schema.Finite }),
-      )(
-        await call(
-          { backendID: owner.backendNodeId, ...parent },
-          "function() { const r = this.getBoundingClientRect(); const sx = this.offsetWidth ? r.width / this.offsetWidth : 1; const sy = this.offsetHeight ? r.height / this.offsetHeight : 1; return {x:r.x+this.clientLeft*sx,y:r.y+this.clientTop*sy,width:r.width,height:r.height,scaleX:sx,scaleY:sy}; }",
-        ),
-      );
-      value.x = box.x + value.x * box.scaleX;
-      value.y = box.y + value.y * box.scaleY;
-      value.width *= box.scaleX;
-      value.height *= box.scaleY;
-      frame = tree.find((item) => item.id === frame?.parentID);
-    }
-    return value;
+    return composeRect(element.frameID, await localRect(element));
   }
 
   // Same-process child frames have no CDP target of their own; the nearest ancestor with one owns them.

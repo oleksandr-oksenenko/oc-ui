@@ -129,3 +129,122 @@
   font-size: var(--oc-type-metadata-size);
   overflow-wrap: anywhere;
 }
+
+.browser-annotations {
+  display: flex;
+  min-width: 0;
+  max-height: 45%;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  overflow: auto;
+  padding: 6px;
+  border-bottom: 1px solid var(--oc-border-base);
+}
+
+.browser-annotation-actions {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.browser-annotation-status {
+  min-width: 0;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+}
+
+.browser-annotation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browser-annotation-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+}
+
+.browser-annotation-card-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.browser-annotation-number {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--oc-radius-full);
+  color: var(--oc-text-contrast);
+  background: var(--oc-accent);
+  font-size: var(--oc-type-caption-size);
+}
+
+.browser-annotation-thumb {
+  width: 48px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  object-fit: cover;
+  object-position: top left;
+}
+
+.browser-annotation-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.browser-annotation-target {
+  overflow: hidden;
+  color: var(--oc-text-base);
+  font-family: var(--oc-font-mono);
+  font-size: var(--oc-type-caption-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-annotation-warning {
+  color: var(--oc-status-warning);
+  font-size: var(--oc-type-caption-size);
+}
+
+.browser-annotation-card textarea {
+  width: 100%;
+  min-height: 44px;
+  resize: vertical;
+  padding: 4px 6px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-base);
+  background: var(--oc-surface-subtle);
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-metadata-size);
+}
+
+.browser-annotation-error {
+  margin: 0;
+  color: var(--oc-status-danger);
+  font-size: var(--oc-type-metadata-size);
+  overflow-wrap: anywhere;
+}

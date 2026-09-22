@@ -11,7 +11,21 @@ import { withTestWorkspace } from "../../../../test/workspace.ts";
 import { deferred } from "../../../../test/deferred.ts";
 import { createSessionBrowser } from "./createSessionBrowser.ts";
 
-function setup(overrides: Partial<Pick<BrowserApi, "attach" | "detach" | "command">> = {}) {
+const annotationTab = (generation = 0) => ({
+  id: Browser.TabID.make("tab_00000000-0000-4000-8000-000000000001"),
+  url: "https://example.test/page",
+  title: "Page",
+  loading: false,
+  canGoBack: false,
+  canGoForward: false,
+  generation,
+});
+
+function setup(
+  overrides: Partial<
+    Pick<BrowserApi, "attach" | "detach" | "command" | "annotationStart" | "annotationCancel">
+  > = {},
+) {
   return withTestWorkspace((effects, disposeView) => {
     let receive: ((event: BrowserEvent) => void) | undefined;
     const [selected, select] = createSignal<string | undefined>("session-a");
@@ -28,10 +42,18 @@ function setup(overrides: Partial<Pick<BrowserApi, "attach" | "detach" | "comman
       return overrides.detach?.(input) ?? Promise.resolve();
     });
     const command = vi.fn<BrowserApi["command"]>(overrides.command ?? (() => Promise.resolve()));
+    const annotationStart = vi.fn<BrowserApi["annotationStart"]>(
+      overrides.annotationStart ?? (() => Promise.resolve()),
+    );
+    const annotationCancel = vi.fn<BrowserApi["annotationCancel"]>(
+      overrides.annotationCancel ?? (() => Promise.resolve()),
+    );
     const api: BrowserApi = {
       attach,
       detach,
       command,
+      annotationStart,
+      annotationCancel,
       layout: () => Promise.resolve(),
       onEvent: (listener) => {
         receive = listener;
@@ -39,8 +61,17 @@ function setup(overrides: Partial<Pick<BrowserApi, "attach" | "detach" | "comman
       },
     };
     const focus = vi.fn<(sessionID: string) => void>();
+    const onAnnotationBatch =
+      vi.fn<(sessionID: string, text: string, files: readonly File[]) => void>();
     const connection = { api, serverUrl: "http://server:1234", password: "fixture" };
-    const controller = createSessionBrowser({ effects }, api, connection, selected, focus);
+    const controller = createSessionBrowser(
+      { effects },
+      api,
+      connection,
+      selected,
+      focus,
+      onAnnotationBatch,
+    );
     const emit = (event: BrowserEvent) => {
       receive?.(event);
       if (event.type === "state" && event.status !== "connected")
@@ -57,6 +88,9 @@ function setup(overrides: Partial<Pick<BrowserApi, "attach" | "detach" | "comman
       attach,
       detach,
       command,
+      annotationStart,
+      annotationCancel,
+      onAnnotationBatch,
       emit,
       connected,
       focus,
@@ -230,5 +264,151 @@ describe("session browser ownership", () => {
     fixture.controller.command({ type: "tabs.open", url: "http://server/page" });
     await vi.waitFor(() => expect(fixture.controller.current().error).toContain("may have run"));
     expect(fixture.command).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("browser annotations", () => {
+  const connect = async (fixture: ReturnType<typeof setup>) => {
+    await vi.waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(1));
+    const bindingID = fixture.controller.current().bindingID!;
+    fixture.emit({
+      bindingID,
+      type: "state",
+      status: "connected",
+      state: { tabs: [annotationTab()], focusedTabID: annotationTab().id },
+    });
+    await vi.waitFor(() => expect(fixture.controller.current().status).toBe("connected"));
+    return bindingID;
+  };
+  const capture = (bindingID: string, requestID: string, number: number) =>
+    ({
+      bindingID,
+      type: "annotation",
+      capture: {
+        requestID,
+        number,
+        mode: "element",
+        tab: annotationTab(),
+        capturedAt: "2026-09-19T00:00:00.000Z",
+        selection: {
+          frameUrl: annotationTab().url,
+          selector: "h1",
+          tag: "h1",
+          text: "Heading",
+          role: "",
+          label: "",
+          bounds: { x: 1, y: 2, width: 30, height: 40 },
+          topFrame: true,
+        },
+        body: `Comment ${number}`,
+        image: {
+          id: Browser.FileID.make("file_00000000-0000-4000-8000-000000000001"),
+          name: `annotation-${number}.png`,
+          mime: "image/png",
+          data: new Uint8Array([1, 2, 3]),
+        },
+      },
+    }) satisfies BrowserEvent;
+  const annotateAndCapture = async (fixture: ReturnType<typeof setup>, bindingID: string) => {
+    fixture.controller.annotate("element");
+    const call = fixture.annotationStart.mock.calls.at(-1)![0];
+    fixture.emit(capture(bindingID, call.requestID, call.number));
+    await vi.waitFor(() =>
+      expect(
+        fixture.controller.annotations().items.some((item) => item.number === call.number),
+      ).toBe(true),
+    );
+    return call;
+  };
+
+  it("captures a numbered annotation and adds it to the composer", async () => {
+    const fixture = setup();
+    const bindingID = await connect(fixture);
+    const call = await annotateAndCapture(fixture, bindingID);
+    expect(call).toMatchObject({
+      bindingID,
+      tabID: annotationTab().id,
+      number: 1,
+      mode: "element",
+    });
+    const [item] = fixture.controller.annotations().items;
+    expect(item?.number).toBe(1);
+    expect(item?.body).toBe("Comment 1");
+    fixture.controller.annotationBody(item!.id, "Make this heading larger");
+    fixture.controller.addAnnotations();
+    expect(fixture.onAnnotationBatch).toHaveBeenCalledTimes(1);
+    const [sessionID, text, files] = fixture.onAnnotationBatch.mock.calls[0]!;
+    expect(sessionID).toBe("session-a");
+    expect(text).toContain("Make this heading larger");
+    expect(text).toContain('"selector": "h1"');
+    expect(files).toHaveLength(1);
+    expect(files[0]?.name).toBe("annotation-1.png");
+    expect(fixture.controller.annotations().items).toHaveLength(0);
+  });
+
+  it("keeps stable numbers with gaps and discards one annotation", async () => {
+    const fixture = setup();
+    const bindingID = await connect(fixture);
+    await annotateAndCapture(fixture, bindingID);
+    await annotateAndCapture(fixture, bindingID);
+    const first = fixture.controller.annotations().items[0]!;
+    fixture.controller.discardAnnotation(first.id);
+    fixture.controller.annotate("element");
+    const call = fixture.annotationStart.mock.calls.at(-1)![0];
+    expect(call.number).toBe(3);
+    fixture.emit(capture(bindingID, call.requestID, call.number));
+    await vi.waitFor(() => expect(fixture.controller.annotations().items).toHaveLength(2));
+    expect(fixture.controller.annotations().items.map((item) => item.number)).toEqual([2, 3]);
+  });
+
+  it("cancels the native pick when the workspace closes mid-request", async () => {
+    const pending = deferred();
+    const fixture = setup({ annotationStart: () => pending.promise });
+    const bindingID = await connect(fixture);
+    fixture.controller.annotate("element");
+    await vi.waitFor(() => expect(fixture.annotationStart).toHaveBeenCalledOnce());
+    const closing = Effect.runPromise(Scope.close(fixture.effects.scope, Exit.void));
+    await vi.waitFor(() =>
+      expect(fixture.annotationCancel).toHaveBeenCalledWith({
+        bindingID,
+        tabID: annotationTab().id,
+      }),
+    );
+    pending.resolve();
+    await closing;
+  });
+
+  it("cancels the native pick and ignores its late capture", async () => {
+    const fixture = setup();
+    const bindingID = await connect(fixture);
+    fixture.controller.annotate("area");
+    const call = fixture.annotationStart.mock.calls.at(-1)![0];
+    fixture.controller.cancelAnnotation();
+    expect(fixture.annotationCancel).toHaveBeenCalledWith({ bindingID, tabID: annotationTab().id });
+    expect(fixture.controller.annotations().status).toBe("idle");
+    fixture.emit(capture(bindingID, call.requestID, call.number));
+    expect(fixture.controller.annotations().items).toHaveLength(0);
+  });
+
+  it("refuses to send until every annotation has a comment", async () => {
+    const fixture = setup();
+    const bindingID = await connect(fixture);
+    await annotateAndCapture(fixture, bindingID);
+    const [item] = fixture.controller.annotations().items;
+    fixture.controller.annotationBody(item!.id, "  ");
+    fixture.controller.addAnnotations();
+    expect(fixture.onAnnotationBatch).not.toHaveBeenCalled();
+    expect(fixture.controller.annotations().error).toMatch(/comment/);
+    expect(fixture.controller.annotations().items).toHaveLength(1);
+  });
+
+  it("stops capturing at the annotation limit", async () => {
+    const fixture = setup();
+    const bindingID = await connect(fixture);
+    for (let index = 0; index < 8; index++) await annotateAndCapture(fixture, bindingID);
+    expect(fixture.controller.annotations().items).toHaveLength(8);
+    fixture.controller.annotate("element");
+    expect(fixture.annotationStart).toHaveBeenCalledTimes(8);
+    expect(fixture.controller.annotations().error).toMatch(/At most 8/);
   });
 });

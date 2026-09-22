@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { BrowserAnnotations } from "./BrowserAnnotations.tsx";
 import { BrowserPane } from "./BrowserPane.tsx";
 import { BrowserViewport } from "./BrowserViewport.tsx";
 import type { SessionBrowser } from "./createSessionBrowser.ts";
@@ -15,6 +16,9 @@ export function BrowserRegion(props: BrowserRegionProps) {
       sessionSelected={props.sessionSelected}
       onReconnect={props.controller.reconnect}
       onCommand={props.controller.command}
+      annotation={
+        <BrowserAnnotations controller={props.controller} state={props.controller.current()} />
+      }
       viewport={
         <Show
           when={

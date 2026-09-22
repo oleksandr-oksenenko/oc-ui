@@ -72,6 +72,7 @@ export function createWorkspaceModel(
       panels.setContextView("browser");
       panels.setRightPanelOpen(true);
     },
+    (id, text, files) => composer.appendBatch(id, text, files),
   );
   const modelSelection = createModelSelection({
     effects: runtime.effects,

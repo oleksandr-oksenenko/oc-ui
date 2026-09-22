@@ -1,6 +1,12 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
-import { BrowserCommand, BrowserLayout, BrowserEvent } from "./browser-api.ts";
+import {
+  BrowserAnnotationStart,
+  BrowserCommand,
+  BrowserEvent,
+  BrowserLayout,
+  BrowserRequest,
+} from "./browser-api.ts";
 
 const parse = Schema.decodeUnknownSync(BrowserCommand);
 
@@ -70,5 +76,80 @@ describe("browser IPC contract", () => {
         state: { tabs: [], focusedTabID: null },
       }),
     ).toThrow(Schema.SchemaError);
+  });
+
+  it("bounds annotation requests and rejects unknown modes", () => {
+    const decode = Schema.decodeUnknownSync(BrowserAnnotationStart);
+    const request = {
+      bindingID: "binding",
+      tabID: "tab_00000000-0000-4000-8000-000000000001",
+      requestID: "request-1",
+      number: 1,
+      mode: "element",
+    };
+    expect(decode(request)).toEqual(request);
+    expect(() => decode({ ...request, mode: "viewport" })).toThrow(Schema.SchemaError);
+    expect(() => decode({ ...request, number: 0 })).toThrow(Schema.SchemaError);
+    expect(() => decode({ ...request, requestID: "" })).toThrow(Schema.SchemaError);
+  });
+
+  it("decodes annotation captures with typed bytes rather than desktop paths", () => {
+    const event = {
+      bindingID: "binding",
+      type: "annotation",
+      capture: {
+        requestID: "request-1",
+        number: 2,
+        mode: "area",
+        tab: {
+          id: "tab_00000000-0000-4000-8000-000000000001",
+          url: "https://example.com",
+          title: "Page",
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          generation: 3,
+        },
+        capturedAt: "2026-09-19T12:00:00.000Z",
+        selection: {
+          frameUrl: "https://example.com",
+          selector: "",
+          tag: "area",
+          text: "",
+          role: "",
+          label: "",
+          bounds: { x: 1, y: 2, width: 30, height: 40 },
+          topFrame: true,
+        },
+        body: "Uneven spacing",
+        image: {
+          id: "file_00000000-0000-4000-8000-000000000001",
+          name: "annotation-2.png",
+          mime: "image/png",
+          data: new Uint8Array([137, 80, 78, 71]),
+        },
+      },
+    };
+    expect(Schema.decodeUnknownSync(BrowserEvent)(event)).toEqual(event);
+    expect(() =>
+      Schema.decodeUnknownSync(BrowserEvent)({
+        ...event,
+        capture: {
+          ...event.capture,
+          image: { ...event.capture.image, data: "/desktop/private/screenshot.png" },
+        },
+      }),
+    ).toThrow(Schema.SchemaError);
+    // The annotation channel is separate from the agent-facing command allowlist.
+    expect(
+      Schema.decodeSync(BrowserRequest)({
+        _tag: "annotationStart",
+        bindingID: "binding",
+        tabID: "tab_00000000-0000-4000-8000-000000000001",
+        requestID: "request-1",
+        number: 1,
+        mode: "element",
+      }),
+    ).toMatchObject({ _tag: "annotationStart" });
   });
 });

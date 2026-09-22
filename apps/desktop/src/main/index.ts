@@ -251,6 +251,8 @@ const installIpcHandlers = (): void => {
           detach: (value) => host.detach(win, value.bindingID),
           command: (value) => host.command(win, value.bindingID, value.action),
           layout: (value) => host.layout(win, value),
+          annotationStart: (value) => host.annotate(win, value),
+          annotationCancel: (value) => host.annotationCancel(win, value),
         });
       }),
     );

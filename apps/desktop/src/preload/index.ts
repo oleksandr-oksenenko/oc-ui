@@ -26,6 +26,8 @@ const desktopApi: DesktopApi = {
     detach: (input) => invokeBrowser({ ...input, _tag: "detach" }),
     command: (input) => invokeBrowser({ ...input, _tag: "command" }),
     layout: (input) => invokeBrowser({ ...input, _tag: "layout" }),
+    annotationStart: (input) => invokeBrowser({ ...input, _tag: "annotationStart" }),
+    annotationCancel: (input) => invokeBrowser({ ...input, _tag: "annotationCancel" }),
     onEvent: (listener) => {
       // oxlint-disable-next-line anti-slop/no-unknown-parameters -- IPC payload is decoded at this boundary.
       const receive = (_event: Electron.IpcRendererEvent, value: unknown) =>

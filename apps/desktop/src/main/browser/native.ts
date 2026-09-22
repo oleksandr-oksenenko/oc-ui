@@ -2,6 +2,7 @@ import { Browser } from "@opencode/plugin-browser/rpc";
 import type { BrowserWindow } from "electron";
 import type { BrowserLayout } from "../../shared/browser-api.ts";
 import type { BrowserNetwork } from "./network.ts";
+import type { AnnotationMode, AnnotationResult } from "./upstream/annotation.ts";
 import { createBrowserPage, type BrowserPage } from "./upstream/page.ts";
 
 export type NativeBrowser = ReturnType<typeof createNativeBrowser>;
@@ -27,7 +28,10 @@ export function createNativeBrowser(
   const focus = (id: Browser.TabID) => {
     focusedTabID = id;
     pages.forEach((page, key) => {
-      if (key !== id) page.view.setVisible(false);
+      if (key === id) return;
+      // Hiding a tab cancels its pick, exactly like layout and hide.
+      page.annotation.cancel();
+      page.view.setVisible(false);
     });
     report();
     onFocus(id);
@@ -41,13 +45,13 @@ export function createNativeBrowser(
     );
     return pending;
   };
-  const closePage = async (id: Browser.TabID) => {
+  const closePage = async (id: Browser.TabID, reason?: string) => {
     const page = pages.get(id);
     if (!page) return;
     pages.delete(id);
     if (focusedTabID === id) focusedTabID = pages.keys().next().value ?? null;
     await retire(page);
-    report();
+    report(reason);
   };
   const create = (popupOptions?: Electron.BrowserWindowConstructorOptions): BrowserPage => {
     if (closed) throw new Error("Browser attachment is closed.");
@@ -58,8 +62,8 @@ export function createNativeBrowser(
       partition,
       network,
       popupOptions,
-      fail: () => {
-        void closePage(id).catch(() => report("Browser tab closed unexpectedly."));
+      fail: (reason) => {
+        void closePage(id, reason).catch(() => report("Browser tab closed unexpectedly."));
       },
       publish: (error) => {
         if (pages.has(id)) report(error);
@@ -81,6 +85,25 @@ export function createNativeBrowser(
   };
   return {
     state,
+    async annotate(
+      input: {
+        readonly tabID: Browser.TabID;
+        readonly number: number;
+        readonly mode: AnnotationMode;
+      },
+      signal: AbortSignal,
+    ): Promise<AnnotationResult | undefined> {
+      if (closed) throw new Error("Browser attachment is closed.");
+      const page = pages.get(input.tabID);
+      if (!page) throw new Error("Browser tab is closed.");
+      if (focusedTabID !== input.tabID || !page.view.getVisible())
+        throw new Error("Open the browser tab before annotating.");
+      // Readiness belongs to the pick so a hung load drains with its operation.
+      return page.annotation.start({ number: input.number, mode: input.mode }, signal);
+    },
+    async cancelAnnotation(tabID: Browser.TabID) {
+      await pages.get(tabID)?.annotation.stop();
+    },
     layout(layout: BrowserLayout) {
       const [width = 0, height = 0] = win.getContentSize();
       const x = Math.max(0, layout.bounds.x);
@@ -99,11 +122,15 @@ export function createNativeBrowser(
           bounds.width > 0 &&
           bounds.height > 0;
         if (visible) page.view.setBounds(bounds);
+        else page.annotation.cancel();
         page.view.setVisible(visible);
       });
     },
     hide() {
-      pages.forEach((page) => page.view.setVisible(false));
+      pages.forEach((page) => {
+        page.annotation.cancel();
+        page.view.setVisible(false);
+      });
     },
     async execute(command: Browser.Command, signal: AbortSignal): Promise<Browser.Result> {
       signal.throwIfAborted();

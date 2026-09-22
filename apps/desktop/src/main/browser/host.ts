@@ -4,6 +4,7 @@ import { Browser } from "@opencode/plugin-browser/rpc";
 import {
   Cause,
   Context,
+  DateTime,
   Deferred,
   Effect,
   Exit,
@@ -21,6 +22,7 @@ import type { BrowserWindow } from "electron";
 
 import {
   emptyBrowserState,
+  type BrowserAnnotationStart,
   type BrowserAttach,
   type BrowserEvent,
   type BrowserLayout,
@@ -42,6 +44,9 @@ type Entry = {
   connection?: {
     native: NativeBrowser;
     command: (action: Browser.Action) => Effect.Effect<void, BrowserHostError | Cause.TimeoutError>;
+    annotate: (
+      input: BrowserAnnotationStart,
+    ) => Effect.Effect<void, BrowserHostError | Cause.TimeoutError>;
   };
 };
 
@@ -144,12 +149,37 @@ const make = Effect.fn("BrowserHost.make")(function* () {
       },
     );
     const gate = Semaphore.makeUnsafe(1);
+    // One pick and one command may never overlap on the same tab; other tabs proceed independently.
+    const activity = new Map<
+      Browser.TabID,
+      { pick?: { stop: () => Promise<void> }; executing: number }
+    >();
+    const tabActivity = (id: Browser.TabID) => {
+      let value = activity.get(id);
+      if (!value) {
+        value = { executing: 0 };
+        activity.set(id, value);
+      }
+      return value;
+    };
     const perform = (command: Browser.Command) => {
       const request = nativeRequest(native, command);
+      const action = command.action;
+      const admission = Effect.sync(() => {
+        if (!("tabID" in action)) return undefined;
+        const state = tabActivity(action.tabID);
+        state.executing += 1;
+        const pick = state.pick;
+        state.pick = undefined;
+        return pick;
+      }).pipe(Effect.flatMap((pick) => (pick ? Effect.promise(() => pick.stop()) : Effect.void)));
       // Stop/close must release a navigation that is still holding the permit.
-      return command.action.type === "stop" || command.action.type === "tabs.close"
-        ? request
-        : gate.withPermit(request);
+      const operation =
+        action.type === "stop" || action.type === "tabs.close" ? request : gate.withPermit(request);
+      const release = Effect.sync(() => {
+        if ("tabID" in action) tabActivity(action.tabID).executing -= 1;
+      });
+      return admission.pipe(Effect.andThen(operation), Effect.ensuring(release));
     };
     const requests = yield* FiberMap.make<string, void, never>();
     const connected = yield* Deferred.make<void>();
@@ -166,6 +196,80 @@ const make = Effect.fn("BrowserHost.make")(function* () {
           if (control.type === "attached") {
             entry.connection = {
               native,
+              annotate: (input) =>
+                Effect.gen(function* () {
+                  const state = tabActivity(input.tabID);
+                  if (state.pick || state.executing > 0)
+                    return yield* new BrowserHostError({
+                      message:
+                        "The browser is busy with another action. Wait for it to finish, then annotate again.",
+                    });
+                  const handle = { stop: () => native.cancelAnnotation(input.tabID) };
+                  state.pick = handle;
+                  // The timeout cleanup awaits native settlement, so a terminal page
+                  // failure observed there is the real cause and wins over the timeout text.
+                  let failure: Error | undefined;
+                  const result = yield* Effect.callback<
+                    Awaited<ReturnType<NativeBrowser["annotate"]>>,
+                    BrowserHostError
+                  >((resume, signal) => {
+                    const pending = native
+                      .annotate(
+                        { tabID: input.tabID, number: input.number, mode: input.mode },
+                        signal,
+                      )
+                      .then(
+                        (value) => resume(Effect.succeed(value)),
+                        (cause) => {
+                          if (cause instanceof Error) failure = cause;
+                          resume(
+                            Effect.fail(
+                              new BrowserHostError({
+                                message:
+                                  cause instanceof Error
+                                    ? cause.message
+                                    : "Annotation capture failed.",
+                                cause,
+                              }),
+                            ),
+                          );
+                        },
+                      );
+                    return Effect.promise(() => pending);
+                  }).pipe(
+                    Effect.timeout("15 minutes"),
+                    Effect.mapError((error) =>
+                      Cause.isTimeoutError(error)
+                        ? new BrowserHostError(
+                            failure
+                              ? { message: failure.message, cause: failure }
+                              : { message: "Annotation timed out. Start the annotation again." },
+                          )
+                        : error,
+                    ),
+                    Effect.ensuring(
+                      Effect.sync(() => {
+                        if (state.pick === handle) state.pick = undefined;
+                      }),
+                    ),
+                  );
+                  if (!result) return yield* Effect.void;
+                  emit({
+                    bindingID,
+                    type: "annotation",
+                    capture: {
+                      requestID: input.requestID,
+                      number: input.number,
+                      mode: result.mode,
+                      tab: result.tab,
+                      capturedAt: DateTime.formatIso(DateTime.nowUnsafe()),
+                      selection: result.selection,
+                      body: result.body,
+                      image: result.image,
+                    },
+                  });
+                  return yield* Effect.void;
+                }),
               command: (action) =>
                 perform({ action, files: [] }).pipe(
                   Effect.timeout("60 seconds"),
@@ -339,7 +443,23 @@ const make = Effect.fn("BrowserHost.make")(function* () {
       connection.native.layout(input);
     }),
   );
-  return { attach, detach, command, layout };
+  const annotate = Effect.fn("BrowserHost.annotate")(function* (
+    win: BrowserWindow,
+    input: BrowserAnnotationStart,
+  ) {
+    const connection = owned(win, input.bindingID)?.connection;
+    if (!connection) return yield* new BrowserHostError({ message: "Browser is not connected." });
+    return yield* connection.annotate(input);
+  });
+  const annotationCancel = Effect.fn("BrowserHost.annotationCancel")(function* (
+    win: BrowserWindow,
+    input: { readonly bindingID: string; readonly tabID: Browser.TabID },
+  ) {
+    const connection = owned(win, input.bindingID)?.connection;
+    if (!connection || win.isDestroyed()) return;
+    yield* Effect.promise(() => connection.native.cancelAnnotation(input.tabID));
+  });
+  return { attach, detach, command, layout, annotate, annotationCancel };
 });
 
 export class BrowserHost extends Context.Service<
