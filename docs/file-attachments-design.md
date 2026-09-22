@@ -182,6 +182,11 @@ The server rejects decoded bytes over `MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024`
 - `attachFiles` is the single entry point for files, so it validates metadata
   before appending. It accepts valid files and reports oversized ones by name (or
   count, for several) rather than discarding an entire mixed selection.
+- Per session draft, at most `MAX_DRAFT_ATTACHMENTS = 16` attachments totaling
+  at most `MAX_DRAFT_ATTACHMENT_BYTES = 24 MiB` are held; a selection past
+  either bound attaches what fits in order and reports the rest with a notice
+  naming the action that releases room. Drafts are per session and are released
+  by clear or a confirmed send.
 - Distinguish a local read failure from an ambiguous network outcome. A prompt
   file-read failure now reports the file name and that nothing was sent, instead
   of collapsing into "Couldn't confirm the message was sent". Command failures do
@@ -190,9 +195,12 @@ The server rejects decoded bytes over `MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024`
   notice when its confirming echo arrives, and clear draft feedback on removal,
   retry, and session cleanup. The composer's existing `role="alert"` is enough.
 
-Count/aggregate size is an open gap: a per-file limit does not bound a selection
-of hundreds of files, and encoding retains the whole batch. Define a client
-count/aggregate budget or explicitly accept the risk.
+Count/aggregate size is bounded per session: at most 16 draft attachments and
+24 MiB total, and at most one retained paste recovery of
+`MAX_RETAINED_PASTE_UNITS = 4 Mi` UTF-16 code units (`MAX_TEXT_ATTACHMENT_BYTES`
+bounds each attached text separately). A payload past the recovery bound is not
+retained at all rather than truncated, and a paste while a recovery is pending is
+refused until it is restored or dismissed.
 
 ### Encoding
 
