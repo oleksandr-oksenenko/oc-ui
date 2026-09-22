@@ -4,9 +4,12 @@
 OpenCode bug report. Do not post it without reviewing the reproduction against
 the then-current release.
 
-The desktop app stays clear of this by capping text attachments at 2 MiB
-(`MAX_TEXT_ATTACHMENT_BYTES` in `apps/desktop/src/renderer/opencode/attachments.ts`),
-but the server misbehavior is outside this repository.
+The desktop app temporarily caps every attachment at 2 MiB decoded
+(`MAX_ATTACHMENT_BYTES` in `apps/desktop/src/renderer/opencode/attachments.ts`)
+because the server re-encodes files, images, and text through the same failing
+validator; that cap is a mitigation, not evidence that the defect is harmless.
+Related filed reports: opencode#50336 (a large file crashes the session through
+`Prompt.Base64`) and opencode#45558 (`Prompt.Base64` 500 on `/prompt`).
 
 ## Environment
 

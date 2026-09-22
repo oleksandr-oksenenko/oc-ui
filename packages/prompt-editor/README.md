@@ -13,13 +13,15 @@ In this package:
 - the literal codec: `fromPlainText`, `pastePlainText`
 - document queries and policies: `pasteContent`, `sliceHasInsertableContent`,
   `slashQuery`
-- editor plugins: `promptPlugins` (history, keymap, input rules)
+- editor plugins: `promptPlugins` (composition guard, history, keymap, input
+  rules)
 - `decodeNumericEntities` on the `./markdown-text` subpath
 
 In the app:
 
-- the Solid view, node views, CSS, menus, focus, and composition handling
-- the controlled-value echo guard and submission shortcuts
+- the Solid view, node views, CSS, menus, and focus
+- the controlled-value echo guard, submission shortcuts, and the composition
+  rechecks around clipboard reads
 - clipboard acquisition, attachments, MIME routing, and upload limits
 - transcript rendering
 

@@ -19,7 +19,6 @@ import {
   MAX_DRAFT_ATTACHMENT_BYTES,
   MAX_DRAFT_ATTACHMENTS,
   MAX_RETAINED_PASTE_UNITS,
-  MAX_TEXT_ATTACHMENT_BYTES,
   selectAttachableFiles,
 } from "../../../../opencode/attachments.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
@@ -50,13 +49,11 @@ const promptAttachmentMessage = (name: string, reusesFailedRequest: boolean): st
 
 const ATTACHMENT_LIMIT_LABEL = `${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
 
-const TEXT_ATTACHMENT_LIMIT_LABEL = `${MAX_TEXT_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
-
 const DRAFT_ATTACHMENT_BUDGET_LABEL = `${MAX_DRAFT_ATTACHMENTS} attachments and ${MAX_DRAFT_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
 
-const PASTE_TOO_LARGE_MESSAGE = `The pasted text is larger than the ${TEXT_ATTACHMENT_LIMIT_LABEL} attachment limit, so it was not attached. Restore it as text instead.`;
+const PASTE_TOO_LARGE_MESSAGE = `The pasted text is larger than the ${ATTACHMENT_LIMIT_LABEL} attachment limit, so it was not attached. Restore it as text instead.`;
 
-const PASTE_TOO_LARGE_TO_RETAIN_MESSAGE = `The pasted text is larger than the ${TEXT_ATTACHMENT_LIMIT_LABEL} attachment limit and too large to keep for restore. Copy a smaller part instead.`;
+const PASTE_TOO_LARGE_TO_RETAIN_MESSAGE = `The pasted text is larger than the ${ATTACHMENT_LIMIT_LABEL} attachment limit and too large to keep for restore. Copy a smaller part instead.`;
 
 const PASTE_BUDGET_MESSAGE = `The pasted text was not attached: the draft can hold ${DRAFT_ATTACHMENT_BUDGET_LABEL} in total. Restore it as text, or remove an attachment and paste it again.`;
 
@@ -277,13 +274,13 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       setAttachmentNotice(sessionID, PASTE_RECOVERY_PENDING_MESSAGE);
       return;
     }
-    if (text.length > MAX_TEXT_ATTACHMENT_BYTES) {
+    if (text.length > MAX_ATTACHMENT_BYTES) {
       retainRejected(sessionID, text, PASTE_TOO_LARGE_MESSAGE);
       return;
     }
     const existing = effects.registry.get(fileDrafts)[sessionID] ?? [];
     const file = new File([text], pastedTextName(existing), { type: "text/plain" });
-    if (file.size > MAX_TEXT_ATTACHMENT_BYTES) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
       retainRejected(sessionID, text, PASTE_TOO_LARGE_MESSAGE);
       return;
     }

@@ -1,8 +1,21 @@
-/** The connected server rejects decoded attachment bytes over this limit
- * (`@opencode/core` `SessionPrompt.materializeAttachment`). It is a server
- * contract, not a desktop tuning value.
+/**
+ * The decoded byte cap for every attachment the composer sends.
+ *
+ * TEMPORARY compatibility cap. The pinned server validates attachment base64
+ * with an open-ended regexp (`Prompt.Base64`) that fails opaquely on large
+ * payloads and overflows the stack above roughly 3.2 MiB decoded. 2 MiB keeps
+ * about 37% margin below the measured failure and applies to text, files, and
+ * images alike: the server re-encodes every attachment through the same
+ * `SessionPrompt.materializeAttachment` path.
+ *
+ * Filed upstream: https://github.com/anomalyco/opencode/issues/50336 (a large
+ * file crashes the session through Prompt.Base64) and
+ * https://github.com/anomalyco/opencode/issues/45558 (Prompt.Base64 500 on
+ * /prompt). The stack overflow itself has no issue yet; the reproduction is in
+ * docs/upstream-attachment-size-report.md. Remove this cap once the validator
+ * is fixed.
  */
-export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
 
 /**
  * How many attachments one session draft may hold. The renderer keeps every
@@ -14,9 +27,9 @@ export const MAX_DRAFT_ATTACHMENTS = 16;
 
 /**
  * The aggregate attachment byte cap for one session draft. It is above the
- * 20 MiB per-file cap so a single large file stays attachable, and below any
- * batch size whose encoding would retain an unbounded payload. A file that
- * does not fit is refused with a notice; nothing is partially encoded.
+ * per-file cap so several attachments fit, and below any batch size whose
+ * encoding would retain an unbounded payload. A file that does not fit is
+ * refused with a notice; nothing is partially encoded.
  */
 export const MAX_DRAFT_ATTACHMENT_BYTES = 24 * 1024 * 1024;
 
@@ -28,14 +41,6 @@ export const MAX_DRAFT_ATTACHMENT_BYTES = 24 * 1024 * 1024;
  * truncated; the notice names the bound so the user can paste a smaller part.
  */
 export const MAX_RETAINED_PASTE_UNITS = 4 * 1024 * 1024;
-
-/**
- * The text-attachment cap, in UTF-8 bytes. The pinned server's base64
- * validation overflows the stack somewhere above 3 MiB decoded and fails
- * opaquely, so text attachments stay under a cap with headroom. It is a byte
- * cap, not a character count.
- */
-export const MAX_TEXT_ATTACHMENT_BYTES = 2 * 1024 * 1024;
 
 /**
  * The file-bearing subset of `DataTransferItem`. A real `DataTransferItem` is

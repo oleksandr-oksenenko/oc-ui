@@ -15,7 +15,6 @@ import {
   MAX_DRAFT_ATTACHMENT_BYTES,
   MAX_DRAFT_ATTACHMENTS,
   MAX_RETAINED_PASTE_UNITS,
-  MAX_TEXT_ATTACHMENT_BYTES,
 } from "../../../../opencode/attachments.ts";
 import { createSessionComposer } from "./createSessionComposer.ts";
 
@@ -245,8 +244,8 @@ describe("createSessionComposer", () => {
   it("accepts text exactly at the 2 MiB UTF-8 byte cap", () => {
     const root = setup();
     root.setSelectedID("session");
-    root.composer.attachText("a".repeat(MAX_TEXT_ATTACHMENT_BYTES));
-    expect(root.composer.files()[0]?.size).toBe(MAX_TEXT_ATTACHMENT_BYTES);
+    root.composer.attachText("a".repeat(MAX_ATTACHMENT_BYTES));
+    expect(root.composer.files()[0]?.size).toBe(MAX_ATTACHMENT_BYTES);
     expect(root.composer.pasteRecovery()).toBeUndefined();
     root.dispose();
   });
@@ -254,7 +253,7 @@ describe("createSessionComposer", () => {
   it("rejects text one byte over the cap and retains the source text", () => {
     const root = setup();
     root.setSelectedID("session");
-    const over = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    const over = "a".repeat(MAX_ATTACHMENT_BYTES + 1);
     root.composer.attachText(over);
     expect(root.composer.files()).toEqual([]);
     const recovery = root.composer.pasteRecovery();
@@ -272,7 +271,7 @@ describe("createSessionComposer", () => {
     // 1,048,576 two-byte characters are exactly 2 MiB.
     const twoByte = "é".repeat(1_048_576);
     root.composer.attachText(twoByte);
-    expect(root.composer.files()[0]?.size).toBe(MAX_TEXT_ATTACHMENT_BYTES);
+    expect(root.composer.files()[0]?.size).toBe(MAX_ATTACHMENT_BYTES);
     root.composer.removeFile(root.composer.files()[0]!);
     // One more byte fails even though the character count is far below the cap.
     root.composer.attachText(`${twoByte}a`);
@@ -282,7 +281,7 @@ describe("createSessionComposer", () => {
     // 524,288 four-byte code points are exactly 2 MiB; one more pair is over.
     const emoji = "😀".repeat(524_288);
     root.composer.attachText(emoji);
-    expect(root.composer.files()[0]?.size).toBe(MAX_TEXT_ATTACHMENT_BYTES);
+    expect(root.composer.files()[0]?.size).toBe(MAX_ATTACHMENT_BYTES);
     root.composer.removeFile(root.composer.files()[0]!);
     root.composer.attachText(`${emoji}😀`);
     expect(root.composer.files()).toEqual([]);
@@ -293,7 +292,7 @@ describe("createSessionComposer", () => {
   it("retains a rejected paste with its origin session and clears it with the session", () => {
     const root = setup();
     root.setSelectedID("session");
-    const over = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    const over = "a".repeat(MAX_ATTACHMENT_BYTES + 1);
     root.composer.attachText(over);
     root.setSelectedID("other");
     expect(root.composer.pasteRecovery()).toBeUndefined();
@@ -319,7 +318,7 @@ describe("createSessionComposer", () => {
   it("refuses a successful paste while a rejected paste is unresolved", () => {
     const root = setup();
     root.setSelectedID("session");
-    const over = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    const over = "a".repeat(MAX_ATTACHMENT_BYTES + 1);
     root.composer.attachText(over);
     expect(root.composer.pasteRecovery()?.message).toContain("2 MiB");
 
@@ -336,8 +335,8 @@ describe("createSessionComposer", () => {
   it("keeps the first rejected paste when another rejected paste arrives", () => {
     const root = setup();
     root.setSelectedID("session");
-    const first = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
-    const second = "b".repeat(MAX_TEXT_ATTACHMENT_BYTES + 2);
+    const first = "a".repeat(MAX_ATTACHMENT_BYTES + 1);
+    const second = "b".repeat(MAX_ATTACHMENT_BYTES + 2);
     root.composer.attachText(first);
     root.composer.attachText(second);
     expect(root.composer.files()).toEqual([]);
@@ -350,7 +349,7 @@ describe("createSessionComposer", () => {
   it("restores the retained source and accepts the next paste after resolution", () => {
     const root = setup();
     root.setSelectedID("session");
-    const over = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    const over = "a".repeat(MAX_ATTACHMENT_BYTES + 1);
     root.composer.attachText(over);
     root.composer.attachText("small");
     expect(root.composer.pasteRecovery()?.take()).toBe(over);
@@ -388,13 +387,13 @@ describe("createSessionComposer", () => {
     root.setSelectedID("session");
     // Text attachments at the per-file cap fill the byte budget exactly; the
     // count cap is deliberately larger than the byte cap can fill.
-    const count = MAX_DRAFT_ATTACHMENT_BYTES / MAX_TEXT_ATTACHMENT_BYTES;
+    const count = MAX_DRAFT_ATTACHMENT_BYTES / MAX_ATTACHMENT_BYTES;
     for (let index = 0; index < count; index += 1) {
-      root.composer.attachText(`${index}`.padEnd(MAX_TEXT_ATTACHMENT_BYTES, "a"));
+      root.composer.attachText(`${index}`.padEnd(MAX_ATTACHMENT_BYTES, "a"));
     }
     expect(root.composer.files()).toHaveLength(count);
 
-    const rejected = "x".repeat(MAX_TEXT_ATTACHMENT_BYTES);
+    const rejected = "x".repeat(MAX_ATTACHMENT_BYTES);
     root.composer.attachText(rejected);
     expect(root.composer.files()).toHaveLength(count);
     // The refused text is retained through the recovery surface, not dropped.
@@ -1182,7 +1181,7 @@ describe("command submissions", () => {
 
     expect(root.composer.files()).toEqual([notes]);
     expect(root.composer.error()).toContain("large.bin");
-    expect(root.composer.error()).toContain("20 MiB");
+    expect(root.composer.error()).toContain("2 MiB");
 
     root.composer.attachFiles([new File(["more"], "more.txt", { type: "text/plain" })]);
     expect(root.composer.error()).toBeUndefined();

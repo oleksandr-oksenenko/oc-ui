@@ -175,8 +175,10 @@ Completion therefore does not blanket-clear attachment notices. The earlier
 
 ### Limits and errors
 
-The server rejects decoded bytes over `MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024`
-(`>`, so exactly 20 MiB is allowed) in `SessionPrompt.materializeAttachment`.
+The server validates attachment base64 in `SessionPrompt.materializeAttachment`,
+and its validator fails or overflows on large payloads (the desktop app caps
+every attachment at `MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024` decoded as a
+temporary mitigation; see the comment on that constant for the filed issues).
 `createSessionComposer` owns validation and errors:
 
 - `attachFiles` is the single entry point for files, so it validates metadata
@@ -197,7 +199,7 @@ The server rejects decoded bytes over `MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024`
 
 Count/aggregate size is bounded per session: at most 16 draft attachments and
 24 MiB total, and at most one retained paste recovery of
-`MAX_RETAINED_PASTE_UNITS = 4 Mi` UTF-16 code units (`MAX_TEXT_ATTACHMENT_BYTES`
+`MAX_RETAINED_PASTE_UNITS = 4 Mi` UTF-16 code units (`MAX_ATTACHMENT_BYTES`
 bounds each attached text separately). A text paste that cannot become an
 attachment - over the per-file cap or past the aggregate budget - is retained
 through the recovery surface with a message that names its reason; a payload
@@ -255,16 +257,16 @@ forwarded.
 
 ## Tests
 
-| Boundary      | Assertions                                                                                                                                                                                                                                                                 |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extraction    | non-image `files`; items-only; null `getAsFile`; files and items both present attach once; stable order                                                                                                                                                                    |
-| Paste/editor  | file plus text attaches once without text insertion; URI-only fallback behaves deliberately (the empty-plain-text guard is covered here, but selection preservation through ProseMirror's empty-payload fallback is not directly covered); ordinary multiline text inserts |
-| Drop          | drop on ProseMirror with file and text payload inserts no text; file drag accepted while `files` is empty during dragover; child transitions do not flicker; text/internal drags still work                                                                                |
-| Picker        | multiple files; repeated selection after reset; cancellation; callback absent; session change while open                                                                                                                                                                   |
-| Controller    | exact 20 MiB boundary; oversize rejection before reads; mixed batch policy; prompt and command local read failure produce no API call and a specific message; errors isolated per session                                                                                  |
-| Ownership     | existing navigation, new-attachment-during-admission, retry identity, subscriber unmount, shutdown, identity consumption tests stay green                                                                                                                                  |
-| Resources     | preview URL revocation on removal/session change/unmount; reader abort on interruption                                                                                                                                                                                     |
-| Server-backed | send a MIME-less text file and an image/PDF fixture against the pinned server; verify persisted inline source, name, and bytes across navigation                                                                                                                           |
+| Boundary      | Assertions                                                                                                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extraction    | non-image `files`; items-only; null `getAsFile`; files and items both present attach once; stable order                                                                                     |
+| Paste/editor  | file plus text attaches once without text insertion; URI-only fallback behaves deliberately (empty plain text and selection preservation are covered); ordinary multiline text inserts      |
+| Drop          | drop on ProseMirror with file and text payload inserts no text; file drag accepted while `files` is empty during dragover; child transitions do not flicker; text/internal drags still work |
+| Picker        | multiple files; repeated selection after reset; cancellation; callback absent; session change while open                                                                                    |
+| Controller    | exact 2 MiB boundary; oversize rejection before reads; mixed batch policy; prompt and command local read failure produce no API call and a specific message; errors isolated per session    |
+| Ownership     | existing navigation, new-attachment-during-admission, retry identity, subscriber unmount, shutdown, identity consumption tests stay green                                                   |
+| Resources     | preview URL revocation on removal/session change/unmount; reader abort on interruption                                                                                                      |
+| Server-backed | send a MIME-less text file and an image/PDF fixture against the pinned server; verify persisted inline source, name, and bytes across navigation                                            |
 
 JSDOM and Storybook prove routing, not OS clipboard exposure; real-app
 verification covers the ProseMirror event-ordering regression and the picker.
