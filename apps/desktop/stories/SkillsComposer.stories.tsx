@@ -174,25 +174,37 @@ export const CommandsHiddenAfterSkill: Story = {
   },
 };
 
-export const NoMatchSubmits: Story = {
+export const NoMatchKeepsDraft: Story = {
   args: { onSubmit: fn() },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
     await userEvent.type(prompt, "/zzz");
+    // The open menu owns Enter, so a query with no matches keeps the draft
+    // instead of sending it.
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+    await expect(prompt).toHaveTextContent("/zzz");
+    // Escape dismisses the menu; Enter sends afterwards.
+    await userEvent.keyboard("{Escape}");
     await userEvent.keyboard("{Enter}");
     await expect(args.onSubmit).toHaveBeenCalledWith("/zzz", []);
     await expect(prompt).toHaveTextContent("");
   },
 };
 
-export const AbsolutePathSubmits: Story = {
+export const AbsolutePathDismissAndSend: Story = {
   args: { onSubmit: fn() },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
     await userEvent.type(prompt, "Inspect /tmp/example");
     await expect(canvas.queryByText("Commands")).toBeNull();
+    // The path after the space reads as a slash query, so the menu owns Enter.
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+    await expect(prompt).toHaveTextContent("Inspect /tmp/example");
+    await userEvent.keyboard("{Escape}");
     await userEvent.keyboard("{Enter}");
     await expect(args.onSubmit).toHaveBeenCalledWith("Inspect /tmp/example", []);
   },
@@ -246,17 +258,31 @@ export const SlashSuggestionsAndDismissal: Story = {
     await userEvent.keyboard("{Escape}");
     await expect(canvas.queryByRole("region", { name: "Suggestions" })).toBeNull();
     await expect(prompt).toHaveFocus();
+    // A formatting toggle with no document change recomputes the same query;
+    // the dismissed menu must stay closed.
+    await fireEvent.keyDown(prompt, {
+      key: "b",
+      code: "KeyB",
+      keyCode: 66,
+      metaKey: /Mac/.test(navigator.platform),
+      ctrlKey: !/Mac/.test(navigator.platform),
+    });
+    await expect(canvas.queryByRole("region", { name: "Suggestions" })).toBeNull();
   },
 };
 export const Loading: Story = {
-  args: { commandState: "loading", skillState: "loading" },
-  play: async ({ canvasElement }) => {
+  args: { commandState: "loading", skillState: "loading", onSubmit: fn() },
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "/");
     await expect(canvas.getByText("Loading commands…")).toBeVisible();
     await expect(canvas.getByText("Loading skills…")).toBeVisible();
     await expect(canvas.queryByText("/init", { exact: true })).toBeNull();
     await expect(canvas.queryByText("/simplify", { exact: true })).toBeNull();
+    // The loading menu owns Enter too, so the draft cannot be sent behind it.
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+    await expect(canvas.getByRole("region", { name: "Suggestions" })).toBeVisible();
   },
 };
 export const Empty: Story = {

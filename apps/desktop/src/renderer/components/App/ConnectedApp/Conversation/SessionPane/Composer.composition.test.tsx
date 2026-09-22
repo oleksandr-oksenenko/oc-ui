@@ -273,3 +273,107 @@ describe("Composer composition precedence", () => {
   // The native protocol records the platform behavior before any grace guard
   // is considered.
 });
+
+describe("Composer menu ownership", () => {
+  it("consumes Enter when the open menu has no matching item", async () => {
+    // The menu owns Enter while it is open, whatever its state. A query with
+    // no matches keeps the draft in the composer instead of sending it.
+    const harness = openComposer();
+    harness.paste("/zzz");
+    await harness.settle();
+    expect(harness.menu()).not.toBeNull();
+
+    harness.enter();
+    expect(harness.submit).not.toHaveBeenCalled();
+    expect(harness.queue).not.toHaveBeenCalled();
+    expect(harness.menu()).not.toBeNull();
+    expect(harness.draft()).toBe("/zzz");
+
+    harness.enter({ metaKey: true });
+    harness.enter({ ctrlKey: true });
+    expect(harness.submit).not.toHaveBeenCalled();
+    expect(harness.queue).not.toHaveBeenCalled();
+
+    harness.dispose();
+  });
+
+  it("consumes Enter while the menu is loading and lets Escape send", async () => {
+    const harness = openComposer(loadingCatalog);
+    harness.paste("/");
+    await harness.settle();
+    expect(harness.menu()).not.toBeNull();
+    expect(harness.host.textContent).toContain("Loading commands…");
+
+    harness.enter();
+    expect(harness.submit).not.toHaveBeenCalled();
+    expect(harness.queue).not.toHaveBeenCalled();
+    expect(harness.draft()).toBe("/");
+
+    // Dismissing the menu is the way to send a draft it owns.
+    harness.press("Escape");
+    expect(harness.menu()).toBeNull();
+    harness.enter();
+    expect(harness.submit).toHaveBeenCalledOnce();
+
+    harness.dispose();
+  });
+
+  it("keeps Mod+Enter in the menu while it is open", async () => {
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+      const harness = openComposer();
+      harness.paste("/bu");
+      await harness.settle();
+      expect(harness.menu()).not.toBeNull();
+
+      harness.enter(modifier);
+      expect(harness.queue).not.toHaveBeenCalled();
+      expect(harness.submit).not.toHaveBeenCalled();
+      expect(harness.menu()).toBeNull();
+      expect(harness.draft()).toContain("/build");
+
+      harness.dispose();
+    }
+  });
+
+  it("keeps Shift+Enter in the editor while the menu is open", async () => {
+    const harness = openComposer();
+    harness.paste("/bu");
+    await harness.settle();
+    expect(harness.menu()).not.toBeNull();
+
+    harness.press("Enter", { shiftKey: true });
+    expect(harness.submit).not.toHaveBeenCalled();
+    expect(harness.queue).not.toHaveBeenCalled();
+
+    // The line break stayed in the editor: the next text lands on line two.
+    harness.paste("next");
+    await harness.settle();
+    expect(harness.draft()).toBe("/bu\nnext");
+
+    harness.dispose();
+  });
+
+  it("keeps a dismissed menu closed until the query changes", async () => {
+    const harness = openComposer();
+    harness.paste("/build");
+    await harness.settle();
+    expect(harness.menu()).not.toBeNull();
+
+    harness.press("Escape");
+    expect(harness.menu()).toBeNull();
+
+    // A transaction with no document change (a formatting toggle with an
+    // empty selection) recomputes the same query; it must not reopen the menu.
+    harness.press("b", primaryModifier());
+    expect(harness.menu()).toBeNull();
+    expect(harness.draft()).toBe("/build");
+
+    // A changed query is a new interaction and opens the menu again.
+    harness.paste("more");
+    await harness.settle();
+    expect(harness.menu()).not.toBeNull();
+    expect(harness.draft()).toBe("/buildmore");
+
+    harness.dispose();
+  });
+});

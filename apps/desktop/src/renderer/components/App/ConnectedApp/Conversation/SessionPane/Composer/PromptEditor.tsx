@@ -83,10 +83,32 @@ export function PromptEditor(props: EditorProps) {
   // reparses over live editing.
   let emitted: { text: string; skills: readonly PromptSkillAttachment[] } | undefined;
   const [query, setQuery] = createSignal<ReturnType<typeof slashQuery>>();
-  const [selectable, setSelectable] = createSignal(false);
+  // The query Escape dismissed. The menu stays closed while that query is
+  // unchanged, so the transaction a caret move or a formatting toggle emits
+  // cannot immediately reopen it.
+  let dismissed: ReturnType<typeof slashQuery>;
   const close = () => {
+    dismissed = undefined;
     setQuery(undefined);
-    setSelectable(false);
+  };
+  const dismiss = () => {
+    const current = query();
+    dismissed = current === undefined ? undefined : { ...current };
+    setQuery(undefined);
+  };
+  const refreshQuery = (next: ReturnType<typeof slashQuery>, docChanged: boolean) => {
+    if (next === undefined) {
+      dismissed = undefined;
+      setQuery(undefined);
+      return;
+    }
+    if (dismissed !== undefined) {
+      const same =
+        dismissed.from === next.from && dismissed.to === next.to && dismissed.text === next.text;
+      if (same || !docChanged) return;
+    }
+    dismissed = undefined;
+    setQuery(next);
   };
   const plugins = promptPlugins();
   const sections = createMemo<SuggestionSection[]>(() => {
@@ -133,9 +155,6 @@ export function PromptEditor(props: EditorProps) {
   const listMounted = createMemo(
     () => query() !== undefined && (items().length > 0 || unavailable().length === 0),
   );
-  createEffect(() => {
-    if (!listMounted()) setSelectable(false);
-  });
   const insert = (suggestion: Suggestion | undefined) => {
     const range = query();
     if (
@@ -179,7 +198,7 @@ export function PromptEditor(props: EditorProps) {
         },
         dispatchTransaction(tr) {
           instance.updateState(instance.state.apply(tr));
-          setQuery(instance.composing ? undefined : slashQuery(instance.state));
+          refreshQuery(instance.composing ? undefined : slashQuery(instance.state), tr.docChanged);
           if (tr.docChanged) {
             const draft = toDraft(instance.state.doc);
             emitted = { text: draft.text, skills: draft.skills };
@@ -190,7 +209,7 @@ export function PromptEditor(props: EditorProps) {
           if (editor.composing || event.isComposing || event.keyCode === 229) return false;
           if (query()) {
             if (event.key === "Escape") {
-              close();
+              dismiss();
               return true;
             }
             if (!event.shiftKey) {
@@ -202,8 +221,12 @@ export function PromptEditor(props: EditorProps) {
                 list?.onKeyDown(event);
                 return true;
               }
-              if (event.key === "Enter" && listMounted() && selectable()) {
-                list?.onKeyDown(event);
+              if (event.key === "Enter") {
+                // The menu owns Enter while it is open, whatever its state.
+                // A suggestion is selected when one exists; otherwise the key
+                // is consumed so a no-match, loading, or failed menu cannot
+                // send the draft behind it.
+                if (listMounted() && items().length > 0) list?.onKeyDown(event);
                 return true;
               }
             }
@@ -342,7 +365,6 @@ export function PromptEditor(props: EditorProps) {
                   ? "No matching commands or skills."
                   : "No commands or skills available for this project."
               }
-              onMove={(suggestion) => setSelectable(suggestion !== undefined)}
               onSelect={insert}
             >
               {(suggestion) => (
