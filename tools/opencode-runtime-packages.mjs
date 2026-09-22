@@ -134,6 +134,9 @@ export function stagePackageClosure(imports, runtimeDirectory, options = {}) {
     return;
 
   // Delete only this build's generated dependency directory, never the install.
+  // The completion marker goes first: an interrupted restage must not leave a
+  // partial tree that the next build accepts as complete.
+  rmSync(manifestPath, { force: true });
   rmSync(packagesDirectory, { recursive: true, force: true });
   mkdirSync(packagesDirectory, { recursive: true });
   if (options.mode === "link") linkRootPackages(roots, packagesDirectory);

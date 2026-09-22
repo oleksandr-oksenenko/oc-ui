@@ -2,6 +2,8 @@
 // oxlint-disable effecttsgo/node-builtin-import -- Exercise the build-time filesystem package boundary.
 import { createRequire } from "node:module";
 import {
+  chmodSync,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -108,3 +110,35 @@ it("fails for a required missing package instead of silently shipping an incompl
     stagePackageClosure([{ specifier: "a", from: directory }], join(directory, "runtime")),
   ).toThrow("Cannot resolve runtime package absent");
 });
+
+// A privileged process and Windows do not enforce owner read bits, so the
+// unreadable-source simulation only applies where the mode is enforced.
+const deniesRead = process.platform !== "win32" && process.getuid?.() !== 0;
+
+it.skipIf(!deniesRead)(
+  "drops the completion marker before restaging so an interrupted copy is not reused",
+  () => {
+    const directory = fixture();
+    const install = join(directory, "install");
+    const runtime = join(directory, "runtime");
+    const a = join(install, "node_modules/a");
+    const b = join(install, "node_modules/b");
+    writePackage(a, { name: "a", version: "1" });
+    stagePackageClosure([{ specifier: "a", from: install }], runtime);
+    expect(existsSync(join(runtime, "closure.json"))).toBe(true);
+
+    // A dependency change forces a restage that fails while copying.
+    writePackage(b, { name: "b", version: "1" });
+    writePackage(a, { name: "a", version: "1", dependencies: { b: "1" } });
+    chmodSync(join(b, "index.js"), 0o000);
+    try {
+      expect(() => stagePackageClosure([{ specifier: "a", from: install }], runtime)).toThrow();
+      expect(existsSync(join(runtime, "closure.json"))).toBe(false);
+    } finally {
+      chmodSync(join(b, "index.js"), 0o644);
+    }
+
+    stagePackageClosure([{ specifier: "a", from: install }], runtime);
+    expect(existsSync(join(runtime, "closure.json"))).toBe(true);
+  },
+);
