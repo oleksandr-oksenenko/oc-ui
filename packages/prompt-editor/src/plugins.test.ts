@@ -1,27 +1,33 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { EditorState, TextSelection } from "prosemirror-state";
 import type { Node } from "prosemirror-model";
-import { EditorView } from "prosemirror-view";
+import { EditorView, type DirectEditorProps } from "prosemirror-view";
 
 import { fromDraft, pasteContent, schema, toDraft } from "./document.ts";
 import { promptPlugins } from "./plugins.ts";
 
-/** Mounts the composer editor and drives it like a keyboard and a browser. */
-function editor(draft = "") {
+/** A stand-in for the app's `handleKeyDown` view prop. */
+type AppKeyHandler = (view: EditorView, event: KeyboardEvent) => boolean;
+
+/**
+ * Mounts the composer editor and drives it like a keyboard and a browser. The
+ * optional handler stands in for the app's `handleKeyDown` view prop, which
+ * the DOM guard must bypass during a composition.
+ */
+function editor(draft = "", appKeyDown?: AppKeyHandler) {
   const host = document.createElement("div");
   document.body.append(host);
   const doc = fromDraft(draft);
-  const view = new EditorView(
-    { mount: host },
-    {
-      state: EditorState.create({
-        schema,
-        doc,
-        selection: TextSelection.atEnd(doc),
-        plugins: promptPlugins(),
-      }),
-    },
-  );
+  const directProps: DirectEditorProps = {
+    state: EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.atEnd(doc),
+      plugins: promptPlugins(),
+    }),
+  };
+  if (appKeyDown !== undefined) directProps.handleKeyDown = appKeyDown;
+  const view = new EditorView({ mount: host }, directProps);
   const type = (text: string) => {
     for (const character of text) {
       const { from, to } = view.state.selection;
@@ -43,10 +49,29 @@ function editor(draft = "") {
   };
   const select = (from: number, to: number) =>
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to)));
+  // Dispatches on the editable DOM, where ProseMirror's own listeners and the
+  // composition guard run, instead of calling a handler prop directly. The
+  // legacy `keyCode` is applied before dispatch; engines that predate
+  // `isComposing` report it on the event the handlers see.
+  const domPress = (key: string, modifiers: KeyboardEventInit & { keyCode?: number } = {}) => {
+    const { keyCode, ...init } = modifiers;
+    const event = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    if (keyCode !== undefined) {
+      Object.defineProperty(event, "keyCode", { value: keyCode, configurable: true });
+    }
+    view.dom.dispatchEvent(event);
+    return event;
+  };
   return {
     view,
     type,
     press,
+    domPress,
     select,
     draft: () => toDraft(view.state.doc),
     block: () => view.state.doc.firstChild?.type.name ?? "",
@@ -404,4 +429,65 @@ describe("prompt editor plugins", () => {
     expect(undone.draft().text).toBe("\\-&#x20;");
     undone.dispose();
   });
+});
+
+/** Dispatches a composition boundary event on the editor's editable DOM. */
+function composition(view: EditorView, type: "compositionstart" | "compositionend") {
+  const event = new CompositionEvent(type, { bubbles: true, cancelable: true, data: "" });
+  view.dom.dispatchEvent(event);
+  return event;
+}
+
+describe("prompt editor composition", () => {
+  it("holds input rules while a composition is active", () => {
+    const composing = editor();
+    composition(composing.view, "compositionstart");
+    composing.type("**bold**");
+    expect(composing.marksOf("bold")).toBeUndefined();
+    expect(composing.view.state.doc.textContent).toBe("**bold**");
+    composing.dispose();
+  });
+
+  it("keeps keymaps, formatting and app handlers out of a composition at the DOM boundary", () => {
+    const appKeys = vi.fn<AppKeyHandler>(() => false);
+    const composed = editor("- one\n- two", appKeys);
+    composition(composed.view, "compositionstart");
+    const doc = composed.view.state.doc.toJSON();
+    const selection = composed.view.state.selection.toJSON();
+    const events = [
+      composed.domPress("Tab"),
+      composed.domPress("Enter"),
+      composed.domPress("Enter", { shiftKey: true }),
+      composed.domPress("b", primaryModifier()),
+      composed.domPress("Backspace"),
+    ];
+    // The guard stops ProseMirror's handling without preventing the browser
+    // default, so the input method still receives the key.
+    for (const event of events) expect(event.defaultPrevented).toBe(false);
+    expect(composed.view.state.doc.toJSON()).toEqual(doc);
+    expect(composed.view.state.selection.toJSON()).toEqual(selection);
+    expect(appKeys).not.toHaveBeenCalled();
+    composed.dispose();
+
+    // Control: without a composition the same key reaches the keymap and the
+    // app handler.
+    const plain = editor("- one\n- two", appKeys);
+    const plainDoc = plain.view.state.doc.toJSON();
+    plain.domPress("Tab");
+    expect(plain.view.state.doc.toJSON()).not.toEqual(plainDoc);
+    expect(appKeys).toHaveBeenCalled();
+    plain.dispose();
+  });
+
+  // Two composition behaviors are deliberately not asserted here.
+  //
+  // D5: `prosemirror-inputrules` re-runs input rules 0 ms after
+  // `compositionend` over IME-committed text, so a committed `**bold**`
+  // becomes bold just after the commit. That is upstream behavior the plan
+  // defers; the native protocol covers what a real input method commits.
+  //
+  // D4: on Safari-like engines ProseMirror drops the first keydown within
+  // 500 ms of `compositionend`, so the guard must not be blamed for a lost
+  // key. Electron on macOS is Chromium; the native protocol records the
+  // platform behavior before any grace guard is considered.
 });
