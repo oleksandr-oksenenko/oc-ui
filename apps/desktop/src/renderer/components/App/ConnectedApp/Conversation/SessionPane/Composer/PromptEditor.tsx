@@ -123,7 +123,7 @@ export function PromptEditor(props: EditorProps) {
   };
   const dismiss = () => {
     const current = query();
-    dismissed = current === undefined ? undefined : { ...current };
+    dismissed = current;
     setQuery(undefined);
   };
   const refreshQuery = (next: ReturnType<typeof slashQuery>) => {

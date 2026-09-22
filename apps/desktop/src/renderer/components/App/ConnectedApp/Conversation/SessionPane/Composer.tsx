@@ -255,6 +255,10 @@ export function Composer(props: ComposerProps) {
    * never land in a draft it did not originate from.
    */
   let literalRead = 0;
+  /** Invalidates a literal read that is still in flight. */
+  const invalidateLiteralRead = () => {
+    literalRead += 1;
+  };
   /**
    * Holding a paste chord repeats the event. A repeated identical payload is
    * one intent, so the attachment path runs once per burst; the event's own
@@ -295,13 +299,11 @@ export function Composer(props: ComposerProps) {
     // A successful submission resets the draft, so a pending literal read must
     // not land in the next one. This is the lifecycle boundary the parent's
     // `clearIfUnchanged` is invisible at for empty-text, attachment-only sends.
-    literalRead += 1;
+    invalidateLiteralRead();
     props.onSubmit();
   };
 
   // The queue chord and its label follow the platform marker.
-  const queueChord = (event: KeyboardEvent) => (isMacPlatform() ? event.metaKey : event.ctrlKey);
-
   const sendTooltip = () => {
     if (stopping()) return "Stop";
     if (props.onQueue) {
@@ -314,13 +316,13 @@ export function Composer(props: ComposerProps) {
   const keyDown = (event: KeyboardEvent) => {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
-    if (queueChord(event)) {
+    if (isMacPlatform() ? event.metaKey : event.ctrlKey) {
       // The queue gesture never falls through to send, even when queueing is
       // unavailable or the draft is not eligible for submission.
       if (props.onQueue && canSubmit()) {
         // Queueing resets the draft like sending does; a pending literal read
         // must not land in the next draft.
-        literalRead += 1;
+        invalidateLiteralRead();
         props.onQueue();
       }
       return;
@@ -469,7 +471,7 @@ export function Composer(props: ComposerProps) {
    */
   const pasteAsPlainText = () => {
     const sessionID = props.sessionID;
-    literalRead += 1;
+    invalidateLiteralRead();
     const generation = literalRead;
     void props.readClipboardText().then((text) => {
       // Only the latest read may insert, and only into the session that
@@ -513,7 +515,7 @@ export function Composer(props: ComposerProps) {
     element.addEventListener("keydown", literalChord, true);
     onCleanup(() => {
       // Disposal invalidates a literal read that is still in flight.
-      literalRead += 1;
+      invalidateLiteralRead();
       element.removeEventListener("dragenter", dragEnter, true);
       element.removeEventListener("dragover", dragOver, true);
       element.removeEventListener("dragleave", dragLeave, true);
@@ -529,7 +531,7 @@ export function Composer(props: ComposerProps) {
       () => {
         // A drag, an open chooser, a paste notice, or a pending literal read
         // does not survive a session change.
-        literalRead += 1;
+        invalidateLiteralRead();
         dragDepth = 0;
         setDropping(false);
         pickerSessionID = undefined;
@@ -545,7 +547,7 @@ export function Composer(props: ComposerProps) {
       (value) => {
         // A clear or a completed send empties the draft a pending literal read
         // was bound to; the read must not recreate it.
-        if (value === "") literalRead += 1;
+        if (value === "") invalidateLiteralRead();
       },
       { defer: true },
     ),
