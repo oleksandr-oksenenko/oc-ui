@@ -46,6 +46,7 @@
     "lighthouse": "catalog:",
     "marked": "catalog:",
     "prosemirror-history": "catalog:",
+    "prosemirror-model": "catalog:",
     "prosemirror-state": "catalog:",
     "prosemirror-view": "catalog:",
     "solid-js": "catalog:"

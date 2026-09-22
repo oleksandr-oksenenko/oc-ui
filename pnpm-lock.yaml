@@ -278,6 +278,9 @@ importers:
       prosemirror-history:
         specifier: 'catalog:'
         version: 1.5.0
+      prosemirror-model:
+        specifier: 'catalog:'
+        version: 1.25.11
       prosemirror-state:
         specifier: 'catalog:'
         version: 1.4.4
