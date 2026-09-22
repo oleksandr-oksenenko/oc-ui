@@ -46,6 +46,14 @@ export type DesktopApi = {
   };
   /** Hands a web URL to the operating system's default handler. */
   readonly openExternal: (url: string) => Promise<void>;
+  /**
+   * Reads the system clipboard text for the composer's literal-paste escape
+   * hatch. The renderer bounds the returned string immediately; the host owns
+   * clipboard access because the runtime denies the web Clipboard API.
+   */
+  readonly clipboard: {
+    readonly readText: () => Promise<string>;
+  };
 };
 
 export const IPC_CHANNELS = {
@@ -55,6 +63,7 @@ export const IPC_CHANNELS = {
   localOpenCodeConnect: "desktop:local-opencode:connect",
   localOpenCodeUnavailable: "desktop:local-opencode:unavailable",
   openExternal: "desktop:open-external",
+  clipboardReadText: "desktop:clipboard:read-text",
 } as const;
 
 /**
@@ -90,3 +99,4 @@ export const parseLocalOpenCodeConnectResult = Schema.decodeUnknownSync(
   LocalOpenCodeConnectResultSchema,
   ipcParseOptions,
 );
+export const parseClipboardText = Schema.decodeUnknownSync(Schema.String, ipcParseOptions);

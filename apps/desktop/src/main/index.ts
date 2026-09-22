@@ -7,6 +7,7 @@ import { NodePath } from "@effect/platform-node";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   net,
@@ -231,6 +232,19 @@ const installIpcHandlers = (): void => {
     }
     // The OS handoff is not cancellable; keep it owned until it settles.
     return trackPending(shell.openExternal(url));
+  });
+
+  // The web Clipboard API is denied by configurePermissions, so the renderer's
+  // literal-paste escape hatch reads through the host instead.
+  ipcMain.handle(IPC_CHANNELS.clipboardReadText, (event, ...args: unknown[]) => {
+    assertTrustedIpcSender(event);
+    if (args.length !== 0) {
+      return Promise.reject(new TypeError("clipboard.readText does not accept arguments"));
+    }
+    if (quitHandler.isQuitting()) {
+      return Promise.reject(new Error("Ocui is closing."));
+    }
+    return clipboard.readText();
   });
 
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- IPC input is decoded before dispatch.

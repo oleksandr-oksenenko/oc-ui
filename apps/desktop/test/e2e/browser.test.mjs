@@ -1091,6 +1091,116 @@ describe.sequential("production browser app", () => {
     );
   });
 
+  it("attaches oversized pasted text, keeps it across navigation, and recovers a rejected paste", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const session = await api.session.create({ title: "Pasted text attachments", location });
+    const other = await api.session.create({ title: "Pasted text other", location });
+    await selectSession(session.title);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+
+    const text = `BEGIN-ACCEPTANCE\n${"The composer keeps module contracts explicit.\n".repeat(400)}END-ACCEPTANCE`;
+    expect(text.length).toBeGreaterThan(16_384);
+    await prompt.evaluate((input, payload) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", payload);
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+    }, text);
+
+    // The paste became an attachment: a chip appears and the draft stays empty.
+    await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).waitFor();
+    expect(await prompt.textContent()).toBe("");
+
+    // The attachment belongs to its origin session across navigation.
+    await selectSession(other.title);
+    expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
+    await selectSession(session.title);
+    await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).waitFor();
+
+    const admitted = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/session/${session.id}/prompt`) &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    const response = await admitted;
+    expect(response.ok(), await response.text()).toBe(true);
+    await idle();
+    const messages = await api.message.list({ sessionID: session.id });
+    const message = messages.data.find((item) => item.type === "user");
+    expect(message.files.map((file) => ({ name: file.name, mime: file.mime }))).toEqual([
+      { name: "pasted-text.txt", mime: "text/plain" },
+    ]);
+    expect(Buffer.from(message.files[0].data, "base64").toString()).toBe(text);
+
+    // A paste over the 2 MiB UTF-8 byte cap is rejected with feedback, keeps
+    // the draft, and retains the source text for an explicit restore.
+    const overCap = "a".repeat(2 * 1024 * 1024 + 1);
+    await prompt.evaluate((input, payload) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", payload);
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+    }, overCap);
+    const recovery = page.getByRole("alert").filter({ hasText: "2 MiB attachment limit" });
+    await recovery.waitFor();
+    expect(await prompt.textContent()).toBe("");
+    expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
+
+    await page.getByRole("button", { name: "Restore text", exact: true }).click();
+    await expect
+      .poll(() => prompt.evaluate((input) => (input.textContent ?? "").length > 2_000_000))
+      .toBe(true);
+    expect(await recovery.count()).toBe(0);
+  });
+
+  it("pastes literally from the host clipboard after Mod+Shift+V and the context action", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Literal paste",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    await prompt.click();
+    // The web build reads the permission-gated Clipboard API for the escape
+    // hatch; stub it with the source the composer must insert literally.
+    await prompt.evaluate((input) => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { readText: async () => "# not a heading\n\n- not a list" },
+      });
+      // Both modifiers so the chord matches on any host platform.
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "v",
+          metaKey: true,
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    await expect.poll(() => prompt.textContent()).toContain("# not a heading");
+    expect(await prompt.locator("h1").count()).toBe(0);
+    expect(await prompt.locator("ul").count()).toBe(0);
+
+    // The context action uses the same literal insertion and keeps focus.
+    await prompt.click({ button: "right" });
+    const item = page.getByRole("menuitem", { name: "Paste as plain text", exact: true });
+    await item.click();
+    await expect
+      .poll(() =>
+        prompt.evaluate((input) => (input.textContent ?? "").split("# not a heading").length),
+      )
+      .toBe(3);
+    expect(await prompt.locator("h1").count()).toBe(0);
+  });
+
   it("attaches files chosen through the picker button and sends their bytes", async () => {
     await ensureConnected();
     const session = await api.session.create({
