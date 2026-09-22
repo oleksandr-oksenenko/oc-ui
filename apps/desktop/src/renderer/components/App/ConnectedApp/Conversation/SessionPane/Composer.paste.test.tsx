@@ -402,6 +402,41 @@ describe("Composer literal paste gesture", () => {
     harness.dispose();
   });
 
+  it("turns an enormous literal paste into a text attachment", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const attachText = vi.fn<(text: string) => void>();
+    const harness = openComposer({
+      readClipboardText: () => read.promise,
+      onAttachText: attachText,
+    });
+    harness.editor.dispatchEvent(chord());
+    const huge = "x".repeat(16_384);
+    read.resolve(huge);
+    await settle();
+    expect(attachText).toHaveBeenCalledWith(huge);
+    expect(textOf(harness.editor)).toBe("");
+    expect(harness.notice()).toBe("");
+    harness.dispose();
+  });
+
+  it("keeps a literal paste just below the attachment threshold inline", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const attachText = vi.fn<(text: string) => void>();
+    const harness = openComposer({
+      readClipboardText: () => read.promise,
+      onAttachText: attachText,
+    });
+    harness.editor.dispatchEvent(chord());
+    const text = "x".repeat(16_383);
+    read.resolve(text);
+    await settle();
+    expect(attachText).not.toHaveBeenCalled();
+    expect(textOf(harness.editor)).toBe(text);
+    harness.dispose();
+  });
+
   it("explains when the host clipboard read is unavailable", async () => {
     setPlatform("macos");
     const harness = openComposer();

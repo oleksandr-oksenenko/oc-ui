@@ -51,10 +51,13 @@ wrapper that runs the supplied expression through `RegExp.test`:
 export function isPattern(regExp, annotations) {
   const source = regExp.source;
   const pattern = new globalThis.RegExp(source, regExp.flags);
-  return makeFilter(s => {
-    pattern.lastIndex = 0;
-    return pattern.test(s); // SchemaAST.js:2593
-  }, { /* annotations ... */ });
+  return makeFilter(
+    (s) => {
+      pattern.lastIndex = 0;
+      return pattern.test(s); // SchemaAST.js:2593
+    },
+    {/* annotations ... */},
+  );
 }
 ```
 
@@ -103,13 +106,13 @@ the final padding group.
 Standalone Node v24.20.0, applying the exact pattern and the pinned schema
 (`Base64.make`) to canonical base64 of repeated `0x41` bytes:
 
-| Decoded size            | Base64 length | Result                                            |
-| ----------------------- | ------------- | ------------------------------------------------- |
-| 3 MiB (3,145,728 B)     | 4,194,304     | accepted                                          |
-| 3,355,435 B (3.199992 MiB) | 4,473,916  | accepted (tail `QQ==`)                            |
-| 3,355,436 B (3.199993 MiB) | 4,473,916  | `RangeError: Maximum call stack size exceeded`    |
-| 3.5 MiB (3,670,016 B)   | 4,893,356     | `RangeError`                                      |
-| 20 MiB − 1 B            | 27,962,028    | `RangeError`                                      |
+| Decoded size               | Base64 length | Result                                         |
+| -------------------------- | ------------- | ---------------------------------------------- |
+| 3 MiB (3,145,728 B)        | 4,194,304     | accepted                                       |
+| 3,355,435 B (3.199992 MiB) | 4,473,916     | accepted (tail `QQ==`)                         |
+| 3,355,436 B (3.199993 MiB) | 4,473,916     | `RangeError: Maximum call stack size exceeded` |
+| 3.5 MiB (3,670,016 B)      | 4,893,356     | `RangeError`                                   |
+| 20 MiB − 1 B               | 27,962,028    | `RangeError`                                   |
 
 Largest reliably passing base64 length on this machine: 4,473,912 chars
 (3,355,434 bytes decoded). First failing length: 4,473,916 chars
@@ -274,6 +277,7 @@ Checked 2026-09-22 against the npm registry and the public repository
   verdict-equivalent: it rejects non-canonical padding (`"AB=="`, `"AAB="`)
   that the current pattern accepts. Either behavior is defensible; choosing it
   intentionally would tighten validation for a few malformed inputs.
+
 - Add a regression test at ≥3.5 MiB decoded for both `data:` and `file:` inputs
   that asserts a stored attachment, plus a Node-level test on `Base64.make`
   with a 4.5 M-character string.

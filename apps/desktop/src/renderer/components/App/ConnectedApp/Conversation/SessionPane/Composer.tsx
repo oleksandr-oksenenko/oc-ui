@@ -21,7 +21,7 @@ import type { ModelPickerOption } from "./Composer/ModelPicker.tsx";
 import { VariantPicker } from "./Composer/VariantPicker.tsx";
 import type { VariantPickerOption } from "./Composer/VariantPicker.tsx";
 import { readClipboardFiles, readClipboardText } from "./Composer/pasteClipboard.ts";
-import { classifyPaste } from "./Composer/pasteRoute.ts";
+import { classifyPaste, TEXT_ATTACHMENT_LIMIT } from "./Composer/pasteRoute.ts";
 
 export type ComposerReview = {
   readonly count: number;
@@ -78,6 +78,9 @@ const UNSUPPORTED_HTML_NOTICE =
 
 const CLIPBOARD_UNAVAILABLE_NOTICE =
   "Clipboard access is unavailable in this app. Press the paste shortcut instead.";
+
+const LITERAL_TOO_LARGE_NOTICE =
+  "That paste is too large to insert here. Copy a smaller part and paste again.";
 
 export type ComposerProps = {
   readonly value: string;
@@ -484,6 +487,18 @@ export function Composer(props: ComposerProps) {
       if (editorControl?.composing() === true) return undefined;
       if (text === undefined) {
         setPasteNotice(CLIPBOARD_UNAVAILABLE_NOTICE);
+        editorControl?.focus();
+        return undefined;
+      }
+      // Even the explicit literal gesture must not insert an enormous payload;
+      // it becomes a text attachment like the automatic route.
+      if (text.length >= TEXT_ATTACHMENT_LIMIT) {
+        if (props.onAttachText !== undefined) {
+          setPasteNotice(undefined);
+          props.onAttachText(text);
+        } else {
+          setPasteNotice(LITERAL_TOO_LARGE_NOTICE);
+        }
         editorControl?.focus();
         return undefined;
       }
