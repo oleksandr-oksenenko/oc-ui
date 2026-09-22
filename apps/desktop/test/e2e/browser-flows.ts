@@ -184,6 +184,11 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
   await browser.saveScreenshot(join(artifacts, "browser-annotation-sent.png"));
 
   await $('.shell-session-main:not([aria-current="page"])').click();
+  // The context panel is remembered per session: a session that has never
+  // shown the browser starts closed on Diff, so open its Browser view first.
+  const showContext = $('[aria-label="Show context"]');
+  if (await showContext.isExisting()) await showContext.click();
+  await $("button=Browser").click();
   await $('[aria-label="Browser address"]').waitForDisplayed({ timeout: TIMEOUT });
   await $(".browser-empty").waitForDisplayed();
   assert.equal((await nativePages())[0]?.id, page.id);
