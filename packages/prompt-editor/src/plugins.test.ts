@@ -178,6 +178,28 @@ describe("prompt editor plugins", () => {
     inside.dispose();
   });
 
+  it("keeps strong and emphasis only between their boundaries", () => {
+    const bold = editor("**bold**");
+    const boldParagraph = bold.view.state.doc.firstChild!;
+    bold.select(boldParagraph.nodeSize - 1, boldParagraph.nodeSize - 1);
+    bold.type("x");
+    expect(bold.marksOf("x")).toEqual([]);
+    bold.dispose();
+
+    const inside = editor("**bold**");
+    inside.select(3, 3);
+    inside.type("x");
+    expect(inside.marksOf("boxld")).toEqual(["strong"]);
+    inside.dispose();
+
+    const em = editor("*em*");
+    const emParagraph = em.view.state.doc.firstChild!;
+    em.select(emParagraph.nodeSize - 1, emParagraph.nodeSize - 1);
+    em.type("x");
+    expect(em.marksOf("x")).toEqual([]);
+    em.dispose();
+  });
+
   it("applies Markdown inline shortcuts without losing content or marks", () => {
     const strong = editor();
     strong.type("**bold**");
