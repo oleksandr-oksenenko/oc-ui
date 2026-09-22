@@ -5,6 +5,31 @@
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 /**
+ * How many attachments one session draft may hold. The renderer keeps every
+ * draft's `File` objects (and later encodes them for the server), so the count
+ * and the aggregate bytes below bound one session's attachment memory; drafts
+ * are per session and are released when the draft is cleared or sent.
+ */
+export const MAX_DRAFT_ATTACHMENTS = 16;
+
+/**
+ * The aggregate attachment byte cap for one session draft. It is above the
+ * 20 MiB per-file cap so a single large file stays attachable, and below any
+ * batch size whose encoding would retain an unbounded payload. A file that
+ * does not fit is refused with a notice; nothing is partially encoded.
+ */
+export const MAX_DRAFT_ATTACHMENT_BYTES = 24 * 1024 * 1024;
+
+/**
+ * The UTF-16 code-unit bound on the source text retained for one rejected
+ * paste. A session holds at most one such recovery entry (a later paste is
+ * refused until the entry is restored or dismissed), so this is the per-session
+ * recovery memory bound. Text past it is not retained at all rather than
+ * truncated; the notice names the bound so the user can paste a smaller part.
+ */
+export const MAX_RETAINED_PASTE_UNITS = 4 * 1024 * 1024;
+
+/**
  * The text-attachment cap, in UTF-8 bytes. The pinned server's base64
  * validation overflows the stack somewhere above 3 MiB decoded and fails
  * opaquely, so text attachments stay under a cap with headroom. It is a byte

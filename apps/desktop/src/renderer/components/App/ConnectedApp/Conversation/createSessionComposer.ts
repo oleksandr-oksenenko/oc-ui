@@ -16,6 +16,9 @@ import { leadingCommandName, parseSessionCommand } from "../../../../opencode/se
 import { readPromptFile } from "../../../../opencode/read-prompt-file.ts";
 import {
   MAX_ATTACHMENT_BYTES,
+  MAX_DRAFT_ATTACHMENT_BYTES,
+  MAX_DRAFT_ATTACHMENTS,
+  MAX_RETAINED_PASTE_UNITS,
   MAX_TEXT_ATTACHMENT_BYTES,
   selectAttachableFiles,
 } from "../../../../opencode/attachments.ts";
@@ -49,7 +52,13 @@ const ATTACHMENT_LIMIT_LABEL = `${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
 
 const TEXT_ATTACHMENT_LIMIT_LABEL = `${MAX_TEXT_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
 
+const DRAFT_ATTACHMENT_BUDGET_LABEL = `${MAX_DRAFT_ATTACHMENTS} attachments and ${MAX_DRAFT_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
+
 const PASTE_TOO_LARGE_MESSAGE = `The pasted text is larger than the ${TEXT_ATTACHMENT_LIMIT_LABEL} attachment limit, so it was not attached. Restore it as text instead.`;
+
+const PASTE_TOO_LARGE_TO_RETAIN_MESSAGE = `The pasted text is larger than the ${TEXT_ATTACHMENT_LIMIT_LABEL} attachment limit and too large to keep for restore. Copy a smaller part instead.`;
+
+const PASTE_BUDGET_MESSAGE = `The pasted text was not attached: the draft can hold ${DRAFT_ATTACHMENT_BUDGET_LABEL} in total. Remove an attachment before pasting more text.`;
 
 const PASTE_RECOVERY_PENDING_MESSAGE =
   "A previous paste is still waiting to be restored or dismissed. Choose Restore text or Dismiss before pasting again.";
@@ -61,6 +70,11 @@ const attachmentSizeMessage = (rejected: readonly File[]): string => {
   }
   return `${rejected.length} files are larger than the ${ATTACHMENT_LIMIT_LABEL} attachment limit.`;
 };
+
+const attachmentBudgetMessage = (rejected: number): string =>
+  rejected === 1
+    ? `One file was not attached: the draft can hold ${DRAFT_ATTACHMENT_BUDGET_LABEL} in total. Remove an attachment before adding more.`
+    : `${rejected} files were not attached: the draft can hold ${DRAFT_ATTACHMENT_BUDGET_LABEL} in total. Remove an attachment before adding more.`;
 
 class CommandAttachmentError extends Schema.TaggedError<CommandAttachmentError>()(
   "CommandAttachmentError",
@@ -159,7 +173,11 @@ export type SessionComposerController = {
   readonly skills: Accessor<readonly PromptSkillAttachment[]>;
   readonly files: Accessor<readonly File[]>;
   readonly attachFiles: (files: readonly File[]) => void;
-  /** Attaches pasted text, or retains it for recovery when it exceeds the byte cap. */
+  /**
+   * Attaches pasted text, retains it for recovery when it exceeds the text
+   * byte cap, and refuses it when the draft's aggregate attachment budget or
+   * the recovery bound is reached.
+   */
   readonly attachText: (text: string) => void;
   readonly removeFile: (file: File) => void;
   /** Append annotation text and its screenshots together, or make no change. */
@@ -214,26 +232,35 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     // A draft owns each File object once; removal and completion track identity.
     const known = new Set(files());
     const next: File[] = [];
+    let budget = remainingAttachmentBudget(files());
+    let excess = 0;
     for (const file of accepted) {
       if (known.has(file)) continue;
+      if (budget.count <= 0 || file.size > budget.bytes) {
+        excess += 1;
+        continue;
+      }
       known.add(file);
       next.push(file);
+      budget = { count: budget.count - 1, bytes: budget.bytes - file.size };
     }
     if (next.length > 0) setFiles(sessionID, [...files(), ...next]);
     // New selection feedback replaces any earlier attachment or command-read error.
     clearCommandAttachmentNotice(sessionID);
-    if (rejected.length > 0) {
-      setAttachmentNotice(sessionID, attachmentSizeMessage(rejected));
-    } else if (next.length > 0) {
-      clearAttachmentNotice(sessionID);
-    }
+    const notices: string[] = [];
+    if (rejected.length > 0) notices.push(attachmentSizeMessage(rejected));
+    if (excess > 0) notices.push(attachmentBudgetMessage(excess));
+    if (notices.length > 0) setAttachmentNotice(sessionID, notices.join(" "));
+    else if (next.length > 0) clearAttachmentNotice(sessionID);
   };
   /**
    * The clipboard intent for text too large to edit inline. Clipboard strings
    * carry no size metadata, so the UTF-16 length is checked first (a lower
    * bound on UTF-8 bytes) and the encoded `File.size` is the exact cap; the
-   * text is never encoded twice. A rejection retains the source text and never
-   * attaches to whatever session becomes active later.
+   * text is never encoded twice. A rejection retains the source text within the
+   * recovery bound and never attaches to whatever session becomes active later.
+   * An attachable paste still needs room in the draft's aggregate budget; a
+   * paste that does not fit is refused rather than partially attached.
    */
   const attachText = (text: string) => {
     const sessionID = options.selectedID();
@@ -246,18 +273,35 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       return;
     }
     if (text.length > MAX_TEXT_ATTACHMENT_BYTES) {
-      setRecovery(sessionID, text);
+      retainRejected(sessionID, text);
       return;
     }
     const existing = effects.registry.get(fileDrafts)[sessionID] ?? [];
     const file = new File([text], pastedTextName(existing), { type: "text/plain" });
     if (file.size > MAX_TEXT_ATTACHMENT_BYTES) {
-      setRecovery(sessionID, text);
+      retainRejected(sessionID, text);
+      return;
+    }
+    const budget = remainingAttachmentBudget(existing);
+    if (budget.count <= 0 || file.size > budget.bytes) {
+      setAttachmentNotice(sessionID, PASTE_BUDGET_MESSAGE);
       return;
     }
     setFiles(sessionID, [...existing, file]);
     clearCommandAttachmentNotice(sessionID);
     clearAttachmentNotice(sessionID);
+  };
+  /**
+   * Retains a rejected paste's source within {@link MAX_RETAINED_PASTE_UNITS}.
+   * Past the bound nothing is kept, so an arbitrarily large clipboard string
+   * cannot pin the renderer's memory; the notice names the reason.
+   */
+  const retainRejected = (sessionID: string, text: string): void => {
+    if (text.length > MAX_RETAINED_PASTE_UNITS) {
+      setAttachmentNotice(sessionID, PASTE_TOO_LARGE_TO_RETAIN_MESSAGE);
+      return;
+    }
+    setRecovery(sessionID, text);
   };
   const pasteRecovery = createMemo<ComposerPasteRecovery | undefined>(() => {
     const sessionID = options.selectedID();
@@ -839,6 +883,15 @@ function pastedTextName(existing: readonly File[]): string {
     name = `pasted-text-${index}.txt`;
   }
   return name;
+}
+
+/** The attachment count and bytes one session's draft may still hold. */
+function remainingAttachmentBudget(files: readonly File[]) {
+  const bytes = files.reduce((total, file) => total + file.size, 0);
+  return {
+    count: MAX_DRAFT_ATTACHMENTS - files.length,
+    bytes: MAX_DRAFT_ATTACHMENT_BYTES - bytes,
+  };
 }
 
 function sameValue<T>(left: T, right: T): boolean {

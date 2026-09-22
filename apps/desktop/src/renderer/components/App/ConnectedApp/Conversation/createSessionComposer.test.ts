@@ -12,6 +12,9 @@ import {
 import { SESSION_PROMPT_METADATA_KEY } from "../../../../opencode/session-prompt.ts";
 import {
   MAX_ATTACHMENT_BYTES,
+  MAX_DRAFT_ATTACHMENT_BYTES,
+  MAX_DRAFT_ATTACHMENTS,
+  MAX_RETAINED_PASTE_UNITS,
   MAX_TEXT_ATTACHMENT_BYTES,
 } from "../../../../opencode/attachments.ts";
 import { createSessionComposer } from "./createSessionComposer.ts";
@@ -354,6 +357,62 @@ describe("createSessionComposer", () => {
     expect(root.composer.files()).toEqual([]);
     root.composer.attachText("small");
     expect(root.composer.files().map((file) => file.name)).toEqual(["pasted-text.txt"]);
+    root.dispose();
+  });
+
+  it("bounds the attachments one draft can hold and refuses the excess", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const files = Array.from(
+      { length: MAX_DRAFT_ATTACHMENTS },
+      (_, index) => new File([`file ${index}`], `file-${index}.txt`),
+    );
+    root.composer.attachFiles(files);
+    expect(root.composer.files()).toHaveLength(MAX_DRAFT_ATTACHMENTS);
+
+    const excess = new File(["excess"], "excess.txt");
+    root.composer.attachFiles([excess]);
+    expect(root.composer.files()).toHaveLength(MAX_DRAFT_ATTACHMENTS);
+    expect(root.composer.files()).not.toContain(excess);
+    expect(root.composer.error()).toContain(`hold ${MAX_DRAFT_ATTACHMENTS} attachments`);
+
+    // Removing one frees a slot for the next selection.
+    root.composer.removeFile(root.composer.files()[0]!);
+    root.composer.attachFiles([excess]);
+    expect(root.composer.files()).toContain(excess);
+    root.dispose();
+  });
+
+  it("bounds the aggregate attachment bytes per draft and refuses the excess", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    // Text attachments at the per-file cap fill the byte budget exactly; the
+    // count cap is deliberately larger than the byte cap can fill.
+    const count = MAX_DRAFT_ATTACHMENT_BYTES / MAX_TEXT_ATTACHMENT_BYTES;
+    for (let index = 0; index < count; index += 1) {
+      root.composer.attachText(`${index}`.padEnd(MAX_TEXT_ATTACHMENT_BYTES, "a"));
+    }
+    expect(root.composer.files()).toHaveLength(count);
+
+    root.composer.attachText("x".repeat(MAX_TEXT_ATTACHMENT_BYTES));
+    expect(root.composer.files()).toHaveLength(count);
+    expect(root.composer.error()).toContain(`hold ${MAX_DRAFT_ATTACHMENTS} attachments`);
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("refuses to retain a rejected paste past the recovery bound", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    root.composer.attachText("a".repeat(MAX_RETAINED_PASTE_UNITS + 1));
+    expect(root.composer.files()).toEqual([]);
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+    expect(root.composer.error()).toContain("too large to keep");
+
+    // At the bound the source is retained and can be restored.
+    const atBound = "b".repeat(MAX_RETAINED_PASTE_UNITS);
+    root.composer.attachText(atBound);
+    expect(root.composer.pasteRecovery()?.take()).toBe(atBound);
     root.dispose();
   });
 
