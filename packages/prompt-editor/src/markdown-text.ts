@@ -13,7 +13,7 @@ const numericReference = /&#(?:[xX]([0-9a-fA-F]{1,7})|([0-9]{1,7}));/g;
 export function decodeNumericEntities(value: string): string {
   return value.replace(numericReference, (match, hex?: string, decimal?: string) => {
     const code = Number.parseInt(hex ?? decimal ?? "", hex === undefined ? 10 : 16);
-    if (!Number.isInteger(code) || code < 0 || code > MAX_CODE_POINT) return match;
+    if (code > MAX_CODE_POINT) return match;
     if (code >= MIN_SURROGATE && code <= MAX_SURROGATE) return "\uFFFD";
     return String.fromCodePoint(code);
   });

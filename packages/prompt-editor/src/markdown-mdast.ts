@@ -7,8 +7,6 @@ import type {
   List,
   ListItem,
   PhrasingContent,
-  Root,
-  RootContent,
   Text,
 } from "mdast";
 import { toMarkdown, type Options as ToMarkdownOptions } from "mdast-util-to-markdown";
@@ -36,14 +34,7 @@ import { Fragment, Mark, type Node as PMNode } from "prosemirror-model";
  */
 export const mdastOptions: ToMarkdownOptions = {
   bullet: "-",
-  bulletOrdered: ".",
-  emphasis: "*",
-  strong: "*",
-  fence: "`",
-  fences: true,
-  listItemIndent: "one",
   rule: "-",
-  ruleRepetition: 3,
   // The transcript renders GFM strikethrough, but the composer has no
   // strikethrough mark, so literal tildes must stay literal on the wire.
   // marked's `del` tokenizer accepts one or two tildes, so every tilde in
@@ -65,17 +56,13 @@ type RenderSkill = (node: PMNode) => string;
  * the mention offsets.
  */
 export function serializeMdast(doc: PMNode, renderSkill: RenderSkill): string {
-  const content = doc.type.name === "doc" ? mergeAdjacentLists(doc) : doc;
+  const content = mergeAdjacentLists(doc);
   // `toMarkdown` terminates the document with a newline; drafts never carry
   // one.
-  return toMarkdown(root(content, renderSkill), mdastOptions).replace(/\n$/, "");
-}
-
-function root(doc: PMNode, renderSkill: RenderSkill): Root {
-  const children: RootContent[] = [];
-  if (doc.type.name === "doc") doc.forEach((node) => children.push(block(node, renderSkill)));
-  else children.push(block(doc, renderSkill));
-  return { type: "root", children };
+  return toMarkdown(
+    { type: "root", children: blocks(content, renderSkill) },
+    mdastOptions,
+  ).replace(/\n$/, "");
 }
 
 function blocks(parent: PMNode, renderSkill: RenderSkill): BlockContent[] {
@@ -136,13 +123,11 @@ function code(node: PMNode): Code {
   };
 }
 
-const headingDepths = [1, 2, 3, 4, 5, 6] as const satisfies readonly Heading["depth"][];
-
 /** mdast headings only carry the six depths Markdown can express. */
 function headingDepth(node: PMNode): Heading["depth"] {
-  const level = Number(node.attrs.level ?? 1);
-  const clamped = Math.min(Math.max(level, 1), 6);
-  return headingDepths[clamped - 1] ?? 1;
+  const level = Math.min(Math.max(Number(node.attrs.level ?? 1), 1), 6);
+  // The clamp keeps the level inside mdast's six depths.
+  return level as Heading["depth"];
 }
 
 type MarkFrame = {

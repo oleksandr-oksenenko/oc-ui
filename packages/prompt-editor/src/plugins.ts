@@ -18,7 +18,7 @@ import {
   wrappingInputRule,
 } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
-import type { MarkType } from "prosemirror-model";
+import type { Attrs, MarkType } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from "prosemirror-schema-list";
 import { Plugin, type Command, type EditorState } from "prosemirror-state";
 
@@ -43,7 +43,11 @@ const linkMark = schema.marks.link!;
  * a rule never replaces an atom or drops formatting that is already active.
  * Rules never fire inside inline code.
  */
-function markInputRule(regexp: RegExp, mark: MarkType): InputRule {
+function markInputRule(
+  regexp: RegExp,
+  mark: MarkType,
+  attrs?: (match: RegExpMatchArray) => Attrs,
+): InputRule {
   return new InputRule(
     regexp,
     (state, match, start, end) => {
@@ -54,7 +58,7 @@ function markInputRule(regexp: RegExp, mark: MarkType): InputRule {
       return state.tr
         .delete(opening + content.length, end)
         .delete(start, opening)
-        .addMark(start, start + content.length, mark.create())
+        .addMark(start, start + content.length, mark.create(attrs?.(match)))
         .removeStoredMark(mark);
     },
     { inCodeMark: false },
@@ -90,7 +94,7 @@ const insertLineBreak: Command = (state, dispatch) => {
   const { $from } = state.selection;
   if (!$from.parent.isTextblock) return false;
   if ($from.parent.type.name === "heading") return splitBlock(state, dispatch);
-  if ($from.nodeBefore?.type === hardBreakType && $from.parent.content.size > 0) {
+  if ($from.nodeBefore?.type === hardBreakType) {
     return splitBlock(state, dispatch);
   }
   if (dispatch) {
@@ -123,21 +127,10 @@ function promptInputRules(): readonly InputRule[] {
     markInputRule(/(?<![\\*_])\*([^*_\\\s](?:[^*_\\]*[^*_\\\s])?)\*$/, emMark),
     markInputRule(/(?<![\w*_\\])_([^*_\\\s](?:[^*_\\]*[^*_\\\s])?)_$/, emMark),
     markInputRule(/`([^`]+)`$/, codeMark),
-    new InputRule(
+    markInputRule(
       /(?<!!)\[([^\]]+)\]\(([^()\s]*(?:\([^()\s]*\)[^()\s]*)*)\)$/,
-      (state, match, start, end) => {
-        const text = match[1]!;
-        const href = match[2] ?? "";
-        if (insideCodeContext(state, start)) return null;
-        const offset = match[0].indexOf(text);
-        const opening = start + offset;
-        return state.tr
-          .delete(opening + text.length, end)
-          .delete(start, opening)
-          .addMark(start, start + text.length, linkMark.create({ href }))
-          .removeStoredMark(linkMark);
-      },
-      { inCodeMark: false },
+      linkMark,
+      (match) => ({ href: match[2] ?? "" }),
     ),
   ];
 }
@@ -161,9 +154,7 @@ function compositionGuard(): Plugin {
     props: {
       handleDOMEvents: {
         keydown(view, event) {
-          // ProseMirror only routes keydown events here.
-          const key = event;
-          return view.composing || key.isComposing || key.keyCode === 229;
+          return view.composing || event.isComposing || event.keyCode === 229;
         },
       },
     },
