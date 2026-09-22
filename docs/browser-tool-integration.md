@@ -27,8 +27,44 @@ retained beside the code. Upgrade these parts together.
 Chromium runs on the desktop, but HTTP/HTTPS and WebSocket traffic goes through
 the connected server. `localhost` therefore means that server. Each attachment
 gets a fresh, nonpersistent partition; loopback proxy bypass and nonproxied WebRTC
-are disabled. Pages have no Node integration or oc-ui preload, and device/media
-permissions remain denied. Renderer IPC permits only navigation and tab controls.
+are disabled. Pages have no Node integration. They load one dedicated annotation
+preload in Electron's isolated world, which only draws the comment popover and
+cannot reach Node or app APIs; device/media permissions remain denied. Renderer
+IPC permits only navigation and tab controls.
+
+## Element annotations
+
+The Browser pane can capture user annotations. **Annotate** and **Select area**
+start Chromium's element inspector over the pinned CDP connection
+(`Overlay.setInspectMode`); the user clicks an element or drags an area, and
+main reads the node's bounded context (frame URL, selector, tag, text, role,
+`aria-label`, viewport bounds). Main captures the visible viewport, burns a
+numbered outline or area rectangle into the bitmap with `nativeImage`, and then
+opens a minimal comment popover in the page, anchored beside the selection.
+Saving the comment returns it with the capture; dismissing it discards the
+capture. Picks cancel on Escape, navigation, hiding the tab, tab disposal, or a
+command targeting that tab; a command and a pick never overlap on one tab, while
+other tabs proceed.
+
+The popover lives in a closed shadow root styled with a constructed stylesheet,
+so page styles and strict CSP cannot change it. It is the only oc-ui element in
+a page, occupies only its own rectangle, and is removed when the editor closes.
+Comments are typed there and cross a bounded channel to main; the page can
+observe the popover's DOM node and the key events that pass through it, so
+comments are not secret input.
+
+The renderer keeps up to eight drafts per session and assigns stable numbers
+that are never reused after a discard. Child-frame selections skip the page
+popover and keep the pane's comment editor, because a frame-local rectangle
+cannot position a top-document popover. Page-derived fields stay inside a
+dynamically fenced untrusted-data block. **Add to composer** inserts the
+formatted batch and its screenshots into the session composer in one update,
+and only then clears the drafts. The server receives ordinary prompt text and
+image attachments, never a desktop path.
+
+`docs/browser-annotations-design.md` records the full design, the retained
+prototype behavior, the failure modes, and the deferred live-marker and style
+adjustment phases.
 
 Upload paths and returned capture paths belong to the server. Files cross machines
 as bytes, with a 5 MiB transfer limit. Do not treat server paths as desktop paths.
