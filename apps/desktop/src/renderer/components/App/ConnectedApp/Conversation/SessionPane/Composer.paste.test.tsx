@@ -437,6 +437,30 @@ describe("Composer literal paste gesture", () => {
     harness.dispose();
   });
 
+  it("suppresses a repeated identical large paste from a held chord", () => {
+    setPlatform("macos");
+    const attachText = vi.fn<(text: string) => void>();
+    const harness = openComposer({ onAttachText: attachText });
+    const huge = "x".repeat(16_384);
+    pasteClipboard(harness.editor, { text: huge });
+    pasteClipboard(harness.editor, { text: huge });
+    expect(attachText).toHaveBeenCalledTimes(1);
+    expect(textOf(harness.editor)).toBe("");
+    harness.dispose();
+  });
+
+  it("attaches different large pastes separately", () => {
+    setPlatform("macos");
+    const attachText = vi.fn<(text: string) => void>();
+    const harness = openComposer({ onAttachText: attachText });
+    pasteClipboard(harness.editor, { text: "x".repeat(16_384) });
+    pasteClipboard(harness.editor, { text: "y".repeat(16_384) });
+    expect(attachText).toHaveBeenCalledTimes(2);
+    expect(attachText.mock.calls[0]?.[0]).toBe("x".repeat(16_384));
+    expect(attachText.mock.calls[1]?.[0]).toBe("y".repeat(16_384));
+    harness.dispose();
+  });
+
   it("explains when the host clipboard read is unavailable", async () => {
     setPlatform("macos");
     const harness = openComposer();

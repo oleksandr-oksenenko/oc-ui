@@ -268,6 +268,20 @@ export function Composer(props: ComposerProps) {
    * never land in a draft it did not originate from.
    */
   let literalRead = 0;
+  /**
+   * Holding a paste chord repeats the event. A repeated identical payload is
+   * one intent, so the attachment path runs once per burst; the event's own
+   * timestamp avoids a wall-clock global.
+   */
+  let lastTextAttachment: { readonly text: string; readonly at: number } | undefined;
+  const isRepeatedTextAttachment = (text: string, at: number) => {
+    const repeat =
+      lastTextAttachment !== undefined &&
+      lastTextAttachment.text === text &&
+      at - lastTextAttachment.at < 400;
+    lastTextAttachment = { text, at };
+    return repeat;
+  };
   const [dropping, setDropping] = createSignal(false);
   const [pasteNotice, setPasteNotice] = createSignal<string | undefined>();
   const canAttach = () => props.onAttachFiles !== undefined;
@@ -393,7 +407,7 @@ export function Composer(props: ComposerProps) {
     if (event.isComposing || event.keyCode === 229) return;
     if (!isLiteralPasteChord(event)) return;
     event.preventDefault();
-    pasteAsPlainText();
+    pasteAsPlainText(event.timeStamp);
   };
 
   /**
@@ -444,7 +458,7 @@ export function Composer(props: ComposerProps) {
         if (props.onAttachText === undefined) return;
         consume();
         setPasteNotice(undefined);
-        props.onAttachText(read.text);
+        if (!isRepeatedTextAttachment(read.text, event.timeStamp)) props.onAttachText(read.text);
         return;
       default: {
         if (control === undefined) return;
@@ -466,7 +480,7 @@ export function Composer(props: ComposerProps) {
    * same literal insertion, keeps focus in the editor, and explains when the
    * clipboard cannot be read instead of failing silently.
    */
-  const pasteAsPlainText = () => {
+  const pasteAsPlainText = (at?: number) => {
     const readClipboard = props.readClipboardText;
     if (readClipboard === undefined) {
       setPasteNotice(CLIPBOARD_UNAVAILABLE_NOTICE);
@@ -495,7 +509,7 @@ export function Composer(props: ComposerProps) {
       if (text.length >= TEXT_ATTACHMENT_LIMIT) {
         if (props.onAttachText !== undefined) {
           setPasteNotice(undefined);
-          props.onAttachText(text);
+          if (at === undefined || !isRepeatedTextAttachment(text, at)) props.onAttachText(text);
         } else {
           setPasteNotice(LITERAL_TOO_LARGE_NOTICE);
         }

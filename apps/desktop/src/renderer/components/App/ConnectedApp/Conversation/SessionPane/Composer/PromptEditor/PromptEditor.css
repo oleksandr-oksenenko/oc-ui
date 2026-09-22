@@ -107,8 +107,19 @@
 
 .prompt-editor-input :is(h1, h2, h3, h4, h5, h6) {
   margin: 0;
-  font-size: inherit;
   font-weight: var(--oc-type-heading-weight);
+}
+
+.prompt-editor-input h1 {
+  font-size: 1.35em;
+}
+
+.prompt-editor-input h2 {
+  font-size: 1.2em;
+}
+
+.prompt-editor-input :is(h3, h4, h5, h6) {
+  font-size: 1.05em;
 }
 
 .prompt-editor-input :is(ul, ol) {

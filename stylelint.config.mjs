@@ -91,10 +91,12 @@ export default {
     {
       files: [
         "apps/desktop/src/renderer/components/App/ConnectedApp/Conversation/SessionPane/SessionPane.css",
+        "apps/desktop/src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer/PromptEditor/PromptEditor.css",
       ],
       rules: {
         // Markdown headings and inline code scale with their 14px prose
-        // container. Keep that relationship local; other font sizes use tokens.
+        // container in the transcript and the composer. Keep that relationship
+        // local; other font sizes use tokens.
         "declaration-property-unit-allowed-list": {
           "/(?:^|-)radius$/": [],
           "font-size": ["em"],
