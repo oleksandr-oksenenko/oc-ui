@@ -73,9 +73,12 @@ function openComposer(
     readonly onAttachText?: (text: string) => void;
     readonly pasteRecovery?: ComposerPasteRecovery;
     readonly readClipboardText?: () => Promise<string | undefined>;
+    readonly files?: readonly File[];
+    readonly onSubmit?: () => void;
   } = {},
 ) {
   const input = vi.fn<(value: string) => void>();
+  const submit = vi.fn<() => void>(options.onSubmit);
   const [value, setValue] = createSignal(options.value ?? "");
   const [sessionID, setSessionID] = createSignal<string | undefined>(options.sessionID);
   const [disabled, setDisabled] = createSignal(options.disabled ?? false);
@@ -92,13 +95,14 @@ function openComposer(
       onAttachText={options.onAttachText}
       pasteRecovery={options.pasteRecovery}
       readClipboardText={options.readClipboardText}
+      files={options.files}
       modelSelection={unavailableSelection}
       agentSelection={unavailableAgentSelection}
       onInput={(text) => {
         input(text);
         setValue(text);
       }}
-      onSubmit={() => undefined}
+      onSubmit={submit}
     />
   ));
   const editor = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
@@ -112,6 +116,7 @@ function openComposer(
     input,
     draft,
     notice,
+    submit,
     setValue,
     setSessionID,
     setDisabled,
@@ -421,6 +426,29 @@ describe("Composer literal paste read ownership", () => {
     harness.setAction("sending");
     harness.setValue("");
     harness.setAction("send");
+    read.resolve("# stale clipboard");
+    await settle();
+    expect(textOf(harness.editor)).toBe("");
+    expect(harness.draft()).toBeUndefined();
+    harness.dispose();
+  });
+
+  it("drops a read that resolves after an attachment-only send", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const file = new File(["shot"], "shot.png", { type: "image/png" });
+    const harness = openComposer({
+      files: [file],
+      readClipboardText: () => read.promise,
+    });
+    harness.editor.dispatchEvent(chord());
+    // Enter submits an empty-text, attachment-only draft. The parent's
+    // clearIfUnchanged is invisible here because the text never changes, so the
+    // submission boundary itself must invalidate the pending read.
+    harness.editor.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+    expect(harness.submit).toHaveBeenCalledTimes(1);
     read.resolve("# stale clipboard");
     await settle();
     expect(textOf(harness.editor)).toBe("");

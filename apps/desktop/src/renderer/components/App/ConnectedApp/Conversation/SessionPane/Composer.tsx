@@ -288,6 +288,10 @@ export function Composer(props: ComposerProps) {
   const submit = (event?: Event) => {
     event?.preventDefault();
     if (!canSubmit()) return;
+    // A successful submission resets the draft, so a pending literal read must
+    // not land in the next one. This is the lifecycle boundary the parent's
+    // `clearIfUnchanged` is invisible at for empty-text, attachment-only sends.
+    literalRead += 1;
     props.onSubmit();
   };
 
@@ -310,7 +314,12 @@ export function Composer(props: ComposerProps) {
     if (queueChord(event)) {
       // The queue gesture never falls through to send, even when queueing is
       // unavailable or the draft is not eligible for submission.
-      if (props.onQueue && canSubmit()) props.onQueue();
+      if (props.onQueue && canSubmit()) {
+        // Queueing resets the draft like sending does; a pending literal read
+        // must not land in the next draft.
+        literalRead += 1;
+        props.onQueue();
+      }
       return;
     }
     submit();
