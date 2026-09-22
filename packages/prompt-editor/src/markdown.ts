@@ -156,7 +156,7 @@ function serializeNode(node: PMNode): PromptDraft {
 }
 
 function substitute(source: string, nonce: string, slots: readonly MarkdownSkill[]): PromptDraft {
-  const pattern = new RegExp(`${placeholderStart}${nonce}(\\d+)${placeholderStart}`, "g");
+  const pattern = placeholderPattern(nonce);
   let text = "";
   let cursor = 0;
   const skills: PromptSkillAttachment[] = [];
@@ -194,6 +194,26 @@ export function serializeSlice(content: Fragment): string {
 }
 
 const placeholderStart = "\uE000";
+
+/**
+ * The character-reference spelling `mdast-util-to-markdown` may write for the
+ * placeholder prefix. Its escaping encodes the boundary character of a text
+ * node as a numeric reference when it would otherwise merge with a neighboring
+ * delimiter — for example the closing `*` of an emphasis that ends at a code
+ * span. The reference decodes back to the same character, so both spellings
+ * identify the placeholder.
+ */
+const encodedPlaceholderStart = "&#xE000;";
+
+/**
+ * The placeholder pattern in serialized source. Either boundary may be written
+ * raw or as the character reference above; a raw-only pattern would silently
+ * drop the skill slot whose boundary was encoded.
+ */
+function placeholderPattern(nonce: string): RegExp {
+  const boundary = `(?:${placeholderStart}|${encodedPlaceholderStart})`;
+  return new RegExp(`${boundary}${nonce}(\\d+)${boundary}`, "g");
+}
 
 let placeholderGeneration = 0;
 

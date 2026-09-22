@@ -370,6 +370,29 @@ describe("prompt document", () => {
     }
   });
 
+  it("keeps a skill slot whose placeholder mdast encodes next to a delimiter", () => {
+    // `mdast-util-to-markdown` writes the placeholder's leading character as
+    // `&#xE000;` after an emphasis that closes at a code span; the serializer
+    // must still find the slot instead of leaking the placeholder as text.
+    const doc = paragraph([
+      schema.text("a", [schema.marks.em!.create()]),
+      schema.text("b", [schema.marks.em!.create(), schema.marks.code!.create()]),
+      schema.node("skill", { id: "aa", name: "aa" }),
+    ]);
+    const draft = toDraft(doc);
+    expect(draft).toEqual({ text: "*a`b`*aa", skills: [mention("aa", 6)] });
+
+    // The emphasis delimiter itself is the documented corpus loss; the atom
+    // must survive the reparse with its identity.
+    const reparsed = fromDraft(draft.text, draft.skills);
+    const names: string[] = [];
+    reparsed.descendants((node) => {
+      if (node.type.name === "skill") names.push(String(node.attrs.name));
+      return true;
+    });
+    expect(names).toEqual(["aa"]);
+  });
+
   it("keeps headings valid when transactions insert and remove a skill", () => {
     const doc = parse("# review now", [mention("review", 2)]);
     const state = EditorState.create({ schema, doc });
