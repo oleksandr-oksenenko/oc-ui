@@ -1201,6 +1201,79 @@ describe.sequential("production browser app", () => {
     expect(await prompt.locator("h1").count()).toBe(0);
   });
 
+  it("drops a literal clipboard read that resolves after navigating away and back", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Literal paste ownership",
+      location: { directory: await realpath(project) },
+    });
+    const other = await api.session.create({
+      title: "Literal paste other",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    await prompt.click();
+    // Hold the host read open so the paste is still pending when the session
+    // changes. A -> B -> A returns to the same session, so only the read's
+    // generation can prove the insertion belongs to a draft that is gone.
+    await prompt.evaluate((input) => {
+      window.__resolveClipboardRead = undefined;
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          readText: () =>
+            new Promise((resolve) => {
+              window.__resolveClipboardRead = resolve;
+            }),
+        },
+      });
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "v",
+          metaKey: true,
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    await expect
+      .poll(() => prompt.evaluate(() => Boolean(window.__resolveClipboardRead)))
+      .toBe(true);
+
+    await selectSession(other.title);
+    await selectSession(session.title);
+    await prompt.evaluate(async () => {
+      window.__resolveClipboardRead("# stale clipboard");
+      // Let the read's continuation run before the assertion round-trips.
+      await Promise.resolve();
+    });
+    expect(await prompt.textContent()).toBe("");
+
+    // A fresh read in the returning session still inserts, so the drop above
+    // is ownership, not a broken literal-paste path.
+    await prompt.evaluate((input) => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { readText: async () => "fresh clipboard" },
+      });
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "v",
+          metaKey: true,
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    await expect.poll(() => prompt.textContent()).toContain("fresh clipboard");
+    expect(await prompt.textContent()).not.toContain("stale clipboard");
+  });
+
   it("attaches files chosen through the picker button and sends their bytes", async () => {
     await ensureConnected();
     const session = await api.session.create({

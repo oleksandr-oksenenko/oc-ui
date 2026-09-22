@@ -258,7 +258,13 @@ export function Composer(props: ComposerProps) {
   let editorControl: PromptEditorControl | undefined;
   let pickerSessionID: string | undefined;
   let dragDepth = 0;
-  let disposed = false;
+  /**
+   * The latest literal-clipboard read. Every read captures the session and the
+   * generation that started it; a newer gesture, a session change, an emptied
+   * draft, or disposal invalidates the pending insertion, so clipboard text can
+   * never land in a draft it did not originate from.
+   */
+  let literalRead = 0;
   const [dropping, setDropping] = createSignal(false);
   const [pasteNotice, setPasteNotice] = createSignal<string | undefined>();
   const canAttach = () => props.onAttachFiles !== undefined;
@@ -455,8 +461,18 @@ export function Composer(props: ComposerProps) {
       editorControl?.focus();
       return;
     }
+    const sessionID = props.sessionID;
+    literalRead += 1;
+    const generation = literalRead;
     void readClipboard().then((text) => {
-      if (disposed) return undefined;
+      // Only the latest read may insert, and only into the session that
+      // started it. A -> B -> A still invalidates, because the session change
+      // advanced the generation.
+      if (generation !== literalRead || sessionID !== props.sessionID) return undefined;
+      // The composer may have become unavailable while the host read was in
+      // flight, and an IME owns the document during a composition.
+      if (props.disabled || props.action === "sending") return undefined;
+      if (editorControl?.composing() === true) return undefined;
       if (text === undefined) {
         setPasteNotice(CLIPBOARD_UNAVAILABLE_NOTICE);
         editorControl?.focus();
@@ -488,7 +504,8 @@ export function Composer(props: ComposerProps) {
     element.addEventListener("paste", paste, true);
     element.addEventListener("keydown", literalChord, true);
     onCleanup(() => {
-      disposed = true;
+      // Disposal invalidates a literal read that is still in flight.
+      literalRead += 1;
       element.removeEventListener("dragenter", dragEnter, true);
       element.removeEventListener("dragover", dragOver, true);
       element.removeEventListener("dragleave", dragLeave, true);
@@ -502,12 +519,25 @@ export function Composer(props: ComposerProps) {
     on(
       () => props.sessionID,
       () => {
-        // A drag, an open chooser or a paste notice does not survive a session
-        // change.
+        // A drag, an open chooser, a paste notice, or a pending literal read
+        // does not survive a session change.
+        literalRead += 1;
         dragDepth = 0;
         setDropping(false);
         pickerSessionID = undefined;
         setPasteNotice(undefined);
+      },
+      { defer: true },
+    ),
+  );
+
+  createEffect(
+    on(
+      () => props.value,
+      (value) => {
+        // A clear or a completed send empties the draft a pending literal read
+        // was bound to; the read must not recreate it.
+        if (value === "") literalRead += 1;
       },
       { defer: true },
     ),

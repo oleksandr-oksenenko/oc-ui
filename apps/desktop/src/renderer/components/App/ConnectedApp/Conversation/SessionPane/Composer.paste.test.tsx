@@ -66,6 +66,9 @@ function pasteClipboard(editor: HTMLElement, flavors: ClipboardFlavors): Event {
 function openComposer(
   options: {
     readonly value?: string;
+    readonly sessionID?: string;
+    readonly disabled?: boolean;
+    readonly action?: "send" | "sending" | "running";
     readonly onAttachFiles?: (files: readonly File[]) => void;
     readonly onAttachText?: (text: string) => void;
     readonly pasteRecovery?: ComposerPasteRecovery;
@@ -74,11 +77,17 @@ function openComposer(
 ) {
   const input = vi.fn<(value: string) => void>();
   const [value, setValue] = createSignal(options.value ?? "");
+  const [sessionID, setSessionID] = createSignal<string | undefined>(options.sessionID);
+  const [disabled, setDisabled] = createSignal(options.disabled ?? false);
+  const [action, setAction] = createSignal<"send" | "sending" | "running">(
+    options.action ?? "send",
+  );
   const { host, dispose } = mount(() => (
     <Composer
       value={value()}
-      disabled={false}
-      action="send"
+      sessionID={sessionID()}
+      disabled={disabled()}
+      action={action()}
       onAttachFiles={options.onAttachFiles}
       onAttachText={options.onAttachText}
       pasteRecovery={options.pasteRecovery}
@@ -96,8 +105,31 @@ function openComposer(
   if (!editor) throw new Error("Composer did not render its prompt");
   const draft = () => input.mock.calls.at(-1)?.[0];
   const notice = () => host.querySelector<HTMLElement>('[role="alert"]')?.textContent ?? "";
-  return { host, dispose, editor, input, draft, notice };
+  return {
+    host,
+    dispose,
+    editor,
+    input,
+    draft,
+    notice,
+    setValue,
+    setSessionID,
+    setDisabled,
+    setAction,
+  };
 }
+
+/** A promise a test resolves by hand, for ordering asynchronous clipboard reads. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+/** Lets every already-settled promise continuation run before an assertion. */
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 /** The editor's current draft text, even when it never changed. */
 const textOf = (editor: HTMLElement) => editor.textContent ?? "";
@@ -343,6 +375,136 @@ describe("Composer literal paste gesture", () => {
     // The caret starts inside the code block; no gesture is needed.
     pasteClipboard(harness.editor, { text: "a\nb" });
     expect(harness.editor.querySelector("code")?.textContent).toContain("a\nb");
+    harness.dispose();
+  });
+});
+
+describe("Composer literal paste read ownership", () => {
+  it("drops a read that resolves after navigating away and back", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const harness = openComposer({
+      sessionID: "session-a",
+      readClipboardText: () => read.promise,
+    });
+    harness.editor.dispatchEvent(chord());
+    // A -> B -> A returns to the same session, but the draft that started the
+    // read is gone; comparing session IDs alone would let this land.
+    harness.setSessionID("session-b");
+    harness.setSessionID("session-a");
+    read.resolve("# stale clipboard");
+    await settle();
+    expect(textOf(harness.editor)).not.toContain("# stale clipboard");
+    expect(harness.draft()).toBeUndefined();
+    harness.dispose();
+  });
+
+  it("drops a read that resolves after the draft is cleared", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const harness = openComposer({ value: "keep this", readClipboardText: () => read.promise });
+    harness.editor.dispatchEvent(chord());
+    harness.setValue("");
+    read.resolve("# stale clipboard");
+    await settle();
+    expect(textOf(harness.editor)).toBe("");
+    expect(harness.draft()).toBeUndefined();
+    harness.dispose();
+  });
+
+  it("drops a read that resolves after the draft is sent", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const harness = openComposer({ value: "send me", readClipboardText: () => read.promise });
+    harness.editor.dispatchEvent(chord());
+    // A confirmed send empties the draft while the host read is in flight.
+    harness.setAction("sending");
+    harness.setValue("");
+    harness.setAction("send");
+    read.resolve("# stale clipboard");
+    await settle();
+    expect(textOf(harness.editor)).toBe("");
+    expect(harness.draft()).toBeUndefined();
+    harness.dispose();
+  });
+
+  it("drops a read that resolves while the composer is unavailable", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const harness = openComposer({ readClipboardText: () => read.promise });
+    harness.editor.dispatchEvent(chord());
+    harness.setDisabled(true);
+    read.resolve("# stale clipboard");
+    await settle();
+    expect(textOf(harness.editor)).toBe("");
+    // Re-enabling the composer does not replay the dropped insertion.
+    harness.setDisabled(false);
+    await settle();
+    expect(textOf(harness.editor)).toBe("");
+    harness.dispose();
+  });
+
+  it("drops a read that resolves while an IME owns the editor", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const harness = openComposer({ readClipboardText: () => read.promise });
+    harness.editor.dispatchEvent(chord());
+    harness.editor.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    read.resolve("# stale clipboard");
+    await settle();
+    expect(textOf(harness.editor)).not.toContain("# stale clipboard");
+    harness.editor.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+    harness.dispose();
+  });
+
+  it("drops a read that resolves after disposal", async () => {
+    setPlatform("macos");
+    const read = deferred<string | undefined>();
+    const harness = openComposer({ readClipboardText: () => read.promise });
+    harness.editor.dispatchEvent(chord());
+    const editor = harness.editor;
+    harness.dispose();
+    read.resolve("# stale clipboard");
+    await settle();
+    expect(textOf(editor)).not.toContain("# stale clipboard");
+    expect(harness.input).not.toHaveBeenCalled();
+  });
+
+  it("lets the later overlapping read win when it completes first", async () => {
+    setPlatform("macos");
+    const first = deferred<string | undefined>();
+    const second = deferred<string | undefined>();
+    const reads = [first, second];
+    let index = 0;
+    const harness = openComposer({ readClipboardText: () => reads[index++]!.promise });
+    harness.editor.dispatchEvent(chord());
+    harness.editor.dispatchEvent(chord());
+
+    second.resolve("second text");
+    await settle();
+    expect(textOf(harness.editor)).toContain("second text");
+    first.resolve("first text");
+    await settle();
+    expect(textOf(harness.editor)).not.toContain("first text");
+    harness.dispose();
+  });
+
+  it("drops an earlier overlapping read that completes before the latest", async () => {
+    setPlatform("macos");
+    const first = deferred<string | undefined>();
+    const second = deferred<string | undefined>();
+    const reads = [first, second];
+    let index = 0;
+    const harness = openComposer({ readClipboardText: () => reads[index++]!.promise });
+    harness.editor.dispatchEvent(chord());
+    harness.editor.dispatchEvent(chord());
+
+    first.resolve("first text");
+    await settle();
+    expect(textOf(harness.editor)).not.toContain("first text");
+    second.resolve("second text");
+    await settle();
+    expect(textOf(harness.editor)).toContain("second text");
     harness.dispose();
   });
 });
