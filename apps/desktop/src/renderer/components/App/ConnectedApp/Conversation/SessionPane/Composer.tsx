@@ -85,9 +85,9 @@ export type ComposerProps = {
    */
   readonly onAttachText: (text: string) => void;
   /**
-   * Reads the system clipboard for the literal-paste escape hatch. The host
-   * owns this because web clipboard permissions are denied; a denied read
-   * resolves to `undefined` and the composer explains it.
+   * Reads the system clipboard for the literal-paste escape hatch. The session
+   * allows the web clipboard for the trusted renderer; a denied or unavailable
+   * read resolves to `undefined` and the composer explains it.
    */
   readonly readClipboardText: () => Promise<string | undefined>;
   /** Session execution and prompt admission state. */

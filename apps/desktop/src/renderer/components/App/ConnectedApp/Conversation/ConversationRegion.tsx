@@ -37,7 +37,7 @@ export type ConversationRegionProps = {
   readonly forms: SessionFormsController;
   readonly permissions: SessionPermissionsController;
   readonly connected: () => boolean;
-  /** Host clipboard access for the composer's literal-paste escape hatch. */
+  /** Reads the system clipboard for the composer's literal-paste gesture; `undefined` when denied or unavailable. */
   readonly readClipboardText: () => Promise<string | undefined>;
 };
 
