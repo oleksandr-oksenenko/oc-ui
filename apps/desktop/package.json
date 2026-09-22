@@ -13,7 +13,7 @@
     "make:mac": "pnpm run build && pnpm run stage:opencode && electron-builder --config electron-builder.config.mjs --mac dir dmg --arm64",
     "predev": "install-electron --no",
     "package:mac": "pnpm run build && pnpm run stage:opencode && electron-builder --config electron-builder.config.mjs --mac dir --arm64",
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev --watch",
     "dev:web": "vp dev --config vite.web.config.ts",
     "opencode:serve": "node scripts/serve-opencode.mjs",
     "verify:browser": "node test/e2e/inspect-browser.mjs",
