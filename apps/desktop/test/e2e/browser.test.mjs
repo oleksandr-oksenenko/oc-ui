@@ -1091,7 +1091,7 @@ describe.sequential("production browser app", () => {
     );
   });
 
-  it("attaches oversized pasted text, keeps it across navigation, and recovers a rejected paste", async () => {
+  it("attaches oversized pasted text, keeps it across navigation, and refuses over-cap pastes", async () => {
     await ensureConnected();
     const location = { directory: await realpath(project) };
     const session = await api.session.create({ title: "Pasted text attachments", location });
@@ -1135,8 +1135,9 @@ describe.sequential("production browser app", () => {
     ]);
     expect(Buffer.from(message.files[0].data, "base64").toString()).toBe(text);
 
-    // A paste over the 2 MiB UTF-8 byte cap is rejected with feedback, keeps
-    // the draft, and retains the source text for an explicit restore.
+    // A paste over the 2 MiB UTF-8 byte cap is refused with an error notice:
+    // nothing is attached, the draft stays empty, and no restore or dismiss
+    // surface exists.
     const overCap = `${"a".repeat(2 * 1024 * 1024 + 1)}FIRST-PAYLOAD`;
     await prompt.evaluate((input, payload) => {
       const clipboardData = new DataTransfer();
@@ -1145,13 +1146,14 @@ describe.sequential("production browser app", () => {
         new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
       );
     }, overCap);
-    const recovery = page.getByRole("alert").filter({ hasText: "2 MiB attachment limit" });
-    await recovery.waitFor();
+    await page.getByRole("alert").filter({ hasText: "2 MiB attachment limit" }).waitFor();
     expect(await prompt.textContent()).toBe("");
     expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "Dismiss", exact: true }).count()).toBe(0);
 
-    // An attachable paste while the recovery is unresolved must neither
-    // attach nor silently clear it; the required action is named instead.
+    // Nothing was retained: an attachable paste now attaches normally and
+    // clears the refusal notice.
     const replacement = "b".repeat(20_000);
     await prompt.evaluate((input, payload) => {
       const clipboardData = new DataTransfer();
@@ -1160,30 +1162,10 @@ describe.sequential("production browser app", () => {
         new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
       );
     }, replacement);
-    await page.getByRole("alert").filter({ hasText: "Restore text or Dismiss" }).waitFor();
-    expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
-    expect(await recovery.count()).toBe(1);
-
-    // A second rejected paste keeps the first retained source.
-    const secondReject = `${"c".repeat(2 * 1024 * 1024 + 1)}SECOND-PAYLOAD`;
-    await prompt.evaluate((input, payload) => {
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/plain", payload);
-      input.dispatchEvent(
-        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-      );
-    }, secondReject);
-    await page.getByRole("alert").filter({ hasText: "Restore text or Dismiss" }).waitFor();
-    expect(await recovery.count()).toBe(1);
-
-    await page.getByRole("button", { name: "Restore text", exact: true }).click();
+    await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).waitFor();
     await expect
-      .poll(() => prompt.evaluate((input) => (input.textContent ?? "").length > 2_000_000))
-      .toBe(true);
-    const restored = await prompt.textContent();
-    expect(restored).toContain("FIRST-PAYLOAD");
-    expect(restored).not.toContain("SECOND-PAYLOAD");
-    expect(await recovery.count()).toBe(0);
+      .poll(() => page.getByRole("alert").filter({ hasText: "2 MiB attachment limit" }).count())
+      .toBe(0);
   });
 
   it("bounds the attachments one draft holds and reports the refusal", async () => {
@@ -1211,22 +1193,16 @@ describe.sequential("production browser app", () => {
     }
     await expect.poll(() => attachments.count()).toBe(16);
 
-    // The draft is at the stated count bound: the next paste is retained for
-    // restore instead of being dropped, and the surface names the release
-    // action.
+    // The draft is at the stated count bound: the next paste is refused with a
+    // notice naming the release action, and offers no restore or dismiss.
     await pasteText(`refused ${"b".repeat(17_000)}`);
     await page
       .getByRole("alert")
       .filter({ hasText: "the draft can hold 16 attachments" })
       .waitFor();
     expect(await attachments.count()).toBe(16);
-    expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(1);
-
-    // Dismissing releases the recovery without inserting the refused text.
-    await page.getByRole("button", { name: "Dismiss", exact: true }).click();
-    await expect
-      .poll(() => page.getByRole("button", { name: "Restore text", exact: true }).count())
-      .toBe(0);
+    expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "Dismiss", exact: true }).count()).toBe(0);
     expect(await prompt.textContent()).toBe("");
 
     // Removing one attachment frees the slot for the next paste.
@@ -1237,7 +1213,7 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
-  it("bounds paste recovery retention and survives adversarial pasted markup", async () => {
+  it("refuses over-cap pastes and survives adversarial pasted markup", async () => {
     await ensureConnected();
     const session = await api.session.create({
       title: "Adversarial paste",
@@ -1247,18 +1223,19 @@ describe.sequential("production browser app", () => {
     const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
     await prompt.click();
 
-    // A rejected paste past the retention bound is not kept at all, so an
-    // arbitrarily large clipboard string cannot pin renderer memory.
-    const overRetention = `${"a".repeat(4 * 1024 * 1024 + 1)}RETENTION-PAYLOAD`;
+    // A paste larger than the former retention bound is over the size cap, so
+    // it is refused with the size notice and retains nothing.
+    const overCap = `${"a".repeat(4 * 1024 * 1024 + 1)}RETENTION-PAYLOAD`;
     await prompt.evaluate((input, payload) => {
       const clipboardData = new DataTransfer();
       clipboardData.setData("text/plain", payload);
       input.dispatchEvent(
         new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
       );
-    }, overRetention);
-    await page.getByRole("alert").filter({ hasText: "too large to keep" }).waitFor();
+    }, overCap);
+    await page.getByRole("alert").filter({ hasText: "2 MiB attachment limit" }).waitFor();
     expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "Dismiss", exact: true }).count()).toBe(0);
     expect(await prompt.textContent()).toBe("");
 
     // Deeply nested HTML is refused before parsing; the text flavor lands and

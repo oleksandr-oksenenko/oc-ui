@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { mount } from "../../../../../test/mount.ts";
 import { Composer } from "./Composer.tsx";
-import type { ComposerPasteRecovery } from "./Composer.tsx";
 
 const unavailableSelection = {
   state: "failed" as const,
@@ -71,7 +70,6 @@ function openComposer(
     readonly action?: "send" | "sending" | "running";
     readonly onAttachFiles?: (files: readonly File[]) => void;
     readonly onAttachText?: (text: string) => void;
-    readonly pasteRecovery?: ComposerPasteRecovery;
     readonly readClipboardText?: () => Promise<string | undefined>;
     readonly files?: readonly File[];
     readonly onSubmit?: () => void;
@@ -93,7 +91,6 @@ function openComposer(
       action={action()}
       onAttachFiles={options.onAttachFiles}
       onAttachText={options.onAttachText}
-      pasteRecovery={options.pasteRecovery}
       readClipboardText={options.readClipboardText}
       files={options.files}
       modelSelection={unavailableSelection}
@@ -758,39 +755,6 @@ describe("Composer literal paste escape hatch", () => {
     item.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
     await vi.waitFor(() => expect(harness.notice()).toContain("Clipboard access"));
     expect(harness.draft()).toBeUndefined();
-    harness.dispose();
-  });
-});
-
-describe("Composer paste recovery surface", () => {
-  it("shows the retained source text and restores it literally", async () => {
-    setPlatform("macos");
-    let retained: string | undefined = "# recovered";
-    const dismiss = vi.fn<() => void>();
-    const harness = openComposer({
-      pasteRecovery: {
-        message: "The pasted text is larger than the 2 MiB attachment limit.",
-        take: () => {
-          const text = retained;
-          retained = undefined;
-          return text;
-        },
-        dismiss,
-      },
-    });
-    const alert = harness.host.querySelector<HTMLElement>('[role="alert"]');
-    expect(alert?.textContent).toContain("2 MiB");
-    const buttons = [...harness.host.querySelectorAll("button")];
-    const restore = buttons.find((button) => button.textContent === "Restore text");
-    const dismissButton = buttons.find((button) => button.textContent === "Dismiss");
-    if (!restore || !dismissButton) throw new Error("recovery actions did not render");
-
-    restore.click();
-    await vi.waitFor(() => expect(textOf(harness.editor)).toContain("# recovered"));
-    expect(harness.editor.querySelector("h1")).toBeNull();
-
-    dismissButton.click();
-    expect(dismiss).toHaveBeenCalledOnce();
     harness.dispose();
   });
 });

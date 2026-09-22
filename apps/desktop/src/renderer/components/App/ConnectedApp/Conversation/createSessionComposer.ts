@@ -18,17 +18,12 @@ import {
   MAX_ATTACHMENT_BYTES,
   MAX_DRAFT_ATTACHMENT_BYTES,
   MAX_DRAFT_ATTACHMENTS,
-  MAX_RETAINED_PASTE_UNITS,
   selectAttachableFiles,
 } from "../../../../opencode/attachments.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { createEffect, createMemo, type Accessor } from "solid-js";
 
-import type {
-  ComposerCatalog,
-  ComposerPasteRecovery,
-  ComposerReview,
-} from "./SessionPane/Composer.tsx";
+import type { ComposerCatalog, ComposerReview } from "./SessionPane/Composer.tsx";
 
 const PROMPT_FAILURE_MESSAGE =
   "Couldn't confirm the message was sent. Your draft has been restored.";
@@ -51,14 +46,9 @@ const ATTACHMENT_LIMIT_LABEL = `${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
 
 const DRAFT_ATTACHMENT_BUDGET_LABEL = `${MAX_DRAFT_ATTACHMENTS} attachments and ${MAX_DRAFT_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
 
-const PASTE_TOO_LARGE_MESSAGE = `The pasted text is larger than the ${ATTACHMENT_LIMIT_LABEL} attachment limit, so it was not attached. Restore it as text instead.`;
+const PASTE_TOO_LARGE_MESSAGE = `The pasted text is larger than the ${ATTACHMENT_LIMIT_LABEL} attachment limit.`;
 
-const PASTE_TOO_LARGE_TO_RETAIN_MESSAGE = `The pasted text is larger than the ${ATTACHMENT_LIMIT_LABEL} attachment limit and too large to keep for restore. Copy a smaller part instead.`;
-
-const PASTE_BUDGET_MESSAGE = `The pasted text was not attached: the draft can hold ${DRAFT_ATTACHMENT_BUDGET_LABEL} in total. Restore it as text, or remove an attachment and paste it again.`;
-
-const PASTE_RECOVERY_PENDING_MESSAGE =
-  "A previous paste is still waiting to be restored or dismissed. Choose Restore text or Dismiss before pasting again.";
+const PASTE_BUDGET_MESSAGE = `The pasted text was not attached: the draft can hold ${DRAFT_ATTACHMENT_BUDGET_LABEL} in total. Remove an attachment and paste it again.`;
 
 const attachmentSizeMessage = (rejected: readonly File[]): string => {
   const first = rejected[0];
@@ -172,15 +162,12 @@ export type SessionComposerController = {
   readonly attachFiles: (files: readonly File[]) => void;
   /**
    * Attaches pasted text. Text over the byte cap or past the draft's aggregate
-   * attachment budget is retained for recovery instead of attached; text past
-   * the recovery bound is refused with a notice.
+   * attachment budget is refused with a notice; nothing is retained.
    */
   readonly attachText: (text: string) => void;
   readonly removeFile: (file: File) => void;
   /** Append annotation text and its screenshots together, or make no change. */
   readonly appendBatch: (sessionID: string, text: string, files: readonly File[]) => void;
-  /** The retained source text of a rejected paste for the selected session. */
-  readonly pasteRecovery: Accessor<ComposerPasteRecovery | undefined>;
   readonly disabled: Accessor<boolean>;
   readonly submitting: Accessor<boolean>;
   readonly error: Accessor<string | undefined>;
@@ -205,26 +192,6 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     if (next.length === 0) delete current[sessionID];
     else current[sessionID] = next;
     effects.registry.set(fileDrafts, current);
-  };
-  /**
-   * Source text retained when a paste could not become an attachment, with the
-   * message that explains its rejection. It is keyed by the session that
-   * initiated the paste, so a navigation never moves it and the recovery
-   * surface always belongs to its origin session.
-   */
-  const pasteRecoveries = Atom.make<
-    Readonly<Record<string, { readonly text: string; readonly message: string } | undefined>>
-  >({});
-  effects.mount(pasteRecoveries);
-  const recoveryState = useAtomValue(() => pasteRecoveries);
-  const setRecovery = (
-    sessionID: string,
-    entry: { readonly text: string; readonly message: string } | undefined,
-  ) => {
-    const current = { ...effects.registry.get(pasteRecoveries) };
-    if (entry === undefined) delete current[sessionID];
-    else current[sessionID] = entry;
-    effects.registry.set(pasteRecoveries, current);
   };
   const attachFiles = (incoming: readonly File[]) => {
     const sessionID = options.selectedID();
@@ -258,77 +225,31 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
    * The clipboard intent for text too large to edit inline. Clipboard strings
    * carry no size metadata, so the UTF-16 length is checked first (a lower
    * bound on UTF-8 bytes) and the encoded `File.size` is the exact cap; the
-   * text is never encoded twice. A rejection retains the source text through
-   * the recovery surface and never attaches to whatever session becomes active
-   * later. An attachable paste still needs room in the draft's aggregate
-   * budget; a paste that does not fit is retained the same way rather than
-   * partially attached or dropped.
+   * text is never encoded twice. A refusal names the reason and keeps the
+   * draft unchanged; nothing is retained.
    */
   const attachText = (text: string) => {
     const sessionID = options.selectedID();
     if (sessionID === undefined || text.trim() === "") return;
-    // A rejected paste keeps its source until the user resolves it. Refusing
-    // the new text instead of replacing or clearing the recovery keeps that
-    // promise and names the action that releases it.
-    if (effects.registry.get(pasteRecoveries)[sessionID] !== undefined) {
-      setAttachmentNotice(sessionID, PASTE_RECOVERY_PENDING_MESSAGE);
-      return;
-    }
     if (text.length > MAX_ATTACHMENT_BYTES) {
-      retainRejected(sessionID, text, PASTE_TOO_LARGE_MESSAGE);
+      setAttachmentNotice(sessionID, PASTE_TOO_LARGE_MESSAGE);
       return;
     }
     const existing = effects.registry.get(fileDrafts)[sessionID] ?? [];
     const file = new File([text], pastedTextName(existing), { type: "text/plain" });
     if (file.size > MAX_ATTACHMENT_BYTES) {
-      retainRejected(sessionID, text, PASTE_TOO_LARGE_MESSAGE);
+      setAttachmentNotice(sessionID, PASTE_TOO_LARGE_MESSAGE);
       return;
     }
     const budget = remainingAttachmentBudget(existing);
     if (budget.count <= 0 || file.size > budget.bytes) {
-      // The source is under the retention bound whenever it is under the text
-      // cap, so a budget rejection is always recoverable.
-      retainRejected(sessionID, text, PASTE_BUDGET_MESSAGE);
+      setAttachmentNotice(sessionID, PASTE_BUDGET_MESSAGE);
       return;
     }
     setFiles(sessionID, [...existing, file]);
     clearCommandAttachmentNotice(sessionID);
     clearAttachmentNotice(sessionID);
   };
-  /**
-   * Retains a rejected paste's source within {@link MAX_RETAINED_PASTE_UNITS},
-   * with the message that explains its rejection. Past the bound nothing is
-   * kept, so an arbitrarily large clipboard string cannot pin the renderer's
-   * memory; the notice names the reason.
-   */
-  const retainRejected = (sessionID: string, text: string, message: string): void => {
-    if (text.length > MAX_RETAINED_PASTE_UNITS) {
-      setAttachmentNotice(sessionID, PASTE_TOO_LARGE_TO_RETAIN_MESSAGE);
-      return;
-    }
-    setRecovery(sessionID, { text, message });
-  };
-  const pasteRecovery = createMemo<ComposerPasteRecovery | undefined>(() => {
-    const sessionID = options.selectedID();
-    if (sessionID === undefined) return undefined;
-    const entry = recoveryState()[sessionID];
-    if (entry === undefined) return undefined;
-    return {
-      message: entry.message,
-      // Both actions stay bound to the origin session captured here.
-      take: () => {
-        const current = effects.registry.get(pasteRecoveries)[sessionID];
-        if (current === undefined) return undefined;
-        setRecovery(sessionID, undefined);
-        clearRecoveryNotice(sessionID);
-        return current.text;
-      },
-      dismiss: () => {
-        setRecovery(sessionID, undefined);
-        clearRecoveryNotice(sessionID);
-      },
-    };
-  });
   const removeFile = (file: File) => {
     const sessionID = options.selectedID();
     if (sessionID === undefined) return;
@@ -410,17 +331,6 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const clearAttachmentNotice = (sessionID: string): void => {
     const notice = effects.registry.get(admission).attachmentNotice;
     if (notice === undefined || notice.sessionID !== sessionID) return;
-    effects.registry.set(admission, {
-      ...effects.registry.get(admission),
-      attachmentNotice: undefined,
-    });
-  };
-  /** Resolving a recovery also releases the notice that asked for it. */
-  const clearRecoveryNotice = (sessionID: string): void => {
-    const notice = effects.registry.get(admission).attachmentNotice;
-    if (notice?.message !== PASTE_RECOVERY_PENDING_MESSAGE || notice.sessionID !== sessionID) {
-      return;
-    }
     effects.registry.set(admission, {
       ...effects.registry.get(admission),
       attachmentNotice: undefined,
@@ -703,7 +613,6 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const clear = (sessionID: string): void => {
     drafts.clear(sessionID);
     setFiles(sessionID, []);
-    setRecovery(sessionID, undefined);
     options.annotations.clear(sessionID);
     options.review.drafts.clearSession(sessionID);
     const failed = failedRequest(sessionID);
@@ -725,7 +634,6 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     attachText,
     removeFile,
     appendBatch,
-    pasteRecovery,
     disabled,
     submitting,
     error: () => {

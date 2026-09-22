@@ -59,10 +59,10 @@ export function serializeMdast(doc: PMNode, renderSkill: RenderSkill): string {
   const content = mergeAdjacentLists(doc);
   // `toMarkdown` terminates the document with a newline; drafts never carry
   // one.
-  return toMarkdown(
-    { type: "root", children: blocks(content, renderSkill) },
-    mdastOptions,
-  ).replace(/\n$/, "");
+  return toMarkdown({ type: "root", children: blocks(content, renderSkill) }, mdastOptions).replace(
+    /\n$/,
+    "",
+  );
 }
 
 function blocks(parent: PMNode, renderSkill: RenderSkill): BlockContent[] {
@@ -124,10 +124,12 @@ function code(node: PMNode): Code {
 }
 
 /** mdast headings only carry the six depths Markdown can express. */
+const HEADING_DEPTHS = [1, 2, 3, 4, 5, 6] as const;
+
 function headingDepth(node: PMNode): Heading["depth"] {
   const level = Math.min(Math.max(Number(node.attrs.level ?? 1), 1), 6);
-  // The clamp keeps the level inside mdast's six depths.
-  return level as Heading["depth"];
+  // The clamp keeps `level` inside the six depths; the fallback also covers NaN.
+  return HEADING_DEPTHS[level - 1] ?? 1;
 }
 
 type MarkFrame = {

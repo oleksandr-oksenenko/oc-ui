@@ -511,25 +511,6 @@
   color: var(--oc-text-muted);
 }
 
-.composer-paste-recovery {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  min-height: 22px;
-  padding: 0 2px 0 7px;
-  color: var(--oc-status-danger);
-  font-size: var(--oc-type-caption-size);
-  line-height: var(--oc-type-caption-line-height);
-}
-
-.composer-paste-recovery-message {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .composer-paste-menu {
   z-index: 20;
   min-width: 180px;

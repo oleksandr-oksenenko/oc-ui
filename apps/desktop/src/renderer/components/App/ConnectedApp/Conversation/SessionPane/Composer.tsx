@@ -28,14 +28,6 @@ export type ComposerReview = {
   readonly onDiscard: (opener: HTMLButtonElement) => void;
 };
 
-/** Source text retained by the attachment owner when a paste could not attach. */
-export type ComposerPasteRecovery = {
-  readonly message: string;
-  /** Returns the retained source text once, so the composer can insert it literally. */
-  readonly take: () => string | undefined;
-  readonly dismiss: () => void;
-};
-
 type ComposerAnnotations = {
   readonly ref?: (button: HTMLButtonElement) => void;
   readonly count: number;
@@ -92,11 +84,9 @@ export type ComposerProps = {
   readonly onRemoveFile?: (file: File) => void;
   /**
    * The attachment owner's clipboard intent for a text paste too large to edit
-   * inline. The owner captures the originating session and retains the result.
+   * inline. The owner refuses oversized text with a notice.
    */
   readonly onAttachText?: (text: string) => void;
-  /** Retained source text from a rejected paste, for the selected session. */
-  readonly pasteRecovery?: ComposerPasteRecovery;
   /**
    * Reads the system clipboard for the literal-paste escape hatch. The host
    * owns this because web clipboard permissions are denied; an unavailable
@@ -523,17 +513,6 @@ export function Composer(props: ComposerProps) {
     });
   };
 
-  const restorePaste = () => {
-    const control = editorControl;
-    // Restoring must not consume the retained source when no editor can
-    // receive it; the recovery stays available for another attempt.
-    if (control === undefined) return;
-    const text = props.pasteRecovery?.take();
-    if (text === undefined) return;
-    control.applyPaste({ route: "literal", text });
-    control.focus();
-  };
-
   onMount(() => {
     const element = form;
     if (element === undefined) return;
@@ -722,24 +701,6 @@ export function Composer(props: ComposerProps) {
               )}
             </For>
           </ul>
-        </Show>
-        <Show when={props.pasteRecovery}>
-          {(recovery) => (
-            <div class="composer-paste-recovery" role="alert">
-              <span class="composer-paste-recovery-message">{recovery().message}</span>
-              <Button type="button" size="small" variant="ghost-muted" onClick={restorePaste}>
-                Restore text
-              </Button>
-              <Button
-                type="button"
-                size="small"
-                variant="ghost-muted"
-                onClick={() => recovery().dismiss()}
-              >
-                Dismiss
-              </Button>
-            </div>
-          )}
         </Show>
         <Show when={pasteNotice()}>
           <p class="composer-status composer-status--error" role="alert">

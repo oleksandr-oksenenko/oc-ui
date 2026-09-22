@@ -309,7 +309,6 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               files={props.composer.files()}
               onAttachFiles={props.composer.attachFiles}
               onAttachText={props.composer.attachText}
-              pasteRecovery={props.composer.pasteRecovery()}
               readClipboardText={props.readClipboardText}
               onRemoveFile={props.composer.removeFile}
               action={composerAction()}

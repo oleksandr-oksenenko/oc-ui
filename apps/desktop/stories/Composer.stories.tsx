@@ -5,10 +5,7 @@ import { createSignal } from "solid-js";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
-import type {
-  ComposerPasteRecovery,
-  ComposerReview,
-} from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
+import type { ComposerReview } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
 import { previewImageFile } from "./image-fixtures.ts";
 
@@ -670,45 +667,6 @@ export const PasteRouting: Story = {
       // The Markdown markers and the clipboard's HTML flavor add no structure.
       await expect(prompt.querySelectorAll("li").length).toBe(lists);
       await expect(prompt.textContent).toContain("- not a list");
-    });
-  },
-};
-
-export const PasteRecovery: Story = {
-  render: () => {
-    const [value, setValue] = createSignal("");
-    const [recovery, setRecovery] = createSignal<ComposerPasteRecovery | undefined>({
-      message:
-        "The pasted text is larger than the 2 MiB attachment limit, so it was not attached. Restore it as text instead.",
-      take: () => {
-        setRecovery(undefined);
-        return "# recovered heading";
-      },
-      dismiss: () => setRecovery(undefined),
-    });
-    return (
-      <Composer
-        value={value()}
-        disabled={false}
-        action="send"
-        pasteRecovery={recovery()}
-        modelSelection={composerModelSelection()}
-        agentSelection={composerAgentSelection()}
-        onInput={setValue}
-        onSubmit={() => undefined}
-      />
-    );
-  },
-  play: async ({ canvasElement, step }) => {
-    const canvas = within(canvasElement);
-    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-
-    await step("The retained source is visible and restore inserts it literally", async () => {
-      await expect(canvas.getByRole("alert")).toHaveTextContent("2 MiB");
-      await userEvent.click(canvas.getByRole("button", { name: "Restore text" }));
-      await waitFor(() => expect(prompt).toHaveTextContent("# recovered heading"));
-      await expect(prompt.querySelector("h1")).toBeNull();
-      await expect(canvas.queryByRole("alert")).toBeNull();
     });
   },
 };

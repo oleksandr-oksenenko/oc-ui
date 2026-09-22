@@ -61,6 +61,7 @@ In the app:
 The app owns clipboard acquisition and attachment memory: a bounded `text/html`
 inspection (1 MiB / 512 nesting levels) with the text flavor as fallback, a
 16,384 UTF-16-unit routing threshold for inline text, a 2 MiB UTF-8 cap per text
-attachment, and per-session draft bounds (16 attachments / 24 MiB, one retained
-paste recovery of at most 4 Mi UTF-16 units). The numbers and their refusal
-behavior are documented in `docs/file-attachments-design.md`.
+attachment, and per-session draft bounds (16 attachments / 24 MiB). An over-cap
+or over-budget text paste is refused with an error notice and retains nothing.
+The numbers and their refusal behavior are documented in
+`docs/file-attachments-design.md`.

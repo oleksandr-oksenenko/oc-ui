@@ -34,15 +34,6 @@ export const MAX_DRAFT_ATTACHMENTS = 16;
 export const MAX_DRAFT_ATTACHMENT_BYTES = 24 * 1024 * 1024;
 
 /**
- * The UTF-16 code-unit bound on the source text retained for one rejected
- * paste. A session holds at most one such recovery entry (a later paste is
- * refused until the entry is restored or dismissed), so this is the per-session
- * recovery memory bound. Text past it is not retained at all rather than
- * truncated; the notice names the bound so the user can paste a smaller part.
- */
-export const MAX_RETAINED_PASTE_UNITS = 4 * 1024 * 1024;
-
-/**
  * The file-bearing subset of `DataTransferItem`. A real `DataTransferItem` is
  * structurally assignable, and tests can build one without a DOM.
  */
