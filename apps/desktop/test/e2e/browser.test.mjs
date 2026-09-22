@@ -1137,7 +1137,7 @@ describe.sequential("production browser app", () => {
 
     // A paste over the 2 MiB UTF-8 byte cap is rejected with feedback, keeps
     // the draft, and retains the source text for an explicit restore.
-    const overCap = "a".repeat(2 * 1024 * 1024 + 1);
+    const overCap = `${"a".repeat(2 * 1024 * 1024 + 1)}FIRST-PAYLOAD`;
     await prompt.evaluate((input, payload) => {
       const clipboardData = new DataTransfer();
       clipboardData.setData("text/plain", payload);
@@ -1150,10 +1150,39 @@ describe.sequential("production browser app", () => {
     expect(await prompt.textContent()).toBe("");
     expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
 
+    // An attachable paste while the recovery is unresolved must neither
+    // attach nor silently clear it; the required action is named instead.
+    const replacement = "b".repeat(20_000);
+    await prompt.evaluate((input, payload) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", payload);
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+    }, replacement);
+    await page.getByRole("alert").filter({ hasText: "Restore text or Dismiss" }).waitFor();
+    expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
+    expect(await recovery.count()).toBe(1);
+
+    // A second rejected paste keeps the first retained source.
+    const secondReject = `${"c".repeat(2 * 1024 * 1024 + 1)}SECOND-PAYLOAD`;
+    await prompt.evaluate((input, payload) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", payload);
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+    }, secondReject);
+    await page.getByRole("alert").filter({ hasText: "Restore text or Dismiss" }).waitFor();
+    expect(await recovery.count()).toBe(1);
+
     await page.getByRole("button", { name: "Restore text", exact: true }).click();
     await expect
       .poll(() => prompt.evaluate((input) => (input.textContent ?? "").length > 2_000_000))
       .toBe(true);
+    const restored = await prompt.textContent();
+    expect(restored).toContain("FIRST-PAYLOAD");
+    expect(restored).not.toContain("SECOND-PAYLOAD");
     expect(await recovery.count()).toBe(0);
   });
 

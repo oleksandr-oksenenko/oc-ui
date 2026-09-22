@@ -51,6 +51,9 @@ const TEXT_ATTACHMENT_LIMIT_LABEL = `${MAX_TEXT_ATTACHMENT_BYTES / (1024 * 1024)
 
 const PASTE_TOO_LARGE_MESSAGE = `The pasted text is larger than the ${TEXT_ATTACHMENT_LIMIT_LABEL} attachment limit, so it was not attached. Restore it as text instead.`;
 
+const PASTE_RECOVERY_PENDING_MESSAGE =
+  "A previous paste is still waiting to be restored or dismissed. Choose Restore text or Dismiss before pasting again.";
+
 const attachmentSizeMessage = (rejected: readonly File[]): string => {
   const first = rejected[0];
   if (rejected.length === 1 && first !== undefined) {
@@ -235,6 +238,13 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const attachText = (text: string) => {
     const sessionID = options.selectedID();
     if (sessionID === undefined || text.trim() === "") return;
+    // A rejected paste keeps its source until the user resolves it. Refusing
+    // the new text instead of replacing or clearing the recovery keeps that
+    // promise and names the action that releases it.
+    if (effects.registry.get(pasteRecoveries)[sessionID] !== undefined) {
+      setAttachmentNotice(sessionID, PASTE_RECOVERY_PENDING_MESSAGE);
+      return;
+    }
     if (text.length > MAX_TEXT_ATTACHMENT_BYTES) {
       setRecovery(sessionID, text);
       return;
@@ -246,7 +256,6 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       return;
     }
     setFiles(sessionID, [...existing, file]);
-    setRecovery(sessionID, undefined);
     clearCommandAttachmentNotice(sessionID);
     clearAttachmentNotice(sessionID);
   };
@@ -262,9 +271,13 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
         const current = effects.registry.get(pasteRecoveries)[sessionID];
         if (current === undefined) return undefined;
         setRecovery(sessionID, undefined);
+        clearRecoveryNotice(sessionID);
         return current.text;
       },
-      dismiss: () => setRecovery(sessionID, undefined),
+      dismiss: () => {
+        setRecovery(sessionID, undefined);
+        clearRecoveryNotice(sessionID);
+      },
     };
   });
   const removeFile = (file: File) => {
@@ -348,6 +361,17 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const clearAttachmentNotice = (sessionID: string): void => {
     const notice = effects.registry.get(admission).attachmentNotice;
     if (notice === undefined || notice.sessionID !== sessionID) return;
+    effects.registry.set(admission, {
+      ...effects.registry.get(admission),
+      attachmentNotice: undefined,
+    });
+  };
+  /** Resolving a recovery also releases the notice that asked for it. */
+  const clearRecoveryNotice = (sessionID: string): void => {
+    const notice = effects.registry.get(admission).attachmentNotice;
+    if (notice?.message !== PASTE_RECOVERY_PENDING_MESSAGE || notice.sessionID !== sessionID) {
+      return;
+    }
     effects.registry.set(admission, {
       ...effects.registry.get(admission),
       attachmentNotice: undefined,

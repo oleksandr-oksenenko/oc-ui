@@ -302,14 +302,58 @@ describe("createSessionComposer", () => {
     root.composer.attachText(over);
     root.composer.pasteRecovery()?.dismiss();
     expect(root.composer.pasteRecovery()).toBeUndefined();
+    // Dismissing releases the draft for a new attachment.
+    root.composer.attachText("small");
+    expect(root.composer.files().map((file) => file.name)).toEqual(["pasted-text.txt"]);
 
     root.composer.attachText(over);
-    root.composer.attachText("small");
-    // A successful attachment replaces the recovery surface.
-    expect(root.composer.pasteRecovery()).toBeUndefined();
     root.composer.clear("session");
     expect(root.composer.files()).toEqual([]);
     expect(root.composer.pasteRecovery()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("refuses a successful paste while a rejected paste is unresolved", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const over = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    root.composer.attachText(over);
+    expect(root.composer.pasteRecovery()?.message).toContain("2 MiB");
+
+    // An ordinary paste must not attach over the rejected source or clear it.
+    root.composer.attachText("small");
+    expect(root.composer.files()).toEqual([]);
+    expect(root.composer.error()).toContain("Restore text or Dismiss");
+    expect(root.composer.pasteRecovery()?.take()).toBe(over);
+    // Resolving the recovery releases the notice with it.
+    expect(root.composer.error()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("keeps the first rejected paste when another rejected paste arrives", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const first = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    const second = "b".repeat(MAX_TEXT_ATTACHMENT_BYTES + 2);
+    root.composer.attachText(first);
+    root.composer.attachText(second);
+    expect(root.composer.files()).toEqual([]);
+    expect(root.composer.error()).toContain("Restore text or Dismiss");
+    // The newest rejection must not overwrite the retained source.
+    expect(root.composer.pasteRecovery()?.take()).toBe(first);
+    root.dispose();
+  });
+
+  it("restores the retained source and accepts the next paste after resolution", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const over = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    root.composer.attachText(over);
+    root.composer.attachText("small");
+    expect(root.composer.pasteRecovery()?.take()).toBe(over);
+    expect(root.composer.files()).toEqual([]);
+    root.composer.attachText("small");
+    expect(root.composer.files().map((file) => file.name)).toEqual(["pasted-text.txt"]);
     root.dispose();
   });
 

@@ -486,10 +486,14 @@ export function Composer(props: ComposerProps) {
   };
 
   const restorePaste = () => {
+    const control = editorControl;
+    // Restoring must not consume the retained source when no editor can
+    // receive it; the recovery stays available for another attempt.
+    if (control === undefined) return;
     const text = props.pasteRecovery?.take();
     if (text === undefined) return;
-    editorControl?.applyPaste({ route: "literal", text });
-    editorControl?.focus();
+    control.applyPaste({ route: "literal", text });
+    control.focus();
   };
 
   onMount(() => {
