@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  MAX_HTML_INSPECTION_UNITS,
-  htmlToPlainText,
-  readClipboardFiles,
-  readClipboardText,
-} from "./pasteClipboard.ts";
-import { MAX_HTML_NESTING } from "./pasteHtml.ts";
+import { htmlToPlainText, readClipboardFiles, readClipboardText } from "./pasteClipboard.ts";
+import { MAX_HTML_INSPECTION_UNITS, MAX_HTML_NESTING } from "./pasteHtml.ts";
 
 /** A clipboard whose `types` match the provided flavors unless overridden. */
 const clipboard = (

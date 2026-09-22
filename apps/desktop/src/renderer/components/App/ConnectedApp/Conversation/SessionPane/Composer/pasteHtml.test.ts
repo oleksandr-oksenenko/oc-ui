@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { MAX_HTML_NESTING, sanitizePastedHtml } from "./pasteHtml.ts";
+import {
+  MAX_HTML_INSPECTION_UNITS,
+  MAX_HTML_NESTING,
+  exceedsHtmlNesting,
+  sanitizePastedHtml,
+} from "./pasteHtml.ts";
 
 describe("sanitizePastedHtml", () => {
   it("keeps allowed links and images with web URLs", () => {
@@ -54,7 +59,49 @@ describe("sanitizePastedHtml", () => {
   });
 });
 
+describe("exceedsHtmlNesting", () => {
+  it("counts a non-void self-closing tag as an open element", () => {
+    // HTML reads `<div/>` as an open element; only void tags self-close.
+    expect(exceedsHtmlNesting("<div/>".repeat(3), 2)).toBe(true);
+    expect(exceedsHtmlNesting('<div class="x"/>'.repeat(3), 2)).toBe(true);
+    expect(exceedsHtmlNesting("<div/>".repeat(2), 2)).toBe(false);
+    // Void elements never nest, whatever their spelling.
+    expect(exceedsHtmlNesting("<br/>".repeat(600))).toBe(false);
+    expect(exceedsHtmlNesting("<img>".repeat(600))).toBe(false);
+  });
+
+  it("ignores a closer that does not match the innermost open element", () => {
+    // HTML ignores `</bogus>` instead of closing the div, so repeated
+    // `<div></bogus>` still nests one element per div.
+    expect(exceedsHtmlNesting("<div></bogus><div>", 1)).toBe(true);
+    expect(exceedsHtmlNesting("<div><span></bogus></bogus><div>", 2)).toBe(true);
+    // A closer that matches the innermost element still closes it.
+    expect(exceedsHtmlNesting("<div></div><div>", 1)).toBe(false);
+    // An outer closer cannot reach past the innermost element.
+    expect(exceedsHtmlNesting("<div><span></div><div><span>", 2)).toBe(true);
+  });
+});
+
 describe("sanitizePastedHtml adversarial input", () => {
+  it("refuses self-closing and unmatched-closer nesting before parsing", () => {
+    const payloads = [
+      `${"<div/>".repeat(MAX_HTML_NESTING + 1)}deep`,
+      `${"<div></bogus>".repeat(MAX_HTML_NESTING + 1)}deep`,
+    ];
+    for (const html of payloads) {
+      const started = performance.now();
+      expect(sanitizePastedHtml(html)).toBe("");
+      expect(performance.now() - started).toBeLessThan(1_000);
+    }
+  });
+
+  it("refuses a payload past the inspection size without sanitizing it", () => {
+    const plain = "a".repeat(MAX_HTML_INSPECTION_UNITS + 1);
+    expect(sanitizePastedHtml(plain)).toBe("");
+    // One unit shorter is sanitized: the size bound, not the text, refuses it.
+    expect(sanitizePastedHtml(plain.slice(0, MAX_HTML_INSPECTION_UNITS))).toContain("a");
+  });
+
   it("refuses markup nested past the bound before parsing it", () => {
     const html = `${"<div>".repeat(50_000)}deep${"</div>".repeat(50_000)}`;
     const started = performance.now();

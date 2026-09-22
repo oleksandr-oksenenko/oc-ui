@@ -1305,6 +1305,53 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
+  it("refuses self-closing and unmatched-closer nesting before parsing", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Nesting counterexamples",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    await prompt.click();
+
+    const pasteHtml = (html, text) =>
+      prompt.evaluate(
+        (input, payload) => {
+          const started = performance.now();
+          const clipboardData = new DataTransfer();
+          clipboardData.setData("text/html", payload.html);
+          if (payload.text !== undefined) clipboardData.setData("text/plain", payload.text);
+          input.dispatchEvent(
+            new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+          );
+          return performance.now() - started;
+        },
+        { html, text },
+      );
+
+    // `<div/>` opens an element in HTML even though a textual scan can mistake
+    // it for a self-closed one. With no text fallback the payload is refused
+    // and the composer explains the inspection bound.
+    const selfClosing = `${"<div/>".repeat(20_000)}SELF-CLOSING`;
+    expect(await pasteHtml(selfClosing)).toBeLessThan(2_000);
+    await page.getByRole("alert").filter({ hasText: "too large or too deeply nested" }).waitFor();
+    expect(await prompt.textContent()).toBe("");
+
+    // With a text flavor the fallback lands and no div is inserted.
+    expect(await pasteHtml(selfClosing, "SELF-CLOSING fallback")).toBeLessThan(2_000);
+    await expect.poll(() => prompt.textContent()).toContain("SELF-CLOSING fallback");
+    expect(await prompt.locator("div").count()).toBe(0);
+
+    // `</bogus>` closes nothing, so repeated `<div></bogus>` still nests one
+    // element per div; the scan must not let the closers offset them.
+    const unmatched = `${"<div></bogus>".repeat(20_000)}UNMATCHED`;
+    expect(await pasteHtml(unmatched, "UNMATCHED fallback")).toBeLessThan(2_000);
+    await expect.poll(() => prompt.textContent()).toContain("UNMATCHED fallback");
+    expect(await prompt.locator("div").count()).toBe(0);
+    expect(errors).toEqual([]);
+  });
+
   it("pastes literally from the host clipboard after Mod+Shift+V and the context action", async () => {
     await ensureConnected();
     const session = await api.session.create({

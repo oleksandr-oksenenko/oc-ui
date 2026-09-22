@@ -2,7 +2,7 @@ import {
   collectTransferFiles,
   type FileTransferLike,
 } from "../../../../../../opencode/attachments.ts";
-import { MAX_HTML_NESTING, exceedsHtmlNesting } from "./pasteHtml.ts";
+import { MAX_HTML_INSPECTION_UNITS, MAX_HTML_NESTING, exceedsHtmlNesting } from "./pasteHtml.ts";
 import { TEXT_ATTACHMENT_LIMIT } from "./pasteRoute.ts";
 
 /**
@@ -11,14 +11,6 @@ import { TEXT_ATTACHMENT_LIMIT } from "./pasteRoute.ts";
  * inspects the available types first, bounds every string immediately after
  * acquisition, and derives the effective text before classification.
  */
-
-/**
- * HTML inspection bound, in UTF-16 code units. Parsing cost grows with the
- * string, so the HTML flavor has its own bound instead of sharing the routing
- * threshold or the attachment byte cap. HTML beyond it is not parsed; the text
- * flavor (when present) still routes normally.
- */
-export const MAX_HTML_INSPECTION_UNITS = 1_048_576;
 
 const uriListToText = (value: string): string => value.replace(/\r?\n/g, " ");
 
