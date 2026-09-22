@@ -63,16 +63,13 @@ const isLiteralPasteChord = (event: KeyboardEvent): boolean => {
 };
 
 const HTML_TOO_LARGE_NOTICE =
-  "The copied content is too large or too deeply nested to inspect, so it was not inserted. Copy a smaller part and paste again.";
+  "The copied content is too large to inspect, so it was not inserted. Copy a smaller part and paste again.";
 
 const UNSUPPORTED_HTML_NOTICE =
   "That copied content has no text this editor can hold. Copy it as plain text and paste again.";
 
 const CLIPBOARD_UNAVAILABLE_NOTICE =
   "Clipboard access is unavailable in this app. Press the paste shortcut instead.";
-
-const LITERAL_TOO_LARGE_NOTICE =
-  "That paste is too large to insert here. Copy a smaller part and paste again.";
 
 export type ComposerProps = {
   readonly value: string;
@@ -84,15 +81,15 @@ export type ComposerProps = {
   readonly onRemoveFile?: (file: File) => void;
   /**
    * The attachment owner's clipboard intent for a text paste too large to edit
-   * inline. The owner refuses oversized text with a notice.
+   * inline.
    */
-  readonly onAttachText?: (text: string) => void;
+  readonly onAttachText: (text: string) => void;
   /**
    * Reads the system clipboard for the literal-paste escape hatch. The host
-   * owns this because web clipboard permissions are denied; an unavailable
-   * read resolves to `undefined` and the composer explains it.
+   * owns this because web clipboard permissions are denied; a denied read
+   * resolves to `undefined` and the composer explains it.
    */
-  readonly readClipboardText?: () => Promise<string | undefined>;
+  readonly readClipboardText: () => Promise<string | undefined>;
   /** Session execution and prompt admission state. */
   readonly action: "send" | "sending" | "running";
   /** Disables submission. Omit onStop when stopping is unavailable. */
@@ -418,7 +415,7 @@ export function Composer(props: ComposerProps) {
       files,
       text: read.text,
       html: read.html,
-      htmlOversize: read.htmlOversize,
+      htmlTooLarge: read.htmlTooLarge,
       codeBlock,
     });
     const consume = () => {
@@ -429,7 +426,7 @@ export function Composer(props: ComposerProps) {
       case "noop":
         consume();
         setPasteNotice(
-          decision.reason === "html-inspection-limit"
+          decision.reason === "html-too-large"
             ? HTML_TOO_LARGE_NOTICE
             : decision.reason === "unsupported-html"
               ? UNSUPPORTED_HTML_NOTICE
@@ -444,7 +441,6 @@ export function Composer(props: ComposerProps) {
         attach(files);
         return;
       case "attachment-text":
-        if (props.onAttachText === undefined) return;
         consume();
         setPasteNotice(undefined);
         if (!isRepeatedTextAttachment(read.text, event.timeStamp)) props.onAttachText(read.text);
@@ -465,21 +461,17 @@ export function Composer(props: ComposerProps) {
   };
 
   /**
-   * The context-menu escape hatch, also used by the keyboard chord. It uses the
-   * same literal insertion, keeps focus in the editor, and explains when the
-   * clipboard cannot be read instead of failing silently.
+   * The context-menu escape hatch, also used by the keyboard chord. It reads
+   * the host clipboard and inserts its text through the editor's plain-text
+   * route, so Markdown and HTML on the clipboard are never interpreted. Oversized
+   * text still becomes an attachment, and a denied read is explained instead of
+   * failing silently.
    */
   const pasteAsPlainText = () => {
-    const readClipboard = props.readClipboardText;
-    if (readClipboard === undefined) {
-      setPasteNotice(CLIPBOARD_UNAVAILABLE_NOTICE);
-      editorControl?.focus();
-      return;
-    }
     const sessionID = props.sessionID;
     literalRead += 1;
     const generation = literalRead;
-    void readClipboard().then((text) => {
+    void props.readClipboardText().then((text) => {
       // Only the latest read may insert, and only into the session that
       // started it. A -> B -> A still invalidates, because the session change
       // advanced the generation.
@@ -496,16 +488,12 @@ export function Composer(props: ComposerProps) {
       // Even the explicit literal gesture must not insert an enormous payload;
       // it becomes a text attachment like the automatic route.
       if (text.length >= TEXT_ATTACHMENT_LIMIT) {
-        if (props.onAttachText !== undefined) {
-          setPasteNotice(undefined);
-          props.onAttachText(text);
-        } else {
-          setPasteNotice(LITERAL_TOO_LARGE_NOTICE);
-        }
+        setPasteNotice(undefined);
+        props.onAttachText(text);
         editorControl?.focus();
         return undefined;
       }
-      if (text !== "") editorControl?.applyPaste({ route: "literal", text });
+      if (text !== "") editorControl?.applyPaste({ route: "plain-text", text });
       editorControl?.focus();
       setPasteNotice(undefined);
       return undefined;

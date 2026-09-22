@@ -38,7 +38,7 @@ export type ConversationRegionProps = {
   readonly permissions: SessionPermissionsController;
   readonly connected: () => boolean;
   /** Host clipboard access for the composer's literal-paste escape hatch. */
-  readonly readClipboardText?: () => Promise<string | undefined>;
+  readonly readClipboardText: () => Promise<string | undefined>;
 };
 
 const formRenderKey = (form: { readonly sessionID: string; readonly id: string }): string =>

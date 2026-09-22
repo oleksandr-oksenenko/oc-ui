@@ -186,8 +186,8 @@ export const fixtures: readonly PasteFixture[] = [
     name: "lone-url",
     source: "Copy Link",
     payload: { text: loneUrl },
-    route: "rich-link",
-    why: "The whole payload is one http(s) URL; the chip is deferred, so it stays ordinary text for now.",
+    route: "plain-text",
+    why: "The whole payload is one http(s) URL; without markup evidence it is ordinary text that keeps its characters.",
   },
   {
     name: "huge-prose",

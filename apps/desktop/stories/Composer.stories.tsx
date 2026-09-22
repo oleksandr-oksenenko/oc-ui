@@ -6,7 +6,11 @@ import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import type { ComposerReview } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
-import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
+import {
+  composerAgentSelection,
+  composerModelSelection,
+  composerPasteProps,
+} from "./composer-fixtures.ts";
 import { previewImageFile } from "./image-fixtures.ts";
 
 const meta = {
@@ -44,6 +48,7 @@ export const Idle: Story = {
     const [agentID, setAgentID] = createSignal("build");
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="send"
@@ -128,6 +133,7 @@ export const PastedFiles: Story = {
     ]);
     return (
       <Composer
+        {...composerPasteProps}
         value=""
         files={files()}
         onAttachFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
@@ -159,6 +165,7 @@ export const DroppedFiles: Story = {
     const [value, setValue] = createSignal("keep this text");
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         files={files()}
         onAttachFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
@@ -211,6 +218,7 @@ export const MarkdownDraft: Story = {
     const [value, setValue] = createSignal("");
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="send"
@@ -258,6 +266,7 @@ export const ImageAttachment: Story = {
     const [files, setFiles] = createSignal<readonly File[]>([previewImageFile("Screenshot.png")]);
     return (
       <Composer
+        {...composerPasteProps}
         value=""
         files={files()}
         onRemoveFile={() => setFiles([])}
@@ -289,6 +298,7 @@ export const LoadingPickers: Story = {
     const [value, setValue] = createSignal("Explain the latest change");
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="send"
@@ -304,6 +314,7 @@ export const LoadingPickers: Story = {
 export const DefaultAgent: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value=""
       disabled={false}
       action="send"
@@ -318,6 +329,7 @@ export const DefaultAgent: Story = {
 export const EmptyAgents: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value=""
       disabled={false}
       action="send"
@@ -332,6 +344,7 @@ export const EmptyAgents: Story = {
 export const MissingAgent: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value=""
       disabled={false}
       action="send"
@@ -350,6 +363,7 @@ export const Multiline: Story = {
     );
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="send"
@@ -367,6 +381,7 @@ export const RunningDraft: Story = {
     const [value, setValue] = createSignal("This draft remains editable while the run is active.");
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="running"
@@ -412,6 +427,7 @@ export const RunningDraft: Story = {
 export const ContextUsage: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value=""
       disabled={false}
       action="send"
@@ -433,6 +449,7 @@ export const ContextUsage: Story = {
 export const Submitting: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value="Send this prompt"
       disabled
       action="sending"
@@ -449,6 +466,7 @@ export const AdmissionError: Story = {
     const [value, setValue] = createSignal("The draft is preserved after admission fails.");
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="send"
@@ -484,6 +502,7 @@ export const AdmissionError: Story = {
 export const EmptyDisabled: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value=""
       disabled
       action="send"
@@ -504,6 +523,7 @@ export const ReviewAttachment: Story = {
     });
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="send"
@@ -520,6 +540,7 @@ export const ReviewAttachment: Story = {
 export const UnavailableWhileDisabled: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value="Unavailable while reconnecting"
       disabled
       action="send"
@@ -543,6 +564,7 @@ export const UnavailableWhileDisabled: Story = {
 export const PromptFocused: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value="A focused prompt exposes the canonical composer focus treatment."
       disabled={false}
       action="send"
@@ -560,6 +582,7 @@ export const PromptFocused: Story = {
 export const SwitchingSelection: Story = {
   render: () => (
     <Composer
+      {...composerPasteProps}
       value="The draft remains visible while the model selection changes."
       disabled={false}
       action="send"
@@ -575,6 +598,7 @@ export const NarrowLongSelections: Story = {
   globals: { viewport: { value: "mobile", isRotated: false } },
   render: () => (
     <Composer
+      {...composerPasteProps}
       value="Review the complete remote workspace context and preserve the server-provided path."
       disabled={false}
       action="send"
@@ -618,6 +642,7 @@ export const PasteRouting: Story = {
     const [value, setValue] = createSignal("");
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="send"
@@ -679,6 +704,7 @@ export const OversizedLiteralPaste: Story = {
     let read = 0;
     return (
       <Composer
+        {...composerPasteProps}
         value={value()}
         disabled={false}
         action="send"

@@ -3,7 +3,11 @@ import { createSignal, Show } from "solid-js";
 
 import { Composer } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { fromDraft, toDraft } from "@oc-ui/prompt-editor";
-import { composerAgentSelection, composerModelSelection } from "../composer-fixtures.ts";
+import {
+  composerAgentSelection,
+  composerModelSelection,
+  composerPasteProps,
+} from "../composer-fixtures.ts";
 import "./markdown-behavior.css";
 
 /**
@@ -24,6 +28,7 @@ export function MarkdownBehavior(props: {
     <div class="markdown-story-frame">
       <p class="markdown-story-note">{props.note}</p>
       <Composer
+        {...composerPasteProps}
         value={value()}
         skills={skills()}
         action="send"

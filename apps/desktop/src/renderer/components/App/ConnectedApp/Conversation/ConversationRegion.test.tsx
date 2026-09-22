@@ -164,6 +164,7 @@ function setup(
         forms={formsController}
         permissions={permissionsController}
         connected={connected}
+        readClipboardText={() => Promise.resolve(undefined)}
       />
     )),
   );

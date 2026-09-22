@@ -1238,8 +1238,8 @@ describe.sequential("production browser app", () => {
     expect(await page.getByRole("button", { name: "Dismiss", exact: true }).count()).toBe(0);
     expect(await prompt.textContent()).toBe("");
 
-    // Deeply nested HTML is refused before parsing; the text flavor lands and
-    // the editor stays responsive.
+    // Deeply nested HTML is refused by the sanitizer before the schema parser
+    // sees it; the text flavor lands and the editor stays responsive.
     const deepHtml = `${"<div>".repeat(20_000)}DEEP-ACCEPTANCE${"</div>".repeat(20_000)}`;
     const deepElapsed = await prompt.evaluate((input, html) => {
       const started = performance.now();
@@ -1317,12 +1317,13 @@ describe.sequential("production browser app", () => {
       );
 
     // `<div/>` opens an element in HTML even though a textual scan can mistake
-    // it for a self-closed one. With no text fallback the payload is refused
-    // and the composer explains the inspection bound.
+    // it for a self-closed one. Rich parsing refuses the nesting, but the
+    // reader's iterative extraction still derives the payload's text and the
+    // fallback inserts it exactly once, with no element tree.
     const selfClosing = `${"<div/>".repeat(20_000)}SELF-CLOSING`;
     expect(await pasteHtml(selfClosing)).toBeLessThan(2_000);
-    await page.getByRole("alert").filter({ hasText: "too large or too deeply nested" }).waitFor();
-    expect(await prompt.textContent()).toBe("");
+    await expect.poll(() => prompt.textContent()).toContain("SELF-CLOSING");
+    expect(await prompt.locator("div").count()).toBe(0);
 
     // With a text flavor the fallback lands and no div is inserted.
     expect(await pasteHtml(selfClosing, "SELF-CLOSING fallback")).toBeLessThan(2_000);

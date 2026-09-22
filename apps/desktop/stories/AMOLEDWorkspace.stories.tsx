@@ -35,7 +35,11 @@ import { WorkspaceAddProject } from "./workspace-showcase/WorkspaceAddProject.ts
 import { WorkspaceBrowser } from "./workspace-showcase/WorkspaceBrowser.tsx";
 import { createWorkspacePermissions } from "./workspace-showcase/permission-fixture.ts";
 import { storySession } from "./session-fixtures.ts";
-import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
+import {
+  composerAgentSelection,
+  composerModelSelection,
+  composerPasteProps,
+} from "./composer-fixtures.ts";
 import { previewImageBase64 } from "./image-fixtures.ts";
 import { workspaceQuestionForm } from "./question-form-fixtures.ts";
 
@@ -434,6 +438,7 @@ function WorkspaceShowcaseFixture() {
                 }
                 composer={
                   <Composer
+                    {...composerPasteProps}
                     value={draft()}
                     disabled={false}
                     action={running(selectedID()) ? "running" : "send"}

@@ -11,7 +11,9 @@ import createDOMPurify from "dompurify";
 // HTML uses around its text. A tag outside this list keeps its text content
 // (DOMPurify's default), so no visible characters are lost with it; the
 // wrappers are listed so `data-pm-slice` context survives a ProseMirror paste.
-const ALLOWED_TAGS = [
+// This is the sanitizer's allowance only; richness evidence and text
+// boundaries are separate sets with their own rules.
+const SANITIZER_ALLOWED_TAGS = [
   "a",
   "article",
   "aside",
@@ -72,12 +74,12 @@ const purifier = createDOMPurify(window);
 export const MAX_HTML_NESTING = 512;
 
 /**
- * HTML inspection bound, in UTF-16 code units. The sanitizer parses the whole
- * string, so its cost grows with the size; a payload past this bound is refused
- * without parsing. This is also the bound for ProseMirror's direct
- * `transformPastedHTML` hook, which the clipboard reader cannot guard: the
- * sanitizer is the last gate before the schema parser. The composer's text
- * flavor takes over for a refused payload.
+ * HTML inspection bound, in UTF-16 code units. Both the sanitizer and the
+ * clipboard reader's text extraction parse the whole string, so cost grows with
+ * the size; the reader refuses to begin above this bound and the sanitizer
+ * refuses to parse, which also covers ProseMirror's direct
+ * `transformPastedHTML` hook: the sanitizer is the last gate before the schema
+ * parser. The composer's text flavor takes over for a refused payload.
  */
 export const MAX_HTML_INSPECTION_UNITS = 1_048_576;
 
@@ -145,18 +147,20 @@ purifier.addHook("uponSanitizeAttribute", (_node, data) => {
  * pasted link without an allowed scheme keeps its text and a pasted image
  * without an allowed source is removed instead of rendering broken.
  *
- * A payload over {@link MAX_HTML_INSPECTION_UNITS} or nested past
- * {@link MAX_HTML_NESTING} is refused before parsing, and a sanitizer failure
- * of any kind yields empty markup rather than a thrown error: the composer then
- * inserts its text fallback, so an adversarial paste can never abort the
- * editor's paste handling.
+ * The size and nesting guards here are authoritative for every consumer,
+ * including ProseMirror's direct `transformPastedHTML` hook, which cannot trust
+ * the clipboard reader. A payload over {@link MAX_HTML_INSPECTION_UNITS} or
+ * nested past {@link MAX_HTML_NESTING} is refused before parsing, and a
+ * sanitizer failure of any kind yields empty markup rather than a thrown error:
+ * the composer then inserts its text fallback, so an adversarial paste can
+ * never abort the editor's paste handling.
  */
 export function sanitizePastedHtml(html: string): string {
   if (html.length > MAX_HTML_INSPECTION_UNITS) return "";
   if (exceedsHtmlNesting(html)) return "";
   try {
     return purifier.sanitize(html, {
-      ALLOWED_TAGS,
+      ALLOWED_TAGS: SANITIZER_ALLOWED_TAGS,
       ALLOWED_ATTR: ALLOWED_ATTRIBUTES,
     });
   } catch {

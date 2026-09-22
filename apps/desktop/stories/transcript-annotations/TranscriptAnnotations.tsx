@@ -15,7 +15,11 @@ import { annotationBlock } from "../../src/renderer/components/App/ConnectedApp/
 import { AnnotationPopover } from "../../src/renderer/components/App/ConnectedApp/Conversation/AnnotationPopover.tsx";
 import { Composer } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { TranscriptView } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
-import { composerAgentSelection, composerModelSelection } from "../composer-fixtures.ts";
+import {
+  composerAgentSelection,
+  composerModelSelection,
+  composerPasteProps,
+} from "../composer-fixtures.ts";
 import "./transcript-annotations.css";
 
 const sourceText =
@@ -260,6 +264,7 @@ function TranscriptAnnotationsContent(
         </div>
         <div class="annotation-story-composer">
           <Composer
+            {...composerPasteProps}
             value={composer.value()}
             action={running() ? "running" : composer.submitting() ? "sending" : "send"}
             disabled={running() ? false : composer.disabled()}

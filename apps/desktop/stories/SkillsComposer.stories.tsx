@@ -4,7 +4,11 @@ import type { PromptSkillAttachment } from "@opencode/client";
 import { createSignal, Show } from "solid-js";
 import { expect, fireEvent, fn, userEvent, within, waitFor } from "storybook/test";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
-import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
+import {
+  composerAgentSelection,
+  composerModelSelection,
+  composerPasteProps,
+} from "./composer-fixtures.ts";
 import "./SkillsComposer.css";
 
 const commands = [
@@ -75,6 +79,7 @@ function ComposerSuggestionsFixture(props: {
     <div class="skills-story-frame">
       <p class="skills-story-intro">Type / to run a command or add a skill to your message.</p>
       <Composer
+        {...composerPasteProps}
         value={value()}
         skills={selected()}
         command={props.command}

@@ -51,47 +51,47 @@ describe("readClipboardText", () => {
     expect(read.text).toBe(huge);
   });
 
-  it("bounds HTML separately and reports when it was skipped", () => {
+  it("bounds HTML by size only and reports when it was skipped", () => {
     const overBound = `<p>${"a".repeat(MAX_HTML_INSPECTION_UNITS)}</p>`;
     const read = readClipboardText(
       clipboard({ "text/html": overBound, "text/plain": "fallback" }),
       context,
     );
     expect(read.html).toBe(undefined);
-    expect(read.htmlOversize).toBe(true);
+    expect(read.htmlTooLarge).toBe(true);
     // The text flavor still routes normally.
     expect(read.text).toBe("fallback");
+
+    // Without a usable text flavor an oversized payload stays refused instead
+    // of being handed to the DOM parser, which reads the whole string first.
+    const blank = readClipboardText(clipboard({ "text/html": overBound }), context);
+    expect(blank).toEqual({ text: "", htmlTooLarge: true });
 
     const atBound = `<p>${"a".repeat(MAX_HTML_INSPECTION_UNITS - 7)}</p>`;
     const bounded = readClipboardText(clipboard({ "text/html": atBound }), context);
     expect(bounded.html).toBe(atBound);
-    expect(bounded.htmlOversize).toBe(undefined);
+    expect(bounded.htmlTooLarge).toBe(undefined);
   });
 
-  it("does not expose HTML nested past the inspection bound", () => {
-    const deep = `${"<div>".repeat(20_000)}<p>hidden</p>${"</div>".repeat(20_000)}`;
+  it("hands size-bounded HTML through however deeply it nests", () => {
+    // The unit DOM throws on parser-deep trees, so this uses a depth past the
+    // sanitizer's nesting bound; the real renderer's parser flattens first.
+    const depth = MAX_HTML_NESTING + 5;
+    const deep = `${"<div>".repeat(depth)}<p>hidden</p>${"</div>".repeat(depth)}`;
     const read = readClipboardText(
       clipboard({ "text/html": deep, "text/plain": "fallback" }),
       context,
     );
-    expect(read.html).toBe(undefined);
-    expect(read.htmlOversize).toBe(true);
-    // The text flavor still routes normally.
+    // Nesting is the sanitizer's concern; the reader does not scan it.
+    expect(read.html).toBe(deep);
+    expect(read.htmlTooLarge).toBe(undefined);
     expect(read.text).toBe("fallback");
 
-    // With no plain flavor there is nothing to derive without parsing the
-    // deep tree, so the payload is left uninspected instead.
+    // With no plain flavor the deep tree still yields its text: extraction is
+    // iterative, so the reader does not need the sanitizer's nesting refusal.
     const blank = readClipboardText(clipboard({ "text/html": deep }), context);
-    expect(blank.html).toBe(undefined);
-    expect(blank.htmlOversize).toBe(true);
-    expect(blank.text).toBe("");
-  });
-
-  it("keeps HTML exactly at the nesting bound parseable", () => {
-    const atBound = `${"<div>".repeat(MAX_HTML_NESTING)}deep${"</div>".repeat(MAX_HTML_NESTING)}`;
-    const read = readClipboardText(clipboard({ "text/html": atBound }), context);
-    expect(read.html).toBe(atBound);
-    expect(read.htmlOversize).toBe(undefined);
+    expect(blank.html).toBe(deep);
+    expect(blank.text).toBe("hidden");
   });
 
   it("derives the effective text from HTML when the plain flavor is blank", () => {
@@ -131,10 +131,18 @@ describe("htmlToPlainText", () => {
     expect(htmlToPlainText("")).toBe("");
   });
 
-  it("keeps text from markup nested past the recursion bound", () => {
+  it("keeps deeply nested text and excludes script and style at every depth", () => {
     const depth = MAX_HTML_NESTING + 5;
-    const deep = `${"<div>".repeat(depth)}<p>deep text</p>${"</div>".repeat(depth)}`;
-    expect(htmlToPlainText(deep)).toBe("deep text");
+    const nested = `${"<div>".repeat(depth)}<p>deep text</p>${"</div>".repeat(depth)}`;
+    expect(htmlToPlainText(nested)).toBe("deep text");
+    // The old depth cut-off returned `textContent`, which leaked script and
+    // style text from a tree too deep to recurse into.
+    const unsafe = `${"<div>".repeat(depth)}<script>alert(1)</script><style>p{color:red}</style><p>kept</p>${"</div>".repeat(depth)}`;
+    expect(htmlToPlainText(unsafe)).toBe("kept");
+  });
+
+  it("returns no text instead of throwing when parsing fails", () => {
+    expect(htmlToPlainText("<!doctype html><html><body>")).toBe("");
   });
 });
 

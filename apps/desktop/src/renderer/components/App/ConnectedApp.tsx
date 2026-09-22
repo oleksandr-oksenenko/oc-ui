@@ -17,7 +17,7 @@ export type ConnectedAppProps = {
   readonly model: WorkspaceModel;
   readonly onChangeServer: () => void;
   /** Host clipboard access for the composer's literal-paste escape hatch. */
-  readonly readClipboardText?: () => Promise<string | undefined>;
+  readonly readClipboardText: () => Promise<string | undefined>;
 };
 
 /** Renders the model retained by the connection's workspace. */

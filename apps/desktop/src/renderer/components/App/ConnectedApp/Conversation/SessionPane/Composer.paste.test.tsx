@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { mount } from "../../../../../test/mount.ts";
 import { Composer } from "./Composer.tsx";
+import { MAX_HTML_INSPECTION_UNITS, MAX_HTML_NESTING } from "./Composer/pasteHtml.ts";
 
 const unavailableSelection = {
   state: "failed" as const,
@@ -90,11 +91,11 @@ function openComposer(
       disabled={disabled()}
       action={action()}
       onAttachFiles={options.onAttachFiles}
-      onAttachText={options.onAttachText}
-      readClipboardText={options.readClipboardText}
       files={options.files}
       modelSelection={unavailableSelection}
       agentSelection={unavailableAgentSelection}
+      onAttachText={options.onAttachText ?? (() => undefined)}
+      readClipboardText={options.readClipboardText ?? (() => Promise.resolve(undefined))}
       onInput={(text) => {
         input(text);
         setValue(text);
@@ -328,11 +329,12 @@ describe("Composer paste routing", () => {
 });
 
 describe("Composer adversarial paste", () => {
-  it("falls back to the text flavor for markup nested past the inspection bound", () => {
+  it("falls back to the text flavor for markup nested past the schema bound", () => {
     setPlatform("macos");
     const harness = openComposer({ value: "keep this" });
     const text = "deep paste fallback";
-    const html = `${"<div>".repeat(20_000)}${text}${"</div>".repeat(20_000)}`;
+    const depth = MAX_HTML_NESTING + 5;
+    const html = `${"<div>".repeat(depth)}${text}${"</div>".repeat(depth)}`;
     const started = performance.now();
     const event = pasteClipboard(harness.editor, { html, text });
     const elapsed = performance.now() - started;
@@ -349,12 +351,81 @@ describe("Composer adversarial paste", () => {
   it("keeps the draft and explains a deep markup payload with no text flavor", () => {
     setPlatform("macos");
     const harness = openComposer({ value: "keep this" });
-    const html = `${"<div>".repeat(20_000)}${"</div>".repeat(20_000)}`;
+    const depth = MAX_HTML_NESTING + 5;
+    const html = `${"<div>".repeat(depth)}${"</div>".repeat(depth)}`;
     const event = pasteClipboard(harness.editor, { html });
     expect(event.defaultPrevented).toBe(true);
     expect(textOf(harness.editor)).toBe("keep this");
     expect(harness.draft()).toBeUndefined();
-    expect(harness.notice()).toContain("not inserted");
+    // The deep payload is size-bounded, so the old inspection-limit notice no
+    // longer applies; there is genuinely no text to insert.
+    expect(harness.notice()).toContain("no text");
+    harness.dispose();
+  });
+
+  it("derives a fallback from deeply nested HTML when the plain flavor is blank", () => {
+    setPlatform("macos");
+    const harness = openComposer();
+    const depth = MAX_HTML_NESTING + 5;
+    const html = `${"<div>".repeat(depth)}<p>deep paste fallback</p>${"</div>".repeat(depth)}`;
+    const start = performance.now();
+    const event = pasteClipboard(harness.editor, { html });
+    const elapsed = performance.now() - start;
+    // Rich parsing rejects the nesting, but the reader extracted the text
+    // iteratively, so the fallback inserts it exactly once.
+    expect(event.defaultPrevented).toBe(true);
+    expect(harness.notice()).toBe("");
+    expect(harness.draft()).toBe("deep paste fallback");
+    expect(harness.editor.querySelector("div div div")).toBeNull();
+    expect(elapsed).toBeLessThan(1_000);
+    harness.dispose();
+  });
+
+  it("excludes script and style text from a deep HTML fallback", () => {
+    setPlatform("macos");
+    const harness = openComposer();
+    const depth = MAX_HTML_NESTING + 5;
+    const html = `${"<div>".repeat(depth)}<script>alert(1)</script><style>p{color:red}</style><p>kept text</p>${"</div>".repeat(depth)}`;
+    pasteClipboard(harness.editor, { html });
+    expect(harness.notice()).toBe("");
+    expect(harness.draft()).toBe("kept text");
+    harness.dispose();
+  });
+
+  it("refuses oversized HTML with no usable text and explains the size", () => {
+    setPlatform("macos");
+    const harness = openComposer({ value: "keep this" });
+    const html = `<p>${"a".repeat(MAX_HTML_INSPECTION_UNITS)}</p>`;
+    const start = performance.now();
+    const event = pasteClipboard(harness.editor, { html });
+    const elapsed = performance.now() - start;
+    // The DOM parser is never given the oversized string.
+    expect(elapsed).toBeLessThan(1_000);
+    expect(event.defaultPrevented).toBe(true);
+    expect(textOf(harness.editor)).toBe("keep this");
+    expect(harness.draft()).toBeUndefined();
+    expect(harness.notice()).toContain("too large");
+    harness.dispose();
+  });
+
+  it("prefers a usable text flavor when the HTML flavor is oversized", () => {
+    setPlatform("macos");
+    const harness = openComposer();
+    const html = `<p>${"a".repeat(MAX_HTML_INSPECTION_UNITS)}</p>`;
+    pasteClipboard(harness.editor, { html, text: "# Heading from text" });
+    expect(harness.notice()).toBe("");
+    expect(harness.editor.querySelector("h1")?.textContent).toBe("Heading from text");
+    harness.dispose();
+  });
+
+  it("preserves the selection when sanitized HTML has no content and no text", () => {
+    setPlatform("macos");
+    const harness = openComposer({ value: "keep this" });
+    const event = pasteClipboard(harness.editor, { html: "<p><script>alert(1)</script></p>" });
+    expect(event.defaultPrevented).toBe(true);
+    expect(textOf(harness.editor)).toBe("keep this");
+    expect(harness.draft()).toBeUndefined();
+    expect(harness.notice()).toContain("no text");
     harness.dispose();
   });
 
@@ -484,15 +555,6 @@ describe("Composer literal paste gesture", () => {
     harness.dispose();
   });
 
-  it("explains when the host clipboard read is unavailable", async () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    harness.editor.dispatchEvent(chord());
-    await vi.waitFor(() => expect(harness.notice()).toContain("Clipboard access is unavailable"));
-    expect(harness.draft()).toBeUndefined();
-    harness.dispose();
-  });
-
   it("explains when the clipboard read is denied", async () => {
     setPlatform("macos");
     const harness = openComposer({ readClipboardText: async () => Promise.resolve(undefined) });
@@ -529,6 +591,26 @@ describe("Composer literal paste gesture", () => {
     // The caret starts inside the code block; no gesture is needed.
     pasteClipboard(harness.editor, { text: "a\nb" });
     expect(harness.editor.querySelector("code")?.textContent).toContain("a\nb");
+    harness.dispose();
+  });
+
+  it("inserts whitespace into a code block instead of treating it as a no-op", () => {
+    setPlatform("macos");
+    const harness = openComposer({ value: "```\ncode\n```" });
+    const event = pasteClipboard(harness.editor, { text: "\n\n" });
+    expect(event.defaultPrevented).toBe(true);
+    expect(harness.draft()).toContain("\n\n");
+    harness.dispose();
+  });
+
+  it("keeps oversized text inline inside a code block", () => {
+    setPlatform("macos");
+    const attachText = vi.fn<(text: string) => void>();
+    const harness = openComposer({ value: "```\ncode\n```", onAttachText: attachText });
+    const text = "a".repeat(16_384);
+    pasteClipboard(harness.editor, { text });
+    expect(attachText).not.toHaveBeenCalled();
+    expect(harness.draft()).toContain(text);
     harness.dispose();
   });
 });
@@ -724,17 +806,6 @@ describe("Composer text attachment intent", () => {
     expect(attachText).toHaveBeenCalledTimes(1);
     expect(below.draft()).toBe("😀".repeat(8_191));
     below.dispose();
-  });
-
-  it("leaves an oversized paste to native handling when no attachment owner exists", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    const text = "a".repeat(16_384);
-    pasteClipboard(harness.editor, { text });
-    // No intent was submitted; ProseMirror's own paste handling inserts the
-    // characters, which is the pre-existing behavior when no owner is present.
-    expect(harness.draft()).toBe(text);
-    harness.dispose();
   });
 });
 

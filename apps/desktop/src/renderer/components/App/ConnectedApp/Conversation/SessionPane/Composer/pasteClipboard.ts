@@ -2,7 +2,7 @@ import {
   collectTransferFiles,
   type FileTransferLike,
 } from "../../../../../../opencode/attachments.ts";
-import { MAX_HTML_INSPECTION_UNITS, MAX_HTML_NESTING, exceedsHtmlNesting } from "./pasteHtml.ts";
+import { MAX_HTML_INSPECTION_UNITS } from "./pasteHtml.ts";
 import { TEXT_ATTACHMENT_LIMIT } from "./pasteRoute.ts";
 
 /**
@@ -12,9 +12,12 @@ import { TEXT_ATTACHMENT_LIMIT } from "./pasteRoute.ts";
  * acquisition, and derives the effective text before classification.
  */
 
-const uriListToText = (value: string): string => value.replace(/\r?\n/g, " ");
-
-const BLOCK_TAGS = new Set([
+// Text boundaries only: tags that end one text block and start another during
+// extraction. This list is deliberately separate from the sanitizer's
+// allowance and from the richness evidence; e.g. `img` is allowed through the
+// sanitizer but is not a text boundary, and `form` is a boundary even though
+// the schema cannot hold it.
+const TEXT_BOUNDARY_TAGS = new Set([
   "ADDRESS",
   "ARTICLE",
   "ASIDE",
@@ -62,23 +65,57 @@ function isElementNode(node: Node): node is Element {
  * The plain text an HTML payload carries, with block boundaries as blank lines
  * and `<br>` as a line feed. This is a text derivation for the attachment and
  * fallback decisions only; insertion still runs through the schema parser.
- * Nesting deeper than {@link MAX_HTML_NESTING} keeps its text content instead
- * of recursing further, so the derivation cannot exhaust the call stack.
+ *
+ * The walk is iterative, so it stays safe on the deeply nested markup the
+ * clipboard reader passes through without a nesting scan, and it skips
+ * `script`/`style` subtrees at every depth instead of trusting the text content
+ * of a tree too deep to recurse into.
  */
 export function htmlToPlainText(html: string): string {
-  const dom = new DOMParser().parseFromString(html, "text/html");
-  const render = (node: Node, depth: number): string => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-    if (!isElementNode(node)) return "";
-    const tag = node.tagName.toUpperCase();
-    if (tag === "SCRIPT" || tag === "STYLE") return "";
-    if (tag === "BR") return "\n";
-    if (depth >= MAX_HTML_NESTING) return node.textContent ?? "";
-    const inner = Array.from(node.childNodes, (child) => render(child, depth + 1)).join("");
-    return BLOCK_TAGS.has(tag) ? `\n\n${inner}\n\n` : inner;
-  };
-  const raw = Array.from(dom.body.childNodes, (node) => render(node, 0)).join("");
-  return raw.replace(/\n{3,}/g, "\n\n").trim();
+  try {
+    const dom = new DOMParser().parseFromString(html, "text/html");
+    type Task = { readonly node: Node } | { readonly text: string };
+    const output: string[] = [];
+    const stack: Task[] = [];
+    for (let index = dom.body.childNodes.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: dom.body.childNodes[index]! });
+    }
+    while (stack.length > 0) {
+      const task = stack.pop()!;
+      if ("text" in task) {
+        output.push(task.text);
+        continue;
+      }
+      const node = task.node;
+      if (node.nodeType === Node.TEXT_NODE) {
+        output.push(node.textContent ?? "");
+        continue;
+      }
+      if (!isElementNode(node)) continue;
+      const tag = node.tagName.toUpperCase();
+      if (tag === "SCRIPT" || tag === "STYLE") continue;
+      if (tag === "BR") {
+        output.push("\n");
+        continue;
+      }
+      const block = TEXT_BOUNDARY_TAGS.has(tag);
+      // Pushed in reverse evaluation order, so the opener is popped first,
+      // then the children in document order, then the closer.
+      if (block) stack.push({ text: "\n\n" });
+      for (let index = node.childNodes.length - 1; index >= 0; index -= 1) {
+        stack.push({ node: node.childNodes[index]! });
+      }
+      if (block) stack.push({ text: "\n\n" });
+    }
+    return output
+      .join("")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  } catch {
+    // Extraction is best effort: a parser failure yields no text, and the
+    // router falls back to the unsupported-content notice instead.
+    return "";
+  }
 }
 
 /**
@@ -92,10 +129,10 @@ export type ClipboardDataLike = FileTransferLike & {
 export type ClipboardRead = {
   /** The effective text: the plain flavor, or the HTML flavor's derived text. */
   readonly text: string;
-  /** Bounded `text/html`, absent when the format is missing or over a bound. */
+  /** Size-bounded `text/html`, absent when the format is missing or too large. */
   readonly html?: string;
-  /** `text/html` was present but exceeded a size or nesting inspection bound. */
-  readonly htmlOversize?: boolean;
+  /** `text/html` was present but exceeded the inspection size bound. */
+  readonly htmlTooLarge?: true;
 };
 
 /** Whether the payload advertises a format; an absent type list reads everything. */
@@ -104,6 +141,8 @@ function hasFlavor(data: ClipboardDataLike, type: string): boolean {
   if (types === undefined) return true;
   return Array.from(types).includes(type);
 }
+
+const uriListToText = (value: string): string => value.replace(/\r?\n/g, " ");
 
 function readTextFlavor(data: ClipboardDataLike): string {
   const getData = data.getData?.bind(data);
@@ -119,11 +158,15 @@ function readTextFlavor(data: ClipboardDataLike): string {
 /**
  * Reads the text and HTML flavors with the routing context. The HTML flavor is
  * not read when it cannot win: a code-block context ignores it, and text over
- * the routing threshold already becomes an attachment. It is also skipped when
- * it exceeds an inspection bound (size or nesting depth), because parsing it
- * would cost unbounded time. A blank plain flavor falls back to the HTML
- * flavor's derived text so the router and the attachment owner never see an
- * empty payload that carries content.
+ * the routing threshold already becomes an attachment.
+ *
+ * A size-bounded HTML flavor is passed through whole, however deeply it nests:
+ * the sanitizer owns that refusal, and text extraction walks it iteratively. A
+ * flavor past the size bound is never handed to `DOMParser` (it parses the
+ * whole string before any walker), so it is refused unless the plain flavor
+ * can stand in. A blank plain flavor falls back to the HTML flavor's derived
+ * text, so the router and the attachment owner never see an empty payload that
+ * carries content.
  */
 export function readClipboardText(
   data: ClipboardDataLike,
@@ -132,19 +175,16 @@ export function readClipboardText(
   const text = readTextFlavor(data);
   const wantsHtml = !context.codeBlock && text.length < TEXT_ATTACHMENT_LIMIT;
   let html: string | undefined;
-  let htmlOversize = false;
+  let htmlTooLarge = false;
   if (wantsHtml && hasFlavor(data, "text/html")) {
     const raw = data.getData?.("text/html") ?? "";
     if (raw !== "") {
-      if (raw.length > MAX_HTML_INSPECTION_UNITS || exceedsHtmlNesting(raw)) {
-        htmlOversize = true;
-      } else {
-        html = raw;
-      }
+      if (raw.length > MAX_HTML_INSPECTION_UNITS) htmlTooLarge = true;
+      else html = raw;
     }
   }
   const effective = text.trim() === "" && html !== undefined ? htmlToPlainText(html) : text;
-  if (htmlOversize) return { text: effective, htmlOversize };
+  if (htmlTooLarge) return { text: effective, htmlTooLarge: true };
   if (html === undefined) return { text: effective };
   return { text: effective, html };
 }

@@ -37,7 +37,7 @@ import "./PromptEditor/PromptEditor.css";
 /** One already-classified paste the composer hands to the editor to apply. */
 type PromptPasteInsert = {
   /** The composer owns the attachment and no-op routes; only these reach the editor. */
-  readonly route: Exclude<PasteRoute, "attachment-files" | "attachment-text" | "noop">;
+  readonly route: Extract<PasteRoute, "plain-text" | "markdown-parse" | "html-parse">;
   readonly text: string;
   readonly html?: string;
   /** The originating paste event, forwarded to ProseMirror's pipeline. */
@@ -378,9 +378,7 @@ export function PromptEditor(props: EditorProps) {
       composing: () => instance.composing,
       applyPaste: (input) => {
         switch (input.route) {
-          case "literal":
           case "plain-text":
-          case "rich-link":
             instance.dispatch(pastePlainText(instance.state, input.text));
             return "inserted";
           case "markdown-parse":

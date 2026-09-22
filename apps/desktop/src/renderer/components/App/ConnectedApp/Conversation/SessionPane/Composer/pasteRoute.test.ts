@@ -74,31 +74,26 @@ describe("paste route fixtures", () => {
 });
 
 describe("paste route precedence", () => {
-  it("keeps files ahead of every text flavor and the literal gesture", () => {
+  it("keeps files ahead of every text flavor and the code context", () => {
     expect(route({ files: [{ name: "a.ts" }], text: "# heading" })).toBe("attachment-files");
     expect(
       route({ files: [{ name: "shot.png", type: "image/png" }], text: "https://example.com/a" }),
     ).toBe("attachment-files");
-    expect(route({ files: [{ name: "a.ts" }], text: "hello", literal: true })).toBe(
+    expect(route({ files: [{ name: "a.ts" }], text: "hello", codeBlock: true })).toBe(
       "attachment-files",
     );
   });
 
-  it("lets the literal gesture win over HTML, Markdown and whitespace", () => {
-    expect(route({ text: "# heading", literal: true })).toBe("literal");
-    expect(route({ html: "<p>hello</p>", text: "hello", literal: true })).toBe("literal");
-    expect(route({ text: "   \n  ", literal: true })).toBe("literal");
-    expect(classifyPaste({ text: "x", literal: true }).reason).toBe("literal-gesture");
-  });
-
-  it("treats a code block as implicit literal mode", () => {
-    expect(route({ text: "# heading", codeBlock: true })).toBe("literal");
-    expect(route({ html: "<p>hello</p>", text: "hello", codeBlock: true })).toBe("literal");
-    expect(route({ text: "\n\n", codeBlock: true })).toBe("literal");
+  it("inserts code-block text literally, including whitespace and oversized text", () => {
+    expect(route({ text: "# heading", codeBlock: true })).toBe("plain-text");
+    expect(route({ html: "<p>hello</p>", text: "hello", codeBlock: true })).toBe("plain-text");
+    expect(route({ text: "\n\n", codeBlock: true })).toBe("plain-text");
+    // A code block keeps its characters instead of becoming an attachment.
+    expect(route({ text: "a".repeat(TEXT_ATTACHMENT_LIMIT), codeBlock: true })).toBe("plain-text");
     expect(classifyPaste({ text: "x", codeBlock: true }).reason).toBe("code-block");
   });
 
-  it("makes whitespace-only text a no-op outside literal and code contexts", () => {
+  it("makes whitespace-only text a no-op outside code and literal contexts", () => {
     expect(classifyPaste({})).toEqual({
       route: "noop",
       reason: "empty-payload",
@@ -134,12 +129,12 @@ describe("paste route precedence", () => {
     expect(route({ text: "a".repeat(TEXT_ATTACHMENT_LIMIT - 3) + "😀" })).toBe("plain-text");
   });
 
-  it("reports HTML that exceeded the inspection bound when there is no text", () => {
-    const decision = classifyPaste({ htmlOversize: true });
+  it("reports HTML that exceeded the size bound when there is no usable text", () => {
+    const decision = classifyPaste({ htmlTooLarge: true });
     expect(decision.route).toBe("noop");
-    expect(decision.reason).toBe("html-inspection-limit");
+    expect(decision.reason).toBe("html-too-large");
     // A usable text flavor still routes normally when the HTML was skipped.
-    expect(classifyPaste({ htmlOversize: true, text: "- one\n- two" }).route).toBe(
+    expect(classifyPaste({ htmlTooLarge: true, text: "- one\n- two" }).route).toBe(
       "markdown-parse",
     );
   });
@@ -149,7 +144,7 @@ describe("paste route edge cases", () => {
   it("falls back to the text flavor when text/html is empty", () => {
     expect(route({ text: "- one\n- two", html: "" })).toBe("markdown-parse");
     expect(route({ text: "first\nsecond", html: "   " })).toBe("plain-text");
-    expect(route({ text: "https://example.com/x", html: "" })).toBe("rich-link");
+    expect(route({ text: "https://example.com/x", html: "" })).toBe("plain-text");
   });
 
   it("parses HTML when there is no plain text flavor", () => {
@@ -165,9 +160,9 @@ describe("paste route edge cases", () => {
     expect(route({ text: "hello", html: "&lt;p&gt;hello&lt;/p&gt;" })).toBe("plain-text");
   });
 
-  it("requires a lone URL, not a URL with trailing text", () => {
-    expect(route({ text: "https://example.com/a" })).toBe("rich-link");
-    expect(route({ text: "  https://example.com/a  " })).toBe("rich-link");
+  it("keeps a lone URL as ordinary text", () => {
+    expect(route({ text: "https://example.com/a" })).toBe("plain-text");
+    expect(route({ text: "  https://example.com/a  " })).toBe("plain-text");
     expect(route({ text: "https://example.com/a see this" })).toBe("plain-text");
     expect(route({ text: "see https://example.com/a" })).toBe("plain-text");
     expect(route({ text: "ftp://example.com/a" })).toBe("plain-text");
@@ -181,10 +176,10 @@ describe("paste route edge cases", () => {
         html: '<article><p><a href="https://example.com/a">Example</a></p></article>',
       }),
     ).toBe("html-parse");
-    // A bare anchor is not richer than the URL itself.
+    // A bare anchor is not richer than the URL itself, so the text stays text.
     expect(
       route({ text: "https://example.com/a", html: '<a href="https://example.com/a">Example</a>' }),
-    ).toBe("rich-link");
+    ).toBe("plain-text");
   });
 
   it("needs one strong or two weak Markdown signals", () => {
@@ -259,6 +254,6 @@ describe("delta against today's pasteContent", () => {
 
     const url = fixtures.find((fixture) => fixture.name === "lone-url")!;
     expect(toDraft(pasteToday(url.payload.text!)).text).toBe(url.payload.text);
-    expect(route(url.payload)).toBe("rich-link");
+    expect(route(url.payload)).toBe("plain-text");
   });
 });

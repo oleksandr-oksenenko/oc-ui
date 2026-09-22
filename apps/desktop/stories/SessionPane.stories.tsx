@@ -8,7 +8,11 @@ import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Convers
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { longTranscript } from "./transcript-catalog-fixtures.ts";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
-import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
+import {
+  composerAgentSelection,
+  composerModelSelection,
+  composerPasteProps,
+} from "./composer-fixtures.ts";
 const meta = {
   title: "Session/SessionPane",
   component: SessionPane,
@@ -47,6 +51,7 @@ export const SelectedPlacement: Story = {
         }
         composer={
           <Composer
+            {...composerPasteProps}
             value={draft()}
             disabled={false}
             action="send"
@@ -79,6 +84,7 @@ export const ReturnToLatestAboveComposer: Story = {
         }
         composer={
           <Composer
+            {...composerPasteProps}
             value={draft()}
             disabled={false}
             action="send"

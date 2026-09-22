@@ -18,7 +18,11 @@ import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversati
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 import { storySession } from "./session-fixtures.ts";
-import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
+import {
+  composerAgentSelection,
+  composerModelSelection,
+  composerPasteProps,
+} from "./composer-fixtures.ts";
 
 const sessions = [
   storySession("workspace", "Workspace migration"),
@@ -124,6 +128,7 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
             }
             composer={
               <Composer
+                {...composerPasteProps}
                 value={draft()}
                 disabled={false}
                 action="running"
@@ -221,6 +226,7 @@ export const MainOnly = {
                 }
                 composer={
                   <Composer
+                    {...composerPasteProps}
                     value="Ask about the selected session"
                     disabled={false}
                     action="send"
@@ -292,6 +298,7 @@ export const NarrowRightPanelCollapsed = {
                 }
                 composer={
                   <Composer
+                    {...composerPasteProps}
                     value="Keep this narrow layout readable"
                     disabled={false}
                     action="send"

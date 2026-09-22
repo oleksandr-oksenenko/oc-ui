@@ -39,6 +39,12 @@ const unavailableAgentSelection = {
   onSelectAgent: () => undefined,
 };
 
+/** Inert paste callbacks; routing tests override them on their own mount. */
+const pasteProps = {
+  onAttachText: () => undefined,
+  readClipboardText: () => Promise.resolve(undefined),
+};
+
 const catalog: ComposerCatalog = {
   commands: {
     state: "ready",
@@ -79,6 +85,7 @@ function openComposer(composerCatalog: ComposerCatalog = catalog) {
   const [value, setValue] = createSignal("");
   const { host, dispose } = mount(() => (
     <Composer
+      {...pasteProps}
       value={value()}
       disabled={false}
       action="send"

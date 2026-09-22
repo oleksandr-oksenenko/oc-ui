@@ -53,20 +53,59 @@ export type FileTransferLike = {
   readonly types?: ReadonlyArray<string> | undefined;
 };
 
-type AttachmentSelection = {
-  readonly accepted: readonly File[];
-  readonly rejected: readonly File[];
+type AttachmentAdmission = {
+  /** Candidates the draft can hold, in input order, after identity dedupe. */
+  readonly admitted: readonly File[];
+  /** Candidates over the per-file byte cap, in input order, for the caller's notice. */
+  readonly tooLarge: readonly File[];
+  /** Candidates that fit the per-file cap but not the draft's remaining budget. */
+  readonly overBudget: readonly File[];
 };
 
-/** Split a selection by the server's per-file size limit, preserving order. */
-export function selectAttachableFiles(files: readonly File[]): AttachmentSelection {
-  const accepted: File[] = [];
-  const rejected: File[] = [];
-  for (const file of files) {
-    if (file.size > MAX_ATTACHMENT_BYTES) rejected.push(file);
-    else accepted.push(file);
+/**
+ * Decides which candidate attachments one draft accepts. Pure: the caller
+ * passes the draft's current files and commits the admitted slice, so an
+ * admission always runs against the state read immediately before it.
+ *
+ * Identity wins over size: an object already in the draft, or repeated within
+ * the selection, is skipped without a rejection because removal and completion
+ * track the same identity. Order is preserved, and both the count and the
+ * aggregate byte budget stop admitting in order, so a mixed selection keeps
+ * everything that fits and reports the exact reason for the rest.
+ */
+export function admitAttachments(
+  existing: readonly File[],
+  candidates: readonly File[],
+): AttachmentAdmission {
+  const known = new Set(existing);
+  const admitted: File[] = [];
+  const tooLarge: File[] = [];
+  const overBudget: File[] = [];
+  let budget = remainingAttachmentBudget(existing);
+  for (const file of candidates) {
+    if (known.has(file)) continue;
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      tooLarge.push(file);
+      continue;
+    }
+    if (budget.count <= 0 || file.size > budget.bytes) {
+      overBudget.push(file);
+      continue;
+    }
+    known.add(file);
+    admitted.push(file);
+    budget = { count: budget.count - 1, bytes: budget.bytes - file.size };
   }
-  return { accepted, rejected };
+  return { admitted, tooLarge, overBudget };
+}
+
+/** The attachment count and bytes one session's draft may still hold. */
+function remainingAttachmentBudget(existing: readonly File[]) {
+  const bytes = existing.reduce((total, file) => total + file.size, 0);
+  return {
+    count: MAX_DRAFT_ATTACHMENTS - existing.length,
+    bytes: MAX_DRAFT_ATTACHMENT_BYTES - bytes,
+  };
 }
 
 /**

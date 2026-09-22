@@ -18,7 +18,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   MAX_DRAFT_ATTACHMENT_BYTES,
   MAX_DRAFT_ATTACHMENTS,
-  selectAttachableFiles,
+  admitAttachments,
 } from "../../../../opencode/attachments.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { createEffect, createMemo, type Accessor } from "solid-js";
@@ -196,30 +196,16 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const attachFiles = (incoming: readonly File[]) => {
     const sessionID = options.selectedID();
     if (sessionID === undefined) return;
-    const { accepted, rejected } = selectAttachableFiles(incoming);
-    // A draft owns each File object once; removal and completion track identity.
-    const known = new Set(files());
-    const next: File[] = [];
-    let budget = remainingAttachmentBudget(files());
-    let excess = 0;
-    for (const file of accepted) {
-      if (known.has(file)) continue;
-      if (budget.count <= 0 || file.size > budget.bytes) {
-        excess += 1;
-        continue;
-      }
-      known.add(file);
-      next.push(file);
-      budget = { count: budget.count - 1, bytes: budget.bytes - file.size };
-    }
-    if (next.length > 0) setFiles(sessionID, [...files(), ...next]);
+    const existing = files();
+    const { admitted, tooLarge, overBudget } = admitAttachments(existing, incoming);
+    if (admitted.length > 0) setFiles(sessionID, [...existing, ...admitted]);
     // New selection feedback replaces any earlier attachment or command-read error.
     clearCommandAttachmentNotice(sessionID);
     const notices: string[] = [];
-    if (rejected.length > 0) notices.push(attachmentSizeMessage(rejected));
-    if (excess > 0) notices.push(attachmentBudgetMessage(excess));
+    if (tooLarge.length > 0) notices.push(attachmentSizeMessage(tooLarge));
+    if (overBudget.length > 0) notices.push(attachmentBudgetMessage(overBudget.length));
     if (notices.length > 0) setAttachmentNotice(sessionID, notices.join(" "));
-    else if (next.length > 0) clearAttachmentNotice(sessionID);
+    else if (admitted.length > 0) clearAttachmentNotice(sessionID);
   };
   /**
    * The clipboard intent for text too large to edit inline. Clipboard strings
@@ -235,18 +221,17 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       setAttachmentNotice(sessionID, PASTE_TOO_LARGE_MESSAGE);
       return;
     }
-    const existing = effects.registry.get(fileDrafts)[sessionID] ?? [];
+    const existing = files();
     const file = new File([text], pastedTextName(existing), { type: "text/plain" });
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      setAttachmentNotice(sessionID, PASTE_TOO_LARGE_MESSAGE);
+    const { admitted, tooLarge } = admitAttachments(existing, [file]);
+    if (admitted.length === 0) {
+      setAttachmentNotice(
+        sessionID,
+        tooLarge.length > 0 ? PASTE_TOO_LARGE_MESSAGE : PASTE_BUDGET_MESSAGE,
+      );
       return;
     }
-    const budget = remainingAttachmentBudget(existing);
-    if (budget.count <= 0 || file.size > budget.bytes) {
-      setAttachmentNotice(sessionID, PASTE_BUDGET_MESSAGE);
-      return;
-    }
-    setFiles(sessionID, [...existing, file]);
+    setFiles(sessionID, [...existing, ...admitted]);
     clearCommandAttachmentNotice(sessionID);
     clearAttachmentNotice(sessionID);
   };
@@ -796,15 +781,6 @@ function pastedTextName(existing: readonly File[]): string {
     name = `pasted-text-${index}.txt`;
   }
   return name;
-}
-
-/** The attachment count and bytes one session's draft may still hold. */
-function remainingAttachmentBudget(files: readonly File[]) {
-  const bytes = files.reduce((total, file) => total + file.size, 0);
-  return {
-    count: MAX_DRAFT_ATTACHMENTS - files.length,
-    bytes: MAX_DRAFT_ATTACHMENT_BYTES - bytes,
-  };
 }
 
 function sameValue<T>(left: T, right: T): boolean {

@@ -5,7 +5,11 @@ import { PendingMessages } from "../../src/renderer/components/App/ConnectedApp/
 import { Composer } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { SessionPane } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
 import { TranscriptView } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
-import { composerAgentSelection, composerModelSelection } from "../composer-fixtures.ts";
+import {
+  composerAgentSelection,
+  composerModelSelection,
+  composerPasteProps,
+} from "../composer-fixtures.ts";
 import "./queueing-steering.css";
 
 export const queuedMessage = (
@@ -105,6 +109,7 @@ export function QueueingSteering(props: {
               }
             />
             <Composer
+              {...composerPasteProps}
               value={draft()}
               files={files()}
               onAttachFiles={(incoming) => setFiles((current) => [...current, ...incoming])}
