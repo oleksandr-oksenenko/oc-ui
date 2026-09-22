@@ -20,7 +20,7 @@ import {
 import { keymap } from "prosemirror-keymap";
 import type { MarkType } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from "prosemirror-schema-list";
-import { Plugin, type Command, type EditorState } from "prosemirror-state";
+import { Plugin, PluginKey, type Command, type EditorState } from "prosemirror-state";
 
 import { schema } from "./markdown.ts";
 
@@ -43,7 +43,16 @@ const linkMark = schema.marks.link!;
  * a rule never replaces an atom or drops formatting that is already active.
  * Rules never fire inside inline code.
  */
-function markInputRule(regexp: RegExp, mark: MarkType): InputRule {
+/**
+ * Set by the code-span input rule when it completes a span. The next typed
+ * character at the end of that span is ordinary text; the flag is consumed by
+ * that character, cleared when the selection moves explicitly, and never set
+ * by the Mod-e toggle, so a toggled run keeps the inclusive code mark while it
+ * is typed (including across a line break).
+ */
+const codeSpanKey = new PluginKey<boolean>("codeSpanExit");
+
+function markInputRule(regexp: RegExp, mark: MarkType, completesCodeSpan = false): InputRule {
   return new InputRule(
     regexp,
     (state, match, start, end) => {
@@ -51,11 +60,12 @@ function markInputRule(regexp: RegExp, mark: MarkType): InputRule {
       if (!content || insideCodeContext(state, start)) return null;
       const offset = match[0].indexOf(content);
       const opening = start + offset;
-      return state.tr
+      const tr = state.tr
         .delete(opening + content.length, end)
         .delete(start, opening)
         .addMark(start, start + content.length, mark.create())
         .removeStoredMark(mark);
+      return completesCodeSpan ? tr.setMeta(codeSpanKey, "completed") : tr;
     },
     { inCodeMark: false },
   );
@@ -122,7 +132,7 @@ function promptInputRules(): readonly InputRule[] {
     markInputRule(/(?<![\w*_\\])_{2}([^*_\\\s](?:[^*_\\]*[^*_\\\s])?)_{2}$/, strongMark),
     markInputRule(/(?<![\\*_])\*([^*_\\\s](?:[^*_\\]*[^*_\\\s])?)\*$/, emMark),
     markInputRule(/(?<![\w*_\\])_([^*_\\\s](?:[^*_\\]*[^*_\\\s])?)_$/, emMark),
-    markInputRule(/`([^`]+)`$/, codeMark),
+    markInputRule(/`([^`]+)`$/, codeMark, true),
     new InputRule(
       /(?<!!)\[([^\]]+)\]\(([^()\s]*(?:\([^()\s]*\)[^()\s]*)*)\)$/,
       (state, match, start, end) => {
@@ -171,6 +181,46 @@ function compositionGuard(): Plugin {
 }
 
 /**
+ * Typing at the end of a completed code span leaves the mark. The flag set by
+ * the span's input rule is the signal; a toggled run never sets it, so the
+ * inclusive mark keeps that run going.
+ */
+function codeSpanExit(): Plugin<boolean> {
+  return new Plugin<boolean>({
+    key: codeSpanKey,
+    state: {
+      init: () => false,
+      apply(tr, pending) {
+        const meta = tr.getMeta(codeSpanKey);
+        if (meta === "completed") return true;
+        if (meta === "consumed") return false;
+        // An explicit selection change (click, arrow, toggle) abandons the
+        // pending exit; mapped typing selections do not.
+        if (tr.selectionSet && !tr.docChanged) return false;
+        return pending;
+      },
+    },
+    props: {
+      handleTextInput(view, from, to, text) {
+        if (codeSpanKey.getState(view.state) !== true || text === "" || from !== to) return false;
+        const code = schema.marks.code;
+        if (code === undefined) return false;
+        const $from = view.state.doc.resolve(from);
+        if (!$from.parent.isTextblock) return false;
+        if (!$from.marks().some((mark) => mark.type === code)) return false;
+        // A code-marked node after the cursor means the cursor is inside the
+        // span, not at its end.
+        if ($from.nodeAfter?.marks.some((mark) => mark.type === code) === true) return false;
+        view.dispatch(
+          view.state.tr.insert(from, schema.text(text)).setMeta(codeSpanKey, "consumed"),
+        );
+        return true;
+      },
+    },
+  });
+}
+
+/**
  * Editing behavior for the composer. Enter stays with the composer's submit
  * contract, so Shift+Enter is the new-line gesture: it continues lists and
  * code blocks, breaks a line inside a block, and starts a new paragraph when
@@ -179,6 +229,7 @@ function compositionGuard(): Plugin {
 export function promptPlugins(): Plugin[] {
   return [
     compositionGuard(),
+    codeSpanExit(),
     history(),
     keymap({
       "Mod-z": undo,

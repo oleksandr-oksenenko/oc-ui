@@ -148,6 +148,18 @@ describe("prompt editor plugins", () => {
     emptyCode.dispose();
   });
 
+  it("leaves the code mark when typing after a code span", () => {
+    const instance = editor();
+    instance.type("`code`");
+    expect(instance.marksOf("code")).toEqual(["code"]);
+    // The mark is inclusive while the run is being typed; typing at the end of
+    // a completed span leaves it instead of trapping the cursor.
+    instance.type("plain");
+    expect(instance.marksOf("plain")).toEqual([]);
+    expect(instance.draft().text).toBe("`code`plain");
+    instance.dispose();
+  });
+
   it("applies Markdown inline shortcuts without losing content or marks", () => {
     const strong = editor();
     strong.type("**bold**");
