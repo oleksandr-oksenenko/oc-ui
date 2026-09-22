@@ -685,13 +685,17 @@ describe("skill mention offsets", () => {
 
   /**
    * The remaining known content-fidelity failure found by this harness. It is
-   * not mention-offset drift: ranges stay correct, but the parsed document or
-   * the draft text does not survive the round trip.
+   * not mention-offset drift: the ranges stay correct and the skill atom
+   * survives; only the emphasis formatting is lost. The authoritative record
+   * is the package corpus case `emphasis adjacent to skill`
+   * (`packages/prompt-editor/src/markdown-corpus.test.ts`).
    */
-  it.fails("keeps emphasis adjacent to a skill name on round trip", () => {
+  it("records the emphasis-adjacent-skill loss with its surviving skill offsets", () => {
     // `*a`b`*aa` cannot close the emphasis run before the skill name: the
     // closing `*` follows a code span and precedes a letter, so CommonMark
-    // leaves it literal and the emphasis mark is lost.
+    // leaves it literal and the emphasis mark is lost. The draft text, the
+    // skill identity and the mention offsets must survive — a worse regression
+    // (a dropped atom or a leaked placeholder) fails before the expected loss.
     const doc = schema.node("doc", null, [
       schema.node("paragraph", null, [
         schema.text("a", [schema.marks.em!.create()]),
@@ -700,7 +704,18 @@ describe("skill mention offsets", () => {
       ]),
     ]);
     const draft = toDraft(doc);
-    expect(fromDraft(draft.text, draft.skills).eq(doc)).toBe(true);
+    expect(draft.text).toBe("*a`b`*aa");
+    expect(draft.skills).toEqual([mention("aa", 6)]);
+    expect(mentionViolation("known-loss", draft)).toBeUndefined();
+
+    const reparsed = fromDraft(draft.text, draft.skills);
+    expect(skillNamesOf(reparsed)).toEqual(["aa"]);
+    expect(reparsed.textContent).toBe("*ab*");
+    expect(mentionViolation("known-loss", toDraft(reparsed))).toBeUndefined();
+
+    // The expected formatting loss: the round trip is not document-equal.
+    expect(reparsed.eq(doc)).toBe(false);
+    expect(reparsed.firstChild!.firstChild!.marks).toEqual([]);
   });
 
   it("admits a mention inside a heading as a schema-valid skill atom", () => {

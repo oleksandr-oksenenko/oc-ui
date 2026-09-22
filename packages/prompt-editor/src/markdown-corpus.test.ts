@@ -12,8 +12,9 @@ import { fromDraft, schema, toDraft } from "./document.ts";
  * round-trips, draft stability, composer conventions, and skill offsets.
  *
  * Cases listed in `KNOWN_LOSSES` are representational losses that Markdown
- * cannot express. They must stay losses — never silently pass — and their
- * outputs must stay stable.
+ * cannot express, or delimiter-boundary limitations the codec cannot yet
+ * serialize without changing the text. They must stay losses — never silently
+ * pass — and their outputs must stay stable.
  */
 
 const mention = (name: string, start: number, id = name): PromptSkillAttachment => ({
@@ -57,13 +58,46 @@ function orderedList(order: number, ...items: string[]): PMNode {
   );
 }
 
-const KNOWN_LOSSES = new Set(["adjacent bullet lists", "adjacent ordered lists"]);
+/**
+ * The minimal known codec loss: an emphasis that closes at a code span and is
+ * immediately followed by a skill atom. The serializer writes ``*a`b`*aa``;
+ * on reparse the closing `*` precedes the skill name's first letter, so
+ * CommonMark leaves the emphasis delimiters literal instead of closing the
+ * run. The skill atom and its mention offsets survive; the emphasis formatting
+ * does not.
+ */
+function emphasisAdjacentSkill(): PMNode {
+  return schema.node("doc", null, [
+    schema.node("paragraph", null, [
+      schema.text("a", [schema.marks.em!.create()]),
+      schema.text("b", [schema.marks.em!.create(), schema.marks.code!.create()]),
+      schema.node("skill", { id: "aa", name: "aa" }),
+    ]),
+  ]);
+}
+
+/** The names of the skill atoms in a document, in order. */
+function skillNames(doc: PMNode): string[] {
+  const names: string[] = [];
+  doc.descendants((node) => {
+    if (node.type.name === "skill") names.push(String(node.attrs.name));
+    return true;
+  });
+  return names;
+}
+
+const KNOWN_LOSSES = new Set([
+  "adjacent bullet lists",
+  "adjacent ordered lists",
+  "emphasis adjacent to skill",
+]);
 
 /**
- * Cases whose draft is not yet a fixed point. Empty since the mdast
- * serializer: every corpus draft is stable under serialize, parse, serialize.
+ * Cases whose draft is not yet a fixed point. The emphasis-adjacent-skill loss
+ * reparses to escaped delimiters, so its draft changes once and then
+ * stabilizes.
  */
-const KNOWN_UNSTABLE = new Set<string>();
+const KNOWN_UNSTABLE = new Set(["emphasis adjacent to skill"]);
 
 const corpus: ReadonlyArray<readonly [string, PMNode]> = [
   ["empty", parse("")],
@@ -165,6 +199,7 @@ const corpus: ReadonlyArray<readonly [string, PMNode]> = [
   ["skill in list", parse("- review this", [mention("review", 2)])],
   ["skill in quote", parse("> review this", [mention("review", 2)])],
   ["skill in code mark", parse("`review`", [mention("review", 1)])],
+  ["emphasis adjacent to skill", emphasisAdjacentSkill()],
   [
     "skill repeated after emoji",
     parse("🙂\n\nreview and review", [mention("review", 4), mention("review", 15)]),
@@ -228,6 +263,37 @@ describe("markdown corpus", () => {
     expect(toDraft(doc).text).toBe("");
   });
 
+  it("records the emphasis-adjacent-skill loss without hiding the skill", () => {
+    const doc = emphasisAdjacentSkill();
+    const { draft, reparsed, again } = roundTrip(doc);
+
+    // What survives: the visible text and the skill's identity and offsets.
+    // A worse regression — the placeholder leaking as text, or the atom or its
+    // mention disappearing — fails these before the expected loss is checked.
+    expect(draft.text).toBe("*a`b`*aa");
+    expect(draft.skills).toEqual([
+      { id: "aa", name: "aa", mention: { start: 6, end: 8, text: "aa" } },
+    ]);
+    expect(skillNames(reparsed)).toEqual(["aa"]);
+    expect(reparsed.textContent).toBe("*ab*");
+
+    // The expected formatting loss: the closing `*` precedes the skill name's
+    // first letter, so the emphasis delimiters stay literal and only the code
+    // mark survives the reparse.
+    expect(reparsed.eq(doc)).toBe(false);
+    const paragraph = reparsed.firstChild!;
+    expect(paragraph.firstChild!.text).toBe("*a");
+    expect(paragraph.firstChild!.marks).toEqual([]);
+    expect(paragraph.child(1).marks.map((mark) => mark.type.name)).toEqual(["code"]);
+    expect(paragraph.child(2).text).toBe("*");
+
+    // The canonical draft is stable after that loss and still indexes the name.
+    expect(again.text).toBe("\\*a`b`\\*aa");
+    expect(again.skills).toEqual([
+      { id: "aa", name: "aa", mention: { start: 8, end: 10, text: "aa" } },
+    ]);
+  });
+
   it("is stable under serialize, parse, serialize, except for the documented instabilities", () => {
     const unstable: string[] = [];
     for (const [name, doc] of corpus) {
@@ -240,7 +306,9 @@ describe("markdown corpus", () => {
 
   it("keeps skill mentions and offsets through a round trip", () => {
     for (const [name, doc] of corpus) {
-      if (!/skill|mention|placeholder/.test(name)) continue;
+      // A documented instability changes the draft text, not the skill atom;
+      // the loss test above checks its surviving atoms and offsets.
+      if (!/skill|mention|placeholder/.test(name) || KNOWN_UNSTABLE.has(name)) continue;
       const { draft, again } = roundTrip(doc);
       expect(again).toEqual(draft);
     }

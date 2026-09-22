@@ -34,6 +34,11 @@ In the app:
   ranges stay ordinary text, and every accepted mention satisfies
   `text.slice(start, end) === name` with ordered, non-overlapping ranges.
   `fromDraft -> toDraft` is a fixed point for canonical drafts.
+- One delimiter-boundary case is a documented loss: an emphasis that closes at
+  a code span immediately before a skill atom reparses with literal `*`
+  delimiters, because the closing `*` would precede the name's first letter.
+  The skill atom, its mention offsets, and the visible text survive; the
+  authoritative record is the `emphasis adjacent to skill` corpus case.
 - `pasteContent` is the Markdown policy: a code block inserts the text as-is,
   anywhere else the text parses as a draft. `pastePlainText` is the literal
   policy: characters are never reinterpreted, carriage returns normalize to
