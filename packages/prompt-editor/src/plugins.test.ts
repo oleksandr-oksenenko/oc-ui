@@ -3,7 +3,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import type { Node } from "prosemirror-model";
 import { EditorView } from "prosemirror-view";
 
-import { fromDraft, schema, toDraft } from "./document.ts";
+import { fromDraft, pasteContent, schema, toDraft } from "./document.ts";
 import { promptPlugins } from "./plugins.ts";
 
 /** Mounts the composer editor and drives it like a keyboard and a browser. */
@@ -69,6 +69,12 @@ function editor(draft = "") {
 /** The platform decides whether Mod is Meta or Ctrl, exactly as the keymap does. */
 const primaryModifier = (): KeyboardEventInit =>
   /Mac|iP(hone|[oa]d)/.test(navigator.platform) ? { metaKey: true } : { ctrlKey: true };
+
+/** The mark names on a paragraph's second child, where the code mark can land. */
+function secondChildMarks(doc: Node): string[] {
+  const paragraph = doc.firstChild!;
+  return paragraph.child(1).marks.map((mark) => mark.type.name);
+}
 
 describe("prompt editor plugins", () => {
   it("applies Markdown block shortcuts while typing", () => {
@@ -308,6 +314,83 @@ describe("prompt editor plugins", () => {
     expect(bold.press("b", primaryModifier())).toBe(true);
     expect(bold.draft().text).toBe("**abc**");
     bold.dispose();
+  });
+
+  it("writes a code mark across a line break as separate code spans", () => {
+    // Mod-e over a selection that spans a hard break.
+    const toggled = editor();
+    toggled.type("a");
+    toggled.press("Enter", { shiftKey: true });
+    toggled.type("b");
+    toggled.select(1, toggled.view.state.doc.firstChild!.nodeSize - 1);
+    expect(toggled.press("e", primaryModifier())).toBe(true);
+    // The toggle marks the break too: this is the document that made the
+    // serializer throw before it learned to split the span.
+    expect(toggled.view.state.doc.firstChild!.child(1).type.name).toBe("hard_break");
+    expect(secondChildMarks(toggled.view.state.doc)).toEqual(["code"]);
+    const draft = toggled.draft();
+    expect(draft.text).toBe("`a`\n`b`");
+    toggled.dispose();
+
+    // Shift+Enter while the code mark is active.
+    const active = editor();
+    active.press("e", primaryModifier());
+    active.type("a");
+    expect(active.press("Enter", { shiftKey: true })).toBe(true);
+    active.type("b");
+    expect(active.marksOf("a")).toEqual(["code"]);
+    expect(active.marksOf("b")).toEqual(["code"]);
+    expect(secondChildMarks(active.view.state.doc)).toEqual(["code"]);
+    expect(active.draft().text).toBe("`a`\n`b`");
+    active.dispose();
+
+    // A transaction that adds the code mark directly, as paste or another
+    // command would.
+    const direct = editor("a\nb");
+    direct.view.dispatch(
+      direct.view.state.tr.addMark(
+        1,
+        direct.view.state.doc.firstChild!.nodeSize - 1,
+        schema.marks.code!.create(),
+      ),
+    );
+    expect(secondChildMarks(direct.view.state.doc)).toEqual(["code"]);
+    expect(direct.draft().text).toBe("`a`\n`b`");
+    direct.dispose();
+
+    // The draft round-trips: text and break survive, and the code mark stays
+    // on the text runs. The break itself has no code form on the wire.
+    const restored = fromDraft(draft.text, draft.skills);
+    restored.check();
+    expect(restored.textContent).toBe("ab");
+    const paragraph = restored.firstChild!;
+    expect(paragraph.childCount).toBe(3);
+    expect(paragraph.child(1).type.name).toBe("hard_break");
+    expect(paragraph.child(0).marks.map((mark) => mark.type.name)).toEqual(["code"]);
+    expect(paragraph.child(2).marks.map((mark) => mark.type.name)).toEqual(["code"]);
+  });
+
+  it("writes a code mark across an image as separate code spans", () => {
+    const pasted = editor();
+    pasted.type("a");
+    pasted.view.dispatch(pasteContent(pasted.view.state, "![alt](x.png)"));
+    pasted.type("b");
+    pasted.select(1, pasted.view.state.doc.firstChild!.nodeSize - 1);
+    expect(pasted.press("e", primaryModifier())).toBe(true);
+    // The toggle marks the image, which is what used to throw.
+    expect(secondChildMarks(pasted.view.state.doc)).toEqual(["code"]);
+    const draft = pasted.draft();
+    expect(draft.text).toBe("`a`![alt](x.png)`b`");
+    pasted.dispose();
+
+    const restored = fromDraft(draft.text, draft.skills);
+    restored.check();
+    expect(restored.textContent).toBe("ab");
+    const paragraph = restored.firstChild!;
+    expect(paragraph.childCount).toBe(3);
+    expect(paragraph.child(1).type.name).toBe("image");
+    expect(paragraph.child(0).marks.map((mark) => mark.type.name)).toEqual(["code"]);
+    expect(paragraph.child(2).marks.map((mark) => mark.type.name)).toEqual(["code"]);
   });
 
   it("undoes an input rule with Backspace", () => {

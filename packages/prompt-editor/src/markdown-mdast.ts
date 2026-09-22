@@ -3,7 +3,6 @@ import type {
   Code,
   Heading,
   Image,
-  InlineCode,
   Link,
   List,
   ListItem,
@@ -159,7 +158,8 @@ type MarkFrame = {
  * and closed as they come and go, so a mark that continues across a
  * differently-marked run stays one wrapper and its boundary spaces stay
  * interior; only a mark that actually ends is closed. A code mark is not a
- * wrapper: it writes its run as one code span.
+ * wrapper: it writes its text runs as code spans, split around content a span
+ * cannot carry.
  */
 function phrasing(parent: PMNode, renderSkill: RenderSkill): PhrasingContent[] {
   const nodes: PMNode[] = [];
@@ -207,7 +207,7 @@ function phrasing(parent: PMNode, renderSkill: RenderSkill): PhrasingContent[] {
       run.push(inline(nodes[cursor]!, renderSkill));
     }
     if (marksAt(nodes, index).some((mark) => mark.type.name === "code")) {
-      write(codeSpan(run));
+      writeCodeRun(run, write);
     } else {
       for (const child of run) write(child);
     }
@@ -281,16 +281,31 @@ function skill(node: PMNode, renderSkill: RenderSkill): Text {
   return { type: "text", value: renderSkill(node) };
 }
 
-/** A code mark's run serializes to one code span. */
-function codeSpan(content: PhrasingContent[]): InlineCode {
-  let value = "";
-  for (const node of content) {
-    // An inline code span can only carry text; an atom, image or break inside
-    // a code mark has no Markdown form and must not be dropped silently.
-    if (node.type !== "text") throw new Error(`Unsupported \`${node.type}\` inside a code mark`);
-    value += node.value;
+/**
+ * Writes a code-marked run as code spans around the content a span cannot
+ * carry. An inline code span is text only, so a break or image splits it: the
+ * code wrapper closes before the node, the node is written without the code
+ * mark, and code resumes after it. Keeping the node inside one span has no
+ * Markdown form and must not drop content.
+ */
+function writeCodeRun(
+  run: readonly PhrasingContent[],
+  write: (child: PhrasingContent) => void,
+): void {
+  let text = "";
+  const flush = () => {
+    if (text === "") return;
+    write({ type: "inlineCode", value: text });
+    text = "";
+  };
+  for (const child of run) {
+    if (child.type === "text") text += child.value;
+    else {
+      flush();
+      write(child);
+    }
   }
-  return { type: "inlineCode", value };
+  flush();
 }
 
 function link(mark: Mark, content: PhrasingContent[]): Link {

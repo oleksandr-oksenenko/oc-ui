@@ -1,7 +1,7 @@
 import type { PromptSkillAttachment } from "@opencode/client";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toMarkdown } from "mdast-util-to-markdown";
-import { Schema } from "prosemirror-model";
+import { Schema, type Node as PMNode } from "prosemirror-model";
 import { describe, expect, it } from "vite-plus/test";
 
 import { fromDraft, schema, toDraft } from "./document.ts";
@@ -9,8 +9,9 @@ import { mdastOptions, serializeMdast } from "./markdown-mdast.ts";
 
 /**
  * Serializer-level checks for the private mdast converter: the production
- * draft must be a fixed point for a plain mdast consumer, and schema content
- * the converter cannot map must throw instead of being flattened.
+ * draft must be a fixed point for a plain mdast consumer, schema content the
+ * converter cannot map must throw instead of being flattened, and a code mark
+ * around a break or image becomes separate code spans instead of a failure.
  */
 
 const mention = (name: string, start: number): PromptSkillAttachment => ({
@@ -93,11 +94,8 @@ describe("mdast serializer", () => {
     expect(() => serializeMdast(marked, () => "")).toThrow("Unsupported mark `highlight`");
   });
 
-  it("throws when a code mark wraps content a code span cannot carry", () => {
+  it("splits a code mark into spans around content a code span cannot carry", () => {
     const code = schema.marks.code!.create();
-    const image = schema.node("image", { src: "x.png" }, undefined, [code]);
-    const imageDoc = schema.node("doc", null, [schema.node("paragraph", null, [image])]);
-    expect(() => toDraft(imageDoc)).toThrow("Unsupported `image` inside a code mark");
     const breakDoc = schema.node("doc", null, [
       schema.node("paragraph", null, [
         schema.text("a", [code]),
@@ -105,9 +103,32 @@ describe("mdast serializer", () => {
         schema.text("b", [code]),
       ]),
     ]);
-    expect(() => toDraft(breakDoc)).toThrow("Unsupported `break` inside a code mark");
+    expect(toDraft(breakDoc).text).toBe("`a`\n`b`");
+    const breakRestored = fromDraft(toDraft(breakDoc).text);
+    breakRestored.check();
+    expect(breakRestored.textContent).toBe("ab");
+    expect(markNames(breakRestored.firstChild!)).toEqual([["code"], [], ["code"]]);
+    expect(breakRestored.firstChild!.child(1).type.name).toBe("hard_break");
+
+    const image = schema.node("image", { src: "x.png", alt: "alt" }, undefined, [code]);
+    const imageDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("a", [code]), image, schema.text("b", [code])]),
+    ]);
+    expect(toDraft(imageDoc).text).toBe("`a`![alt](x.png)`b`");
+    const imageRestored = fromDraft(toDraft(imageDoc).text);
+    imageRestored.check();
+    expect(imageRestored.textContent).toBe("ab");
+    expect(markNames(imageRestored.firstChild!)).toEqual([["code"], [], ["code"]]);
+    expect(imageRestored.firstChild!.child(1).type.name).toBe("image");
   });
 });
+
+/** The mark names on each child of a node, in order. */
+function markNames(node: PMNode): string[][] {
+  const names: string[][] = [];
+  node.forEach((child) => names.push(child.marks.map((mark) => mark.type.name)));
+  return names;
+}
 
 /**
  * A schema with node and mark names the composer does not define, so the
