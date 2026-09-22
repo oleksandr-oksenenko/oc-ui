@@ -199,6 +199,27 @@ describe("Composer composition precedence", () => {
     harness.dispose();
   });
 
+  it("gives composition precedence over the open suggestion menu", async () => {
+    for (const signal of [{ isComposing: true }, { keyCode: 229 }] as const) {
+      const harness = openComposer();
+      harness.paste("/");
+      await harness.settle();
+      expect(harness.menu()).not.toBeNull();
+
+      // A keydown that claims to belong to a composition while the browser
+      // failed to deliver composition events must not select an item, format
+      // the document, or submit the draft.
+      harness.enter(signal);
+
+      expect(harness.submit).not.toHaveBeenCalled();
+      expect(harness.queue).not.toHaveBeenCalled();
+      expect(harness.menu()).not.toBeNull();
+      expect(harness.draft()).toBe("/");
+
+      harness.dispose();
+    }
+  });
+
   it("closes the suggestion menu when composition starts, without sending", async () => {
     const harness = openComposer();
     harness.paste("/");

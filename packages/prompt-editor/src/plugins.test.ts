@@ -479,6 +479,24 @@ describe("prompt editor composition", () => {
     plain.dispose();
   });
 
+  it("consumes keydowns that only claim a composition through the payload", () => {
+    for (const signal of ["isComposing", "keyCode229"]) {
+      const appKeys = vi.fn<AppKeyHandler>(() => false);
+      const harness = editor("- one\n- two", appKeys);
+      const doc = harness.view.state.doc.toJSON();
+      const selection = harness.view.state.selection.toJSON();
+      const event =
+        signal === "isComposing"
+          ? harness.domPress("Tab", { isComposing: true })
+          : harness.domPress("Tab", { keyCode: 229 });
+      expect(event.defaultPrevented).toBe(false);
+      expect(harness.view.state.doc.toJSON()).toEqual(doc);
+      expect(harness.view.state.selection.toJSON()).toEqual(selection);
+      expect(appKeys).not.toHaveBeenCalled();
+      harness.dispose();
+    }
+  });
+
   // Two composition behaviors are deliberately not asserted here.
   //
   // D5: `prosemirror-inputrules` re-runs input rules 0 ms after

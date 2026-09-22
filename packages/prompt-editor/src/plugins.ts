@@ -20,7 +20,7 @@ import {
 import { keymap } from "prosemirror-keymap";
 import type { MarkType } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from "prosemirror-schema-list";
-import type { Command, EditorState, Plugin } from "prosemirror-state";
+import { Plugin, type Command, type EditorState } from "prosemirror-state";
 
 import { schema } from "./markdown.ts";
 
@@ -143,6 +143,34 @@ function promptInputRules(): readonly InputRule[] {
 }
 
 /**
+ * The keydown guard for compositions. It runs at the DOM boundary, before the
+ * app's `handleKeyDown` and before every keymap, so a key that an input method
+ * owns cannot submit, queue, select a suggestion, toggle a mark, or move the
+ * document. Browsers differ in what they report for the Enter that commits a
+ * composition: the view may already have seen `compositionend`, the event may
+ * carry `isComposing`, or it may only report the legacy `keyCode` 229, so all
+ * three signals count. Returning true from `handleDOMEvents` stops
+ * ProseMirror's own handling without calling `preventDefault`, so the browser
+ * and the IME keep processing the key natively. It deliberately does not
+ * return true for a keydown after `compositionend`: whether a platform
+ * delivers the committing Enter as a separate keydown is native behavior that
+ * needs a real IME to establish.
+ */
+function compositionGuard(): Plugin {
+  return new Plugin({
+    props: {
+      handleDOMEvents: {
+        keydown(view, event) {
+          // ProseMirror only routes keydown events here.
+          const key = event;
+          return view.composing || key.isComposing || key.keyCode === 229;
+        },
+      },
+    },
+  });
+}
+
+/**
  * Editing behavior for the composer. Enter stays with the composer's submit
  * contract, so Shift+Enter is the new-line gesture: it continues lists and
  * code blocks, breaks a line inside a block, and starts a new paragraph when
@@ -150,6 +178,7 @@ function promptInputRules(): readonly InputRule[] {
  */
 export function promptPlugins(): Plugin[] {
   return [
+    compositionGuard(),
     history(),
     keymap({
       "Mod-z": undo,
