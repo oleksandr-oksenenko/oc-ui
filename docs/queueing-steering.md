@@ -3,10 +3,12 @@
 This extends the original milestone-one composer behavior using OpenCode
 `2.0.3` inbox contracts.
 
-- Enter and Send submit with `delivery: "steer"`; Cmd+Enter uses `"queue"`.
-  Shift+Enter inserts a newline. While running, the shared button shows Stop
-  when there is no sendable text, attachment, review, or annotation, and Send
-  otherwise.
+- Enter and Send submit with `delivery: "steer"`; Mod+Enter uses `"queue"`,
+  which is Cmd on macOS and Ctrl elsewhere (the renderer's `data-platform`
+  marker, set in `mount-app.tsx`). The chord is consumed even when queueing is
+  unavailable or the draft is not eligible, so it never sends. Shift+Enter
+  inserts a newline. While running, the shared button shows Stop when there is
+  no sendable text, attachment, review, or annotation, and Send otherwise.
 - Pending user messages appear above the composer, with steering messages first
   and SDK order preserved within each delivery group. Rows use one line with
   equal vertical padding. The red × calls `session.inbox.cancel`;

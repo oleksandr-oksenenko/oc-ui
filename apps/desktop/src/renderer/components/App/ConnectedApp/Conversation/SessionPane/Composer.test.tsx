@@ -1,10 +1,20 @@
 import { createSignal } from "solid-js";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { mount } from "../../../../../test/mount.ts";
 import type { FileTransferLike } from "../../../../../opencode/attachments.ts";
 import { Composer } from "./Composer.tsx";
 import type { ComposerProps } from "./Composer.tsx";
+
+// The renderer sets this signal before mounting (mount-app.tsx); the tests
+// choose the platform explicitly.
+const setPlatform = (platform: "macos" | "other") => {
+  document.documentElement.dataset.platform = platform;
+};
+
+afterEach(() => {
+  delete document.documentElement.dataset.platform;
+});
 
 const unavailableSelection = {
   state: "failed" as const,
@@ -838,6 +848,7 @@ describe("Composer", () => {
   });
 
   it("moves the queue shortcuts from below the composer into the send tooltip", async () => {
+    setPlatform("macos");
     vi.useFakeTimers();
     const [action, setAction] = createSignal<ComposerProps["action"]>("send");
     const [onQueue, setOnQueue] = createSignal<(() => void) | undefined>(() => undefined);
@@ -878,6 +889,126 @@ describe("Composer", () => {
 
     dispose();
     vi.useRealTimers();
+  });
+
+  it("labels the queue chord for the non-macOS platform", async () => {
+    setPlatform("other");
+    vi.useFakeTimers();
+    const { host, dispose } = mount(() => (
+      <Composer
+        value="send this"
+        disabled={false}
+        action="send"
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+        onQueue={() => undefined}
+      />
+    ));
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    const trigger = button?.closest('[data-component="tooltip-v2-trigger"]');
+    const event = new Event("pointerenter");
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    trigger!.dispatchEvent(event);
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(tooltipText()).toBe("Enter to send · Ctrl Enter to queue · Shift Enter for a new line");
+
+    dispose();
+    vi.useRealTimers();
+  });
+
+  it("queues with the platform's chord and never sends from it", () => {
+    const cases = [
+      { platform: "macos" as const, chord: { metaKey: true } },
+      { platform: "other" as const, chord: { ctrlKey: true } },
+    ];
+    for (const { platform, chord } of cases) {
+      setPlatform(platform);
+      const submit = vi.fn<() => void>();
+      const queue = vi.fn<() => void>();
+      const { host, dispose } = mount(() => (
+        <Composer
+          value="send this"
+          disabled={false}
+          action="send"
+          modelSelection={unavailableSelection}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={submit}
+          onQueue={queue}
+        />
+      ));
+      const prompt = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+      if (!prompt) throw new Error("Composer did not render a prompt");
+
+      prompt.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, ...chord }));
+
+      expect(queue).toHaveBeenCalledOnce();
+      expect(submit).not.toHaveBeenCalled();
+      dispose();
+    }
+  });
+
+  it("consumes the queue chord when queueing is unavailable", () => {
+    setPlatform("macos");
+    const submit = vi.fn<() => void>();
+    const { host, dispose } = mount(() => (
+      <Composer
+        value="send this"
+        disabled={false}
+        action="send"
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={submit}
+      />
+    ));
+    const prompt = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+    if (!prompt) throw new Error("Composer did not render a prompt");
+
+    prompt.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }),
+    );
+    expect(submit).not.toHaveBeenCalled();
+
+    // Enter keeps its send contract when the chord is not held.
+    prompt.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(submit).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it("consumes the queue chord when the draft is not eligible", () => {
+    setPlatform("macos");
+    for (const props of [
+      { disabled: true, value: "send this" },
+      { disabled: false, value: "" },
+    ]) {
+      const submit = vi.fn<() => void>();
+      const queue = vi.fn<() => void>();
+      const { host, dispose } = mount(() => (
+        <Composer
+          value={props.value}
+          disabled={props.disabled}
+          action="send"
+          modelSelection={unavailableSelection}
+          agentSelection={unavailableAgentSelection}
+          onInput={() => undefined}
+          onSubmit={submit}
+          onQueue={queue}
+        />
+      ));
+      const prompt = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+      if (!prompt) throw new Error("Composer did not render a prompt");
+
+      prompt.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }),
+      );
+      expect(queue).not.toHaveBeenCalled();
+      expect(submit).not.toHaveBeenCalled();
+      dispose();
+    }
   });
 
   it("keeps the stop tooltip while a running composer is empty", async () => {

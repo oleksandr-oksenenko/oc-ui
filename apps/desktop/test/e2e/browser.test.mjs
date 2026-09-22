@@ -618,7 +618,9 @@ describe.sequential("production browser app", () => {
         await prompt.press("Enter");
         await prompt.press("Backspace");
       } else await prompt.fill(text);
-      await prompt.press("Meta+Enter");
+      // The queue chord follows the renderer's platform marker: Cmd on macOS,
+      // Ctrl elsewhere.
+      await prompt.press(process.platform === "darwin" ? "Meta+Enter" : "Control+Enter");
       await expect.poll(() => prompt.textContent()).toBe("");
       await pending.getByText(text, { exact: true }).waitFor();
     }

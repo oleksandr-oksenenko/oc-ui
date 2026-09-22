@@ -42,6 +42,9 @@ export type ComposerCatalog = {
   readonly onRetry: () => void;
 };
 
+/** The renderer marks the document with its platform before mounting (mount-app.tsx). */
+const isMacPlatform = () => document.documentElement.dataset.platform === "macos";
+
 export type ComposerProps = {
   readonly value: string;
   readonly sessionID?: string;
@@ -86,7 +89,7 @@ export type ComposerProps = {
   };
   readonly onInput: (value: string, skills?: readonly PromptSkillAttachment[]) => void;
   readonly onSubmit: () => void;
-  /** When supplied, Cmd+Enter submits with queued delivery. */
+  /** When supplied, Mod+Enter submits with queued delivery. */
   readonly onQueue?: () => void;
   readonly onStop?: () => void;
 };
@@ -232,11 +235,14 @@ export function Composer(props: ComposerProps) {
     props.onSubmit();
   };
 
+  // The queue chord and its label follow the platform marker.
+  const queueChord = (event: KeyboardEvent) => (isMacPlatform() ? event.metaKey : event.ctrlKey);
+
   const sendTooltip = () => {
     if (stopping()) return "Stop";
     if (props.onQueue) {
       const steer = props.action === "running" ? "Enter to steer" : "Enter to send";
-      return `${steer} · ⌘ Enter to queue · Shift Enter for a new line`;
+      return `${steer} · ${isMacPlatform() ? "⌘" : "Ctrl"} Enter to queue · Shift Enter for a new line`;
     }
     return props.action === "running" ? "Send steering message (Enter)" : "Send";
   };
@@ -245,8 +251,10 @@ export function Composer(props: ComposerProps) {
     if (event.isComposing || event.keyCode === 229 || event.key !== "Enter" || event.shiftKey)
       return;
     event.preventDefault();
-    if (event.metaKey && props.onQueue) {
-      if (canSubmit()) props.onQueue();
+    if (queueChord(event)) {
+      // The queue gesture never falls through to send, even when queueing is
+      // unavailable or the draft is not eligible for submission.
+      if (props.onQueue && canSubmit()) props.onQueue();
       return;
     }
     submit();
