@@ -387,9 +387,9 @@ export function Composer(props: ComposerProps) {
   };
 
   /**
-   * The explicit literal-paste gesture. The host clipboard read owns the
-   * payload; preventing the keydown default also stops a platform that maps the
-   * chord to its own paste-and-match-style from inserting a second time.
+   * The explicit literal-paste gesture. The clipboard read owns the payload;
+   * preventing the keydown default also stops a platform that maps the chord
+   * to its own paste-and-match-style from inserting a second time.
    */
   const literalChord = (event: KeyboardEvent) => {
     if (event.isComposing || event.keyCode === 229) return;
@@ -464,7 +464,7 @@ export function Composer(props: ComposerProps) {
 
   /**
    * The context-menu escape hatch, also used by the keyboard chord. It reads
-   * the host clipboard and inserts its text through the editor's plain-text
+   * the clipboard and inserts its text through the editor's plain-text
    * route, so Markdown and HTML on the clipboard are never interpreted. Oversized
    * text still becomes an attachment, and a denied read is explained instead of
    * failing silently.

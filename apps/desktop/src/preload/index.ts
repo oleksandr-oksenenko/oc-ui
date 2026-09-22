@@ -4,7 +4,6 @@ import { BROWSER_CHANNELS, BrowserEvent, type BrowserRequest } from "../shared/b
 
 import {
   IPC_CHANNELS,
-  parseClipboardText,
   parseLocalOpenCodeConnectResult,
   parseOpenExternalUrl,
   parseTargetLoadResult,
@@ -61,10 +60,6 @@ const desktopApi: DesktopApi = {
     },
   },
   openExternal,
-  clipboard: {
-    // The renderer bounds the text immediately after this resolves.
-    readText: () => ipcRenderer.invoke(IPC_CHANNELS.clipboardReadText).then(parseClipboardText),
-  },
 };
 
 contextBridge.exposeInMainWorld("desktop", desktopApi);

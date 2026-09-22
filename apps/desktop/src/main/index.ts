@@ -7,7 +7,6 @@ import { NodePath } from "@effect/platform-node";
 import {
   app,
   BrowserWindow,
-  clipboard,
   dialog,
   ipcMain,
   net,
@@ -16,7 +15,7 @@ import {
   session,
   shell,
 } from "electron";
-import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent } from "electron";
+import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent, WebContents } from "electron";
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 
 import { BrowserHost } from "./browser/host.ts";
@@ -26,6 +25,7 @@ import { BROWSER_CHANNELS, BrowserRequest } from "../shared/browser-api.ts";
 import type { SaveTargetInput } from "../shared/desktop-api.ts";
 import { IPC_CHANNELS, parseOpenExternalUrl, parseSaveTargetInput } from "../shared/desktop-api.ts";
 import { LocalOpenCode, LocalOpenCodeUnavailableError } from "./local-opencode.ts";
+import { allowsClipboardAccess } from "./permissions.ts";
 import { settingsLayer, Settings } from "./settings.ts";
 import { settingsFileSystemLayer } from "./settings-file-system.ts";
 import { createAppQuitHandler, settleSettingsIpc } from "./shutdown.ts";
@@ -234,19 +234,6 @@ const installIpcHandlers = (): void => {
     return trackPending(shell.openExternal(url));
   });
 
-  // The web Clipboard API is denied by configurePermissions, so the renderer's
-  // literal-paste escape hatch reads through the host instead.
-  ipcMain.handle(IPC_CHANNELS.clipboardReadText, (event, ...args: unknown[]) => {
-    assertTrustedIpcSender(event);
-    if (args.length !== 0) {
-      return Promise.reject(new TypeError("clipboard.readText does not accept arguments"));
-    }
-    if (quitHandler.isQuitting()) {
-      return Promise.reject(new Error("Ocui is closing."));
-    }
-    return clipboard.readText();
-  });
-
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- IPC input is decoded before dispatch.
   ipcMain.handle(BROWSER_CHANNELS.request, (event, raw: unknown) => {
     assertTrustedIpcSender(event);
@@ -285,6 +272,11 @@ const installIpcHandlers = (): void => {
 const forwardLocalOpenCodeUnavailable = (): void => {
   if (mainWindow === undefined || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send(IPC_CHANNELS.localOpenCodeUnavailable);
+};
+
+const resolveDevelopmentOrigin = (): string | undefined => {
+  const { rendererUrl } = resolveDesktopRuntimeEnvironment();
+  return rendererUrl === undefined ? undefined : new URL(rendererUrl).origin;
 };
 
 const isRendererUrl = (value: string, developmentOrigin: string | undefined): boolean => {
@@ -352,11 +344,34 @@ const installRendererProtocol = async (rendererRoot: string): Promise<void> => {
   });
 };
 
+/**
+ * Default-deny web permissions, with one deliberate exception: clipboard
+ * access from the trusted main renderer, which the transcript copy controls
+ * need (Electron checks the read permission even for writes). Everything else
+ * stays denied.
+ */
 const configurePermissions = (): void => {
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
-  });
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  const allowsClipboard = (
+    webContents: WebContents | null,
+    permission: string,
+    details: { readonly isMainFrame: boolean; readonly requestingUrl?: string | undefined },
+  ): boolean =>
+    allowsClipboardAccess({
+      permission,
+      isMainWindow: webContents !== null && webContents === mainWindow?.webContents,
+      isMainFrame: details.isMainFrame,
+      isTrustedUrl:
+        details.requestingUrl !== undefined &&
+        isRendererUrl(details.requestingUrl, resolveDevelopmentOrigin()),
+    });
+  session.defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback, details) => {
+      callback(allowsClipboard(webContents, permission, details));
+    },
+  );
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) =>
+    allowsClipboard(webContents, permission, details),
+  );
 };
 
 const createMainWindow = async (): Promise<void> => {

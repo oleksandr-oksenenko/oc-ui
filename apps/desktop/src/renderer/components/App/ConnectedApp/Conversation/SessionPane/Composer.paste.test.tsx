@@ -449,7 +449,7 @@ describe("Composer adversarial paste", () => {
 });
 
 describe("Composer literal paste gesture", () => {
-  it("inserts the host clipboard text literally and leaves routing untouched", async () => {
+  it("inserts the clipboard text literally and leaves routing untouched", async () => {
     setPlatform("macos");
     const read = vi.fn<() => Promise<string | undefined>>(async () =>
       Promise.resolve("# not a heading\n\n- not a list"),

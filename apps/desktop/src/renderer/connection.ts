@@ -307,8 +307,8 @@ class Connection extends Context.Service<
   Effect.Success<ReturnType<typeof makeConnection>>
 >()("renderer/Connection") {}
 
-/** The permission-gated web Clipboard API; an unavailable read resolves to undefined. */
-function readBrowserClipboardText(): Promise<string | undefined> {
+/** The web Clipboard API; the session allows it for the trusted renderer. An unavailable or denied read resolves to undefined. */
+function readWebClipboardText(): Promise<string | undefined> {
   try {
     return navigator.clipboard.readText().catch(() => undefined);
   } catch {
@@ -341,15 +341,11 @@ export function createRenderer(host: AppHost) {
     /* The host owns how a web link leaves the window; the caller reports failure. */
     openExternal: (url: string) => host.openExternal(url),
     /**
-     * Clipboard text for the composer's literal-paste escape hatch. The desktop
-     * host reads through its own bridge because web clipboard permissions are
-     * denied; the browser build falls back to the permission-gated API. An
-     * unavailable or denied read resolves to `undefined` so the UI can explain it.
+     * Clipboard text for the composer's literal-paste escape hatch. The
+     * session allows the web clipboard for the trusted renderer; an unavailable
+     * or denied read resolves to `undefined` so the UI can explain it.
      */
-    readClipboardText: (): Promise<string | undefined> =>
-      host.kind === "desktop"
-        ? host.clipboard.readText().catch(() => undefined)
-        : readBrowserClipboardText(),
+    readClipboardText: () => readWebClipboardText(),
     appearance: {
       state: appearance.state,
       setTheme: (theme: Theme) => {

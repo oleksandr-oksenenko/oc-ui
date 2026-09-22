@@ -97,9 +97,6 @@ const makeDesktop = (options: {
       ),
     onUnavailable: options.onUnavailable ?? (() => () => undefined),
   },
-  clipboard: {
-    readText: vi.fn<() => Promise<string>>(() => Promise.resolve("")),
-  },
 });
 
 const mount = (appHost: AppHost) => {
