@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vite-plus/test";
+
+import { sanitizePastedHtml } from "./pasteHtml.ts";
+
+describe("sanitizePastedHtml", () => {
+  it("keeps allowed links and images with web URLs", () => {
+    const html =
+      '<p>See <a href="https://example.com/spec">the spec</a>.</p><img src="https://example.com/a.png" alt="A">';
+    const sanitized = sanitizePastedHtml(html);
+    expect(sanitized).toContain('href="https://example.com/spec"');
+    expect(sanitized).toContain('src="https://example.com/a.png"');
+    expect(sanitized).toContain('alt="A"');
+  });
+
+  it("drops unsafe link schemes while keeping the link text", () => {
+    for (const href of ["javascript:alert(1)", "data:text/html,<script>", "file:///etc/passwd"]) {
+      const sanitized = sanitizePastedHtml(`<p><a href="${href}">click</a></p>`);
+      expect(sanitized).not.toContain("href");
+      expect(sanitized).toContain("click");
+    }
+    expect(sanitizePastedHtml('<a href="mailto:team@example.com">mail</a>')).toContain(
+      'href="mailto:team@example.com"',
+    );
+  });
+
+  it("removes images whose source the editor cannot load", () => {
+    for (const src of [
+      "file:///tmp/a.png",
+      "blob:https://example.com/x",
+      "data:image/png;base64,AAAA",
+    ]) {
+      const sanitized = sanitizePastedHtml(`<img src="${src}" alt="stale">`);
+      expect(sanitized).not.toContain("src");
+    }
+  });
+
+  it("keeps schema-relevant structure and slice context", () => {
+    const html =
+      '<article data-pm-slice="1 1 []"><h1>Title</h1><ul><li>one</li><li>two</li></ul><pre><code>const x = 1;</code></pre></article>';
+    const sanitized = sanitizePastedHtml(html);
+    expect(sanitized).toContain("data-pm-slice");
+    expect(sanitized).toContain("<h1>Title</h1>");
+    expect(sanitized).toContain("<li>one</li>");
+    expect(sanitized).toContain("<pre><code>const x = 1;</code></pre>");
+  });
+
+  it("keeps text from unsupported blocks and drops script content", () => {
+    const sanitized = sanitizePastedHtml(
+      "<table><tr><td>cell</td></tr></table><script>alert(1)</script><style>p{}</style>",
+    );
+    expect(sanitized).toContain("cell");
+    expect(sanitized).not.toContain("alert");
+    expect(sanitized).not.toContain("color");
+  });
+});

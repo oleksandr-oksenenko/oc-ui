@@ -5,7 +5,10 @@ import { createSignal } from "solid-js";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
-import type { ComposerReview } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
+import type {
+  ComposerPasteRecovery,
+  ComposerReview,
+} from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { composerAgentSelection, composerModelSelection } from "./composer-fixtures.ts";
 import { previewImageFile } from "./image-fixtures.ts";
 
@@ -598,4 +601,114 @@ export const NarrowLongSelections: Story = {
       onSubmit={() => undefined}
     />
   ),
+};
+
+/** Dispatches a real clipboard paste on the editor, as a source app would. */
+function pasteSource(
+  editor: HTMLElement,
+  flavors: { readonly text?: string; readonly html?: string },
+) {
+  const clipboardData = new DataTransfer();
+  if (flavors.text !== undefined) clipboardData.setData("text/plain", flavors.text);
+  if (flavors.html !== undefined) clipboardData.setData("text/html", flavors.html);
+  editor.dispatchEvent(
+    new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+  );
+}
+
+export const PasteRouting: Story = {
+  render: () => {
+    const [value, setValue] = createSignal("");
+    return (
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        readClipboardText={async () => "# not a heading\n\n- not a list"}
+        onInput={setValue}
+        onSubmit={() => undefined}
+      />
+    );
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+
+    await step("Rich HTML keeps its structure, link and list", async () => {
+      pasteSource(prompt, {
+        html: '<article><h1>Paste routing</h1><p>See <a href="https://example.com/spec">the spec</a>.</p><ul><li>one</li><li>two</li></ul></article>',
+        text: "Paste routing\nSee the spec.\none\ntwo",
+      });
+      await waitFor(() => expect(prompt.querySelector("a")).not.toBeNull());
+      await expect(prompt.querySelector("h1")).toHaveTextContent("Paste routing");
+      await expect(prompt.querySelectorAll("li")).toHaveLength(2);
+    });
+
+    await step("Plain text keeps single newlines without Markdown parsing", async () => {
+      pasteSource(prompt, { text: "\nfirst line\nsecond line" });
+      await waitFor(() => expect(prompt.textContent).toContain("second line"));
+      // The plain route maps the one newline to a hard break.
+      await expect(prompt.querySelectorAll("br").length).toBe(1);
+      await expect(prompt.textContent).toContain("first linesecond line");
+    });
+
+    await step("The literal gesture inserts the clipboard text verbatim", async () => {
+      const lists = prompt.querySelectorAll("li").length;
+      prompt.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "v",
+          metaKey: true,
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await waitFor(() => expect(prompt.textContent).toContain("# not a heading"));
+      // The Markdown markers and the clipboard's HTML flavor add no structure.
+      await expect(prompt.querySelectorAll("li").length).toBe(lists);
+      await expect(prompt.textContent).toContain("- not a list");
+    });
+  },
+};
+
+export const PasteRecovery: Story = {
+  render: () => {
+    const [value, setValue] = createSignal("");
+    const [recovery, setRecovery] = createSignal<ComposerPasteRecovery | undefined>({
+      message:
+        "The pasted text is larger than the 2 MiB attachment limit, so it was not attached. Restore it as text instead.",
+      take: () => {
+        setRecovery(undefined);
+        return "# recovered heading";
+      },
+      dismiss: () => setRecovery(undefined),
+    });
+    return (
+      <Composer
+        value={value()}
+        disabled={false}
+        action="send"
+        pasteRecovery={recovery()}
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={setValue}
+        onSubmit={() => undefined}
+      />
+    );
+  },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+
+    await step("The retained source is visible and restore inserts it literally", async () => {
+      await expect(canvas.getByRole("alert")).toHaveTextContent("2 MiB");
+      await userEvent.click(canvas.getByRole("button", { name: "Restore text" }));
+      await waitFor(() => expect(prompt).toHaveTextContent("# recovered heading"));
+      await expect(prompt.querySelector("h1")).toBeNull();
+      await expect(canvas.queryByRole("alert")).toBeNull();
+    });
+  },
 };

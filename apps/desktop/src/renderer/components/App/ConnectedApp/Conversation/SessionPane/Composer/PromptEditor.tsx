@@ -21,19 +21,48 @@ import type { ComposerProps } from "../Composer.tsx";
 import {
   fromDraft,
   pasteContent,
+  pastePlainText,
   promptPlugins,
   schema,
   serializeSlice,
   slashQuery,
+  sliceHasInsertableContent,
   toDraft,
 } from "@oc-ui/prompt-editor";
 import "prosemirror-view/style/prosemirror.css";
+import { sanitizePastedHtml } from "./pasteHtml.ts";
+import { textFallbackRoute, type PasteRoute } from "./pasteRoute.ts";
 import "./PromptEditor/PromptEditor.css";
+
+/** One already-classified paste the composer hands to the editor to apply. */
+type PromptPasteInsert = {
+  readonly route: PasteRoute;
+  readonly text: string;
+  readonly html?: string;
+  /** The originating paste event, forwarded to ProseMirror's pipeline. */
+  readonly event?: ClipboardEvent;
+};
+
+export type PromptEditorControl = {
+  /** Moves focus into the editor without changing the selection. */
+  focus: () => void;
+  /** Whether the caret currently sits inside a code block. */
+  inCodeBlock: () => boolean;
+  /** Whether an IME composition currently owns the document. */
+  composing: () => boolean;
+  /**
+   * Applies one classified paste to the current selection, dispatching at most
+   * one transaction. `unsupported` means the HTML flavor produced nothing
+   * insertable and there was no text fallback; the selection is unchanged.
+   */
+  applyPaste: (input: PromptPasteInsert) => "inserted" | "unsupported";
+};
 
 type EditorProps = Pick<ComposerProps, "value" | "skills" | "catalog" | "sessionID" | "onInput"> & {
   placeholder: string;
   onKeyDown: (event: KeyboardEvent) => void;
   ref: (element: HTMLDivElement) => void;
+  control?: (control: PromptEditorControl | undefined) => void;
 };
 
 type Suggestion =
@@ -181,6 +210,12 @@ export function PromptEditor(props: EditorProps) {
     close();
   };
   onMount(() => {
+    // Set only while `applyPaste` runs an HTML paste, so ProseMirror's own
+    // pipeline can report whether its parse produced insertable content before
+    // anything is dispatched.
+    let pendingHtmlFallback:
+      | { readonly fallback: ReturnType<typeof pastePlainText>; used: boolean }
+      | undefined;
     const instance = new EditorView(
       { mount: host },
       {
@@ -248,20 +283,21 @@ export function PromptEditor(props: EditorProps) {
             return false;
           },
         },
-        handlePaste(editor, event) {
-          // Plain text stays the pasted representation. The policy itself is
-          // owned by `pasteContent`: a code block takes it literally, and
-          // anywhere else it is parsed as draft Markdown so pasted lists,
-          // quotes and emphasis arrive as formatting. HTML-only payloads keep
-          // ProseMirror's schema-based DOM handling. File payloads are owned
-          // by the composer's capture listener; an absent format returns an
-          // empty string, and treating it as text would replace the selection
-          // with an empty slice and suppress ProseMirror's own URI handling.
-          const text = event.clipboardData?.getData("text/plain");
-          if (!text) return false;
-          editor.dispatch(pasteContent(editor.state, text));
+        // Runs inside ProseMirror's clipboard pipeline for the HTML route the
+        // composer asked for. A usable parse is left to the pipeline itself
+        // (return false); otherwise the fallback transaction is dispatched
+        // here, so success and fallback each insert exactly once.
+        handlePaste(editor, _event, slice) {
+          const pending = pendingHtmlFallback;
+          if (pending === undefined) return false;
+          pending.used = true;
+          if (sliceHasInsertableContent(slice)) return false;
+          editor.dispatch(pending.fallback);
           return true;
         },
+        // Unsafe link and image URIs are dropped before the schema parser can
+        // turn them into marks or nodes.
+        transformPastedHTML: (html) => sanitizePastedHtml(html),
         clipboardTextSerializer: (slice) => serializeSlice(slice.content),
         nodeViews: {
           skill(node, editor, getPos) {
@@ -315,6 +351,66 @@ export function PromptEditor(props: EditorProps) {
       },
     );
     view = instance;
+
+    /** Applies one routed paste; the composer consumes the event exactly once. */
+    const applyHtmlPaste = (
+      text: string,
+      html: string,
+      event: ClipboardEvent | undefined,
+    ): "inserted" | "unsupported" => {
+      const fallbackRoute = textFallbackRoute(text);
+      if (fallbackRoute === "noop") {
+        // Nothing to fall back to. Inserting the empty parse would delete the
+        // selection, so the caller surfaces feedback instead.
+        return "unsupported";
+      }
+      const state = instance.state;
+      const fallback =
+        fallbackRoute === "markdown-parse"
+          ? pasteContent(state, text)
+          : pastePlainText(state, text);
+      pendingHtmlFallback = { fallback, used: false };
+      try {
+        instance.pasteHTML(
+          html,
+          // ProseMirror constructs a ClipboardEvent when none is given, which
+          // some test environments do not provide; the originating event is
+          // forwarded instead so the pipeline hook can see it.
+          event,
+        );
+        // `pasteHTML` runs the whole pipeline synchronously; if it did not
+        // reach the hook (for example the view is composing), dispatch the
+        // prepared fallback so the paste is never silently dropped.
+        if (!pendingHtmlFallback.used) instance.dispatch(fallback);
+        return "inserted";
+      } finally {
+        pendingHtmlFallback = undefined;
+      }
+    };
+
+    props.control?.({
+      focus: () => instance.focus(),
+      inCodeBlock: () => instance.state.selection.$from.parent.type.spec.code === true,
+      composing: () => instance.composing,
+      applyPaste: (input) => {
+        switch (input.route) {
+          case "literal":
+          case "plain-text":
+          case "rich-link":
+            instance.dispatch(pastePlainText(instance.state, input.text));
+            return "inserted";
+          case "markdown-parse":
+            instance.dispatch(pasteContent(instance.state, input.text));
+            return "inserted";
+          case "html-parse":
+            return applyHtmlPaste(input.text, input.html ?? "", input.event);
+          default:
+            // Attachment and no-op routes are owned by the composer; the
+            // editor never inserts for them.
+            return "inserted";
+        }
+      },
+    });
     createEffect(() => {
       instance.dom.dataset.placeholder = props.placeholder;
       const value = props.value;
@@ -341,7 +437,11 @@ export function PromptEditor(props: EditorProps) {
       close();
     });
   });
-  onCleanup(() => view?.destroy());
+  onCleanup(() => {
+    view?.destroy();
+    view = undefined;
+    props.control?.(undefined);
+  });
   return (
     <div class="prompt-editor">
       <Show when={query() !== undefined}>
