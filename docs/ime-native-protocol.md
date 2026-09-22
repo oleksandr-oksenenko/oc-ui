@@ -6,7 +6,10 @@ confirm the Enter/commit ordering, menu interactions, and input-rule behavior
 of Chinese, Japanese, and Korean input. It is a release gate before shipping
 IME support: run it once on the release candidate and record the results.
 
-- App: `pnpm dev` from the repository root.
+- App: the release candidate build (record the commit and build), not only
+  `pnpm dev`.
+- Record: app commit/build, macOS version, Electron/Chromium version, input
+  source versions, and the date.
 - Use a throwaway project/session so submitted messages are harmless.
 - Do not record API keys, tokens, or personal data.
 - One verification owner: run each scenario once, in order, and paste the
@@ -101,8 +104,11 @@ the baseline contract (Enter sends, Shift+Enter breaks a line).
 3. Press Enter again.
 
 Expected: the first Enter commits only; nothing sends during or immediately
-after the commit beyond what the commit itself produced; the second Enter sends
-你好. **Failure shape:** the first Enter sends a partial draft or the raw pinyin.
+after the commit. Depending on the input method, that Enter may commit the raw
+Latin text instead of the selected candidate — record which happened. The
+invariant is no accidental submission, not the committed text; the second Enter
+sends whatever the first committed. **Failure shape:** the first Enter sends a
+partial draft or the raw pinyin.
 
 ### C. Chinese Pinyin — Space commit and fast Enter
 
@@ -124,14 +130,17 @@ Expected: step 2 commits, step 3 sends 今日は. Note which Enter produced
 
 ### E. Korean — live assembly
 
-1. With 2-Set Korean, type `annyeong`; the syllables assemble without an
-   explicit commit (compositionend may fire between syllables).
-2. Press Enter.
-3. With a fresh draft, type `annyeong` and press Cmd+Enter.
+1. With 2-Set Korean, press the physical keys `dkssud` (the keys for 안녕); the
+   syllables assemble without an explicit commit (compositionend may fire
+   between syllables). `annyeong` does not transliterate in 2-Set.
+2. Press Enter and record whether it arrived while a composition was active.
+3. With a fresh draft, press `dkssud` and press Cmd+Enter.
 
-Expected: step 2 sends 안녕 exactly once; step 3 queues exactly once. Korean
-often ends the composition before the Enter keydown, so this is the highest-risk
-case for accidental send.
+Expected: if the composition had ended before Enter, step 2 sends 안녕 exactly
+once; if Enter arrived during composition, it commits and does not send. Record
+which sequence occurred — do not assume the send. Step 3 queues exactly once.
+Korean often ends the composition before the Enter keydown, so this is the
+highest-risk case for accidental send.
 
 ### F. Slash menu while an IME is active
 
@@ -139,7 +148,8 @@ case for accidental send.
 2. Start typing pinyin immediately, e.g. `b`, `u`, `i`…; if the menu is still
    open, note it; keep composing until candidates appear.
 3. Press Enter to commit the composition (do not select a menu item).
-4. Press Escape.
+4. Start a new composition and press Escape to cancel it (keep this separate
+   from the commit in step 3).
 5. Clear, type `/`, and press Enter with no composition.
 
 Expected:
@@ -147,7 +157,7 @@ Expected:
 - Step 2: starting a composition closes the menu (no suggestion menu over the
   composing text).
 - Step 3: Enter commits the IME; the item is not selected and nothing sends.
-- Step 4: Escape cancels the composition; it must not send.
+- Step 4: Escape cancels the new composition; it must not send.
 - Step 5: with the menu open and no composition, Enter inserts the first
   suggestion (e.g. `/build `) and does not send.
 
