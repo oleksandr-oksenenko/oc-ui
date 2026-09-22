@@ -1,21 +1,16 @@
 import type { PromptSkillAttachment } from "@opencode/client";
 import MarkdownIt from "markdown-it";
 import { Fragment, type Node as PMNode, Schema } from "prosemirror-model";
-import {
-  defaultMarkdownParser,
-  defaultMarkdownSerializer,
-  MarkdownParser,
-  MarkdownSerializer,
-  schema as baseSchema,
-  type MarkdownSerializerState,
-} from "prosemirror-markdown";
+import { defaultMarkdownParser, MarkdownParser, schema as baseSchema } from "prosemirror-markdown";
 
+import { serializeMdast } from "./markdown-mdast.ts";
 import { decodeNumericEntities } from "./markdown-text.ts";
 
 /**
- * Drafts are CommonMark: the same text the model receives. Parsing and
- * serialization are owned by `prosemirror-markdown` so the composer, the
- * transcript, and the model all read one dialect.
+ * Drafts are CommonMark: the same text the model receives. Parsing is owned by
+ * `prosemirror-markdown` and serialization by `mdast-util-to-markdown` (see
+ * `markdown-mdast.ts`), so the composer, the transcript, and the model all
+ * read one dialect.
  *
  * Composer specifics:
  * - A single newline is a hard line break, matching the transcript's
@@ -136,134 +131,6 @@ const markdownParser = new MarkdownParser(schema, tokenizer, {
   softbreak: { node: "hard_break" },
 });
 
-type SkillSerializer = (
-  state: MarkdownSerializerState,
-  node: PMNode,
-  parent: PMNode,
-  index: number,
-) => void;
-
-function createSerializer(skillSerializer: SkillSerializer): MarkdownSerializer {
-  return new MarkdownSerializer(
-    {
-      // Everything the bundled schema writes the same way is reused; only the
-      // composer's deltas are written here.
-      ...defaultMarkdownSerializer.nodes,
-      // The composer writes the canonical bullet.
-      bullet_list(state, node) {
-        state.renderList(node, "  ", () => "- ");
-      },
-      // A trailing break carries no text, so it is dropped rather than
-      // swallowed by the paragraph separator, and a plain newline keeps the
-      // draft's single-newline shape.
-      hard_break(state, node, parent, index) {
-        for (let next = index + 1; next < parent.childCount; next += 1) {
-          if (parent.child(next).type === node.type) continue;
-          state.write("\n");
-          return;
-        }
-      },
-      text(state, node, parent, index) {
-        const value = node.text ?? "";
-        const atLineStart = index === 0 || parent.child(index - 1).type.name === "hard_break";
-        state.write(escapeLiteralSyntax(state.esc(value, atLineStart), atLineStart));
-      },
-      skill: skillSerializer,
-    },
-    {
-      // The bundled em and strong writers have the same shape.
-      ...defaultMarkdownSerializer.marks,
-      // The bundled code span writer does not pad edge spaces.
-      code: {
-        open: (_state, _mark, parent, index) => codeSpanDelimiter(textOf(parent.child(index)), -1),
-        close: (_state, _mark, parent, index) =>
-          codeSpanDelimiter(textOf(parent.child(index - 1)), 1),
-        escape: false,
-      },
-      // The bundled link writer uses the autolink form for plain URLs, which
-      // fights the literal-text escaping; the explicit form round-trips the
-      // href and title.
-      link: {
-        open: "[",
-        close: (_state, mark) => {
-          const title =
-            mark.attrs.title == null ? "" : ` "${String(mark.attrs.title).replace(/"/g, '\\"')}"`;
-          return `](${linkDestination(String(mark.attrs.href ?? ""))}${title})`;
-        },
-        mixable: true,
-      },
-    },
-    {
-      hardBreakNodeName: "hard_break",
-      // `1)` starts a list too; escape it when it is literal paragraph text.
-      escapeExtraCharacters: /(?<=^\s*\d+)\)/,
-    },
-  );
-}
-
-/** The delimiter pair for an inline code span, sized to its content. */
-function codeSpanDelimiter(text: string, side: number): string {
-  const longest = longestBackticks(text);
-  const fence = "`".repeat(longest + 1);
-  // A space at either edge, or a backtick anywhere, needs a padding space on
-  // both edges: CommonMark strips one space from each edge of the span.
-  const padding = (longest > 0 || text.startsWith(" ") || text.endsWith(" ")) && text.trim() !== "";
-  if (!padding) return fence;
-  return side < 0 ? fence + " " : " " + fence;
-}
-
-/** Line starts that would turn literal text into a setext heading. */
-function escapeSetext(value: string, atLineStart: boolean): string {
-  return atLineStart && /^=+\s*$/.test(value) ? "\\" + value : value;
-}
-
-const entitySyntax = /&(?=[a-zA-Z][a-zA-Z0-9]*;|#\d+;|#[xX][0-9a-fA-F]+;)/g;
-
-/**
- * Every literal `<` is escaped: it is simpler and safer than recognizing the
- * tag, comment, doctype and autolink openings separately.
- */
-const tagSyntax = /</g;
-
-/**
- * Literal text must not read as entity, HTML tag or autolink syntax after the
- * draft is parsed again by the composer or by the transcript renderer. The
- * setext guard runs after the standard escaping, which would otherwise escape
- * its backslash.
- */
-function escapeLiteralSyntax(escaped: string, atLineStart: boolean): string {
-  return escapeSetext(escaped, atLineStart).replace(entitySyntax, "\\&").replace(tagSyntax, "\\<");
-}
-
-/** A node's literal text, or the name written for a skill atom. */
-function textOf(node: PMNode): string {
-  return node.isText ? (node.text ?? "") : String(node.attrs.name ?? "");
-}
-
-/**
- * Writes a skill atom as an opaque replacement string. A code mark is written
- * here because the serializer only emits non-escaping marks around text nodes.
- */
-function renderSkill(state: MarkdownSerializerState, node: PMNode, replacement: string): void {
-  const name = String(node.attrs.name ?? "");
-  const code = schema.marks.code!.isInSet(node.marks);
-  state.write();
-  if (code) state.text(codeSpanDelimiter(name, -1), false);
-  state.text(replacement, false);
-  if (code) state.text(codeSpanDelimiter(name, 1), false);
-}
-
-function linkDestination(href: string): string {
-  if (/[\s<>]/.test(href)) return "<" + href.replace(/[<>]/g, "") + ">";
-  return href.replace(/[()]/g, "\\$&");
-}
-
-function longestBackticks(value: string): number {
-  let longest = 0;
-  for (const run of value.matchAll(/`+/g)) longest = Math.max(longest, run[0].length);
-  return longest;
-}
-
 export type PromptDraft = {
   readonly text: string;
   readonly skills: readonly PromptSkillAttachment[];
@@ -279,13 +146,12 @@ export function serializeDraft(doc: PMNode): PromptDraft {
 }
 
 function serializeNode(node: PMNode): PromptDraft {
-  const content = node.type.name === "doc" ? mergeAdjacentLists(node) : node;
-  const nonce = freshNonce(content.textContent);
+  const nonce = freshNonce(node.textContent);
   const slots: MarkdownSkill[] = [];
-  const source = createSerializer((state, skill) => {
+  const source = serializeMdast(node, (skill) => {
     slots.push({ id: String(skill.attrs.id ?? ""), name: String(skill.attrs.name ?? "") });
-    renderSkill(state, skill, placeholder(nonce, slots.length - 1));
-  }).serialize(content);
+    return placeholder(nonce, slots.length - 1);
+  });
   return substitute(source, nonce, slots);
 }
 
@@ -312,35 +178,12 @@ function substitute(source: string, nonce: string, slots: readonly MarkdownSkill
   return { text, skills };
 }
 
-const listTypes = new Set(["bullet_list", "ordered_list"]);
-
-/**
- * Adjacent lists of the same type are one list in Markdown, so they are
- * serialized as one; the parser then rebuilds a single list.
- */
-function mergeAdjacentLists(doc: PMNode): PMNode {
-  const blocks: PMNode[] = [];
-  doc.forEach((node) => {
-    const previous = blocks[blocks.length - 1];
-    if (previous && previous.type === node.type && listTypes.has(node.type.name)) {
-      blocks[blocks.length - 1] = previous.type.create(
-        { ...previous.attrs, tight: previous.attrs.tight === true && node.attrs.tight === true },
-        previous.content.append(node.content),
-        previous.marks,
-      );
-      return;
-    }
-    blocks.push(node);
-  });
-  return blocks.length === doc.childCount ? doc : doc.copy(Fragment.fromArray(blocks));
-}
-
 /** Serializes clipboard slice content, falling back to plain text. */
 export function serializeSlice(content: Fragment): string {
   if (content.childCount === 0) return "";
   const inline = content.firstChild!.isInline && content.lastChild!.isInline;
   const node = inline
-    ? schema.node("paragraph", null, content)
+    ? schema.node("doc", null, [schema.node("paragraph", null, content)])
     : schema.topNodeType.validContent(content)
       ? schema.node("doc", null, content)
       : undefined;

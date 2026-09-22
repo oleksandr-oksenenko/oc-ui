@@ -112,7 +112,8 @@ describe("prompt editor plugins", () => {
     const emptyCode = editor();
     emptyCode.type("``` ");
     expect(emptyCode.block()).toBe("code_block");
-    expect(emptyCode.draft().text).toBe("```\n\n```");
+    // An empty fence has no content line.
+    expect(emptyCode.draft().text).toBe("```\n```");
     emptyCode.dispose();
   });
 
@@ -148,10 +149,11 @@ describe("prompt editor plugins", () => {
     const strike = editor();
     strike.type("~~gone~~");
     // Strikethrough is not one of the composer's marks, so the tildes stay
-    // literal text and the draft escapes them.
+    // literal text and the draft escapes the leading one, which could
+    // otherwise open a fence.
     expect(strike.view.state.doc.textContent).toBe("~~gone~~");
     expect(strike.marksOf("gone")).toBeUndefined();
-    expect(strike.draft().text).toBe("\\~\\~gone\\~\\~");
+    expect(strike.draft().text).toBe("\\~~gone~~");
     strike.dispose();
 
     const link = editor();
@@ -314,7 +316,9 @@ describe("prompt editor plugins", () => {
     expect(undone.block()).toBe("bullet_list");
     expect(undone.press("Backspace")).toBe(true);
     expect(undone.block()).toBe("paragraph");
-    expect(undone.draft().text).toBe("\\- ");
+    // The trailing space is written as a character reference: a plain one
+    // would be stripped from the end of the paragraph when parsed again.
+    expect(undone.draft().text).toBe("\\-&#x20;");
     undone.dispose();
   });
 });

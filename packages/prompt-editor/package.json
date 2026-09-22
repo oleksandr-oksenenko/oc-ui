@@ -14,6 +14,7 @@
   "dependencies": {
     "@opencode/client": "catalog:",
     "markdown-it": "catalog:",
+    "mdast-util-to-markdown": "catalog:",
     "prosemirror-commands": "catalog:",
     "prosemirror-history": "catalog:",
     "prosemirror-inputrules": "catalog:",
@@ -25,7 +26,9 @@
   },
   "devDependencies": {
     "@types/markdown-it": "catalog:",
+    "@types/mdast": "catalog:",
     "jsdom": "catalog:",
+    "mdast-util-from-markdown": "catalog:",
     "prosemirror-view": "catalog:",
     "vite-plus": "catalog:"
   }

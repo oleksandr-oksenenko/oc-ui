@@ -6,6 +6,12 @@ const model = (name) => ({
   limit: { context: 32768, output: 2048 },
 });
 
+/**
+ * The composer sends CommonMark, so a model reads backslash escapes as the
+ * punctuation they escape; scenario matching works on that text.
+ */
+const markdownText = (value) => value.replace(/\\([!"#$%&'()*+,-./:;<=>?@[\\\]^_`{|}~])/gu, "$1");
+
 // The real pinned OpenCode server consumes this local OpenAI chat-completion endpoint.
 // Scenarios are selected by the latest user turn, so transcript history cannot retrigger them.
 export async function startScriptedProvider() {
@@ -38,7 +44,10 @@ export async function startScriptedProvider() {
       const body = JSON.parse(Buffer.concat(chunks).toString());
       const messages = body.messages ?? [];
       const lastUser = messages.findLastIndex((message) => message.role === "user");
-      const prompt = JSON.stringify(messages[lastUser]?.content ?? "");
+      const content = messages[lastUser]?.content;
+      const prompt = markdownText(
+        Array.isArray(content) ? JSON.stringify(content) : (content ?? ""),
+      );
       const afterUser = messages.slice(lastUser + 1);
       const toolReply = afterUser.find((message) => message.role === "tool");
       requests.push({ model: body.model, prompt, toolReply: toolReply?.content });

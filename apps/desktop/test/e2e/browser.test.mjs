@@ -944,7 +944,9 @@ describe.sequential("production browser app", () => {
     await idle();
     const messages = await api.message.list({ sessionID: session.id });
     const message = messages.data.find((item) => item.type === "user");
-    expect(message.text).toBe("Use review and testing ");
+    // The trailing space is written as a character reference so the draft
+    // still holds it when parsed again.
+    expect(message.text).toBe("Use review and testing&#x20;");
     expect(message.skills.map((skill) => ({ name: skill.name, mention: skill.mention }))).toEqual([
       { name: "review", mention: { start: 4, end: 10, text: "review" } },
       { name: "testing", mention: { start: 15, end: 22, text: "testing" } },

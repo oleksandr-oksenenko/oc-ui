@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { PromptSkillAttachment } from "@opencode/client";
-import { Fragment } from "prosemirror-model";
+import { Fragment, type Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import {
   fromDraft,
@@ -46,6 +46,11 @@ function roundTrip(text: string, skills: readonly PromptSkillAttachment[] = []) 
   return draft;
 }
 
+/** A document whose single paragraph has the given inline content. */
+function paragraph(content: PMNode[]): PMNode {
+  return schema.node("doc", null, [schema.node("paragraph", null, content)]);
+}
+
 /** A document whose block content is exactly the written text. */
 function literal(text: string) {
   return schema.node("doc", null, [
@@ -62,6 +67,35 @@ describe("prompt document", () => {
     expect(canonicalize("a\n").draft.text).toBe("a");
   });
 
+  it("drops trailing line breaks instead of writing empty lines", () => {
+    const breakType = schema.nodes.hard_break!;
+    const trailing = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("a"), breakType.create()]),
+    ]);
+    expect(toDraft(trailing)).toEqual({ text: "a", skills: [] });
+    const doubled = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("a"), breakType.create(), breakType.create()]),
+    ]);
+    expect(toDraft(doubled)).toEqual({ text: "a", skills: [] });
+    // A break with text after it is kept.
+    const kept = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("a"), breakType.create(), schema.text("b")]),
+    ]);
+    expect(toDraft(kept).text).toBe("a\nb");
+  });
+
+  it("keeps only the hard-break marks Markdown can read back", () => {
+    const strong = schema.marks.strong!.create();
+    const marked = (text: string) => schema.text(text, [strong]);
+    const markedBreak = schema.node("hard_break", null, undefined, [strong]);
+    // A mark that spans the break stays around both lines.
+    expect(toDraft(paragraph([marked("a"), markedBreak, marked("b")])).text).toBe("**a\nb**");
+    // A mark that would start or end at the break is dropped: a newline inside
+    // the delimiter pair is not readable back, so the mark has no Markdown form.
+    expect(toDraft(paragraph([marked("a"), markedBreak, schema.text("b")])).text).toBe("**a**\nb");
+    expect(toDraft(paragraph([schema.text("a"), markedBreak, marked("b")])).text).toBe("a\n**b**");
+  });
+
   it("escapes text that would otherwise parse as Markdown", () => {
     const math = canonicalize("2 * 3 = 6");
     expect(math.draft.text).toBe("2 \\* 3 = 6");
@@ -74,7 +108,9 @@ describe("prompt document", () => {
       ["1. not ordered", "1\\. not ordered"],
       ["1) not ordered", "1\\) not ordered"],
       ["use **literal**", "use \\*\\*literal\\*\\*"],
-      ["~~plain~~", "\\~\\~plain\\~\\~"],
+      // A leading tilde could open a fence, so it is escaped; the pair itself
+      // is not strikethrough in the composer's dialect.
+      ["~~plain~~", "\\~~plain~~"],
     ] as const) {
       const doc = literal(source);
       const draft = toDraft(doc);
@@ -118,10 +154,23 @@ describe("prompt document", () => {
     ]) {
       expect(roundTrip(source).text).toBe(source);
     }
-    // A block after an item's first paragraph is separated by a blank line.
+    // A tight item keeps its following block without an injected blank line.
     expect(canonicalize("- item\n  ```\n  code\n  ```").draft.text).toBe(
-      "- item\n\n  ```\n  code\n  ```",
+      "- item\n  ```\n  code\n  ```",
     );
+  });
+
+  it("keeps ordered list start values", () => {
+    for (const source of [
+      "1. first\n2. second",
+      "3. third\n4. fourth",
+      "7. seven\n8. eight",
+      "10. ten\n11. eleven",
+    ]) {
+      expect(roundTrip(source).text).toBe(source);
+    }
+    // The bundled parser reads `0.` as the default start of 1.
+    expect(canonicalize("0. zero\n1. one").draft.text).toBe("1. zero\n2. one");
   });
 
   it("canonicalizes authored Markdown without losing it", () => {
@@ -195,21 +244,21 @@ describe("prompt document", () => {
     ]) {
       expect(roundTrip(source).text).toBe(source);
     }
-    // A span that starts or ends with a space keeps it through padding.
-    expect(canonicalize("` a` and `b `").draft.text).toBe("`  a ` and ` b  `");
-    // Leading and trailing whitespace is expelled from emphasis, so the
-    // marked text stays visible without an unparseable delimiter pair.
+    // Only a space on both edges would be stripped by CommonMark, so a
+    // one-sided space needs no padding.
+    expect(canonicalize("` a` and `b `").draft.text).toBe("` a` and `b `");
+    // Edge whitespace inside emphasis is written as character references, so
+    // the document keeps it instead of expelling it.
     const spaced = schema.node("doc", null, [
       schema.node("paragraph", null, [schema.text(" bold ", [schema.marks.strong!.create()])]),
     ]);
     const draft = toDraft(spaced);
-    expect(draft.text).toBe(" **bold** ");
-    // CommonMark cannot represent a paragraph whose edges are spaces, so the
-    // whitespace outside the emphasis is not part of the parsed document.
-    expect(fromDraft(draft.text).textContent).toBe("bold");
-    expect(
-      fromDraft(draft.text).firstChild?.firstChild?.marks.map((mark) => mark.type.name),
-    ).toEqual(["strong"]);
+    expect(draft.text).toBe("**&#x20;bold&#x20;**");
+    const spacedRestored = fromDraft(draft.text);
+    expect(spacedRestored.eq(spaced)).toBe(true);
+    expect(spacedRestored.firstChild?.firstChild?.marks.map((mark) => mark.type.name)).toEqual([
+      "strong",
+    ]);
   });
 
   it("round-trips skills inside marks and blocks", () => {
@@ -242,6 +291,52 @@ describe("prompt document", () => {
       ["## *review* now", 4],
       ["### ***review*** now", 7],
       ["#### [review](https://x.dev)", 6],
+    ] as const) {
+      const skills = [mention("review", start)];
+      expect(roundTrip(text, skills)).toEqual({ text, skills });
+    }
+  });
+
+  it("keeps mention offsets after unicode text", () => {
+    for (const text of ["🙂 review", "漢字 review", "e\u0301 review", "👨‍👩‍👧 review"]) {
+      const start = text.indexOf("review");
+      const skills = [mention("review", start)];
+      const draft = roundTrip(text, skills);
+      expect(draft).toEqual({ text, skills });
+      expect(draft.text.slice(start, start + 6)).toBe("review");
+    }
+  });
+
+  it("round-trips markdown-significant skill names", () => {
+    for (const name of [
+      "a*b",
+      "**bold**",
+      "# hash",
+      "`tick`",
+      "[link](x)",
+      "~~strike~~",
+      "a_b_c",
+      "1. item",
+      "a\\b",
+      // A name shaped like a nonce placeholder stays an attachment.
+      "\uE000k0\uE000",
+    ]) {
+      const text = `use ${name} now`;
+      const skills = [mention(name, text.indexOf(name))];
+      const draft = roundTrip(text, skills);
+      expect(draft).toEqual({ text, skills });
+      expect(draft.text.slice(4, 4 + name.length)).toBe(name);
+    }
+  });
+
+  it("round-trips marked skill atoms", () => {
+    for (const [text, start] of [
+      ["*review* now", 1],
+      ["**review** now", 2],
+      ["***review*** now", 3],
+      ["[review](https://x.dev)", 1],
+      ["**a *review* c**", 5],
+      ["**a** *review* `b`", 7],
     ] as const) {
       const skills = [mention("review", start)];
       expect(roundTrip(text, skills)).toEqual({ text, skills });
@@ -361,6 +456,38 @@ describe("prompt document", () => {
     const doc = parse("review this", [mention("review", 0)]);
     const skill = doc.firstChild!.firstChild!;
     expect(serializeSlice(Fragment.from(skill))).toBe("review");
+  });
+
+  it("serializes partial clipboard fragments", () => {
+    const strong = schema.marks.strong!.create();
+    const review = schema.node("skill", { id: "review", name: "review" });
+    const cases: ReadonlyArray<readonly [Fragment, string]> = [
+      [Fragment.empty, ""],
+      [Fragment.from(schema.text("plain")), "plain"],
+      [Fragment.from(schema.text("bold", [strong])), "**bold**"],
+      [Fragment.from([review, schema.text(" now")]), "review now"],
+      [Fragment.from([schema.text("a"), schema.node("hard_break"), schema.text("b")]), "a\nb"],
+      // A trailing break carries no text and is dropped.
+      [Fragment.from([schema.text("a"), schema.node("hard_break")]), "a"],
+      [
+        Fragment.from([
+          schema.node("paragraph", null, [schema.text("one")]),
+          schema.node("bullet_list", { tight: true }, [
+            schema.node("list_item", null, [schema.node("paragraph", null, [schema.text("two")])]),
+          ]),
+        ]),
+        "one\n\n- two",
+      ],
+    ];
+    for (const [content, text] of cases) {
+      expect(serializeSlice(content)).toBe(text);
+    }
+    // A fragment that is not document content falls back to its plain text,
+    // writing each skill atom as its name.
+    const item = Fragment.from(
+      schema.node("list_item", null, [schema.node("paragraph", null, [review])]),
+    );
+    expect(serializeSlice(item)).toBe("review");
   });
 
   it("pastes code literally and Markdown elsewhere", () => {

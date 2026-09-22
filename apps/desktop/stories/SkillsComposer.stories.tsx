@@ -369,7 +369,9 @@ export const UndoRedoAndEditing: Story = {
     await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Send" }));
     await expect(canvas.getByRole("status")).toHaveTextContent("review");
-    await expect(args.onSubmit).toHaveBeenCalledWith("Please Use review ", [
+    // The trailing space is written as a character reference so the draft
+    // still holds it when parsed again.
+    await expect(args.onSubmit).toHaveBeenCalledWith("Please Use review&#x20;", [
       { id: "review", name: "review", mention: { start: 11, end: 17, text: "review" } },
     ]);
   },
@@ -391,7 +393,7 @@ export const MultilineAndDeletion: Story = {
     await fireEvent.keyDown(prompt, { key: "Backspace", code: "Backspace", keyCode: 8 });
     await expect(canvas.queryByRole("button", { name: "Remove testing skill" })).toBeNull();
     await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-    await expect(args.onSubmit).toHaveBeenCalledWith("First line\n\nreview and ", [
+    await expect(args.onSubmit).toHaveBeenCalledWith("First line\n\nreview and&#x20;", [
       { id: "review", name: "review", mention: { start: 12, end: 18, text: "review" } },
     ]);
   },
@@ -418,7 +420,7 @@ export const RemoveChipAndSeparator: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Remove review skill" }));
     await expect(prompt.textContent).toBe("Use and testing ");
     await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-    await expect(args.onSubmit).toHaveBeenCalledWith("Use and testing ", [
+    await expect(args.onSubmit).toHaveBeenCalledWith("Use and testing&#x20;", [
       { id: "testing", name: "testing", mention: { start: 8, end: 15, text: "testing" } },
     ]);
   },

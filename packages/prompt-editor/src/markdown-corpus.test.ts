@@ -12,8 +12,8 @@ import { fromDraft, schema, toDraft } from "./document.ts";
  * round-trips, draft stability, composer conventions, and skill offsets.
  *
  * Cases listed in `KNOWN_LOSSES` are representational losses that Markdown
- * cannot express (or that the current serializer normalizes). They must stay
- * losses — never silently pass — and their outputs must stay stable.
+ * cannot express. They must stay losses — never silently pass — and their
+ * outputs must stay stable.
  */
 
 const mention = (name: string, start: number, id = name): PromptSkillAttachment => ({
@@ -46,18 +46,13 @@ function afterBreak(marker: string): PMNode {
   ]);
 }
 
-const KNOWN_LOSSES = new Set([
-  "adjacent bullet lists",
-  "item with following code block",
-  "spaced strong",
-]);
+const KNOWN_LOSSES = new Set(["adjacent bullet lists"]);
 
 /**
- * Cases whose draft is not yet a fixed point. These are documented
- * instabilities, not silent passes; Phase 2 (mdast adoption) must shrink this
- * set to empty.
+ * Cases whose draft is not yet a fixed point. Empty since the mdast
+ * serializer: every corpus draft is stable under serialize, parse, serialize.
  */
-const KNOWN_UNSTABLE = new Set(["spaced strong"]);
+const KNOWN_UNSTABLE = new Set<string>();
 
 const corpus: ReadonlyArray<readonly [string, PMNode]> = [
   ["empty", parse("")],
