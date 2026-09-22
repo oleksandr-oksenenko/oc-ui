@@ -14,11 +14,19 @@ import type {
 import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
 import { leadingCommandName, parseSessionCommand } from "../../../../opencode/session-command.ts";
 import { readPromptFile } from "../../../../opencode/read-prompt-file.ts";
-import { MAX_ATTACHMENT_BYTES, selectAttachableFiles } from "../../../../opencode/attachments.ts";
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_TEXT_ATTACHMENT_BYTES,
+  selectAttachableFiles,
+} from "../../../../opencode/attachments.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { createEffect, createMemo, type Accessor } from "solid-js";
 
-import type { ComposerCatalog, ComposerReview } from "./SessionPane/Composer.tsx";
+import type {
+  ComposerCatalog,
+  ComposerPasteRecovery,
+  ComposerReview,
+} from "./SessionPane/Composer.tsx";
 
 const PROMPT_FAILURE_MESSAGE =
   "Couldn't confirm the message was sent. Your draft has been restored.";
@@ -38,6 +46,10 @@ const promptAttachmentMessage = (name: string, reusesFailedRequest: boolean): st
     : `Couldn't read "${name}". Your message was not sent. Remove the file or choose it again.`;
 
 const ATTACHMENT_LIMIT_LABEL = `${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
+
+const TEXT_ATTACHMENT_LIMIT_LABEL = `${MAX_TEXT_ATTACHMENT_BYTES / (1024 * 1024)} MiB`;
+
+const PASTE_TOO_LARGE_MESSAGE = `The pasted text is larger than the ${TEXT_ATTACHMENT_LIMIT_LABEL} attachment limit, so it was not attached. Restore it as text instead.`;
 
 const attachmentSizeMessage = (rejected: readonly File[]): string => {
   const first = rejected[0];
@@ -144,9 +156,13 @@ export type SessionComposerController = {
   readonly skills: Accessor<readonly PromptSkillAttachment[]>;
   readonly files: Accessor<readonly File[]>;
   readonly attachFiles: (files: readonly File[]) => void;
+  /** Attaches pasted text, or retains it for recovery when it exceeds the byte cap. */
+  readonly attachText: (text: string) => void;
   readonly removeFile: (file: File) => void;
   /** Append annotation text and its screenshots together, or make no change. */
   readonly appendBatch: (sessionID: string, text: string, files: readonly File[]) => void;
+  /** The retained source text of a rejected paste for the selected session. */
+  readonly pasteRecovery: Accessor<ComposerPasteRecovery | undefined>;
   readonly disabled: Accessor<boolean>;
   readonly submitting: Accessor<boolean>;
   readonly error: Accessor<string | undefined>;
@@ -172,6 +188,22 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     else current[sessionID] = next;
     effects.registry.set(fileDrafts, current);
   };
+  /**
+   * Source text retained when a paste could not become an attachment. It is
+   * keyed by the session that initiated the paste, so a navigation never moves
+   * it and the recovery surface always belongs to its origin session.
+   */
+  const pasteRecoveries = Atom.make<
+    Readonly<Record<string, { readonly text: string; readonly message: string } | undefined>>
+  >({});
+  effects.mount(pasteRecoveries);
+  const recoveryState = useAtomValue(() => pasteRecoveries);
+  const setRecovery = (sessionID: string, text: string | undefined) => {
+    const current = { ...effects.registry.get(pasteRecoveries) };
+    if (text === undefined) delete current[sessionID];
+    else current[sessionID] = { text, message: PASTE_TOO_LARGE_MESSAGE };
+    effects.registry.set(pasteRecoveries, current);
+  };
   const attachFiles = (incoming: readonly File[]) => {
     const sessionID = options.selectedID();
     if (sessionID === undefined) return;
@@ -193,6 +225,48 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       clearAttachmentNotice(sessionID);
     }
   };
+  /**
+   * The clipboard intent for text too large to edit inline. Clipboard strings
+   * carry no size metadata, so the UTF-16 length is checked first (a lower
+   * bound on UTF-8 bytes) and the encoded `File.size` is the exact cap; the
+   * text is never encoded twice. A rejection retains the source text and never
+   * attaches to whatever session becomes active later.
+   */
+  const attachText = (text: string) => {
+    const sessionID = options.selectedID();
+    if (sessionID === undefined || text.trim() === "") return;
+    if (text.length > MAX_TEXT_ATTACHMENT_BYTES) {
+      setRecovery(sessionID, text);
+      return;
+    }
+    const existing = effects.registry.get(fileDrafts)[sessionID] ?? [];
+    const file = new File([text], pastedTextName(existing), { type: "text/plain" });
+    if (file.size > MAX_TEXT_ATTACHMENT_BYTES) {
+      setRecovery(sessionID, text);
+      return;
+    }
+    setFiles(sessionID, [...existing, file]);
+    setRecovery(sessionID, undefined);
+    clearCommandAttachmentNotice(sessionID);
+    clearAttachmentNotice(sessionID);
+  };
+  const pasteRecovery = createMemo<ComposerPasteRecovery | undefined>(() => {
+    const sessionID = options.selectedID();
+    if (sessionID === undefined) return undefined;
+    const entry = recoveryState()[sessionID];
+    if (entry === undefined) return undefined;
+    return {
+      message: entry.message,
+      // Both actions stay bound to the origin session captured here.
+      take: () => {
+        const current = effects.registry.get(pasteRecoveries)[sessionID];
+        if (current === undefined) return undefined;
+        setRecovery(sessionID, undefined);
+        return current.text;
+      },
+      dismiss: () => setRecovery(sessionID, undefined),
+    };
+  });
   const removeFile = (file: File) => {
     const sessionID = options.selectedID();
     if (sessionID === undefined) return;
@@ -556,6 +630,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const clear = (sessionID: string): void => {
     drafts.clear(sessionID);
     setFiles(sessionID, []);
+    setRecovery(sessionID, undefined);
     options.annotations.clear(sessionID);
     options.review.drafts.clearSession(sessionID);
     const failed = failedRequest(sessionID);
@@ -574,8 +649,10 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     skills: () => drafts.skills(options.selectedID() ?? ""),
     files,
     attachFiles,
+    attachText,
     removeFile,
     appendBatch,
+    pasteRecovery,
     disabled,
     submitting,
     error: () => {
@@ -726,6 +803,18 @@ function samePrompt(left: SessionPrompt, right: SessionPrompt): boolean {
     sameValue(left.metadata, right.metadata) &&
     sameValue(left.skills, right.skills)
   );
+}
+
+/** A free file name for a pasted-text attachment within one session's draft. */
+function pastedTextName(existing: readonly File[]): string {
+  const used = new Set(existing.map((file) => file.name));
+  let index = 1;
+  let name = "pasted-text.txt";
+  while (used.has(name)) {
+    index += 1;
+    name = `pasted-text-${index}.txt`;
+  }
+  return name;
 }
 
 function sameValue<T>(left: T, right: T): boolean {

@@ -10,7 +10,10 @@ import {
   type ReviewDraftKey,
 } from "../../../../domain/index.ts";
 import { SESSION_PROMPT_METADATA_KEY } from "../../../../opencode/session-prompt.ts";
-import { MAX_ATTACHMENT_BYTES } from "../../../../opencode/attachments.ts";
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_TEXT_ATTACHMENT_BYTES,
+} from "../../../../opencode/attachments.ts";
 import { createSessionComposer } from "./createSessionComposer.ts";
 
 type ComposerInput = Parameters<typeof createSessionComposer>[0];
@@ -180,6 +183,133 @@ describe("createSessionComposer", () => {
       { name: "notes.txt", uri: "data:text/plain;base64,bm90ZXM=" },
     ]);
     expect(root.composer.files()).toEqual([]);
+    root.dispose();
+  });
+
+  it("attaches pasted text under the byte cap with a unique name", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    root.composer.attachText("hello");
+    const first = root.composer.files()[0];
+    expect(first?.name).toBe("pasted-text.txt");
+    expect(first?.type).toBe("text/plain");
+    expect(first?.size).toBe(5);
+    root.composer.attachText("second");
+    expect(root.composer.files().map((file) => file.name)).toEqual([
+      "pasted-text.txt",
+      "pasted-text-2.txt",
+    ]);
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("keeps a text attachment with its originating session across navigation", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    root.composer.attachText("belongs to session");
+    root.setSelectedID("other");
+    expect(root.composer.files()).toEqual([]);
+    root.composer.attachText("belongs to other");
+    expect(root.composer.files().map((file) => file.name)).toEqual(["pasted-text.txt"]);
+    root.setSelectedID("session");
+    const [file] = root.composer.files();
+    expect(file?.name).toBe("pasted-text.txt");
+    expect(file?.size).toBe("belongs to session".length);
+    root.dispose();
+  });
+
+  it("submits a text attachment that was just pasted", async () => {
+    const prompt = vi.fn<Prompt>((input) => Promise.resolve(promptResult(input)));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.composer.attachText("attached text");
+    await root.composer.submit();
+    expect(prompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: [
+          {
+            name: "pasted-text.txt",
+            uri: `data:text/plain;base64,${btoa("attached text")}`,
+          },
+        ],
+      }),
+    );
+    // A confirmed send consumes the attachment.
+    expect(root.composer.files()).toEqual([]);
+    root.dispose();
+  });
+
+  it("accepts text exactly at the 2 MiB UTF-8 byte cap", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    root.composer.attachText("a".repeat(MAX_TEXT_ATTACHMENT_BYTES));
+    expect(root.composer.files()[0]?.size).toBe(MAX_TEXT_ATTACHMENT_BYTES);
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+    root.dispose();
+  });
+
+  it("rejects text one byte over the cap and retains the source text", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const over = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    root.composer.attachText(over);
+    expect(root.composer.files()).toEqual([]);
+    const recovery = root.composer.pasteRecovery();
+    expect(recovery?.message).toContain("2 MiB");
+    // Taking the retained text is a one-time recovery.
+    expect(recovery?.take()).toBe(over);
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+    expect(root.composer.files()).toEqual([]);
+    root.dispose();
+  });
+
+  it("counts the cap in UTF-8 bytes rather than characters", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    // 1,048,576 two-byte characters are exactly 2 MiB.
+    const twoByte = "é".repeat(1_048_576);
+    root.composer.attachText(twoByte);
+    expect(root.composer.files()[0]?.size).toBe(MAX_TEXT_ATTACHMENT_BYTES);
+    root.composer.removeFile(root.composer.files()[0]!);
+    // One more byte fails even though the character count is far below the cap.
+    root.composer.attachText(`${twoByte}a`);
+    expect(root.composer.files()).toEqual([]);
+    expect(root.composer.pasteRecovery()?.take()).toBe(`${twoByte}a`);
+
+    // 524,288 four-byte code points are exactly 2 MiB; one more pair is over.
+    const emoji = "😀".repeat(524_288);
+    root.composer.attachText(emoji);
+    expect(root.composer.files()[0]?.size).toBe(MAX_TEXT_ATTACHMENT_BYTES);
+    root.composer.removeFile(root.composer.files()[0]!);
+    root.composer.attachText(`${emoji}😀`);
+    expect(root.composer.files()).toEqual([]);
+    expect(root.composer.pasteRecovery()?.take()).toBe(`${emoji}😀`);
+    root.dispose();
+  });
+
+  it("retains a rejected paste with its origin session and clears it with the session", () => {
+    const root = setup();
+    root.setSelectedID("session");
+    const over = "a".repeat(MAX_TEXT_ATTACHMENT_BYTES + 1);
+    root.composer.attachText(over);
+    root.setSelectedID("other");
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+    expect(root.composer.files()).toEqual([]);
+    root.setSelectedID("session");
+    expect(root.composer.files()).toEqual([]);
+    expect(root.composer.pasteRecovery()?.take()).toBe(over);
+
+    root.composer.attachText(over);
+    root.composer.pasteRecovery()?.dismiss();
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+
+    root.composer.attachText(over);
+    root.composer.attachText("small");
+    // A successful attachment replaces the recovery surface.
+    expect(root.composer.pasteRecovery()).toBeUndefined();
+    root.composer.clear("session");
+    expect(root.composer.files()).toEqual([]);
+    expect(root.composer.pasteRecovery()).toBeUndefined();
     root.dispose();
   });
 

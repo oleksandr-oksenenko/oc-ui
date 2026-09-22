@@ -110,6 +110,8 @@ function setup(
     files: () => [],
     skills: () => [],
     attachFiles: () => undefined,
+    attachText: () => undefined,
+    pasteRecovery: () => undefined,
     removeFile: () => undefined,
     appendBatch: () => undefined,
     value: () => "",

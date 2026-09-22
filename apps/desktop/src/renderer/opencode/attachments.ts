@@ -1,9 +1,16 @@
-/**
- * The connected server rejects decoded attachment bytes over this limit
+/** The connected server rejects decoded attachment bytes over this limit
  * (`@opencode/core` `SessionPrompt.materializeAttachment`). It is a server
  * contract, not a desktop tuning value.
  */
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+/**
+ * The text-attachment cap, in UTF-8 bytes. The pinned server's base64
+ * validation overflows the stack somewhere above 3 MiB decoded and fails
+ * opaquely, so text attachments stay under a cap with headroom. It is a byte
+ * cap, not a character count.
+ */
+export const MAX_TEXT_ATTACHMENT_BYTES = 2 * 1024 * 1024;
 
 /**
  * The file-bearing subset of `DataTransferItem`. A real `DataTransferItem` is

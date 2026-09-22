@@ -37,6 +37,8 @@ export type ConversationRegionProps = {
   readonly forms: SessionFormsController;
   readonly permissions: SessionPermissionsController;
   readonly connected: () => boolean;
+  /** Host clipboard access for the composer's literal-paste escape hatch. */
+  readonly readClipboardText?: () => Promise<string | undefined>;
 };
 
 const formRenderKey = (form: { readonly sessionID: string; readonly id: string }): string =>
@@ -306,6 +308,9 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               sessionID={props.workspace.selectedID()}
               files={props.composer.files()}
               onAttachFiles={props.composer.attachFiles}
+              onAttachText={props.composer.attachText}
+              pasteRecovery={props.composer.pasteRecovery()}
+              readClipboardText={props.readClipboardText}
               onRemoveFile={props.composer.removeFile}
               action={composerAction()}
               disabled={props.composer.disabled()}
