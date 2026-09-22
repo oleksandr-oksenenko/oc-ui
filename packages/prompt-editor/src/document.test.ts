@@ -108,9 +108,10 @@ describe("prompt document", () => {
       ["1. not ordered", "1\\. not ordered"],
       ["1) not ordered", "1\\) not ordered"],
       ["use **literal**", "use \\*\\*literal\\*\\*"],
-      // A leading tilde could open a fence, so it is escaped; the pair itself
-      // is not strikethrough in the composer's dialect.
-      ["~~plain~~", "\\~~plain~~"],
+      // The transcript renders GFM strikethrough, but the composer has no
+      // strikethrough mark, so literal tilde pairs are escaped.
+      ["~~plain~~", "\\~~plain\\~\\~"],
+      ["a ~~b~~ c", "a \\~\\~b\\~\\~ c"],
     ] as const) {
       const doc = literal(source);
       const draft = toDraft(doc);

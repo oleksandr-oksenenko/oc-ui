@@ -69,6 +69,7 @@ const corpus: ReadonlyArray<readonly [string, PMNode]> = [
   ["literal ordered paren", literal("1) not ordered")],
   ["literal strong", literal("use **literal**")],
   ["literal strikethrough", literal("~~plain~~")],
+  ["literal strikethrough mid-line", literal("a ~~b~~ c")],
   ["heading", parse("# Heading")],
   ["bullet list", parse("- one\n- two")],
   ["nested bullet list", parse("- one\n  - nested\n- two")],
@@ -212,6 +213,7 @@ describe("markdown corpus", () => {
     expect(toDraft(parse("1) item")).text).toBe("1. item");
     expect(toDraft(parse("~~~\ncode\n~~~")).text).toBe("```\ncode\n```");
     expect(toDraft(parse("* one\n+ two")).text).toBe("- one\n- two");
+    expect(toDraft(parse("a ~~b~~ c")).text).toBe("a \\~\\~b\\~\\~ c");
   });
 
   it("parses every case into a schema-valid document", () => {

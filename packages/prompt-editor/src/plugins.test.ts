@@ -149,11 +149,11 @@ describe("prompt editor plugins", () => {
     const strike = editor();
     strike.type("~~gone~~");
     // Strikethrough is not one of the composer's marks, so the tildes stay
-    // literal text and the draft escapes the leading one, which could
-    // otherwise open a fence.
+    // literal text and the draft escapes them, since the transcript renders
+    // GFM strikethrough.
     expect(strike.view.state.doc.textContent).toBe("~~gone~~");
     expect(strike.marksOf("gone")).toBeUndefined();
-    expect(strike.draft().text).toBe("\\~~gone~~");
+    expect(strike.draft().text).toBe("\\~~gone\\~\\~");
     strike.dispose();
 
     const link = editor();
