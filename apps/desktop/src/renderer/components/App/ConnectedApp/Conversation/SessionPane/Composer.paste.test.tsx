@@ -253,6 +253,32 @@ describe("Composer paste routing", () => {
     harness.dispose();
   });
 
+  it("falls back to the text flavor when the sanitized HTML has no insertable content", () => {
+    setPlatform("macos");
+    const harness = openComposer();
+    pasteClipboard(harness.editor, {
+      html: "<p><script>alert(1)</script></p>",
+      text: "fallback after sanitizing",
+    });
+    // The rich HTML flavor routed to the schema pipeline, but its sanitized
+    // parse held nothing: the prepared text fallback is dispatched instead.
+    expect(harness.notice()).toBe("");
+    expect(harness.draft()).toBe("fallback after sanitizing");
+    expect(textOf(harness.editor)).toBe("fallback after sanitizing");
+    harness.dispose();
+  });
+
+  it("inserts the text fallback once when the rich parse is an empty block", () => {
+    setPlatform("macos");
+    const harness = openComposer();
+    pasteClipboard(harness.editor, { html: "<p> </p>", text: "one copy" });
+    expect(harness.notice()).toBe("");
+    expect(harness.draft()).toBe("one copy");
+    expect(harness.editor.querySelectorAll("p")).toHaveLength(1);
+    expect(textOf(harness.editor)).toBe("one copy");
+    harness.dispose();
+  });
+
   it("leaves the selection unchanged and explains when HTML-only content cannot be used", () => {
     setPlatform("macos");
     const harness = openComposer({ value: "keep this" });

@@ -2,7 +2,7 @@ import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
 import { List, type ListRef } from "@opencode/ui/list";
 import { closeHistory } from "prosemirror-history";
-import { EditorState, TextSelection } from "prosemirror-state";
+import { EditorState, TextSelection, type Transaction } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import {
   batch,
@@ -36,7 +36,8 @@ import "./PromptEditor/PromptEditor.css";
 
 /** One already-classified paste the composer hands to the editor to apply. */
 type PromptPasteInsert = {
-  readonly route: PasteRoute;
+  /** The composer owns the attachment and no-op routes; only these reach the editor. */
+  readonly route: Exclude<PasteRoute, "attachment-files" | "attachment-text" | "noop">;
   readonly text: string;
   readonly html?: string;
   /** The originating paste event, forwarded to ProseMirror's pipeline. */
@@ -186,14 +187,10 @@ export function PromptEditor(props: EditorProps) {
   );
   const insert = (suggestion: Suggestion | undefined) => {
     const range = query();
-    if (
-      !suggestion ||
-      !range ||
-      !view ||
-      !items().some((candidate) => candidate.key === suggestion.key)
-    ) {
-      return;
-    }
+    // `List` only reports a selection it currently renders, so the value and
+    // the open menu are guaranteed here; the checks narrow the callback's
+    // optional contract for the type checker only.
+    if (!suggestion || !range || !view) return;
     const tr = closeHistory(view.state.tr);
     if (suggestion.kind === "command") {
       tr.replaceWith(range.from, range.to, schema.text(`/${suggestion.name} `));
@@ -211,11 +208,9 @@ export function PromptEditor(props: EditorProps) {
   };
   onMount(() => {
     // Set only while `applyPaste` runs an HTML paste, so ProseMirror's own
-    // pipeline can report whether its parse produced insertable content before
-    // anything is dispatched.
-    let pendingHtmlFallback:
-      | { readonly fallback: ReturnType<typeof pastePlainText>; used: boolean }
-      | undefined;
+    // pipeline can replace a parse that produced nothing insertable. `doPaste`
+    // always calls the `handlePaste` hook before it returns.
+    let pendingHtmlFallback: Transaction | undefined;
     const instance = new EditorView(
       { mount: host },
       {
@@ -240,19 +235,14 @@ export function PromptEditor(props: EditorProps) {
             batch(() => props.onInput(draft.text, draft.skills));
           }
         },
-        handleKeyDown(editor, event) {
-          if (editor.composing || event.isComposing || event.keyCode === 229) return false;
+        handleKeyDown(_editor, event) {
           if (query()) {
             if (event.key === "Escape") {
               dismiss();
               return true;
             }
             if (!event.shiftKey) {
-              if (
-                (event.key === "ArrowDown" || event.key === "ArrowUp") &&
-                listMounted() &&
-                items().length > 0
-              ) {
+              if ((event.key === "ArrowDown" || event.key === "ArrowUp") && items().length > 0) {
                 list?.onKeyDown(event);
                 return true;
               }
@@ -261,7 +251,7 @@ export function PromptEditor(props: EditorProps) {
                 // A suggestion is selected when one exists; otherwise the key
                 // is consumed so a no-match, loading, or failed menu cannot
                 // send the draft behind it.
-                if (listMounted() && items().length > 0) list?.onKeyDown(event);
+                if (items().length > 0) list?.onKeyDown(event);
                 return true;
               }
             }
@@ -288,11 +278,10 @@ export function PromptEditor(props: EditorProps) {
         // (return false); otherwise the fallback transaction is dispatched
         // here, so success and fallback each insert exactly once.
         handlePaste(editor, _event, slice) {
-          const pending = pendingHtmlFallback;
-          if (pending === undefined) return false;
-          pending.used = true;
+          const fallback = pendingHtmlFallback;
+          if (fallback === undefined) return false;
           if (sliceHasInsertableContent(slice)) return false;
-          editor.dispatch(pending.fallback);
+          editor.dispatch(fallback);
           return true;
         },
         // Unsafe link and image URIs are dropped before the schema parser can
@@ -365,11 +354,10 @@ export function PromptEditor(props: EditorProps) {
         return "unsupported";
       }
       const state = instance.state;
-      const fallback =
+      pendingHtmlFallback =
         fallbackRoute === "markdown-parse"
           ? pasteContent(state, text)
           : pastePlainText(state, text);
-      pendingHtmlFallback = { fallback, used: false };
       try {
         instance.pasteHTML(
           html,
@@ -378,10 +366,6 @@ export function PromptEditor(props: EditorProps) {
           // forwarded instead so the pipeline hook can see it.
           event,
         );
-        // `pasteHTML` runs the whole pipeline synchronously; if it did not
-        // reach the hook (for example the view is composing), dispatch the
-        // prepared fallback so the paste is never silently dropped.
-        if (!pendingHtmlFallback.used) instance.dispatch(fallback);
         return "inserted";
       } finally {
         pendingHtmlFallback = undefined;
@@ -404,10 +388,10 @@ export function PromptEditor(props: EditorProps) {
             return "inserted";
           case "html-parse":
             return applyHtmlPaste(input.text, input.html ?? "", input.event);
-          default:
-            // Attachment and no-op routes are owned by the composer; the
-            // editor never inserts for them.
-            return "inserted";
+          default: {
+            const unreachable: never = input.route;
+            return unreachable;
+          }
         }
       },
     });

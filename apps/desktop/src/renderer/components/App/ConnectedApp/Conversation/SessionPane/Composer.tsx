@@ -315,8 +315,7 @@ export function Composer(props: ComposerProps) {
   };
 
   const keyDown = (event: KeyboardEvent) => {
-    if (event.isComposing || event.keyCode === 229 || event.key !== "Enter" || event.shiftKey)
-      return;
+    if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     if (queueChord(event)) {
       // The queue gesture never falls through to send, even when queueing is
@@ -397,7 +396,7 @@ export function Composer(props: ComposerProps) {
     if (event.isComposing || event.keyCode === 229) return;
     if (!isLiteralPasteChord(event)) return;
     event.preventDefault();
-    pasteAsPlainText(event.timeStamp);
+    pasteAsPlainText();
   };
 
   /**
@@ -470,7 +469,7 @@ export function Composer(props: ComposerProps) {
    * same literal insertion, keeps focus in the editor, and explains when the
    * clipboard cannot be read instead of failing silently.
    */
-  const pasteAsPlainText = (at?: number) => {
+  const pasteAsPlainText = () => {
     const readClipboard = props.readClipboardText;
     if (readClipboard === undefined) {
       setPasteNotice(CLIPBOARD_UNAVAILABLE_NOTICE);
@@ -499,7 +498,7 @@ export function Composer(props: ComposerProps) {
       if (text.length >= TEXT_ATTACHMENT_LIMIT) {
         if (props.onAttachText !== undefined) {
           setPasteNotice(undefined);
-          if (at === undefined || !isRepeatedTextAttachment(text, at)) props.onAttachText(text);
+          props.onAttachText(text);
         } else {
           setPasteNotice(LITERAL_TOO_LARGE_NOTICE);
         }
