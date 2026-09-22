@@ -56,8 +56,9 @@ export async function quitAndWaitForOwnedWorkers(
   timeoutMs: number,
 ): Promise<void> {
   await recordOwnedWorkers(userDataPath);
-  const confirmation = await browser.electron.mock("dialog", "showMessageBox");
-  await confirmation.mockResolvedValue({ response: 1, checkboxChecked: false });
+  // Quit no longer asks. Mock native dialogs so a stop failure cannot block the run.
+  const dialogs = await browser.electron.mock("dialog", "showMessageBox");
+  await dialogs.mockResolvedValue({ response: 0, checkboxChecked: false });
   // Let the execute reply reach WDIO before the app closes its renderer.
   await browser.electron.execute((electron) => {
     setTimeout(() => electron.app.quit(), 0);

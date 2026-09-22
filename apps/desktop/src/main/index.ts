@@ -197,7 +197,7 @@ const installIpcHandlers = (): void => {
       return Promise.reject(new TypeError("localOpenCode.connect does not accept arguments"));
     }
     if (quitHandler.isQuitting()) {
-      return { status: "failed" as const, message: "Ocui is closing. Cancel Quit to connect." };
+      return { status: "failed" as const, message: "Ocui is closing." };
     }
     if (desktopRuntime === undefined) {
       return { status: "failed" as const, message: "Desktop services are not ready." };

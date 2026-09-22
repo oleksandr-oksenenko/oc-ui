@@ -44,7 +44,6 @@ export class LocalOpenCode extends Context.Service<
   LocalOpenCode,
   {
     readonly connect: Effect.Effect<LocalOpenCodeConnection, LocalOpenCodeUnavailableError>;
-    readonly needsQuitConfirmation: Effect.Effect<boolean>;
     readonly shutdown: Effect.Effect<void, LocalOpenCodeUnavailableError>;
     readonly onUnavailable: (listener: () => void) => () => void;
   }
@@ -253,7 +252,6 @@ export class LocalOpenCode extends Context.Service<
         return LocalOpenCode.of({
           connect,
           shutdown,
-          needsQuitConfirmation: Effect.sync(() => current !== undefined),
           onUnavailable: (listener) => {
             listeners.add(listener);
             return () => {

@@ -14,10 +14,7 @@ export const settleSettingsIpc = Effect.fn("Desktop.settleSettingsIpc")(function
 
 /** Owns the native quit fiber outside the runtime it must eventually dispose. */
 export function createAppQuitHandler(dependencies: {
-  readonly localOpenCode: Effect.Effect<Pick<
-    LocalOpenCode["Service"],
-    "needsQuitConfirmation" | "shutdown"
-  > | void>;
+  readonly localOpenCode: Effect.Effect<Pick<LocalOpenCode["Service"], "shutdown"> | void>;
   readonly showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>;
   readonly cleanup: Effect.Effect<void>;
   readonly quit: () => void;
@@ -31,18 +28,6 @@ export function createAppQuitHandler(dependencies: {
     let serverStopped = false;
     yield* Effect.gen(function* () {
       const local = yield* dependencies.localOpenCode;
-      if (local !== undefined && (yield* local.needsQuitConfirmation)) {
-        const { response } = yield* showMessageBox({
-          type: "warning",
-          message: "Quit Ocui and stop built-in OpenCode?",
-          detail: "Any work it is doing will be interrupted.",
-          buttons: ["Cancel", "Quit"],
-          defaultId: 0,
-          cancelId: 0,
-          noLink: true,
-        });
-        if (response !== 1) return;
-      }
       if (local !== undefined) yield* local.shutdown;
       serverStopped = true;
       yield* dependencies.cleanup;

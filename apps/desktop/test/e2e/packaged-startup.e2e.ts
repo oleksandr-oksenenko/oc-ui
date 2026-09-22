@@ -104,17 +104,9 @@ describe("packaged owned OpenCode", () => {
     await verifySessionTools(projectDirectory);
   });
 
-  it("preserves the worker on Cancel Quit and reload, then restarts only on request", async () => {
+  it("keeps the worker across renderer reload and restarts only on request", async () => {
     const firstPid = workerPids[0];
     assert.ok(firstPid !== undefined);
-
-    // Native confirmation is mocked only by the test; Cancel must preserve the worker.
-    const confirmation = await browser.electron.mock("dialog", "showMessageBox");
-    await confirmation.mockResolvedValue({ response: 0, checkboxChecked: false });
-    await browser.electron.execute((electron) => electron.app.quit());
-    await browser.waitUntil(() => confirmation.mock.calls.length === 1);
-    assert.deepEqual(await ownedWorkerPids(), [firstPid]);
-    await verifyHealth(firstPid);
 
     // Renderer teardown does not own the server. A saved local choice remains lazy.
     await browser.refresh();
@@ -166,8 +158,9 @@ describe("packaged owned OpenCode", () => {
   });
 
   after(async () => {
-    const confirmation = await browser.electron.mock("dialog", "showMessageBox");
-    await confirmation.mockResolvedValue({ response: 1, checkboxChecked: false });
+    // Quit no longer asks. Mock native dialogs so a stop failure cannot block the run.
+    const dialogs = await browser.electron.mock("dialog", "showMessageBox");
+    await dialogs.mockResolvedValue({ response: 0, checkboxChecked: false });
     // Let the execute reply reach WDIO before the app closes its renderer.
     await browser.electron.execute((electron) => {
       setTimeout(() => electron.app.quit(), 0);

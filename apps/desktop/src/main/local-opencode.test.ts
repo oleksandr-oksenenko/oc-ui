@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 
 import type { utilityProcess } from "electron";
 import type { UtilityProcess } from "electron";
-import { Effect, ManagedRuntime } from "effect";
+import { ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { OpenCodeWorkerCommand } from "../shared/opencode-worker-contract.ts";
@@ -51,7 +51,6 @@ const create = async (options: { inspectorPort?: string } = {}) => {
   const service = await runtime.runPromise(LocalOpenCode);
   return {
     connect: (signal?: AbortSignal) => runtime.runPromise(service.connect, { signal }),
-    needsQuitConfirmation: () => Effect.runSync(service.needsQuitConfirmation),
     shutdown: () => runtime.runPromise(service.shutdown),
     onUnavailable: service.onUnavailable,
     dispose: () => runtime.dispose(),
@@ -89,11 +88,9 @@ afterEach(async () => {
 describe("owned OpenCode worker", () => {
   it("starts lazily, shares concurrent starts, and reuses the same authenticated endpoint", async () => {
     const service = await create();
-    expect(service.needsQuitConfirmation()).toBe(false);
     expect(fork).not.toHaveBeenCalled();
     const first = service.connect();
     const second = service.connect();
-    expect(service.needsQuitConfirmation()).toBe(true);
     expect(fork).toHaveBeenCalledExactlyOnceWith("/private/runtime/opencode-worker.mjs", [], {
       serviceName: "Ocui built-in OpenCode",
       stdio: "pipe",
@@ -119,7 +116,6 @@ describe("owned OpenCode worker", () => {
     const shutdown = service.shutdown();
     const concurrentShutdown = service.shutdown();
     await Promise.all([shutdown, concurrentShutdown]);
-    expect(service.needsQuitConfirmation()).toBe(false);
     await expect(service.connect()).rejects.toMatchObject({ reason: "start-failed" });
   });
 
@@ -147,7 +143,6 @@ describe("owned OpenCode worker", () => {
     child().listen();
     await connected;
     expect(fork).toHaveBeenCalledTimes(1);
-    expect(service.needsQuitConfirmation()).toBe(true);
     await service.shutdown();
   });
 
@@ -161,10 +156,8 @@ describe("owned OpenCode worker", () => {
     const disposal = service.dispose().then(disposed);
     await vi.waitFor(() => expect(child().postMessage).toHaveBeenCalledWith({ type: "stop" }));
     expect(disposed).not.toHaveBeenCalled();
-    expect(service.needsQuitConfirmation()).toBe(true);
     child().exit();
     await disposal;
-    expect(service.needsQuitConfirmation()).toBe(false);
   });
 
   it("does not treat listening or HTTP 503 as readiness", async () => {
@@ -203,7 +196,6 @@ describe("owned OpenCode worker", () => {
     child().listen();
     await rejected;
     expect(child().postMessage).toHaveBeenCalledWith({ type: "stop" });
-    expect(service.needsQuitConfirmation()).toBe(false);
   });
 
   it("rejects a non-loopback or malformed private message without probing it", async () => {
@@ -215,7 +207,6 @@ describe("owned OpenCode worker", () => {
     child().listen("http://example.test:4096");
     await rejected;
     expect(fetch).not.toHaveBeenCalled();
-    expect(service.needsQuitConfirmation()).toBe(false);
   });
 
   it("cancels an in-flight readiness fetch immediately when quitting", async () => {
@@ -271,7 +262,6 @@ describe("owned OpenCode worker", () => {
     child().listen();
     await vi.advanceTimersByTimeAsync(2_000);
     expect(signal?.aborted).toBe(true);
-    expect(service.needsQuitConfirmation()).toBe(true);
     await Promise.all([service.shutdown(), rejected]);
   });
 
@@ -297,7 +287,6 @@ describe("owned OpenCode worker", () => {
     await rejected;
     expect(signals).toHaveLength(1);
     expect(signals[0]?.aborted).toBe(true);
-    expect(service.needsQuitConfirmation()).toBe(false);
   });
 
   it("does not automatically restart a crash and ignores late events from the previous worker", async () => {
@@ -318,7 +307,6 @@ describe("owned OpenCode worker", () => {
     oldExit?.(1);
     child().listen();
     await restarted;
-    expect(service.needsQuitConfirmation()).toBe(true);
     expect(unavailable).toHaveBeenCalledTimes(1);
     expect(fork).toHaveBeenCalledTimes(2);
     await service.shutdown();
@@ -345,21 +333,35 @@ describe("owned OpenCode worker", () => {
     const connected = service.connect();
     child().listen();
     await connected;
-    child().exitsOnStop = false;
+    const retained = child();
+    retained.exitsOnStop = false;
     const quitting = service.shutdown();
     const rejected = (async () => {
       await expect(quitting).rejects.toMatchObject({ reason: "stop-failed" });
     })();
     await vi.advanceTimersByTimeAsync(14_000);
     await rejected;
-    expect(child().kill).toHaveBeenCalledTimes(1);
+    expect(retained.kill).toHaveBeenCalledTimes(1);
     expect(killProcess).toHaveBeenCalledExactlyOnceWith(4242, "SIGKILL");
-    expect(service.needsQuitConfirmation()).toBe(true);
     await expect(service.connect()).rejects.toMatchObject({ reason: "start-failed" });
     expect(fork).toHaveBeenCalledTimes(1);
-    child().exitsOnStop = true;
-    await service.shutdown();
-    expect(service.needsQuitConfirmation()).toBe(false);
+
+    // The retry must stop the retained child, not a replacement, and wait for its exit.
+    let retried = false;
+    const retry = service.shutdown().then(() => {
+      retried = true;
+      return undefined;
+    });
+    await vi.waitFor(() =>
+      expect(
+        retained.postMessage.mock.calls.filter(([message]) => message.type === "stop"),
+      ).toHaveLength(2),
+    );
+    expect(retried).toBe(false);
+    retained.exit();
+    await retry;
+    expect(retried).toBe(true);
+    expect(fork).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a failed startup owned when its cleanup fails", async () => {
@@ -376,7 +378,6 @@ describe("owned OpenCode worker", () => {
     await rejected;
     await expect(service.connect()).rejects.toMatchObject({ reason: "stop-failed" });
     expect(fork).toHaveBeenCalledTimes(1);
-    expect(service.needsQuitConfirmation()).toBe(true);
     child().exitsOnStop = true;
     await service.shutdown();
   });
@@ -398,6 +399,5 @@ describe("owned OpenCode worker", () => {
     await vi.advanceTimersByTimeAsync(4_000);
     expect(child().kill).toHaveBeenCalledTimes(1);
     expect(killProcess).not.toHaveBeenCalled();
-    expect(service.needsQuitConfirmation()).toBe(false);
   });
 });
