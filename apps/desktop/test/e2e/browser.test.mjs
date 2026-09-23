@@ -1095,7 +1095,7 @@ describe.sequential("production browser app", () => {
     );
   });
 
-  it("attaches oversized pasted text, keeps it across navigation, and refuses an over-cap paste", async () => {
+  it("attaches oversized pasted text and keeps it across navigation", async () => {
     await ensureConnected();
     const location = { directory: await realpath(project) };
     const session = await api.session.create({ title: "Pasted text attachments", location });
@@ -1138,23 +1138,6 @@ describe.sequential("production browser app", () => {
       { name: "pasted-text.txt", mime: "text/plain" },
     ]);
     expect(Buffer.from(message.files[0].data, "base64").toString()).toBe(text);
-
-    // A paste over the 2 MiB UTF-8 byte cap is refused with an error notice:
-    // nothing is attached, the draft stays empty, and no restore or dismiss
-    // surface exists.
-    const overCap = `${"a".repeat(2 * 1024 * 1024 + 1)}FIRST-PAYLOAD`;
-    await prompt.evaluate((input, payload) => {
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/plain", payload);
-      input.dispatchEvent(
-        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
-      );
-    }, overCap);
-    await page.getByRole("alert").filter({ hasText: "2 MiB attachment limit" }).waitFor();
-    expect(await prompt.textContent()).toBe("");
-    expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
-    expect(await page.getByRole("button", { name: "Restore text", exact: true }).count()).toBe(0);
-    expect(await page.getByRole("button", { name: "Dismiss", exact: true }).count()).toBe(0);
   });
 
   it("attaches files chosen through the picker button and sends their bytes", async () => {

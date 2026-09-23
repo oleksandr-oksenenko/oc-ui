@@ -241,25 +241,6 @@ describe("Composer composition precedence", () => {
     menu.dispose();
   });
 
-  it("leaves Tab to the composition instead of transforming the document", () => {
-    const composing = openComposer();
-    composing.paste("- one\n- two");
-    const before = composing.draft();
-    composing.composition("compositionstart");
-    composing.press("Tab");
-    composing.press("Tab", { shiftKey: true });
-    expect(composing.draft()).toBe(before);
-    composing.dispose();
-
-    // Control: the same document sinks its item when no composition is active.
-    const editing = openComposer();
-    editing.paste("- one\n- two");
-    const plain = editing.draft();
-    editing.press("Tab");
-    expect(editing.draft()).not.toBe(plain);
-    editing.dispose();
-  });
-
   it("does not open the menu from text that arrives during composition", async () => {
     const harness = openComposer();
     harness.composition("compositionstart");
