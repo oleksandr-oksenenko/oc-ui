@@ -11,9 +11,9 @@
  * Filed upstream: https://github.com/anomalyco/opencode/issues/50336 (a large
  * file crashes the session through Prompt.Base64) and
  * https://github.com/anomalyco/opencode/issues/45558 (Prompt.Base64 500 on
- * /prompt). The stack overflow itself has no issue yet; the reproduction is in
- * docs/upstream-attachment-size-report.md. Remove this cap once the validator
- * is fixed.
+ * /prompt). The stack overflow itself has no issue yet; the finding and
+ * reproduction are in docs/upstream-attachment-size-report.md. Remove this cap
+ * once the validator is fixed.
  */
 export const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
 
