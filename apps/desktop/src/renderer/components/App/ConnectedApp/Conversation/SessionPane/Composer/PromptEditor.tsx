@@ -42,7 +42,12 @@ type PromptPasteInsert = {
 export type PromptEditorControl = {
   /** Moves focus into the editor without changing the selection. */
   focus: () => void;
-  /** Whether the caret currently sits inside a code block. */
+  /**
+   * Whether the current selection starts inside a code block. It reads `$from`,
+   * the ordered selection start, matching how the paste classifier reads
+   * context; a selection spanning code and non-code blocks is classified by
+   * its start.
+   */
   inCodeBlock: () => boolean;
   /** Whether an IME composition currently owns the document. */
   composing: () => boolean;
@@ -81,7 +86,14 @@ type SuggestionSection = {
   readonly items: readonly Suggestion[];
 };
 
-/** Compares the skill attachments that belong with a draft value. */
+/**
+ * Whether the incoming skill attachments match the ones the editor just
+ * emitted. Part of the controlled-value echo guard: when the composer echoes
+ * our own draft back, reparsing would replace live formatting and the caret,
+ * so the update effect skips it. A genuine external change — session switch,
+ * restored draft, or edited attachment metadata — fails this comparison and
+ * reparses. Identity is id, name, and mention range, in order.
+ */
 function sameSkills(
   left: readonly PromptSkillAttachment[],
   right: readonly PromptSkillAttachment[],

@@ -19,7 +19,7 @@ import { ModelPicker } from "./Composer/ModelPicker.tsx";
 import type { ModelPickerOption } from "./Composer/ModelPicker.tsx";
 import { VariantPicker } from "./Composer/VariantPicker.tsx";
 import type { VariantPickerOption } from "./Composer/VariantPicker.tsx";
-import { readClipboardFiles, readClipboardText } from "./Composer/pasteClipboard.ts";
+import { readPastedFiles, readPastedText } from "./Composer/pasteClipboard.ts";
 import { classifyPaste } from "./Composer/pasteRoute.ts";
 
 export type ComposerReview = {
@@ -347,12 +347,12 @@ export function Composer(props: ComposerProps) {
     const data = event.clipboardData;
     if (data === null) return;
     const control = editorControl;
-    const files = readClipboardFiles(data);
+    const files = readPastedFiles(data);
     // An IME owns the document during a composition; text paste stays with the
     // browser and the IME, exactly as ProseMirror's own handler leaves it.
     if (files.length === 0 && control?.composing() === true) return;
     const codeBlock = control?.inCodeBlock() ?? false;
-    const read = readClipboardText(data);
+    const read = readPastedText(data);
     const decision = classifyPaste({
       files,
       text: read,

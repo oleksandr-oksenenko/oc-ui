@@ -48,6 +48,10 @@ type PreparedInstruction = {
  * mentions that still match the instruction text take part, and the prefix is
  * checked against the text (after numeric references decode) so a literal
  * marker cannot become a chip.
+ *
+ * TODO: redesign this around custom elements. If the Markdown renderer emitted
+ * a chip element per skill (or sanitization preserved a custom tag), the
+ * placeholder markers and the post-render DOM walk could be deleted.
  */
 function withPlaceholders(
   text: string,
@@ -118,7 +122,13 @@ function replacePlaceholders(
   }
 }
 
-/** Renders a sent prompt instruction as sanitized Markdown with skill chips. */
+/**
+ * Renders a sent prompt instruction in the transcript: sanitized Markdown with
+ * skill attachments shown as chips. Skill mentions are first protected with
+ * this render's private placeholder prefix so Markdown rendering cannot touch
+ * them, then swapped for chip elements. The effect is keyed on the full input,
+ * so a transcript refresh with identical content leaves the DOM untouched.
+ */
 export function PromptInstruction(props: {
   readonly text: string;
   readonly skills?: readonly PromptSkillAttachment[];

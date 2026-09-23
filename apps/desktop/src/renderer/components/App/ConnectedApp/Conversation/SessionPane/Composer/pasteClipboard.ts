@@ -21,11 +21,13 @@ export type ClipboardDataLike = FileTransferLike & {
 const uriListToText = (value: string): string => value.replace(/\r?\n/g, " ");
 
 /**
- * Reads the plain text flavor in ProseMirror's own fallback order:
+ * Reads the text flavor of a paste or drop payload synchronously; this is not
+ * the system clipboard API. It follows ProseMirror's own fallback order:
  * `text/plain`, the legacy `Text` spelling, then `text/uri-list` with its line
- * feeds flattened. An absent `getData` yields no text.
+ * feeds flattened. `text/html` is never inspected, and an absent `getData`
+ * yields no text.
  */
-export function readClipboardText(data: ClipboardDataLike): string {
+export function readPastedText(data: ClipboardDataLike): string {
   const getData = data.getData?.bind(data);
   if (getData === undefined) return "";
   const plain = getData("text/plain") || getData("Text");
@@ -35,10 +37,10 @@ export function readClipboardText(data: ClipboardDataLike): string {
 }
 
 /**
- * Collects file attachments from a paste payload. Metadata only: the bytes are
- * never read here, and the existing size policy belongs to the attachment
- * owner.
+ * Collects the file attachments from a paste or drop payload. Metadata only:
+ * the bytes are never read here, and the existing size policy belongs to the
+ * attachment owner.
  */
-export function readClipboardFiles(data: ClipboardDataLike | null): File[] {
+export function readPastedFiles(data: ClipboardDataLike | null): File[] {
   return collectTransferFiles(data);
 }
