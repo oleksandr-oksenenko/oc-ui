@@ -209,6 +209,18 @@ describe("Markdown", () => {
     }
   });
 
+  it("keeps code blocks keyboard-reachable without focusing tables", () => {
+    const { host, dispose } = mount(() => (
+      <Markdown text={"| Check | Status |\n| --- | --- |\n| Tests | Passed |\n\n```\ncode\n```"} />
+    ));
+    try {
+      expect(host.querySelector("pre")?.getAttribute("tabindex")).toBe("0");
+      expect(host.querySelector("table")?.hasAttribute("tabindex")).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+
   it("preserves numbered list starts and reports clipboard failures", async () => {
     const writeText = vi
       .fn<(text: string) => Promise<void>>()

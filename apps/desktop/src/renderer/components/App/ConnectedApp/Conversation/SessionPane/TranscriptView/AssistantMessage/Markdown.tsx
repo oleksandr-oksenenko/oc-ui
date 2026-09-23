@@ -46,8 +46,9 @@ export function Markdown(props: MarkdownProps): JSX.Element {
     }
     const currentGeneration = ++generation;
     root.innerHTML = renderMarkdownCached(props.text);
-    for (const region of root.querySelectorAll<HTMLElement>("pre, table")) {
-      region.tabIndex = 0;
+    // Only scrollable regions take a tab stop; tables wrap instead of scrolling.
+    for (const codeBlock of root.querySelectorAll<HTMLElement>("pre")) {
+      codeBlock.tabIndex = 0;
     }
     const renderedFileUrls = new Set<string>();
     for (const image of root.querySelectorAll<HTMLImageElement>("img[data-file-src]")) {

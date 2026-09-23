@@ -1,6 +1,6 @@
 /* Opt in app-owned scroll regions; upstream components retain their behavior.
- * Markdown creates its scrollable code blocks and tables from rendered content. */
-:where(.oc-scrollable, .transcript-markdown pre, .transcript-markdown table) {
+ * Markdown creates scrollable code blocks from rendered content. */
+:where(.oc-scrollable, .transcript-markdown pre) {
   scrollbar-color: var(--oc-scrollbar-thumb) var(--oc-scrollbar-track);
   scrollbar-width: var(--oc-scrollbar-width);
 

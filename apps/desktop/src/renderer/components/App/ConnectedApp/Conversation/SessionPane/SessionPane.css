@@ -421,12 +421,6 @@
 }
 
 .transcript-markdown table {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-wrap: normal;
-  white-space: nowrap;
   border-collapse: collapse;
 }
 
@@ -434,6 +428,7 @@
   padding: 5px 8px;
   border: 1px solid var(--oc-border-muted);
   text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .transcript-markdown img {

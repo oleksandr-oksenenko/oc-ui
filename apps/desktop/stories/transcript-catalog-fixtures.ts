@@ -118,6 +118,31 @@ export const markdownAssistant: SessionMessageInfo = {
   finish: "stop",
 };
 
+export const tableAssistant: SessionMessageInfo = {
+  id: "assistant-table",
+  time: { created: 1, completed: 2 },
+  type: "assistant",
+  agent: "build",
+  model: { providerID: "openai", id: "gpt-5" },
+  content: [
+    {
+      type: "text",
+      text: [
+        "The release checks are **green**. Here is the summary:",
+        "",
+        "| Check | Result | Location |",
+        "| --- | --- | --- |",
+        "| Type checking and static analysis | All checks passed without errors | `apps/desktop/src/renderer` |",
+        "| Long identifier | superlongunbrokenidentifierwithoutspacesorpunctuation | [Release notes](https://example.com/releases) |",
+        "| Packaging | Signed and notarized | `apps/desktop/release` |",
+        "",
+        "Nothing here blocks the release.",
+      ].join("\n"),
+    },
+  ],
+  finish: "stop",
+};
+
 export const fileImageAssistant: SessionMessageInfo = {
   id: "assistant-file-image",
   time: { created: 1, completed: 2 },

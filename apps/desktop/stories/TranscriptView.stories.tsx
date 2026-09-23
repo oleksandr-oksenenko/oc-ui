@@ -10,6 +10,7 @@ import {
   assistant,
   streamingAssistant,
   markdownAssistant,
+  tableAssistant,
   fileImageAssistant,
   richItems,
   reviewPrompt,
@@ -88,6 +89,29 @@ const settle = () =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
 
+// A table must fit its transcript column instead of scrolling inside it.
+const tableTranscript: TranscriptViewProps["messages"] = [
+  {
+    id: "user-table",
+    time: { created: 0 },
+    type: "user",
+    text: "Can you review the release checks?",
+  },
+  tableAssistant,
+];
+
+async function assertTableFits(canvasElement: HTMLElement): Promise<void> {
+  const table = canvasElement.querySelector<HTMLTableElement>(".transcript-markdown table")!;
+  const markdown = table.closest<HTMLElement>(".transcript-markdown")!;
+  await expect(table.clientWidth).toBeGreaterThan(0);
+  await expect(table.clientHeight).toBeGreaterThan(0);
+  await expect(table.scrollWidth).toBeLessThanOrEqual(table.clientWidth + 1);
+  await expect(table.getBoundingClientRect().right).toBeLessThanOrEqual(
+    markdown.getBoundingClientRect().right + 1,
+  );
+  await expect(markdown.scrollWidth).toBeLessThanOrEqual(markdown.clientWidth + 1);
+}
+
 export const ScrollPreservation: Story = {
   args: { messages: [], sessionStatus: "running" },
   render: () => <TranscriptUpdatesFixture />,
@@ -144,6 +168,24 @@ export const ScrollPreservation: Story = {
 export const Markdown: Story = {
   args: { messages: [markdownAssistant], sessionStatus: "idle", loading: false },
   render: renderTranscript,
+};
+export const MarkdownTable: Story = {
+  args: {
+    messages: tableTranscript,
+    sessionStatus: "idle",
+    loading: false,
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => assertTableFits(canvasElement),
+};
+export const MarkdownTableNarrow: Story = {
+  args: {
+    messages: tableTranscript,
+    sessionStatus: "idle",
+    loading: false,
+  },
+  render: renderNarrowTranscript,
+  play: async ({ canvasElement }) => assertTableFits(canvasElement),
 };
 export const MarkdownFileImage: Story = {
   args: {
