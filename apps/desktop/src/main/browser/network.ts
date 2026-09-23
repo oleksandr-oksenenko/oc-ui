@@ -6,6 +6,11 @@ import { Effect, Encoding } from "effect";
 
 export type BrowserNetwork = Effect.Success<ReturnType<typeof createBrowserNetwork>>;
 
+/** Erases a retired profile's storage. Connections are closed separately by the owner. */
+export async function clearBrowserPartition(partitionID: string): Promise<void> {
+  await session.fromPartition(partitionID).clearStorageData();
+}
+
 export const createBrowserNetwork = Effect.fn("BrowserNetwork.create")(function* <E>(
   rpc: Pick<
     RpcClient<typeof Browser.Definition, E>,

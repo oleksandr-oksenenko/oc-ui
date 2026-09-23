@@ -67,6 +67,17 @@ export function createWorkspaceModel(
     browserConnection?.api,
     browserConnection ?? { serverUrl: "", password: "" },
     sessions.selectedID,
+    () => panels.rightPanelOpen() && panels.contextView() === "browser",
+    (handler) => {
+      const stopDeleted = runtime.data.on("session.deleted", (event) =>
+        handler(event.data.sessionID),
+      );
+      const stopMoved = runtime.data.on("session.moved", (event) => handler(event.data.sessionID));
+      return () => {
+        stopDeleted();
+        stopMoved();
+      };
+    },
     (id) => {
       sessions.select(id);
       panels.setContextView("browser");

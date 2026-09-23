@@ -7,6 +7,29 @@ import { createBrowserPage, type BrowserPage } from "./upstream/page.ts";
 
 export type NativeBrowser = ReturnType<typeof createNativeBrowser>;
 
+/** A bounded recovery record: page URLs in tab order and the focused index. */
+export type BrowserCheckpoint = {
+  readonly urls: readonly string[];
+  readonly focusedIndex: number | null;
+};
+
+/** What restoration rebuilt, plus destinations it never attempted. */
+export type RestoreOutcome = {
+  readonly urls: readonly string[];
+  readonly pending: readonly string[];
+};
+
+/** Resolves on abort so a stalled page cannot hold restoration. */
+const abortedOutcome = (signal: AbortSignal) =>
+  // oxlint-disable-next-line effecttsgo/new-promise -- AbortSignal has no promise API; this adapter is not Effect code.
+  new Promise<"aborted">((resolve) => {
+    if (signal.aborted) {
+      resolve("aborted");
+      return;
+    }
+    signal.addEventListener("abort", () => resolve("aborted"), { once: true });
+  });
+
 export function createNativeBrowser(
   win: BrowserWindow,
   partition: string,
@@ -15,6 +38,8 @@ export function createNativeBrowser(
   onFocus: (tabID: Browser.TabID) => void,
 ) {
   const pages = new Map<Browser.TabID, BrowserPage>();
+  /** The last destination requested for a tab, kept for retries after a failed load. */
+  const requested = new Map<Browser.TabID, string>();
   const retiring = new Set<Promise<void>>();
   let focusedTabID: Browser.TabID | null = null;
   let closed = false;
@@ -25,7 +50,7 @@ export function createNativeBrowser(
   const report = (error?: string) => {
     if (!closed) publish(state(), error);
   };
-  const focus = (id: Browser.TabID) => {
+  const applyFocus = (id: Browser.TabID, notify: boolean) => {
     focusedTabID = id;
     pages.forEach((page, key) => {
       if (key === id) return;
@@ -34,8 +59,9 @@ export function createNativeBrowser(
       page.view.setVisible(false);
     });
     report();
-    onFocus(id);
+    if (notify) onFocus(id);
   };
+  const focus = (id: Browser.TabID) => applyFocus(id, true);
   const retire = (page: BrowserPage) => {
     const pending = page.dispose();
     retiring.add(pending);
@@ -49,6 +75,7 @@ export function createNativeBrowser(
     const page = pages.get(id);
     if (!page) return;
     pages.delete(id);
+    requested.delete(id);
     if (focusedTabID === id) focusedTabID = pages.keys().next().value ?? null;
     await retire(page);
     report(reason);
@@ -85,6 +112,61 @@ export function createNativeBrowser(
   };
   return {
     state,
+    checkpoint(): BrowserCheckpoint {
+      const entries = Array.from(pages.entries());
+      const focused = entries.findIndex(([id]) => id === focusedTabID);
+      return {
+        // The protocol's tab state truncates URLs; recovery keeps the loaded value.
+        // A tab whose first navigation failed keeps its intended destination.
+        urls: entries.map(([id, page]) => {
+          const current = page.contents.getURL();
+          if (current && current !== "about:blank") return current;
+          return requested.get(id) ?? current;
+        }),
+        focusedIndex: focused < 0 ? null : focused,
+      };
+    },
+    async restore(checkpoint: BrowserCheckpoint, signal: AbortSignal): Promise<RestoreOutcome> {
+      if (closed) throw new Error("Browser attachment is closed.");
+      const urls: string[] = [];
+      const aborted = abortedOutcome(signal);
+      for (let index = 0; index < checkpoint.urls.length; index += 1) {
+        const destination = checkpoint.urls[index]!;
+        if (signal.aborted) return { urls, pending: checkpoint.urls.slice(index) };
+        const page = create();
+        const id = page.state().id;
+        requested.set(id, destination);
+        const execution = page.execute(
+          { action: { type: "navigate", tabID: id, url: destination }, files: [] },
+          signal,
+        );
+        // Native disposal owns settlement; observe rejection to keep it handled.
+        const settled = execution.then(
+          () => "done" as const,
+          () => "failed" as const,
+        );
+        const winner = await Promise.race([settled, aborted]);
+        if (winner === "aborted" || signal.aborted) {
+          // Fence a stalled page so it cannot hold the attachment; its disposal
+          // remains tracked and awaited by native disposal.
+          void closePage(id).catch(() => undefined);
+          return { urls, pending: checkpoint.urls.slice(index) };
+        }
+        if (winner === "failed") {
+          // A failed destination keeps its tab and stays recoverable.
+          report("Browser tab could not be reopened.");
+          urls.push(destination);
+        } else {
+          urls.push(page.contents.getURL() || destination);
+        }
+      }
+      if (checkpoint.focusedIndex !== null) {
+        const target = Array.from(pages.keys())[checkpoint.focusedIndex];
+        if (target) applyFocus(target, false);
+      }
+      report();
+      return { urls, pending: [] };
+    },
     async annotate(
       input: {
         readonly tabID: Browser.TabID;
@@ -143,10 +225,12 @@ export function createNativeBrowser(
       if (action.type === "tabs.list") return { value: state(), files: [] };
       if (action.type === "tabs.open") {
         const page = create();
+        const destination = action.url ?? "about:blank";
+        requested.set(page.state().id, destination);
         if (action.focus !== false) focus(page.state().id);
         const result = await page.execute(
           {
-            action: { type: "navigate", tabID: page.state().id, url: action.url ?? "about:blank" },
+            action: { type: "navigate", tabID: page.state().id, url: destination },
             files: [],
           },
           signal,
@@ -164,6 +248,7 @@ export function createNativeBrowser(
         await closePage(action.tabID);
         return { value: state(), files: [] };
       }
+      if (action.type === "navigate") requested.set(action.tabID, action.url);
       const result = await page.execute(command, signal);
       report();
       return result;

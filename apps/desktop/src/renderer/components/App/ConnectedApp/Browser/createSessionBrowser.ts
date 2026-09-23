@@ -30,6 +30,8 @@ export type SessionBrowserState = {
   readonly status: Exclude<BrowserStateEvent["status"], "closed"> | "idle" | "connecting";
   readonly browser: Browser.State;
   readonly error?: string;
+  /** One unconsumed automatic recovery opportunity after a usable connection dropped. */
+  readonly recovery?: boolean;
 };
 const idle = (): SessionBrowserState => ({ status: "idle", browser: emptyBrowserState() });
 const message = (cause: unknown, fallback: string) =>
@@ -41,6 +43,8 @@ export function createSessionBrowser(
   api: BrowserApi | undefined,
   endpoint: { readonly serverUrl: string; readonly password: string },
   selectedID: Accessor<string | undefined>,
+  open: Accessor<boolean>,
+  onSessionRemoved: (handler: (sessionID: string) => void) => () => void,
   onFocus: (sessionID: string) => void,
   onAnnotationBatch: (sessionID: string, text: string, files: readonly File[]) => void,
 ) {
@@ -90,15 +94,25 @@ export function createSessionBrowser(
       if (id === selectedID()) onFocus(id);
       return;
     }
+    const previous = state(id);
+    const status = event.status === "closed" ? "failed" : event.status;
     update(id, {
       bindingID: event.status === "connected" ? event.bindingID : undefined,
-      status: event.status === "closed" ? "failed" : event.status,
+      status,
       browser: event.state,
       error:
         event.error ??
         (event.status === "closed"
           ? "Browser connection closed. Reconnect to continue."
           : undefined),
+      // Arm one automatic recovery only when a usable connection drops.
+      // Replacement and protocol failures never reclaim automatically.
+      recovery:
+        status === "connected"
+          ? false
+          : status === "failed" && previous.status === "connected"
+            ? true
+            : previous.recovery,
     });
   });
   effects.runSync(Effect.addFinalizer(() => Effect.sync(() => unsubscribe?.())));
@@ -143,9 +157,36 @@ export function createSessionBrowser(
       ),
     );
   };
+  const forget = (id: string) => {
+    if (effects.registry.get(all).has(id))
+      update(id, {
+        status: "failed",
+        browser: emptyBrowserState(),
+        recovery: false,
+        error: "The session moved or was deleted. Reconnect to use its browser.",
+      });
+    if (!api) return;
+    effects.runFork(
+      effects
+        .request(() => api.forget({ serverUrl: endpoint.serverUrl, sessionID: SessionID.make(id) }))
+        .pipe(Effect.catch((error) => Effect.logWarning("Browser profile cleanup failed", error))),
+    );
+  };
+  const stopRemoved = onSessionRemoved(forget);
+  effects.runSync(Effect.addFinalizer(() => Effect.sync(() => stopRemoved())));
   createEffect(() => {
     const id = selectedID();
-    if (id && state(id).status === "idle") connect(id);
+    const value = id ? (values().get(id) ?? idle()) : undefined;
+    if (!id || !value) return;
+    if (value.status === "idle") {
+      connect(id);
+      return;
+    }
+    if (value.status === "failed" && value.recovery && open()) {
+      // Consume before the attempt so repeated evaluation cannot duplicate it.
+      update(id, { ...value, recovery: false });
+      connect(id);
+    }
   });
   return {
     available: api !== undefined,

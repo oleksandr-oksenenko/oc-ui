@@ -253,6 +253,7 @@ const installIpcHandlers = (): void => {
           layout: (value) => host.layout(win, value),
           annotationStart: (value) => host.annotate(win, value),
           annotationCancel: (value) => host.annotationCancel(win, value),
+          forget: (value) => host.forget(win, value),
         });
       }),
     );

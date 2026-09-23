@@ -6,7 +6,8 @@ import { SessionID } from "@opencode/schema/session-id";
 import { Deferred, Effect, ManagedRuntime, Queue, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { emptyBrowserState, type BrowserEvent } from "../../shared/browser-api.ts";
-import type { NativeBrowser } from "./native.ts";
+import type { BrowserCheckpoint, NativeBrowser } from "./native.ts";
+import type { BrowserNetwork } from "./network.ts";
 import type { AnnotationResult } from "./upstream/annotation.ts";
 import { BrowserHost } from "./host.ts";
 
@@ -17,12 +18,14 @@ const native = {
   cancelAnnotation: vi.fn<NativeBrowser["cancelAnnotation"]>(),
   layout: vi.fn<NativeBrowser["layout"]>(),
   hide: vi.fn<NativeBrowser["hide"]>(),
+  checkpoint: vi.fn<NativeBrowser["checkpoint"]>(),
+  restore: vi.fn<NativeBrowser["restore"]>(),
   dispose: vi.fn<NativeBrowser["dispose"]>(),
 };
 
 type Reply = { outcome: typeof Browser.Outcome.Encoded };
 type Rpc = {
-  attach: () => Effect.Effect<"closed" | "replaced">;
+  attach: () => Effect.Effect<"closed" | "replaced", unknown>;
   state: () => Effect.Effect<void>;
   command: () => Effect.Effect<Browser.Command>;
   result: (reply: Reply) => Effect.Effect<void>;
@@ -41,8 +44,27 @@ vi.mock("@opencode/client/effect", () => ({
       }),
   },
 }));
-vi.mock("./network.ts", () => ({ createBrowserNetwork: () => Effect.void }));
-vi.mock("./native.ts", () => ({ createNativeBrowser: () => native }));
+const clearPartition = vi.hoisted(() =>
+  vi.fn<(partitionID: string) => Promise<void>>(() => Promise.resolve()),
+);
+const nativeCalls = vi.hoisted((): string[] => []);
+const nativePublish = vi.hoisted((): Array<(state: Browser.State, error?: string) => void> => []);
+vi.mock("./network.ts", () => ({
+  createBrowserNetwork: () => Effect.void,
+  clearBrowserPartition: (partitionID: string) => clearPartition(partitionID),
+}));
+vi.mock("./native.ts", () => ({
+  createNativeBrowser: (
+    _window: BrowserWindow,
+    partition: string,
+    _network: BrowserNetwork,
+    publish: (state: Browser.State, error?: string) => void,
+  ) => {
+    nativeCalls.push(partition);
+    nativePublish.push(publish);
+    return native;
+  },
+}));
 
 let runtime: ManagedRuntime.ManagedRuntime<BrowserHost, never>;
 let host: BrowserHost["Service"];
@@ -58,8 +80,11 @@ const input = {
 };
 const control = (data: Browser.Control) =>
   Queue.offerUnsafe(controls, { type: "rpc.experimental.browser.control", data });
-const start = () =>
-  runtime.runPromiseExit(host.attach(window, input, (event) => events.push(event)));
+const startWith = (value: typeof input) =>
+  runtime.runPromiseExit(host.attach(window, value, (event) => events.push(event)));
+const start = () => startWith(input);
+const rejectAttach = (type: string, message: string) =>
+  Effect.fail(Object.assign(new Error(message), { type }));
 
 beforeEach(async () => {
   controls = Effect.runSync(Queue.unbounded());
@@ -74,6 +99,13 @@ beforeEach(async () => {
     isDestroyed: () => false,
   }) as BrowserWindow;
   vi.resetAllMocks();
+  nativeCalls.length = 0;
+  nativePublish.length = 0;
+  clearPartition.mockImplementation(() => Promise.resolve());
+  native.checkpoint.mockReturnValue({ urls: [], focusedIndex: null });
+  native.restore.mockImplementation((checkpoint: BrowserCheckpoint) =>
+    Promise.resolve({ urls: checkpoint.urls, pending: [] }),
+  );
   native.execute.mockResolvedValue({ value: emptyBrowserState(), files: [] });
   native.annotate.mockResolvedValue(undefined);
   native.cancelAnnotation.mockResolvedValue(undefined);
@@ -168,6 +200,201 @@ describe("browser attachment lifetime", () => {
     await lifetime;
     expect(native.dispose).toHaveBeenCalledOnce();
     expect(events.at(-1)).toMatchObject({ status: "replaced" });
+  });
+
+  it("keeps the partition and reopens tabs after a recoverable disconnect", async () => {
+    native.checkpoint.mockReturnValue({ urls: ["https://example.test/page"], focusedIndex: 0 });
+    const first = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    expect(nativeCalls).toHaveLength(1);
+    const partition = nativeCalls[0]!;
+    await Effect.runPromise(Deferred.succeed(closed, "closed"));
+    await first;
+    expect(events.at(-1)).toMatchObject({ status: "failed" });
+    closed = Deferred.makeUnsafe();
+    Queue.offerUnsafe(controls, { type: "server.connected" });
+    const second = start();
+    await vi.waitFor(() => expect(events.at(-1)).toMatchObject({ status: "connected" }));
+    expect(nativeCalls).toHaveLength(2);
+    expect(nativeCalls[1]).toBe(partition);
+    expect(native.restore).toHaveBeenCalledWith(
+      { urls: ["https://example.test/page"], focusedIndex: 0 },
+      expect.any(AbortSignal),
+    );
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await second;
+  });
+
+  it("isolates partitions per session", async () => {
+    const first = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    const other = { ...input, bindingID: "fixture-other", sessionID: SessionID.make("ses_other") };
+    const second = startWith(other);
+    await vi.waitFor(() => expect(nativeCalls).toHaveLength(2));
+    expect(nativeCalls[0]).not.toBe(nativeCalls[1]);
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await runtime.runPromise(host.detach(window, other.bindingID));
+    await Promise.all([first, second]);
+  });
+
+  it("treats an unavailable RPC as a recoverable failure", async () => {
+    rpc.attach = vi.fn<Rpc["attach"]>(() =>
+      rejectAttach("rpc.unavailable", "RPC is unavailable: experimental.browser"),
+    );
+    await start();
+    expect(events.at(-1)).toMatchObject({
+      status: "failed",
+      error: expect.stringMatching(/Reconnect/),
+    });
+  });
+
+  it("keeps the unsupported status for a protocol rejection", async () => {
+    rpc.attach = vi.fn<Rpc["attach"]>(() => rejectAttach("rpc.method_not_found", "Unknown"));
+    await start();
+    expect(events.at(-1)).toMatchObject({ status: "unsupported" });
+  });
+
+  it("forgets the profile, clears storage, and starts a fresh partition", async () => {
+    const first = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    const partition = nativeCalls[0]!;
+    await runtime.runPromise(
+      host.forget(window, { serverUrl: input.serverUrl, sessionID: input.sessionID }),
+    );
+    await first;
+    expect(clearPartition).toHaveBeenCalledWith(partition);
+    closed = Deferred.makeUnsafe();
+    Queue.offerUnsafe(controls, { type: "server.connected" });
+    const second = start();
+    await vi.waitFor(() => expect(nativeCalls).toHaveLength(2));
+    expect(nativeCalls[1]).not.toBe(partition);
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await second;
+  });
+
+  it("discards the retained profile when the renderer reloads", async () => {
+    native.checkpoint.mockReturnValue({ urls: ["https://example.test/page"], focusedIndex: 0 });
+    const first = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    const partition = nativeCalls[0]!;
+    window.webContents.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false });
+    await first;
+    await vi.waitFor(() => expect(clearPartition).toHaveBeenCalledWith(partition));
+    // Storage is erased only after the native browser that used it has settled.
+    expect(native.dispose.mock.invocationCallOrder[0]).toBeLessThan(
+      clearPartition.mock.invocationCallOrder[0]!,
+    );
+    closed = Deferred.makeUnsafe();
+    Queue.offerUnsafe(controls, { type: "server.connected" });
+    const second = start();
+    await vi.waitFor(() => expect(nativeCalls).toHaveLength(2));
+    expect(nativeCalls[1]).not.toBe(partition);
+    expect(native.restore).not.toHaveBeenCalled();
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await second;
+  });
+
+  it("discards a retained profile on reload even with no active attachment", async () => {
+    native.checkpoint.mockReturnValue({ urls: ["https://example.test/page"], focusedIndex: 0 });
+    const first = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    const partition = nativeCalls[0]!;
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await first;
+    window.webContents.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false });
+    await vi.waitFor(() => expect(clearPartition).toHaveBeenCalledWith(partition));
+    closed = Deferred.makeUnsafe();
+    Queue.offerUnsafe(controls, { type: "server.connected" });
+    const second = start();
+    await vi.waitFor(() => expect(nativeCalls).toHaveLength(2));
+    expect(nativeCalls[1]).not.toBe(partition);
+    expect(native.restore).not.toHaveBeenCalled();
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await second;
+  });
+
+  it("keeps unattempted destinations for the next reconnect after a partial restore", async () => {
+    native.checkpoint.mockReturnValue({
+      urls: ["https://one.test/", "https://two.test/"],
+      focusedIndex: 1,
+    });
+    native.restore.mockResolvedValue({
+      urls: ["https://one.test/"],
+      pending: ["https://two.test/"],
+    });
+    const first = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    await Effect.runPromise(Deferred.succeed(closed, "closed"));
+    await first;
+    closed = Deferred.makeUnsafe();
+    Queue.offerUnsafe(controls, { type: "server.connected" });
+    const second = start();
+    await vi.waitFor(() => expect(events.at(-1)).toMatchObject({ status: "connected" }));
+    // The live inventory now holds only the restored tab, and a native
+    // publication arrives before the next drop.
+    native.checkpoint.mockReturnValue({ urls: ["https://one.test/"], focusedIndex: null });
+    nativePublish.at(-1)!(emptyBrowserState(), undefined);
+    await Effect.runPromise(Deferred.succeed(closed, "closed"));
+    await second;
+    native.restore.mockClear();
+    closed = Deferred.makeUnsafe();
+    Queue.offerUnsafe(controls, { type: "server.connected" });
+    const third = start();
+    await vi.waitFor(() => expect(events.at(-1)).toMatchObject({ status: "connected" }));
+    // The pending destination survived the live refresh and the drop.
+    expect(native.restore).toHaveBeenLastCalledWith(
+      { urls: ["https://one.test/", "https://two.test/"], focusedIndex: 1 },
+      expect.any(AbortSignal),
+    );
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await third;
+  });
+
+  it("installs window listeners once and removes them with the owner", async () => {
+    const first = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await first;
+    for (let index = 0; index < 3; index += 1) {
+      window.webContents.emit("did-start-navigation", {
+        isMainFrame: true,
+        isSameDocument: false,
+      });
+      closed = Deferred.makeUnsafe();
+      Queue.offerUnsafe(controls, { type: "server.connected" });
+      const next = start();
+      await vi.waitFor(() => expect(events.at(-1)).toMatchObject({ status: "connected" }));
+      await runtime.runPromise(host.detach(window, input.bindingID));
+      await next;
+    }
+    expect(window.listenerCount("closed")).toBe(1);
+    expect(window.webContents.listenerCount("did-start-navigation")).toBe(1);
+    expect(window.webContents.listenerCount("destroyed")).toBe(1);
+    await runtime.dispose();
+    expect(window.listenerCount("closed")).toBe(0);
+    expect(window.webContents.listenerCount("did-start-navigation")).toBe(0);
+    expect(window.webContents.listenerCount("destroyed")).toBe(0);
+  });
+
+  it("waits for accepted retirements before the owner finishes", async () => {
+    const storage = Promise.withResolvers<void>();
+    clearPartition.mockImplementation(() => storage.promise);
+    const first = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await first;
+    window.webContents.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false });
+    await vi.waitFor(() => expect(clearPartition).toHaveBeenCalled());
+    let disposed = false;
+    const disposal = runtime.dispose().then(() => {
+      disposed = true;
+      return undefined;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(disposed).toBe(false);
+    storage.resolve();
+    await disposal;
+    expect(disposed).toBe(true);
   });
 });
 

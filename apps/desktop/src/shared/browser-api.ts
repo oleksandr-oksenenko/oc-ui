@@ -11,6 +11,11 @@ export const BrowserAttach = Schema.Struct({
 });
 export type BrowserAttach = typeof BrowserAttach.Type;
 const BrowserBinding = Schema.Struct({ bindingID });
+const BrowserForget = Schema.Struct({
+  serverUrl: Schema.String.check(Schema.isLengthBetween(1, 2_048)),
+  sessionID: SessionID,
+});
+type BrowserForget = typeof BrowserForget.Type;
 export const BrowserLayout = Schema.Struct({
   bindingID,
   tabID: Schema.NullOr(Browser.TabID),
@@ -87,6 +92,7 @@ export const BrowserRequest = Schema.TaggedUnion({
   layout: BrowserLayout.fields,
   annotationStart: BrowserAnnotationStart.fields,
   annotationCancel: BrowserAnnotationCancel.fields,
+  forget: BrowserForget.fields,
 });
 export const BrowserEvent = Schema.Union([
   Schema.Struct({ bindingID, type: Schema.Literal("focus"), tabID: Browser.TabID }),
@@ -113,6 +119,8 @@ export type BrowserApi = {
   /** Resolves when the pick settles, including cancellation; failures reject. */
   readonly annotationStart: (input: BrowserAnnotationStart) => Promise<void>;
   readonly annotationCancel: (input: typeof BrowserAnnotationCancel.Type) => Promise<void>;
+  /** Stops matching attachments and erases the retained profile for that session. */
+  readonly forget: (input: BrowserForget) => Promise<void>;
   readonly onEvent: (listener: (event: BrowserEvent) => void) => () => void;
 };
 export const BROWSER_CHANNELS = {

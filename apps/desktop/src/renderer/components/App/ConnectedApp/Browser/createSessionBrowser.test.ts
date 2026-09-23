@@ -23,12 +23,16 @@ const annotationTab = (generation = 0) => ({
 
 function setup(
   overrides: Partial<
-    Pick<BrowserApi, "attach" | "detach" | "command" | "annotationStart" | "annotationCancel">
+    Pick<
+      BrowserApi,
+      "attach" | "detach" | "command" | "annotationStart" | "annotationCancel" | "forget"
+    >
   > = {},
 ) {
   return withTestWorkspace((effects, disposeView) => {
     let receive: ((event: BrowserEvent) => void) | undefined;
     const [selected, select] = createSignal<string | undefined>("session-a");
+    const [open, setOpen] = createSignal(false);
     const stopEvents = vi.fn<() => void>();
     const lifetimes = new Map<string, { promise: Promise<void>; resolve(): void }>();
     const attach = vi.fn<BrowserApi["attach"]>((input) => {
@@ -48,12 +52,14 @@ function setup(
     const annotationCancel = vi.fn<BrowserApi["annotationCancel"]>(
       overrides.annotationCancel ?? (() => Promise.resolve()),
     );
+    const forget = vi.fn<BrowserApi["forget"]>(overrides.forget ?? (() => Promise.resolve()));
     const api: BrowserApi = {
       attach,
       detach,
       command,
       annotationStart,
       annotationCancel,
+      forget,
       layout: () => Promise.resolve(),
       onEvent: (listener) => {
         receive = listener;
@@ -63,12 +69,18 @@ function setup(
     const focus = vi.fn<(sessionID: string) => void>();
     const onAnnotationBatch =
       vi.fn<(sessionID: string, text: string, files: readonly File[]) => void>();
+    const removed = new Set<(sessionID: string) => void>();
     const connection = { api, serverUrl: "http://server:1234", password: "fixture" };
     const controller = createSessionBrowser(
       { effects },
       api,
       connection,
       selected,
+      open,
+      (handler) => {
+        removed.add(handler);
+        return () => removed.delete(handler);
+      },
       focus,
       onAnnotationBatch,
     );
@@ -85,11 +97,17 @@ function setup(
       disposeView,
       select,
       selected,
+      open,
+      setOpen,
       attach,
       detach,
       command,
       annotationStart,
       annotationCancel,
+      forget,
+      remove: (sessionID: string) => {
+        for (const handler of removed) handler(sessionID);
+      },
       onAnnotationBatch,
       emit,
       connected,
@@ -252,6 +270,86 @@ describe("session browser ownership", () => {
     expect(fixture.attach).toHaveBeenCalledTimes(1);
     fixture.controller.reconnect();
     await vi.waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(2));
+  });
+
+  it("reconnects once when a usable connection drops while the pane is open", async () => {
+    const fixture = setup();
+    await vi.waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(1));
+    const first = fixture.controller.current().bindingID!;
+    fixture.connected(first);
+    await vi.waitFor(() => expect(fixture.controller.current().status).toBe("connected"));
+    fixture.setOpen(true);
+    fixture.emit({
+      bindingID: first,
+      type: "state",
+      status: "failed",
+      state: emptyBrowserState(),
+      error: "dropped",
+    });
+    await vi.waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(2));
+    const second = fixture.attach.mock.calls[1]![0].bindingID;
+    fixture.emit({
+      bindingID: second,
+      type: "state",
+      status: "failed",
+      state: emptyBrowserState(),
+      error: "dropped again",
+    });
+    await vi.waitFor(() => expect(fixture.controller.current().status).toBe("failed"));
+    expect(fixture.attach).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds a recovery opportunity while the pane is hidden", async () => {
+    const fixture = setup();
+    await vi.waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(1));
+    const first = fixture.controller.current().bindingID!;
+    fixture.connected(first);
+    await vi.waitFor(() => expect(fixture.controller.current().status).toBe("connected"));
+    fixture.emit({
+      bindingID: first,
+      type: "state",
+      status: "failed",
+      state: emptyBrowserState(),
+    });
+    await vi.waitFor(() => expect(fixture.controller.current().recovery).toBe(true));
+    expect(fixture.attach).toHaveBeenCalledTimes(1);
+    fixture.setOpen(true);
+    await vi.waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(2));
+  });
+
+  it("never auto-reclaims a replaced attachment", async () => {
+    const fixture = setup();
+    await vi.waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(1));
+    const first = fixture.controller.current().bindingID!;
+    fixture.connected(first);
+    fixture.setOpen(true);
+    fixture.emit({
+      bindingID: first,
+      type: "state",
+      status: "replaced",
+      state: emptyBrowserState(),
+      error: "Another desktop took control.",
+    });
+    await vi.waitFor(() => expect(fixture.controller.current().status).toBe("replaced"));
+    expect(fixture.controller.current().recovery).toBe(false);
+    expect(fixture.attach).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets a moved or deleted session and disarms recovery", async () => {
+    const fixture = setup();
+    await vi.waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(1));
+    fixture.connected(fixture.controller.current().bindingID!);
+    fixture.setOpen(true);
+    fixture.remove("session-a");
+    await vi.waitFor(() =>
+      expect(fixture.forget).toHaveBeenCalledWith({
+        serverUrl: "http://server:1234",
+        sessionID: "session-a",
+      }),
+    );
+    await vi.waitFor(() => expect(fixture.controller.current().status).toBe("failed"));
+    expect(fixture.controller.current().recovery).toBe(false);
+    expect(fixture.attach).toHaveBeenCalledTimes(1);
   });
 
   it("reports uncertain command failures without replaying them", async () => {
