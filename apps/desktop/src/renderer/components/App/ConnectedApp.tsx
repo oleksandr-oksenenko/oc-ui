@@ -107,7 +107,9 @@ export function ConnectedApp(props: ConnectedAppProps) {
               fallback={
                 <ChangesRegion
                   idBase={changesTabsId}
-                  changes={changes.view()}
+                  files={changes.files()}
+                  presentation={changes.presentation()}
+                  review={changes.review()}
                   showTabs={panels.mobile() && !browser.available}
                   onClose={closeRightPanel}
                 />

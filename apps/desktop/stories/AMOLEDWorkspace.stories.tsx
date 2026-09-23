@@ -529,8 +529,8 @@ function WorkspaceShowcaseFixture() {
                       showTabs={false}
                       autoFocusClose={panelState.mobile()}
                       tabsIdBase={contextTabsId}
-                      diff={{
-                        files: diff,
+                      files={diff}
+                      presentation={{
                         loading: false,
                         comparison: diffComparison(),
                         comparisonOptions: [

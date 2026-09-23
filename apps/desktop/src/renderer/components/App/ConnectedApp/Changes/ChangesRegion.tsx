@@ -1,9 +1,15 @@
 import { ContextPanel } from "./ContextPanel.tsx";
-import type { DiffViewProps } from "./ContextPanel/DiffView.tsx";
+import type {
+  DiffFileData,
+  DiffReviewView,
+  DiffViewPresentation,
+} from "./ContextPanel/DiffView.tsx";
 
 export type ChangesRegionProps = {
   readonly idBase: string;
-  readonly changes: DiffViewProps;
+  readonly files: readonly DiffFileData[];
+  readonly presentation: DiffViewPresentation;
+  readonly review?: DiffReviewView;
   readonly showTabs: boolean;
   readonly onClose?: () => void;
 };
@@ -15,7 +21,9 @@ export function ChangesRegion(props: ChangesRegionProps) {
       showTabs={props.showTabs}
       autoFocusClose={props.showTabs}
       onClose={props.onClose}
-      diff={props.changes}
+      files={props.files}
+      presentation={props.presentation}
+      review={props.review}
     />
   );
 }

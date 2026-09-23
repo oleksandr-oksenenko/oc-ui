@@ -131,13 +131,13 @@ describe("createWorkspaceChanges", () => {
     const root = setup({ selected: session() });
     for (const files of [[], [file("a.ts")]]) {
       root.setSnapshot({ files, status: "refreshing", stale: false });
-      expect(root.changes.view().loading).toBe(false);
-      expect(root.changes.view().files).toBe(files);
+      expect(root.changes.presentation().loading).toBe(false);
+      expect(root.changes.files()).toBe(files);
     }
     root.setSnapshot({ files: [], status: "refreshing", stale: true, error: "offline" });
-    expect(root.changes.view()).toMatchObject({ loading: false, error: "offline" });
+    expect(root.changes.presentation()).toMatchObject({ loading: false, error: "offline" });
     root.setSnapshot({ files: [], status: "loading", stale: false });
-    expect(root.changes.view().loading).toBe(true);
+    expect(root.changes.presentation().loading).toBe(true);
     root.dispose();
   });
   it("pauses in a hidden document and follows the complete selected location", async () => {
@@ -175,7 +175,7 @@ describe("createWorkspaceChanges", () => {
     window.dispatchEvent(new Event("focus"));
     await settle();
     expect(root.stopPolling).toHaveBeenCalledTimes(1);
-    root.changes.view().onComparisonChange?.("branch");
+    root.changes.presentation().onComparisonChange?.("branch");
     await settle();
     expect(root.pollDiff).toHaveBeenLastCalledWith(location, "branch");
     root.setPanelOpen(false);
@@ -221,16 +221,16 @@ describe("createWorkspaceChanges", () => {
       },
     });
 
-    expect(root.changes.view()).toMatchObject({
-      files: [
-        {
-          file: "src/example.ts",
-          patch: expect.any(String),
-          additions: 1,
-          deletions: 1,
-          status: "modified",
-        },
-      ],
+    expect(root.changes.files()).toMatchObject([
+      {
+        file: "src/example.ts",
+        patch: expect.any(String),
+        additions: 1,
+        deletions: 1,
+        status: "modified",
+      },
+    ]);
+    expect(root.changes.presentation()).toMatchObject({
       loading: false,
       error: "server unavailable",
       stale: true,
@@ -238,12 +238,12 @@ describe("createWorkspaceChanges", () => {
       emptyDescription: "The working copy matches HEAD.",
       comparison: "working",
     });
-    root.changes.view().onRetry?.();
+    root.changes.presentation().onRetry?.();
     expect(root.refreshDiff).toHaveBeenCalledWith(location, "working");
 
     root.setSelectedSession(undefined);
-    expect(root.changes.view()).toMatchObject({
-      files: [],
+    expect(root.changes.files()).toEqual([]);
+    expect(root.changes.presentation()).toMatchObject({
       loading: false,
       emptyMessage: "Select a session to view changes",
       emptyDescription: "The Diff panel follows the selected session's workspace location.",
@@ -260,20 +260,20 @@ describe("createWorkspaceChanges", () => {
       branch: { current: "feature", default: "main" },
     });
 
-    expect(root.changes.view().comparisonOptions).toEqual([
+    expect(root.changes.presentation().comparisonOptions).toEqual([
       { value: "working", label: "Working changes" },
       { value: "branch", label: "Changes vs main" },
     ]);
-    root.changes.view().onComparisonChange?.("branch");
-    expect(root.changes.view().comparison).toBe("branch");
-    expect(root.changes.view().emptyMessage).toBe("No changes against main");
-    expect(root.changes.view().emptyDescription).toBe(
+    root.changes.presentation().onComparisonChange?.("branch");
+    expect(root.changes.presentation().comparison).toBe("branch");
+    expect(root.changes.presentation().emptyMessage).toBe("No changes against main");
+    expect(root.changes.presentation().emptyDescription).toBe(
       "The working copy matches its merge base with main.",
     );
 
     root.setBranch(undefined);
     await settle();
-    expect(root.changes.view().comparison).toBe("working");
+    expect(root.changes.presentation().comparison).toBe("working");
 
     root.dispose();
   });
@@ -285,19 +285,19 @@ describe("createWorkspaceChanges", () => {
       branch: { default: "main" },
     });
 
-    expect(root.changes.view().comparisonOptions).toEqual([
+    expect(root.changes.presentation().comparisonOptions).toEqual([
       { value: "working", label: "Working changes" },
       { value: "branch", label: "Changes vs main" },
     ]);
-    root.changes.view().onComparisonChange?.("branch");
-    expect(root.changes.view().comparison).toBe("branch");
-    expect(root.changes.view().emptyMessage).toBe("No changes against main");
+    root.changes.presentation().onComparisonChange?.("branch");
+    expect(root.changes.presentation().comparison).toBe("branch");
+    expect(root.changes.presentation().emptyMessage).toBe("No changes against main");
 
     // A metadata refresh that is still detached keeps the option and selection.
     root.setBranch({ default: "main" });
     await settle();
-    expect(root.changes.view().comparisonOptions).toHaveLength(2);
-    expect(root.changes.view().comparison).toBe("branch");
+    expect(root.changes.presentation().comparisonOptions).toHaveLength(2);
+    expect(root.changes.presentation().comparison).toBe("branch");
 
     root.dispose();
   });
@@ -307,26 +307,26 @@ describe("createWorkspaceChanges", () => {
       selected: session(),
       branch: { current: "feature", default: "main" },
     });
-    root.changes.view().onComparisonChange?.("branch");
-    expect(root.changes.view().comparison).toBe("branch");
+    root.changes.presentation().onComparisonChange?.("branch");
+    expect(root.changes.presentation().comparison).toBe("branch");
 
     root.setBranch({ default: "main" });
     await settle();
-    expect(root.changes.view().comparison).toBe("branch");
+    expect(root.changes.presentation().comparison).toBe("branch");
 
     root.dispose();
   });
 
   it("adds branch comparison when default metadata arrives after mount", async () => {
     const root = setup({ selected: session() });
-    expect(root.changes.view().comparisonOptions).toEqual([
+    expect(root.changes.presentation().comparisonOptions).toEqual([
       { value: "working", label: "Working changes" },
     ]);
 
     root.setBranch({ default: "main" });
     await settle();
-    expect(root.changes.view().comparisonOptions).toHaveLength(2);
-    expect(root.changes.view().comparison).toBe("working");
+    expect(root.changes.presentation().comparisonOptions).toHaveLength(2);
+    expect(root.changes.presentation().comparison).toBe("working");
 
     root.dispose();
   });
@@ -339,7 +339,7 @@ describe("createWorkspaceChanges", () => {
       {},
     ]) {
       const root = setup({ selected: session(), branch });
-      expect(root.changes.view().comparisonOptions).toEqual([
+      expect(root.changes.presentation().comparisonOptions).toEqual([
         { value: "working", label: "Working changes" },
       ]);
       root.dispose();
@@ -357,11 +357,11 @@ describe("createWorkspaceChanges", () => {
       },
       branch: { default: "main" },
     });
-    root.changes.view().onComparisonChange?.("branch");
-    expect(root.changes.view().comparison).toBe("branch");
-    expect(root.changes.view().error).toBe("The comparison base could not be read.");
+    root.changes.presentation().onComparisonChange?.("branch");
+    expect(root.changes.presentation().comparison).toBe("branch");
+    expect(root.changes.presentation().error).toBe("The comparison base could not be read.");
 
-    root.changes.view().onRetry?.();
+    root.changes.presentation().onRetry?.();
     expect(root.refreshDiff).toHaveBeenCalledWith(location, "branch");
 
     root.dispose();
@@ -372,12 +372,12 @@ describe("createWorkspaceChanges", () => {
       selected: session(),
       branch: { current: "feature", default: "main" },
     });
-    root.changes.view().onComparisonChange?.("branch");
-    expect(root.changes.view().comparison).toBe("branch");
+    root.changes.presentation().onComparisonChange?.("branch");
+    expect(root.changes.presentation().comparison).toBe("branch");
 
     root.setBranch({ current: "main", default: "main" });
     await settle();
-    expect(root.changes.view().comparison).toBe("working");
+    expect(root.changes.presentation().comparison).toBe("working");
 
     root.dispose();
   });
@@ -388,7 +388,7 @@ describe("createWorkspaceChanges", () => {
     const emptyID = root.reviewDrafts.begin(key, "src/example.ts", reviewSelection, "new\n");
     const emptyOpener = document.createElement("button");
 
-    root.changes.view().review?.onRemoveComment?.(emptyID, emptyOpener);
+    root.changes.review()?.onRemoveComment?.(emptyID, emptyOpener);
 
     expect(root.requestRemoveComment).not.toHaveBeenCalled();
     expect(root.reviewDrafts.get(key).comments).toHaveLength(0);
@@ -397,7 +397,7 @@ describe("createWorkspaceChanges", () => {
     root.reviewDrafts.updateBody(key, nonEmptyID, "Please check this line");
     const nonEmptyOpener = document.createElement("button");
 
-    root.changes.view().review?.onRemoveComment?.(nonEmptyID, nonEmptyOpener);
+    root.changes.review()?.onRemoveComment?.(nonEmptyID, nonEmptyOpener);
 
     expect(root.requestRemoveComment).toHaveBeenCalledWith(key, nonEmptyID, nonEmptyOpener);
     expect(root.reviewDrafts.get(key).comments).toHaveLength(1);
@@ -411,12 +411,12 @@ describe("createWorkspaceChanges", () => {
     const savedID = root.reviewDrafts.begin(key, "src/example.ts", reviewSelection, "new\n");
     root.reviewDrafts.updateBody(key, savedID, "Fix this");
 
-    root.changes.view().review?.onFinishComment?.(savedID);
+    root.changes.review()?.onFinishComment?.(savedID);
     expect(root.reviewDrafts.get(key).comments).toMatchObject([{ id: savedID, body: "Fix this" }]);
     expect(root.reviewDrafts.get(key).editingCommentID).toBeUndefined();
 
     const emptyID = root.reviewDrafts.begin(key, "src/example.ts", reviewSelection, "new\n");
-    root.changes.view().review?.onFinishComment?.(emptyID);
+    root.changes.review()?.onFinishComment?.(emptyID);
     expect(root.reviewDrafts.get(key).comments.map((comment) => comment.id)).toEqual([savedID]);
 
     root.dispose();
@@ -428,24 +428,71 @@ describe("createWorkspaceChanges", () => {
       selected: session(),
       snapshot: { files, status: "ready", stale: false },
     });
-    const projected = root.changes.view().files;
+    const projected = root.changes.files();
     const projectedFile = projected[0];
     const key = root.changes.reviewKey();
     expect(key).toEqual({ sessionID: "session-1", comparison: "working" });
 
     const commentID = root.reviewDrafts.begin(key!, "src/example.ts", reviewSelection, "new\n");
-    expect(root.changes.view().files).toBe(projected);
+    expect(root.changes.files()).toBe(projected);
     root.reviewDrafts.updateBody(key!, commentID, "Please check this line");
-    expect(root.changes.view().files).toBe(projected);
-    expect(root.changes.view().files[0]).toBe(projectedFile);
+    expect(root.changes.files()).toBe(projected);
+    expect(root.changes.files()[0]).toBe(projectedFile);
 
     root.setSnapshot({ files, status: "loading", stale: true });
-    expect(root.changes.view().files).toBe(projected);
-    expect(root.changes.view().files[0]).toBe(projectedFile);
+    expect(root.changes.files()).toBe(projected);
+    expect(root.changes.files()[0]).toBe(projectedFile);
 
     root.setSnapshot({ files: [...files], status: "ready", stale: false });
-    expect(root.changes.view().files[0]).toEqual(projectedFile);
-    expect(root.changes.view().files[0]).toBe(projectedFile);
+    expect(root.changes.files()[0]).toEqual(projectedFile);
+    expect(root.changes.files()[0]).toBe(projectedFile);
+
+    root.dispose();
+  });
+
+  it("keeps the file list, presentation, and review actions stable across review updates", () => {
+    const root = setup({
+      selected: session(),
+      snapshot: { files: [file("src/example.ts")], status: "ready", stale: false },
+    });
+    const files = root.changes.files();
+    const presentation = root.changes.presentation();
+    const reviewBefore = root.changes.review();
+    const key = root.changes.reviewKey()!;
+
+    const commentID = root.reviewDrafts.begin(key, "src/example.ts", reviewSelection, "new\n");
+    expect(root.changes.files()).toBe(files);
+    expect(root.changes.presentation()).toBe(presentation);
+    expect(root.changes.review()).not.toBe(reviewBefore);
+    const actions = root.changes.review();
+
+    root.reviewDrafts.updateBody(key, commentID, "Please check this line");
+    expect(root.changes.files()).toBe(files);
+    expect(root.changes.presentation()).toBe(presentation);
+    expect(root.changes.review()?.comments[0]?.body).toBe("Please check this line");
+    // Body-only updates must not churn the callbacks that Pierre holds.
+    expect(root.changes.review()?.onUpdateCommentBody).toBe(actions?.onUpdateCommentBody);
+
+    root.dispose();
+  });
+
+  it("binds review actions to the key captured at construction", () => {
+    const root = setup({ selected: session() });
+    const keyA = root.changes.reviewKey()!;
+    const actionsA = root.changes.review()!;
+
+    root.setSelectedSession(sessionFixture({ id: "session-2", location }));
+    const keyB = root.changes.reviewKey()!;
+    const actionsB = root.changes.review()!;
+
+    expect(keyB).not.toEqual(keyA);
+    expect(actionsB.onUpdateCommentBody).not.toBe(actionsA.onUpdateCommentBody);
+
+    const commentID = root.reviewDrafts.begin(keyA, "src/example.ts", reviewSelection, "new\n");
+    actionsA.onUpdateCommentBody?.(commentID, "from A");
+
+    expect(root.reviewDrafts.get(keyA).comments[0]?.body).toBe("from A");
+    expect(root.reviewDrafts.get(keyB).comments).toHaveLength(0);
 
     root.dispose();
   });

@@ -17,7 +17,11 @@ import type { ReviewDraftKey, ReviewDraftStore } from "../../../../domain/review
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import type { VcsDiffMode } from "../../../../opencode/vcs-diff.ts";
 
-import type { DiffReviewView, DiffViewProps } from "./ContextPanel/DiffView.tsx";
+import type {
+  DiffFileData,
+  DiffReviewView,
+  DiffViewPresentation,
+} from "./ContextPanel/DiffView.tsx";
 
 const EMPTY_FILES: readonly FileDiffInfo[] = [];
 
@@ -47,7 +51,9 @@ export type WorkspaceChangesInput = {
 
 export type WorkspaceChangesController = {
   readonly reviewKey: Accessor<ReviewDraftKey | undefined>;
-  readonly view: Accessor<DiffViewProps>;
+  readonly files: Accessor<readonly DiffFileData[]>;
+  readonly presentation: Accessor<DiffViewPresentation>;
+  readonly review: Accessor<DiffReviewView | undefined>;
 };
 
 export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceChangesController {
@@ -163,20 +169,14 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
     }
   });
 
-  const reviewView = (): DiffReviewView | undefined => {
+  const reviewActions = createMemo<
+    Omit<DiffReviewView, "comments" | "editingCommentID" | "selectedLines"> | undefined
+  >(() => {
     const key = reviewKey();
     if (key === undefined) return undefined;
-    const draft = input.reviewDrafts.get(key);
-    const editingComment = draft.comments.find((comment) => comment.id === draft.editingCommentID);
-    const selectedLines = editingComment
-      ? { path: editingComment.path, range: editingComment.selection }
-      : null;
     const commentFor = (commentID: string) =>
       input.reviewDrafts.get(key).comments.find((comment) => comment.id === commentID);
     return {
-      comments: draft.comments,
-      editingCommentID: draft.editingCommentID,
-      selectedLines,
       onBeginComment: (path, selection, selectedCode) =>
         input.reviewDrafts.begin(key, path, selection, selectedCode),
       onUpdateCommentBody: (commentID, body) => input.reviewDrafts.updateBody(key, commentID, body),
@@ -197,33 +197,46 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
         input.requestRemoveComment(key, commentID, opener);
       },
     };
-  };
+  });
 
-  const files = createMemo<readonly FileDiffInfo[]>(() => diffSnapshot()?.files ?? EMPTY_FILES);
+  const review = createMemo<DiffReviewView | undefined>(() => {
+    const key = reviewKey();
+    if (key === undefined) return undefined;
+    const actions = reviewActions();
+    if (actions === undefined) return undefined;
+    const draft = input.reviewDrafts.get(key);
+    const editingComment = draft.comments.find((comment) => comment.id === draft.editingCommentID);
+    const selectedLines = editingComment
+      ? { path: editingComment.path, range: editingComment.selection }
+      : null;
+    return {
+      comments: draft.comments,
+      editingCommentID: draft.editingCommentID,
+      selectedLines,
+      ...actions,
+    };
+  });
 
-  const diff = createMemo<DiffViewProps>(() => {
+  const files = createMemo<readonly DiffFileData[]>(() => diffSnapshot()?.files ?? EMPTY_FILES);
+
+  const presentation = createMemo<DiffViewPresentation>(() => {
     const location = selectedLocation();
     const snapshot = diffSnapshot();
     const branch = location && input.runtime.data.location.vcs.info(location)?.branch;
     const defaultBranch = branch?.default;
-    const currentFiles = files();
-    const review = reviewView();
 
     if (!location || !snapshot) {
       return {
-        files: currentFiles,
         loading: false,
         emptyMessage: "Select a session to view changes",
         emptyDescription: "The Diff panel follows the selected session's workspace location.",
         comparison: diffMode(),
         comparisonOptions: diffComparisonOptions(),
         onComparisonChange: changeDiffMode,
-        review,
       };
     }
 
     return {
-      files: currentFiles,
       loading: snapshot.status === "loading",
       error: snapshot.error,
       stale: snapshot.stale,
@@ -241,9 +254,8 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
       onRetry: () => {
         effects.runFork(input.runtime.diffs.refresh(location, diffMode()));
       },
-      review,
     };
   });
 
-  return { reviewKey, view: diff };
+  return { reviewKey, files, presentation, review };
 }

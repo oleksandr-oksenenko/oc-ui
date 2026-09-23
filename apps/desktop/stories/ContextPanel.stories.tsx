@@ -7,8 +7,18 @@ import { expect, userEvent, waitFor, within } from "storybook/test";
 import type { SelectedLineRange } from "@pierre/diffs";
 
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
-import type { DiffFileData } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView.tsx";
+import type {
+  DiffFileData,
+  DiffReviewView,
+  DiffViewPresentation,
+} from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView.tsx";
 import type { ReviewComment } from "../src/renderer/domain/review-drafts.ts";
+
+/** Split a diff fixture into the panel's independent file and presentation props. */
+function panelProps(input: DiffViewPresentation & { readonly files: readonly DiffFileData[] }) {
+  const { files, ...presentation } = input;
+  return { files, presentation };
+}
 
 const diffFiles: readonly DiffFileData[] = [
   {
@@ -149,13 +159,13 @@ type Story = StoryObj<typeof meta>;
 
 export const Diff: Story = {
   args: {
-    diff: { files: diffFiles, loading: false },
+    ...panelProps({ files: diffFiles, loading: false }),
   },
 };
 
 export const Loading: Story = {
   args: {
-    diff: {
+    ...panelProps({
       files: [],
       loading: true,
       comparison: "working",
@@ -163,71 +173,71 @@ export const Loading: Story = {
         { value: "working", label: "Working changes" },
         { value: "branch", label: "Changes vs main" },
       ],
-    },
+    }),
   },
 };
 
 export const NoSession: Story = {
   args: {
-    diff: {
+    ...panelProps({
       files: [],
       loading: false,
       emptyMessage: "Select a session to view changes",
       emptyDescription: "The Diff panel follows the selected session's workspace location.",
-    },
+    }),
   },
 };
 
 export const Empty: Story = {
   args: {
-    diff: { files: [], loading: false },
+    ...panelProps({ files: [], loading: false }),
   },
 };
 
 export const Unavailable: Story = {
   args: {
-    diff: {
+    ...panelProps({
       files: [],
       loading: false,
       emptyMessage: "Diff unavailable",
       emptyDescription: "OpenCode diff data is not connected yet.",
-    },
+    }),
   },
 };
 
 export const Error: Story = {
   args: {
-    diff: { files: [], loading: false, error: "The working tree could not be read." },
+    ...panelProps({ files: [], loading: false, error: "The working tree could not be read." }),
   },
 };
 
 export const Refreshing: Story = {
   args: {
-    diff: { files: diffFiles, loading: true, stale: true },
+    ...panelProps({ files: diffFiles, loading: true, stale: true }),
   },
 };
 
 export const RefreshError: Story = {
   args: {
-    diff: {
+    ...panelProps({
       files: diffFiles,
       loading: false,
       stale: true,
       error: "The latest changes could not be loaded.",
       onRetry: () => undefined,
-    },
+    }),
   },
 };
 
 export const CachedStale: Story = {
   args: {
-    diff: { files: diffFiles, loading: false, stale: true },
+    ...panelProps({ files: diffFiles, loading: false, stale: true }),
   },
 };
 
 export const BranchEmpty: Story = {
   args: {
-    diff: {
+    ...panelProps({
       files: [],
       loading: false,
       comparison: "branch",
@@ -237,13 +247,13 @@ export const BranchEmpty: Story = {
       ],
       emptyMessage: "No changes against main",
       emptyDescription: "The working copy matches its merge base with main.",
-    },
+    }),
   },
 };
 
 export const DiffEdgeCases: Story = {
   args: {
-    diff: {
+    ...panelProps({
       files: [
         {
           file: "src/renderer/components/App/ConnectedApp/Changes/ContextPanel/very-long-file-name.tsx",
@@ -270,13 +280,13 @@ deleted file mode 100644
         },
       ],
       loading: false,
-    },
+    }),
   },
 };
 
 export const CollapseAll: Story = {
   args: {
-    diff: { files: diffFiles, loading: false },
+    ...panelProps({ files: diffFiles, loading: false }),
   },
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
@@ -323,7 +333,7 @@ export const CollapseAll: Story = {
 
 export const VirtualizedList: Story = {
   args: {
-    diff: { files: manyFiles, loading: false },
+    ...panelProps({ files: manyFiles, loading: false }),
   },
   play: async ({ canvasElement, step }) => {
     const viewport = () => canvasElement.querySelector<HTMLElement>(".diff-code-view");
@@ -363,7 +373,7 @@ export const VirtualizedList: Story = {
 
 export const GutterRangeSelection: Story = {
   args: {
-    diff: { files: gutterFiles, loading: false },
+    ...panelProps({ files: gutterFiles, loading: false }),
   },
   render: () => {
     const [selection, setSelection] = createSignal("");
@@ -376,16 +386,13 @@ export const GutterRangeSelection: Story = {
         </output>
         <div style={{ flex: "1 1 auto", "min-height": "0" }}>
           <ContextPanel
-            diff={{
-              files: gutterFiles,
-              loading: false,
-              review: {
-                comments: [],
-                onBeginComment: (_path, range) =>
-                  setSelection(
-                    `${range.start}:${range.side}-${range.end}:${range.endSide ?? range.side}`,
-                  ),
-              },
+            {...panelProps({ files: gutterFiles, loading: false })}
+            review={{
+              comments: [],
+              onBeginComment: (_path, range) =>
+                setSelection(
+                  `${range.start}:${range.side}-${range.end}:${range.endSide ?? range.side}`,
+                ),
             }}
           />
         </div>
@@ -495,14 +502,15 @@ export const GutterRangeSelection: Story = {
 
 export const ComparisonControl: Story = {
   args: {
-    diff: { files: diffFiles, loading: false },
+    ...panelProps({ files: diffFiles, loading: false }),
   },
   render: () => {
     const [comparison, setComparison] = createSignal("working");
+    // Keep `files` a stable prop source; only presentation reacts to the signal.
     return (
       <ContextPanel
-        diff={{
-          files: diffFiles,
+        files={diffFiles}
+        presentation={{
           loading: false,
           comparison: comparison(),
           comparisonOptions: [
@@ -518,7 +526,7 @@ export const ComparisonControl: Story = {
 
 export const ReviewComments: Story = {
   args: {
-    diff: { files: diffFiles, loading: false },
+    ...panelProps({ files: diffFiles, loading: false }),
   },
   render: () => {
     const [editingCommentID, setEditingCommentID] = createSignal<string | undefined>("comment-1");
@@ -536,34 +544,30 @@ export const ReviewComments: Story = {
       selection,
       selectedCode: "const previous = createMemo(() => current());\n",
     }));
-    const view = createMemo(() => ({
-      files: diffFiles,
-      loading: false,
-      review: {
-        comments: [comment()],
-        editingCommentID: editingCommentID(),
-        selectedLines: { path: comment().path, range: selection },
-        onUpdateCommentBody: (_id: string, nextBody: string) => setBody(nextBody),
-        onEditComment: (commentID: string) => setEditingCommentID(commentID),
-        onFinishComment: () => setEditingCommentID(undefined),
-        onRemoveComment: () => setEditingCommentID(undefined),
-      },
+    const view = createMemo<DiffReviewView>(() => ({
+      comments: [comment()],
+      editingCommentID: editingCommentID(),
+      selectedLines: { path: comment().path, range: selection },
+      onUpdateCommentBody: (_id: string, nextBody: string) => setBody(nextBody),
+      onEditComment: (commentID: string) => setEditingCommentID(commentID),
+      onFinishComment: () => setEditingCommentID(undefined),
+      onRemoveComment: () => setEditingCommentID(undefined),
     }));
-    return <ContextPanel diff={view()} />;
+    return <ContextPanel {...panelProps({ files: diffFiles, loading: false })} review={view()} />;
   },
 };
 
 export const NoClose: Story = {
   args: {
     onClose: undefined,
-    diff: { files: diffFiles, loading: false },
+    ...panelProps({ files: diffFiles, loading: false }),
   },
 };
 
 export const CloseFocused: Story = {
   args: {
     autoFocusClose: true,
-    diff: { files: diffFiles, loading: false },
+    ...panelProps({ files: diffFiles, loading: false }),
   },
 };
 
@@ -577,7 +581,7 @@ export const NarrowLongPath: Story = {
   parameters: { viewport: narrowViewport },
   globals: { viewport: { value: "narrow320", isRotated: false } },
   args: {
-    diff: {
+    ...panelProps({
       loading: false,
       comparison: "branch",
       comparisonOptions: [
@@ -594,7 +598,7 @@ export const NarrowLongPath: Story = {
           patch: "",
         },
       ],
-    },
+    }),
   },
 };
 
@@ -623,7 +627,7 @@ function measurePathEdges(path: HTMLElement) {
 
 export const LongPathTooltip: Story = {
   args: {
-    diff: {
+    ...panelProps({
       loading: false,
       files: [
         {
@@ -649,7 +653,7 @@ export const LongPathTooltip: Story = {
           patch: "@@ -0,0 +1 @@\n+rtl value\n",
         },
       ],
-    },
+    }),
   },
   play: async ({ canvasElement, step }) => {
     const paths = () => [...canvasElement.querySelectorAll<HTMLElement>(".diff-file-path")];

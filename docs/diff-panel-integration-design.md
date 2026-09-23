@@ -104,7 +104,7 @@ pooling. The panel adopts it instead of the previous per-file Solid list.
 
 ### Item model
 
-`DiffCodeView` maps `DiffViewProps.files` to one controlled `CodeView` item per
+`DiffCodeView` maps the `files` prop to one controlled `CodeView` item per
 file, preserving server order:
 
 | Item field    | Source                                                                                       |
@@ -233,10 +233,11 @@ and is stated here as the owner's lifetime.
 
 ## UI, tests, and stories
 
-`DiffViewProps` uses `comparison`, `comparisonOptions`, and
+`DiffViewPresentation` uses `comparison`, `comparisonOptions`, and
 `onComparisonChange`. The selector's accessible label is “Diff comparison” and
 remains available during loading, empty, and error states when both
-comparisons exist. Session-attribution wording is absent.
+comparisons exist. Session-attribution wording is absent. The file list travels
+as its own `files` prop, so presentation updates never invalidate patch parsing.
 
 The summary exposes one icon control with a truthful label: it reads
 “Collapse all files” while any file is expanded and “Expand all files” when

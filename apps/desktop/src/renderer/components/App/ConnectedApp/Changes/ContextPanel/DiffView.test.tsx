@@ -40,13 +40,15 @@ describe("DiffView", () => {
     const { host, dispose } = mount(() => (
       <DiffView
         files={[]}
-        loading
-        comparison="working"
-        comparisonOptions={[
-          { value: "working", label: "Working changes" },
-          { value: "branch", label: "Changes vs main" },
-        ]}
-        onComparisonChange={onComparisonChange}
+        presentation={{
+          loading: true,
+          comparison: "working",
+          comparisonOptions: [
+            { value: "working", label: "Working changes" },
+            { value: "branch", label: "Changes vs main" },
+          ],
+          onComparisonChange,
+        }}
       />
     ));
 
@@ -68,7 +70,7 @@ describe("DiffView", () => {
   it("hides the comparison selector when only one comparison is available", () => {
     stubResizeObserver();
     const { host, dispose } = mount(() => (
-      <DiffView files={[malformedFile]} loading={false} comparison="working" />
+      <DiffView files={[malformedFile]} presentation={{ loading: false, comparison: "working" }} />
     ));
 
     expect(host.querySelector('[data-component="select-v2"]')).toBeNull();
@@ -80,12 +82,14 @@ describe("DiffView", () => {
     const { host, dispose } = mount(() => (
       <DiffView
         files={[]}
-        loading={false}
-        comparison="branch"
-        comparisonOptions={[
-          { value: "working", label: "Working changes" },
-          { value: "branch", label: "Changes vs main" },
-        ]}
+        presentation={{
+          loading: false,
+          comparison: "branch",
+          comparisonOptions: [
+            { value: "working", label: "Working changes" },
+            { value: "branch", label: "Changes vs main" },
+          ],
+        }}
       />
     ));
 
@@ -101,9 +105,11 @@ describe("DiffView", () => {
       () => (
         <DiffView
           files={[]}
-          loading={false}
-          emptyMessage="No changes against main"
-          emptyDescription="The working copy matches its merge base with main."
+          presentation={{
+            loading: false,
+            emptyMessage: "No changes against main",
+            emptyDescription: "The working copy matches its merge base with main.",
+          }}
         />
       ),
       host,
@@ -120,10 +126,12 @@ describe("DiffView", () => {
     const { host, dispose } = mount(() => (
       <DiffView
         files={[malformedFile]}
-        loading={false}
-        stale
-        error="The server is unavailable."
-        onRetry={onRetry}
+        presentation={{
+          loading: false,
+          stale: true,
+          error: "The server is unavailable.",
+          onRetry,
+        }}
       />
     ));
 
@@ -141,7 +149,9 @@ describe("DiffView", () => {
 
   it("collapses and expands every file from the summary control", async () => {
     stubResizeObserver();
-    const { host, dispose } = mount(() => <DiffView files={mixedFiles} loading={false} />);
+    const { host, dispose } = mount(() => (
+      <DiffView files={mixedFiles} presentation={{ loading: false }} />
+    ));
 
     const trigger = (path: string) =>
       host.querySelector<HTMLButtonElement>(`[aria-label$=" ${path}"]`);
@@ -188,7 +198,7 @@ describe("DiffView", () => {
     const { host, dispose } = mount(() => {
       const [files, setFiles] = createSignal<readonly DiffFileData[]>([file]);
       update = setFiles;
-      return <DiffView files={files()} loading={false} />;
+      return <DiffView files={files()} presentation={{ loading: false }} />;
     });
 
     await waitFor(() => expect(host.querySelector(".diff-collapse-toggle")).not.toBeNull());

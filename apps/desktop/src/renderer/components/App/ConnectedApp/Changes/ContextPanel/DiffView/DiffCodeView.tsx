@@ -161,8 +161,8 @@ export function DiffCodeView(props: DiffCodeViewProps) {
     () => new Map(props.files.map((file) => [file.file, file] as const)),
   );
 
-  // Preparing patches is the expensive part, so it only reruns when the file
-  // list changes; review and expansion changes reuse the parsed metadata.
+  // Preparing patches is the expensive part, so it only reruns when the files
+  // list changes; status and review updates reuse the parsed metadata.
   const prepared = createMemo(() =>
     props.files.map((file) => ({ file, renderData: prepareDiffRender(file) })),
   );

@@ -139,7 +139,8 @@ function IntegratedFixture(mobileStoryState: MobileStoryState = "transcript") {
         context={
           <ChangesRegion
             idBase={contextTabsId}
-            changes={{ files: diffFiles, loading: false }}
+            files={diffFiles}
+            presentation={{ loading: false }}
             showTabs={panelState.mobile()}
             onClose={() => panelState.setRightPanelOpen(false)}
           />
