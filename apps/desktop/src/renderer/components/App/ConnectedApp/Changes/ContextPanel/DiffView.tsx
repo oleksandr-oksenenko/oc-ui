@@ -129,7 +129,8 @@ export function DiffView(props: DiffViewProps) {
         </div>
       </Show>
 
-      <Show when={props.presentation.error && props.files.length === 0}>
+      {/* Keep the error operand last so the accessor yields the message, not a boolean. */}
+      <Show when={props.files.length === 0 && props.presentation.error}>
         {(error) => (
           <div class="context-state error-state" role="alert">
             <Icon aria-hidden="true" name="warning" size="small" />

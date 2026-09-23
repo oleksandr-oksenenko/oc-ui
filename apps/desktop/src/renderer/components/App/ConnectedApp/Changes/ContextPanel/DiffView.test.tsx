@@ -120,6 +120,20 @@ describe("DiffView", () => {
     dispose();
   });
 
+  it("shows the error message when the diff has no files", () => {
+    const { host, dispose } = mount(() => (
+      <DiffView
+        files={[]}
+        presentation={{ loading: false, error: "The working tree could not be read." }}
+      />
+    ));
+
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      "The working tree could not be read.",
+    );
+    dispose();
+  });
+
   it("keeps cached files visible during a failed refresh", async () => {
     stubResizeObserver();
     const onRetry = vi.fn<() => void>();
