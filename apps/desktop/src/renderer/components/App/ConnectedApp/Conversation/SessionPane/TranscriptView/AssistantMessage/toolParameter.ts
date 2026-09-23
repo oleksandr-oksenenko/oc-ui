@@ -4,9 +4,11 @@ import { Predicate } from "effect";
 import { serverPathRelative } from "../../../../../../../ui/serverPath.ts";
 
 /**
- * Hard bound on the text handed to a row's DOM and accessible name. It is not a
- * display rule: the row's width decides what is visible. A longer value keeps
- * both of its ends, so the row still shows what an unbounded value would.
+ * Hard bound on the text handed to a row's DOM and accessible name, including
+ * its ellipsis. It is not a display rule: the row's width decides what is
+ * visible. A longer value keeps both ends, far beyond the ~90 characters a
+ * column can show, so the bound leaves an ordinary parameter looking the same as
+ * an unbounded value would.
  */
 export const TOOL_PARAMETER_TEXT_BOUND = 512;
 
@@ -83,18 +85,20 @@ function isText(value: JsonValue | undefined): value is string {
 }
 
 /**
- * Collapses whitespace so the value stays one line, then bounds its length. The
- * bound keeps both ends, so a value over it still shows what the row would show
- * unbounded: the head of a command, the tail of a path.
+ * Collapses whitespace so the value stays one line, then bounds its length to
+ * `TOOL_PARAMETER_TEXT_BOUND` including the ellipsis. The bound keeps both ends,
+ * so a value over it still shows the head of a command or the tail of a path, as
+ * it would unbounded.
  */
 function oneLine(value: string): string | undefined {
   const collapsed = value.replace(/\s+/g, " ").trim();
   if (collapsed.length === 0) return undefined;
   if (collapsed.length <= TOOL_PARAMETER_TEXT_BOUND) return collapsed;
-  const half = Math.floor(TOOL_PARAMETER_TEXT_BOUND / 2);
-  // Keep the code-unit ceiling without cutting a surrogate pair in half: both
-  // cuts take the pair whole rather than dropping it.
-  const head = collapsed.slice(0, half + (leadsSurrogatePair(collapsed, half - 1) ? 1 : 0));
+  // Each end gets half of what the ellipsis leaves, and the tail may take one
+  // code unit more to keep a surrogate pair whole. Both cuts shorten their end
+  // rather than reaching past it, so the result cannot exceed the bound.
+  const half = Math.floor((TOOL_PARAMETER_TEXT_BOUND - 2) / 2);
+  const head = collapsed.slice(0, half - (leadsSurrogatePair(collapsed, half - 1) ? 1 : 0));
   const start = collapsed.length - half;
   return `${head}…${collapsed.slice(start - (trailsSurrogatePair(collapsed, start) ? 1 : 0))}`;
 }

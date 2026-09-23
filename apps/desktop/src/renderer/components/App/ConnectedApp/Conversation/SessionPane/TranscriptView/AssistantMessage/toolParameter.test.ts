@@ -9,6 +9,11 @@ const asPath = (text: string) => ({ text, path: true });
 /** A parameter that is not a path. */
 const asText = (text: string) => ({ text, path: false });
 
+/** True when `text` holds a surrogate half without its partner. */
+function loneSurrogate(text: string): boolean {
+  return /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text);
+}
+
 function running(name: string, input: Record<string, JsonValue>): SessionMessageAssistantTool {
   return {
     type: "tool",
@@ -179,18 +184,38 @@ describe("toolParameter", () => {
   it("hands over values up to the text bound unchanged", () => {
     const exact = "a".repeat(TOOL_PARAMETER_TEXT_BOUND);
     expect(toolParameter(running("read", { path: exact }))).toEqual(asPath(exact));
+    const over = "a".repeat(TOOL_PARAMETER_TEXT_BOUND + 1);
+    expect(toolParameter(running("read", { path: over }))!.text.length).toBeLessThanOrEqual(
+      TOOL_PARAMETER_TEXT_BOUND,
+    );
   });
 
-  it("bounds a longer value while keeping both of its ends", () => {
+  it("keeps both ends of a value over the text bound", () => {
     const head = "h".repeat(TOOL_PARAMETER_TEXT_BOUND);
     const tail = "t".repeat(TOOL_PARAMETER_TEXT_BOUND);
-    expect(toolParameter(running("shell", { command: `${head}${tail}` }))).toEqual(
-      // The row shows the head of a command and the tail of a path, so the bound
-      // keeps both ends and can never change what is visible.
-      asText(
-        `${head.slice(0, TOOL_PARAMETER_TEXT_BOUND / 2)}…${tail.slice(TOOL_PARAMETER_TEXT_BOUND / 2)}`,
-      ),
-    );
+    const parameter = toolParameter(running("shell", { command: `${head}${tail}` }))!;
+    // The row shows the head of a command and the tail of a path, so the bound
+    // keeps both ends, far beyond what a row can show.
+    expect(parameter.text.startsWith("h".repeat(200))).toBe(true);
+    expect(parameter.text.endsWith("t".repeat(200))).toBe(true);
+    expect(parameter.text).toContain("…");
+    expect(parameter.text.length).toBeLessThanOrEqual(TOOL_PARAMETER_TEXT_BOUND);
+  });
+
+  it("stays within the text bound whatever the value's length or code units", () => {
+    const pair = "😀";
+    const cases = [
+      "a".repeat(TOOL_PARAMETER_TEXT_BOUND),
+      "a".repeat(TOOL_PARAMETER_TEXT_BOUND + 1),
+      `${pair}${pair}${"a".repeat(TOOL_PARAMETER_TEXT_BOUND * 4)}`,
+      "a".repeat(TOOL_PARAMETER_TEXT_BOUND * 100),
+    ];
+    for (const command of cases) {
+      const parameter = toolParameter(running("shell", { command }))!;
+      expect(parameter.text.length).toBeLessThanOrEqual(TOOL_PARAMETER_TEXT_BOUND);
+      // No cut may leave half of a surrogate pair behind.
+      expect(loneSurrogate(parameter.text)).toBe(false);
+    }
   });
 
   it("shows nothing for empty or non-string primary values", () => {
@@ -214,14 +239,18 @@ describe("toolParameter", () => {
   });
 
   it("does not split a surrogate pair when bounding a long value", () => {
-    const half = TOOL_PARAMETER_TEXT_BOUND / 2;
-    const head = `${"a".repeat(half - 1)}😀`;
-    expect(toolParameter(running("shell", { command: `${head}${"b".repeat(400)}` }))).toEqual(
-      asText(`${head}…${"b".repeat(half)}`),
-    );
-    const tail = `😀${"b".repeat(half - 1)}`;
-    expect(toolParameter(running("shell", { command: `${"a".repeat(400)}${tail}` }))).toEqual(
-      asText(`${"a".repeat(half)}…${tail}`),
-    );
+    const pair = "😀";
+    // Each value places the pair where the bound cuts: the tail's cut keeps the
+    // pair whole, since a path's row shows exactly that end, and the head's cut
+    // drops it whole instead of leaving half of it behind.
+    const kept = toolParameter(running("shell", { command: `${pair}${"b".repeat(254)}` }))!;
+    expect(kept.text).toContain(pair);
+    expect(loneSurrogate(kept.text)).toBe(false);
+
+    const dropped = toolParameter(
+      running("shell", { command: `${"a".repeat(254)}${pair}${"b".repeat(400)}` }),
+    )!;
+    expect(dropped.text).not.toContain(pair);
+    expect(loneSurrogate(dropped.text)).toBe(false);
   });
 });

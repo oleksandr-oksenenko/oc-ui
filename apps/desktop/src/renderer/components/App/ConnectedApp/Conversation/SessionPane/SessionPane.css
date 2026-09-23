@@ -695,11 +695,13 @@
 
 .transcript-context-label {
   min-width: 0;
-  overflow: hidden;
   color: var(--oc-text-strong);
   font-weight: var(--oc-type-heading-weight);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+  /* A command is the row's own content, so it wraps inside the row instead of
+     being clipped; `anywhere` keeps one unbroken token from painting past the
+     transcript column. */
+  overflow-wrap: anywhere;
 }
 
 .transcript-context-detail {

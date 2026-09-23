@@ -347,8 +347,12 @@ export const ToolImageLongMetadata: Story = {
         const header = parameter.closest<HTMLElement>(".transcript-tool-header");
         if (!header) throw new Error("Tool header is missing");
         // A parameter holding the whole row leaves the running loader at the row's
-        // edge, where its rotated box overhangs its 14px layout box by ~3px.
-        await expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth + 6);
+        // edge, where its rotated box overhangs its 14px layout box by ~3px. Rows
+        // without one have no such excuse.
+        const spinning = header.querySelector(".transcript-tool-loader") !== null;
+        await expect(header.scrollWidth).toBeLessThanOrEqual(
+          header.clientWidth + (spinning ? 6 : 1),
+        );
       }
       const icon = canvasElement.querySelector<HTMLElement>(
         '.transcript-tool-header > [data-slot="icon-svg"]',
@@ -424,7 +428,7 @@ export const ShellStates: Story = {
       await expect(output.matches(":focus-visible")).toBe(true);
       await expect(getComputedStyle(output).outlineStyle).not.toBe("none");
     });
-    await step("Clips a long command inside the transcript column", async () => {
+    await step("Wraps a long command inside the transcript column", async () => {
       const label = [
         ...canvasElement.querySelectorAll<HTMLElement>(".transcript-context-label"),
       ].find((element) => element.textContent === longShellCommand);
@@ -432,12 +436,16 @@ export const ShellStates: Story = {
       const trigger = label.closest<HTMLElement>(".transcript-context-trigger");
       if (!trigger) throw new Error("Shell row is missing");
       const labelBox = label.getBoundingClientRect();
-      // The command stays inside its row and keeps its head; only the flags that
-      // run past the row are clipped.
+      // A command is the row's own content: it stays readable in full and wraps,
+      // so the row never paints past the transcript column.
       await expect(trigger.scrollWidth).toBeLessThanOrEqual(trigger.clientWidth + 1);
-      await expect(label.scrollWidth).toBeGreaterThan(label.clientWidth + 1);
-      await expect(substringRect(label, "pnpm").left).toBeGreaterThanOrEqual(labelBox.left - 1);
-      await expect(contentRect(label).right).toBeGreaterThan(labelBox.right + 1);
+      await expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth + 1);
+      const command = substringRect(label, longShellCommand);
+      await expect(command.left).toBeGreaterThanOrEqual(labelBox.left - 1);
+      await expect(command.right).toBeLessThanOrEqual(labelBox.right + 1);
+      await expect(label.getBoundingClientRect().height).toBeGreaterThan(
+        Number.parseFloat(getComputedStyle(label).lineHeight),
+      );
     });
   },
 };
