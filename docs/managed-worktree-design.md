@@ -16,6 +16,15 @@ original design and historical verification below.
 Status: Implemented for OpenCode `0.0.0-beta-18866`, 2026-09-02. Dependency
 upgrade committed as `ee1735a`; feature verification is recorded below.
 
+## Current cleanup policy — 2026-09-23
+
+Session deletion no longer removes worktrees. Registered worktrees stay on disk
+and in the server inventory after their sessions are deleted, matching OpenCode
+Desktop v2 (2.0.13), which keeps worktree deletion as a separate explicit
+action. This supersedes the "Last-session cleanup" section and the
+worktree-removal bullet in "Agreed behavior": no automatic cleanup, cleanup
+queue, or cross-client usage check runs from session deletion.
+
 ## Decision
 
 Use the upgraded OpenCode server unchanged. Prepare the destination and fetch
@@ -69,11 +78,9 @@ there is no new server, process manager, session catalog, or background job syst
   any configured startup command before creating the session.
   Create no branch on worktree creation or first prompt. Branch creation belongs
   to a later push operation; this feature adds no push UI or Git-command interception.
-- After confirmed session deletion, remove worktrees with no remaining known
-  sessions, using `force: true`. Child and archived sessions count as usage.
-- Keep session deletion successful even if cleanup fails. Show retained paths
-  for manual handling. No cleanup queue, automatic cleanup retries, or
-  cross-client locks.
+- Never remove worktrees as part of session deletion (effective 2026-09-23;
+  see "Current cleanup policy"). Registered worktrees remain after their last
+  session is deleted; removal is a separate, explicit action.
 
 ## Existing implementations and verified contracts
 
@@ -301,7 +308,10 @@ that notification when session-only retry succeeds.
 - Keep fatal server errors meaningful and show retained directories only in
   failure/recovery messages.
 
-## Last-session cleanup
+## Last-session cleanup (superseded 2026-09-23)
+
+This section is historical. Session deletion no longer removes worktrees; see
+"Current cleanup policy".
 
 ### Scope and identity
 
@@ -388,7 +398,8 @@ Candidates are removal inputs; do not add a separate identity wrapper.
    Preserve direct-directory creation, Add Project, and session-only retry.
 3. Add the upstream toast region and failure messages.
 4. Complete last-session cleanup in `createSessionFlows`, `SessionFlowsRegion`,
-   `DeleteSessionFlow`, and `DeleteSessionDialog`.
+   `DeleteSessionFlow`, and `DeleteSessionDialog`. (Cleanup was removed again on
+   2026-09-23; see "Current cleanup policy".)
 5. Update affected tests, stories, `docs/new-session-location-ui.md`,
    `docs/session-deletion-design.md`, and `docs/component-inventory.md`.
 
@@ -396,7 +407,8 @@ The dependency upgrade is complete. No further OpenCode source changes,
 dependency changes, compatibility relaxation, Electron IPC, or worktree
 persistence are needed. Changes to `ConnectedRuntime` are limited to forwarding
 the existing shell completion event. The creation
-helper is the only new policy module; cleanup stays with its current flow.
+helper is the only new policy module; worktree cleanup was later removed from
+session deletion (see "Current cleanup policy").
 
 ## Verification
 
@@ -419,7 +431,9 @@ location resolution succeed, session-only retry, shared worktree preservation,
 descendants in multiple
 worktrees, archived sessions, workspace identity, incomplete refresh, and
 session finalization despite partial cleanup failure. Reuse existing catalog
-pagination/reconciliation and dialog tests rather than duplicating them.
+pagination/reconciliation and dialog tests rather than duplicating them. The
+cleanup items in this list were superseded on 2026-09-23: session deletion no
+longer removes worktrees (see "Current cleanup policy").
 
 After implementation run repository-root `pnpm check` and `pnpm test`, fix
 all findings, and verify Storybook plus the actual Electron app. Exercise first

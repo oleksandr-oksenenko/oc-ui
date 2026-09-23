@@ -115,8 +115,9 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   await $(".delete-session-dialog").waitForExist({ reverse: true, timeout: TIMEOUT });
   await browser.waitUntil(async () => (await sessions()).length === 2, { timeout: TIMEOUT });
   assert.ok(!(await sessions()).some((session) => session.id === created.id));
-  assert.ok(!(await git(projectDirectory, "worktree", "list", "--porcelain")).includes(worktree));
-  await assert.rejects(access(worktree), { code: "ENOENT" });
+  // Session deletion keeps the worktree, matching OpenCode Desktop v2.
+  assert.ok((await git(projectDirectory, "worktree", "list", "--porcelain")).includes(worktree));
+  await access(worktree);
   await access(join(projectDirectory, "working.txt"));
   await expectFiles(["watcher.txt", "working.txt"]);
 }

@@ -51,10 +51,6 @@ export function DeleteSessionDialog(props: DeleteSessionDialogProps) {
               {props.descendantCount === 1 ? "session" : "sessions"}.
             </p>
           </Show>
-          <p>
-            Unused registered Git worktrees may also be permanently removed, including uncommitted
-            changes.
-          </p>
           <Show when={props.error}>
             {(error) => (
               <div class="delete-session-error" role="alert" tabIndex={-1}>

@@ -122,21 +122,14 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
     if (!input.connected() || deletion()) return;
     const target = inspectDeletion(sessionID);
     if (target.status !== "ready") return;
-    const sessions = input.workspace.sessions();
-    const subtreeSessions = sessions.filter((candidate) =>
-      target.subtreeIDs.includes(candidate.id),
-    );
     const flow = createDeleteSessionFlow({
       effects: input.runtime.effects,
       session: target.session,
       subtreeIDs: target.subtreeIDs,
-      subtreeSessions,
       sessions: input.workspace.sessions,
       sessionIDs: input.runtime.sessions.ids,
       syncCatalog: input.workspace.syncCatalog,
-      listWorktrees: input.runtime.api.worktree.list,
       removeSession: input.runtime.api.session.remove,
-      removeWorktree: input.runtime.api.worktree.remove,
       deletionStatusForSession,
       onDeleted: deleteSessions,
       onDismiss: dismissDeletion,

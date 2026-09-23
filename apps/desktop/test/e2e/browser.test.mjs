@@ -1122,13 +1122,14 @@ describe.sequential("production browser app", () => {
     );
   });
 
-  it("creates and removes an isolated server worktree with cancel and reopen", async () => {
+  it("creates an isolated server worktree and keeps it after session deletion", async () => {
     await git(project, "commit", "--allow-empty", "-m", "local worktree base");
     await git(project, "branch", "-f", "main", "HEAD");
     const localMain = await git(project, "rev-parse", "refs/heads/main");
     expect(localMain).not.toBe(await git(project, "rev-parse", "origin/main"));
     await page.screenshot({ path: join(artifacts, "browser-connected.png") });
     const before = await git(project, "worktree", "list", "--porcelain");
+    const priorSessions = (await api.session.list({ limit: 100 })).data;
     await page.getByLabel("Create session", { exact: true }).click();
     await page.getByRole("button", { name: "Start in worktree", exact: true }).click();
     // A newly created session starts with the context panel closed.
@@ -1144,6 +1145,11 @@ describe.sequential("production browser app", () => {
       true,
     );
     expect(await git(worktree, "rev-parse", "HEAD")).toBe(localMain);
+    const created = (await api.session.list({ limit: 100 })).data.find(
+      (session) => !priorSessions.some((previous) => previous.id === session.id),
+    );
+    expect(created).toBeDefined();
+    expect(created.location.directory).toBe(worktree);
     const row = page.locator(".shell-session-row.selected");
     await row.hover();
     await row.locator(".shell-session-delete").click();
@@ -1153,10 +1159,19 @@ describe.sequential("production browser app", () => {
     await row.hover();
     await row.locator(".shell-session-delete").click();
     await page.locator('.delete-session-dialog button[type="submit"]').click();
+    await page.locator(".delete-session-dialog").waitFor({ state: "hidden" });
+    // The session is gone from the server, and the worktree stays registered
+    // with both the server inventory and Git while its files remain on disk.
     await expect
-      .poll(() => git(project, "worktree", "list", "--porcelain"))
-      .not.toContain(worktree);
-    await expect(access(worktree)).rejects.toHaveProperty("code", "ENOENT");
+      .poll(async () =>
+        (await api.session.list({ limit: 100 })).data.some((session) => session.id === created.id),
+      )
+      .toBe(false);
+    expect(await api.worktree.list({ location: { directory: worktree } })).toContainEqual(
+      expect.objectContaining({ directory: worktree }),
+    );
+    expect(await git(project, "worktree", "list", "--porcelain")).toContain(worktree);
+    await access(worktree);
     await access(join(project, "working.txt"));
   });
 

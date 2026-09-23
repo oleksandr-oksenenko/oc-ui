@@ -24,33 +24,28 @@ Each session row ends with a small trash button. The button is disabled while di
 the session, or any child below it, is running.
 
 Selecting the button opens a confirmation dialog. The dialog names the session, states that deletion
-cannot be undone, and says how many child sessions will also be deleted. The destructive request is
-sent only after confirmation.
+cannot be undone, says how many child sessions will also be deleted, and sends the destructive
+request only after confirmation.
 
-The confirmation explains that unused worktrees may also be removed, including
-uncommitted changes. At confirmation, the application refreshes the full session
-catalog and active statuses, checks the selected subtree again, and lists registered
-worktrees for its stored project IDs. It matches each session's stored path to the
-deepest containing registered directory and requires the Git strategy. The primary checkout and unsupported
-workspace locations are never removed.
+At confirmation, the application refreshes the full session catalog and active statuses, requires
+every catalog record to be loaded, checks the selected subtree again, and sends `session.remove`.
+The session remains visible until OpenCode confirms the request.
 
-After confirmed session removal, the application immediately clears the deleted
-subtree and its drafts. It refreshes remaining sessions and removes only candidates
-with no remaining users through `worktree.remove({ ..., force: true })`. Archived,
-independent, and child sessions count as users, including sessions in nested
-directories. There is no branch deletion and no second confirmation.
-No location-resolution requests are made during deletion: OpenCode can register
-missing directories as new projects during those requests. Remaining sessions
-protect candidates whose directory contains their stored path, including the root
-itself. Stale sessions in other worktrees of the same project do not block cleanup.
-These comparisons do not resolve symlink aliases; an aliased path stored by another
-client can evade the usage check.
+Deleting a session never deletes a worktree. Registered worktrees stay on disk and in the server's
+inventory after their sessions are gone, so uncommitted work is preserved. This matches OpenCode
+Desktop v2 (2.0.13), where session deletion is sessions-only and worktree deletion is a separate,
+explicit action with its own checks. Removing a worktree requires the user to run
+`git worktree remove` on the connected server, or a future worktree-management surface. This
+application performs no automatic cleanup, no startup inventory scan, and no cleanup queue.
+
+After confirmed removal, the application immediately clears the deleted subtree and its drafts.
+There is no branch deletion, no worktree cleanup, and no second confirmation.
 
 While deletion is in progress, the dialog cannot be dismissed. A failed request leaves the session
 and its drafts untouched and keeps the dialog open for retry. A successful request removes the
-deleted subtree from the catalog and clears its in-memory drafts. If the selected session was deleted,
-the existing selection policy chooses the nearest surviving ancestor and otherwise the newest
-remaining session.
+deleted subtree from the catalog and clears its in-memory drafts. If the selected session was
+deleted, the existing selection policy chooses the nearest surviving ancestor and otherwise the
+newest remaining session.
 
 ## Why delete is not optimistic
 
@@ -58,14 +53,20 @@ The session remains visible until OpenCode confirms the request. Removing it fir
 temporary connection failure look like data was deleted when it was not. Live `session.deleted`
 events still reconcile deletions made by other clients.
 
-Session removal happens before worktree removal. This keeps a worktree intact if the session request
-fails. If association or the post-deletion refresh is incomplete, the affected
-worktree is retained. Cleanup failures do not undo successful session deletion:
-the dialog closes and a persistent notification names retained paths for manual
-handling. There is no cleanup retry queue or "Finish deletion" state. Cleanup
-runs only from this app's confirmed deletion flow, never from generic events or
-startup inventory scans. A cross-client race after the final usage check is an
-accepted limitation.
+Session deletion is the only mutation in this flow. Worktree removal is intentionally decoupled: the
+pinned server's `worktree.remove` runs `git worktree remove --force` synchronously inside the HTTP
+request, which takes seconds to tens of seconds for worktrees that contain installed dependencies.
+Keeping it out of session deletion keeps confirmation fast and never discards uncommitted changes as
+a side effect of deleting a session. No post-deletion catalog refresh is needed; local removal plus
+the server's `session.deleted` events already reconcile the list.
+
+## Worktree management follow-up
+
+OpenCode Desktop v2 exposes worktree deletion as an explicit Settings action with pre-flight checks
+(`vcs.status`, branch diff, and sessions whose location is inside the worktree) that keep `active`,
+`linked`, and `dirty` worktrees unless the user force-confirms. If this application adds worktree
+management later, it should reuse the pinned client's `worktree.list/remove` contracts and those
+guards rather than reintroducing cleanup into session deletion.
 
 ## Archive follow-up
 

@@ -95,7 +95,7 @@ describe("packaged owned OpenCode", () => {
     }
   });
 
-  it("updates diffs and creates and removes a worktree through the UI", async () => {
+  it("updates diffs and keeps a worktree after deleting its session", async () => {
     await verifyProjectFlows(projectDirectory);
     await browser.saveScreenshot(join(artifactDirectory, "project-flows-complete.png"));
   });
