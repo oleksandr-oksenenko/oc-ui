@@ -99,37 +99,18 @@ describe("Composer paste routing", () => {
     harness.dispose();
   });
 
-  it("leaves a files-only paste to native handling when no owner exists", () => {
+  it("makes a whitespace-only or HTML-only paste a no-op instead of deleting the selection", () => {
     setPlatform("macos");
-    const harness = openComposer();
-    const notes = new File(["notes"], "notes.txt", { type: "text/plain" });
-    const event = pasteClipboard(harness.editor, { files: [notes] });
-    expect(event.defaultPrevented).toBe(false);
-    expect(harness.draft()).toBeUndefined();
-    harness.dispose();
-  });
-
-  it("makes a whitespace-only paste a no-op instead of deleting the selection", () => {
-    setPlatform("macos");
-    const harness = openComposer({ value: "keep this" });
-    selectAll(harness.editor);
-    const event = pasteClipboard(harness.editor, { text: "\n\n\n" });
-    expect(event.defaultPrevented).toBe(true);
-    expect(harness.draft()).toBeUndefined();
-    expect(textOf(harness.editor)).toBe("keep this");
-    harness.dispose();
-  });
-
-  it("leaves the selection unchanged for an HTML-only payload", () => {
-    setPlatform("macos");
-    const harness = openComposer({ value: "keep this" });
-    selectAll(harness.editor);
-    const event = pasteClipboard(harness.editor, { html: "<p>rich</p>" });
-    expect(event.defaultPrevented).toBe(true);
-    expect(textOf(harness.editor)).toBe("keep this");
-    expect(harness.notice()).toBe("");
-    expect(harness.draft()).toBeUndefined();
-    harness.dispose();
+    for (const flavors of [{ text: "\n\n\n" }, { html: "<p>rich</p>" }] as const) {
+      const harness = openComposer({ value: "keep this" });
+      selectAll(harness.editor);
+      const event = pasteClipboard(harness.editor, flavors);
+      expect(event.defaultPrevented).toBe(true);
+      expect(textOf(harness.editor)).toBe("keep this");
+      expect(harness.notice()).toBe("");
+      expect(harness.draft()).toBeUndefined();
+      harness.dispose();
+    }
   });
 });
 

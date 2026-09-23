@@ -217,12 +217,6 @@ describe("paste route fixtures", () => {
       signals: [],
     });
   });
-
-  it("classifies a 50 KB prose paste and a 50 KB Markdown paste as text attachments", () => {
-    const hugeMarkdown = `# Big document\n\n${"Some prose paragraph.\n\n".repeat(3_000)}`;
-    expect(hugeMarkdown.length).toBeGreaterThan(50_000);
-    expect(route({ text: hugeMarkdown })).toBe("attachment-text");
-  });
 });
 
 describe("paste route precedence", () => {

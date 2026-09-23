@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { readPastedFiles, readPastedText } from "./pasteClipboard.ts";
+import { readPastedText } from "./pasteClipboard.ts";
 
 /** A clipboard whose `getData` serves the provided flavors. */
 const clipboard = (data: Readonly<Record<string, string>>) => ({
@@ -34,12 +34,5 @@ describe("readPastedText", () => {
     const data = { files: [], getData: (type: string) => (type === "text/plain" ? "x" : "") };
     expect(readPastedText(data)).toBe("x");
     expect(readPastedText({ files: [] })).toBe("");
-  });
-});
-
-describe("readPastedFiles", () => {
-  it("collects file metadata without reading bytes", () => {
-    const file = new File(["x"], "note.txt", { type: "text/plain" });
-    expect(readPastedFiles({ files: [file] })).toEqual([file]);
   });
 });

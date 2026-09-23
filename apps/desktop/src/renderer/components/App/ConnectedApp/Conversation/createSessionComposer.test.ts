@@ -239,26 +239,17 @@ describe("createSessionComposer", () => {
     root.dispose();
   });
 
-  it("accepts text exactly at the 2 MiB UTF-8 byte cap", () => {
-    const root = setup();
-    root.setSelectedID("session");
-    root.composer.attachText("a".repeat(MAX_ATTACHMENT_BYTES));
-    expect(root.composer.files()[0]?.size).toBe(MAX_ATTACHMENT_BYTES);
-    root.dispose();
-  });
-
-  it("rejects text one byte over the cap with the size notice", () => {
-    const root = setup();
-    root.setSelectedID("session");
-    root.composer.attachText("a".repeat(MAX_ATTACHMENT_BYTES + 1));
-    expect(root.composer.files()).toEqual([]);
-    expect(root.composer.error()).toContain("2 MiB attachment limit");
-    root.dispose();
-  });
-
   it("counts the cap in UTF-8 bytes rather than characters", () => {
     const root = setup();
     root.setSelectedID("session");
+    // ASCII at the cap passes; one byte over is refused before encoding.
+    root.composer.attachText("a".repeat(MAX_ATTACHMENT_BYTES));
+    expect(root.composer.files()[0]?.size).toBe(MAX_ATTACHMENT_BYTES);
+    root.composer.removeFile(root.composer.files()[0]!);
+    root.composer.attachText("a".repeat(MAX_ATTACHMENT_BYTES + 1));
+    expect(root.composer.files()).toEqual([]);
+    expect(root.composer.error()).toContain("2 MiB attachment limit");
+
     // 1,048,576 two-byte characters are exactly 2 MiB.
     const twoByte = "é".repeat(1_048_576);
     root.composer.attachText(twoByte);
@@ -296,10 +287,20 @@ describe("createSessionComposer", () => {
     expect(root.composer.files()).not.toContain(excess);
     expect(root.composer.error()).toContain(`hold ${MAX_DRAFT_ATTACHMENTS} attachments`);
 
-    // Removing one frees a slot for the next selection.
+    // A count-exhausted paste keeps its own wording.
+    root.composer.attachText("kept for restore");
+    expect(root.composer.files().map((file) => file.name)).not.toContain("pasted-text.txt");
+    expect(root.composer.error()).toContain(`hold ${MAX_DRAFT_ATTACHMENTS} attachments`);
+    expect(root.composer.error()).toContain("Remove an attachment and paste it again");
+
+    // Removing one frees a slot for the next selection and the next paste.
     root.composer.removeFile(root.composer.files()[0]!);
     root.composer.attachFiles([excess]);
     expect(root.composer.files()).toContain(excess);
+    root.composer.removeFile(root.composer.files()[0]!);
+    root.composer.attachText("fits now");
+    expect(root.composer.files().map((file) => file.name)).toContain("pasted-text.txt");
+    expect(root.composer.error()).toBeUndefined();
     root.dispose();
   });
 
@@ -320,30 +321,6 @@ describe("createSessionComposer", () => {
     expect(root.composer.files().map((file) => file.name)).toEqual(names);
     expect(root.composer.error()).toContain("attachments and 24 MiB");
     expect(root.composer.error()).toContain("Remove an attachment and paste it again");
-    root.dispose();
-  });
-
-  it("refuses a count-exhausted paste and attaches it after freeing room", () => {
-    const root = setup();
-    root.setSelectedID("session");
-    const files = Array.from(
-      { length: MAX_DRAFT_ATTACHMENTS },
-      (_, index) => new File([`file ${index}`], `file-${index}.txt`),
-    );
-    root.composer.attachFiles(files);
-    expect(root.composer.files()).toHaveLength(MAX_DRAFT_ATTACHMENTS);
-
-    root.composer.attachText("kept for restore");
-    expect(root.composer.files()).toHaveLength(MAX_DRAFT_ATTACHMENTS);
-    expect(root.composer.files().map((file) => file.name)).not.toContain("pasted-text.txt");
-    expect(root.composer.error()).toContain(`hold ${MAX_DRAFT_ATTACHMENTS} attachments`);
-    expect(root.composer.error()).toContain("Remove an attachment and paste it again");
-
-    // Freeing a slot lets the next paste attach normally.
-    root.composer.removeFile(root.composer.files()[0]!);
-    root.composer.attachText("fits now");
-    expect(root.composer.files().map((file) => file.name)).toContain("pasted-text.txt");
-    expect(root.composer.error()).toBeUndefined();
     root.dispose();
   });
 

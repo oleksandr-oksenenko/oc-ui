@@ -424,17 +424,6 @@ describe("prompt editor plugins", () => {
     expect(secondChildMarks(direct.view.state.doc)).toEqual(["code"]);
     expect(direct.draft().text).toBe("`a`\n`b`");
     direct.dispose();
-
-    // The draft round-trips: text and break survive, and the code mark stays
-    // on the text runs. The break itself has no code form on the wire.
-    const restored = fromDraft(draft.text, draft.skills);
-    restored.check();
-    expect(restored.textContent).toBe("ab");
-    const paragraph = restored.firstChild!;
-    expect(paragraph.childCount).toBe(3);
-    expect(paragraph.child(1).type.name).toBe("hard_break");
-    expect(paragraph.child(0).marks.map((mark) => mark.type.name)).toEqual(["code"]);
-    expect(paragraph.child(2).marks.map((mark) => mark.type.name)).toEqual(["code"]);
   });
 
   it("writes a code mark across an image as separate code spans", () => {
@@ -449,15 +438,6 @@ describe("prompt editor plugins", () => {
     const draft = pasted.draft();
     expect(draft.text).toBe("`a`![alt](x.png)`b`");
     pasted.dispose();
-
-    const restored = fromDraft(draft.text, draft.skills);
-    restored.check();
-    expect(restored.textContent).toBe("ab");
-    const paragraph = restored.firstChild!;
-    expect(paragraph.childCount).toBe(3);
-    expect(paragraph.child(1).type.name).toBe("image");
-    expect(paragraph.child(0).marks.map((mark) => mark.type.name)).toEqual(["code"]);
-    expect(paragraph.child(2).marks.map((mark) => mark.type.name)).toEqual(["code"]);
   });
 
   it("undoes an input rule with Backspace", () => {

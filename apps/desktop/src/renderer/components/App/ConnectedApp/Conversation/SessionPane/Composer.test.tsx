@@ -44,6 +44,32 @@ const renderAgentComposer = (agentSelection: ComposerProps["agentSelection"]) =>
     />
   ));
 
+/** Mounts a composer with the queue spies for one platform and state. */
+const renderQueueComposer = (
+  platform: "macos" | "other",
+  options: { readonly value?: string; readonly disabled?: boolean; readonly queue?: boolean } = {},
+) => {
+  setPlatform(platform);
+  const submit = vi.fn<() => void>();
+  const queue = vi.fn<() => void>();
+  const { host, dispose } = mount(() => (
+    <Composer
+      {...inertPasteProps}
+      value={options.value ?? "send this"}
+      disabled={options.disabled ?? false}
+      action="send"
+      modelSelection={unavailableSelection}
+      agentSelection={unavailableAgentSelection}
+      onInput={() => undefined}
+      onSubmit={submit}
+      onQueue={options.queue === false ? undefined : queue}
+    />
+  ));
+  const prompt = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+  if (!prompt) throw new Error("Composer did not render a prompt");
+  return { dispose, prompt, submit, queue };
+};
+
 describe("Composer", () => {
   it("attaches pasted files and inserts ordinary text paste", () => {
     const paste = vi.fn<(files: readonly File[]) => void>();
@@ -899,13 +925,10 @@ describe("Composer", () => {
     expect(tooltipText()).toBe("Send");
 
     dispose();
-    vi.useRealTimers();
-  });
 
-  it("labels the queue chord for the non-macOS platform", async () => {
+    // The non-macOS platform names Ctrl in the same slot.
     setPlatform("other");
-    vi.useFakeTimers();
-    const { host, dispose } = mount(() => (
+    const other = mount(() => (
       <Composer
         {...inertPasteProps}
         value="send this"
@@ -918,111 +941,53 @@ describe("Composer", () => {
         onQueue={() => undefined}
       />
     ));
-    const button = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
-    const trigger = button?.closest('[data-component="tooltip-v2-trigger"]');
-    const event = new Event("pointerenter");
-    Object.defineProperty(event, "pointerType", { value: "mouse" });
-    trigger!.dispatchEvent(event);
+    const otherButton = other.host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    const otherTrigger = otherButton?.closest('[data-component="tooltip-v2-trigger"]');
+    const otherEvent = new Event("pointerenter");
+    Object.defineProperty(otherEvent, "pointerType", { value: "mouse" });
+    otherTrigger!.dispatchEvent(otherEvent);
     await vi.advanceTimersByTimeAsync(600);
 
     expect(tooltipText()).toBe("Enter to send · Ctrl Enter to queue · Shift Enter for a new line");
 
-    dispose();
+    other.dispose();
     vi.useRealTimers();
   });
 
   it("queues with the platform's chord and never sends from it", () => {
-    const cases = [
-      { platform: "macos" as const, chord: { metaKey: true } },
-      { platform: "other" as const, chord: { ctrlKey: true } },
-    ];
-    for (const { platform, chord } of cases) {
-      setPlatform(platform);
-      const submit = vi.fn<() => void>();
-      const queue = vi.fn<() => void>();
-      const { host, dispose } = mount(() => (
-        <Composer
-          {...inertPasteProps}
-          value="send this"
-          disabled={false}
-          action="send"
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={submit}
-          onQueue={queue}
-        />
-      ));
-      const prompt = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
-      if (!prompt) throw new Error("Composer did not render a prompt");
-
-      prompt.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, ...chord }));
-
-      expect(queue).toHaveBeenCalledOnce();
-      expect(submit).not.toHaveBeenCalled();
-      dispose();
+    for (const [platform, chord] of [
+      ["macos", { metaKey: true }],
+      ["other", { ctrlKey: true }],
+    ] as const) {
+      const harness = renderQueueComposer(platform);
+      harness.prompt.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, ...chord }),
+      );
+      expect(harness.queue).toHaveBeenCalledOnce();
+      expect(harness.submit).not.toHaveBeenCalled();
+      harness.dispose();
     }
   });
 
-  it("consumes the queue chord when queueing is unavailable", () => {
-    setPlatform("macos");
-    const submit = vi.fn<() => void>();
-    const { host, dispose } = mount(() => (
-      <Composer
-        {...inertPasteProps}
-        value="send this"
-        disabled={false}
-        action="send"
-        modelSelection={unavailableSelection}
-        agentSelection={unavailableAgentSelection}
-        onInput={() => undefined}
-        onSubmit={submit}
-      />
-    ));
-    const prompt = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
-    if (!prompt) throw new Error("Composer did not render a prompt");
-
-    prompt.dispatchEvent(
+  it("consumes the queue chord when queueing is unavailable or the draft is not eligible", () => {
+    // No queue owner: the chord is consumed, and plain Enter still sends.
+    const unavailable = renderQueueComposer("macos", { queue: false });
+    unavailable.prompt.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }),
     );
-    expect(submit).not.toHaveBeenCalled();
+    expect(unavailable.submit).not.toHaveBeenCalled();
+    unavailable.prompt.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(unavailable.submit).toHaveBeenCalledOnce();
+    unavailable.dispose();
 
-    // Enter keeps its send contract when the chord is not held.
-    prompt.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    expect(submit).toHaveBeenCalledOnce();
-    dispose();
-  });
-
-  it("consumes the queue chord when the draft is not eligible", () => {
-    setPlatform("macos");
-    for (const props of [
-      { disabled: true, value: "send this" },
-      { disabled: false, value: "" },
-    ]) {
-      const submit = vi.fn<() => void>();
-      const queue = vi.fn<() => void>();
-      const { host, dispose } = mount(() => (
-        <Composer
-          {...inertPasteProps}
-          value={props.value}
-          disabled={props.disabled}
-          action="send"
-          modelSelection={unavailableSelection}
-          agentSelection={unavailableAgentSelection}
-          onInput={() => undefined}
-          onSubmit={submit}
-          onQueue={queue}
-        />
-      ));
-      const prompt = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
-      if (!prompt) throw new Error("Composer did not render a prompt");
-
-      prompt.dispatchEvent(
+    for (const state of [{ disabled: true }, { value: "" }] as const) {
+      const ineligible = renderQueueComposer("macos", state);
+      ineligible.prompt.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }),
       );
-      expect(queue).not.toHaveBeenCalled();
-      expect(submit).not.toHaveBeenCalled();
-      dispose();
+      expect(ineligible.queue).not.toHaveBeenCalled();
+      expect(ineligible.submit).not.toHaveBeenCalled();
+      ineligible.dispose();
     }
   });
 

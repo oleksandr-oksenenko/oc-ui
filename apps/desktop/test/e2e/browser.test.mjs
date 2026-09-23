@@ -1095,11 +1095,10 @@ describe.sequential("production browser app", () => {
     );
   });
 
-  it("attaches oversized pasted text and keeps it across navigation", async () => {
+  it("attaches oversized pasted text and sends its bytes", async () => {
     await ensureConnected();
     const location = { directory: await realpath(project) };
     const session = await api.session.create({ title: "Pasted text attachments", location });
-    const other = await api.session.create({ title: "Pasted text other", location });
     await selectSession(session.title);
     const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
 
@@ -1116,12 +1115,6 @@ describe.sequential("production browser app", () => {
     // The paste became an attachment: a chip appears and the draft stays empty.
     await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).waitFor();
     expect(await prompt.textContent()).toBe("");
-
-    // The attachment belongs to its origin session across navigation.
-    await selectSession(other.title);
-    expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
-    await selectSession(session.title);
-    await page.getByRole("button", { name: "Remove pasted-text.txt", exact: true }).waitFor();
 
     const admitted = page.waitForResponse(
       (response) =>

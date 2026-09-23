@@ -325,6 +325,31 @@ describe("markdown corpus", () => {
     expect(toDraft(parse("* one\n+ two")).text).toBe("- one\n- two");
     expect(toDraft(parse("a ~~b~~ c")).text).toBe("a \\~\\~b\\~\\~ c");
     expect(toDraft(parse("~text~")).text).toBe("\\~text\\~");
+
+    // Plain text and single newlines are already canonical; a trailing newline
+    // is not a line of its own.
+    for (const text of ["", "hello", "a\nb", "a\n\nb", "first\nsecond\nthird"]) {
+      expect(toDraft(parse(text)).text).toBe(text);
+    }
+    expect(toDraft(parse("a\n")).text).toBe("a");
+
+    // Multi-digit ordered markers survive, and the bundled parser reads `0.`
+    // as the default start of 1.
+    for (const source of ["7. seven\n8. eight", "10. ten\n11. eleven"]) {
+      expect(toDraft(parse(source)).text).toBe(source);
+    }
+    expect(toDraft(parse("0. zero\n1. one")).text).toBe("1. zero\n2. one");
+
+    // Authored Markdown normalizes once and then stays stable: a lazy
+    // blockquote gets its markers, nested identical emphasis collapses to one
+    // bold run, list blank-line shape is kept, and images round-trip.
+    expect(toDraft(parse("> quote\nlazy")).text).toBe("> quote\n> lazy");
+    expect(toDraft(parse("**a __b__ c**")).text).toBe("**a b c**");
+    expect(toDraft(parse("- a\n\n- b")).text).toBe("- a\n\n- b");
+    expect(toDraft(parse("- item\n  ```\n  code\n  ```")).text).toBe(
+      "- item\n  ```\n  code\n  ```",
+    );
+    expect(toDraft(parse("![alt](x.png)")).text).toBe("![alt](x.png)");
   });
 
   it("parses every case into a schema-valid document", () => {

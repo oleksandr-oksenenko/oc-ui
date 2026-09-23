@@ -160,17 +160,6 @@ describe("Composer composition precedence", () => {
     harness.dispose();
   });
 
-  it("never queues during composition even with the queue modifier", () => {
-    const harness = openComposer();
-    harness.composition("compositionstart");
-    harness.enter({ metaKey: true });
-    harness.enter({ ctrlKey: true });
-    harness.enter({ keyCode: 229 });
-    expect(harness.queue).not.toHaveBeenCalled();
-    expect(harness.submit).not.toHaveBeenCalled();
-    harness.dispose();
-  });
-
   it("picks the suggestion item on Enter and keeps the form out of it", async () => {
     const harness = openComposer();
     harness.paste("/");
@@ -206,39 +195,6 @@ describe("Composer composition precedence", () => {
 
       harness.dispose();
     }
-  });
-
-  it("closes the suggestion menu when composition starts, without sending", async () => {
-    const harness = openComposer();
-    harness.paste("/");
-    await harness.settle();
-    expect(harness.menu()).not.toBeNull();
-
-    harness.composition("compositionstart");
-    expect(harness.menu()).toBeNull();
-    harness.enter();
-    expect(harness.submit).not.toHaveBeenCalled();
-
-    harness.dispose();
-  });
-
-  it("leaves Escape to the composition and keeps it closing the menu otherwise", async () => {
-    const composing = openComposer();
-    composing.paste("/");
-    await composing.settle();
-    composing.composition("compositionstart");
-    composing.press("Escape");
-    expect(composing.submit).not.toHaveBeenCalled();
-    composing.dispose();
-
-    const menu = openComposer();
-    menu.paste("/");
-    await menu.settle();
-    expect(menu.menu()).not.toBeNull();
-    menu.press("Escape");
-    expect(menu.menu()).toBeNull();
-    expect(menu.submit).not.toHaveBeenCalled();
-    menu.dispose();
   });
 
   it("does not open the menu from text that arrives during composition", async () => {

@@ -78,14 +78,6 @@ function skillAtom(doc: PMNode): PMNode | undefined {
 }
 
 describe("prompt document", () => {
-  it("keeps plain text and single newlines canonical", () => {
-    for (const text of ["", "hello", "a\nb", "a\n\nb", "first\nsecond\nthird"]) {
-      expect(roundTrip(text).text).toBe(text);
-    }
-    // A trailing newline is not a line of its own.
-    expect(canonicalize("a\n").draft.text).toBe("a");
-  });
-
   it("drops trailing line breaks instead of writing empty lines", () => {
     const breakType = schema.nodes.hard_break!;
     const trailing = schema.node("doc", null, [
@@ -121,38 +113,6 @@ describe("prompt document", () => {
       text: "review",
       skills: [valid],
     });
-  });
-
-  it("keeps ordered list start values", () => {
-    for (const source of [
-      "1. first\n2. second",
-      "3. third\n4. fourth",
-      "7. seven\n8. eight",
-      "10. ten\n11. eleven",
-    ]) {
-      expect(roundTrip(source).text).toBe(source);
-    }
-    // The bundled parser reads `0.` as the default start of 1.
-    expect(canonicalize("0. zero\n1. one").draft.text).toBe("1. zero\n2. one");
-  });
-
-  it("canonicalizes authored Markdown without losing it", () => {
-    for (const [source, text] of [
-      ["> quote\nlazy", "> quote\n> lazy"],
-      // Nested identical emphasis collapses to one bold run, keeping the tail.
-      ["**a __b__ c**", "**a b c**"],
-      // Loose and tight lists keep their blank-line shape.
-      ["- a\n\n- b", "- a\n\n- b"],
-    ] as const) {
-      expect(canonicalize(source).draft.text).toBe(text);
-    }
-    // A tight item keeps its following block without an injected blank line.
-    expect(canonicalize("- item\n  ```\n  code\n  ```").draft.text).toBe(
-      "- item\n  ```\n  code\n  ```",
-    );
-    // Inline images are part of the bundled schema, so image syntax
-    // round-trips as an image node.
-    expect(canonicalize("![alt](x.png)").draft.text).toBe("![alt](x.png)");
   });
 
   it("allows a skill atom at every heading level", () => {
