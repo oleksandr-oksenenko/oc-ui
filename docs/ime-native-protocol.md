@@ -1,5 +1,16 @@
 # Native IME release checklist — Composer (ProseMirror)
 
+> **Status: deferred (2026-09-23).** The current maintainer does not type
+> through an IME, so this run is not a gate for the current change. The
+> implemented guards stay in the editor (composition closes the suggestion
+> menu, the menu owns Enter, the slash query is suppressed while composing),
+> and synthetic tests cover them. What remains unverified: real commit/send
+> ordering and menu behavior against Chinese, Japanese, and Korean input
+> (scenarios A–G and I), and external replacement during an active
+> composition — a confirmed send or a session switch can rebuild the editor
+> state mid-composition; fixing that needs a deferral policy, not a one-line
+> guard. Run this checklist before claiming IME support.
+
 Release gate for IME support. Synthetic tests cannot drive an input method;
 this checklist is the only way to confirm commit/send ordering, menu behavior,
 and input rules against real Chinese, Japanese, and Korean input. Run it once
