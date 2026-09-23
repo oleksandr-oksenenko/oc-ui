@@ -5,8 +5,15 @@ beside Diff to enter an address, or let the agent open a page. Both operate the
 same tabs. Hiding the panel or selecting another session keeps those tabs alive.
 Closing a tab disposes its page. Reload, disconnect, session deletion/movement,
 or app shutdown closes the relevant attachments and waits for cleanup.
-Reconnect is explicit after failure or replacement by another desktop. The web
-app has no native browser capability and retains its existing Diff panel.
+
+A dropped connection is recoverable. While the selected session's Browser panel
+is open, one automatic reconnect reuses the session's nonpersistent partition, so
+cookies and site storage survive, and reopens the saved tab URLs. Unsaved page
+state (forms, scroll, history) is lost, in-flight agent actions are never
+replayed, and a notice says so. Replacement by another desktop stays manual.
+Session deletion or movement, and a renderer reload, erase the retained profile
+and its storage. The web app has no native browser capability and retains its
+existing Diff panel.
 
 ## Pinned server contract
 
@@ -25,9 +32,11 @@ commit `013ded3743eb9c198d8f544afdfd60fdad1e68a4`; attribution and MIT license a
 retained beside the code. Upgrade these parts together.
 
 Chromium runs on the desktop, but HTTP/HTTPS and WebSocket traffic goes through
-the connected server. `localhost` therefore means that server. Each attachment
-gets a fresh, nonpersistent partition; loopback proxy bypass and nonproxied WebRTC
-are disabled. Pages have no Node integration. They load one dedicated annotation
+the connected server. `localhost` therefore means that server. One nonpersistent
+partition is retained per window, server and session across attachment
+reconnects; it is erased when the session is deleted or moved, when the renderer
+reloads, when the window closes, or when the desktop forgets the profile.
+Loopback proxy bypass and nonproxied WebRTC are disabled. Pages have no Node integration. They load one dedicated annotation
 preload in Electron's isolated world, which only draws the comment popover and
 cannot reach Node or app APIs; device/media permissions remain denied. Renderer
 IPC permits only navigation and tab controls.
@@ -77,12 +86,22 @@ An `ask` rule does not supply per-action protection in this version.
 
 - Electron main owns one scoped attachment per server/session. Its scope owns the
   SDK connection, native tabs, network proxy, queued replies and command fibers.
+- Main also retains one window-scoped browser profile per server/session: the
+  nonpersistent partition and a checkpoint of tab URLs and the focused index. The
+  attachment scope owns the live pages and proxy; the profile survives a dropped
+  attachment until the session is forgotten, moved or deleted, the renderer
+  reloads, or the window closes. A profile is reused only while the session stays
+  in the same location.
 - Both server RPC and desktop IPC attach calls remain pending for the attachment's
   lifetime. The renderer workspace retains its IPC call; disposing a view only
   hides the native viewport. Workspace cancellation detaches before awaiting IPC.
 - Subscribe before server attach. The matching `attached` event marks readiness;
-  setup has a 15-second deadline. Acknowledged tab state precedes command results
-  so the server recognizes newly returned tab IDs.
+  setup has a 15-second deadline. After a drop, restoration rebuilds the saved
+  tabs (bounded to 30 seconds) before the connection becomes usable, and the
+  restored state is acknowledged before command results so the server recognizes
+  the new tab IDs. A failed setup keeps the previous checkpoint; destinations a
+  slow page left unattempted stay saved for the next reconnect, and a tab whose
+  first load failed keeps its intended URL.
 - The renderer surfaces tab focus only for the selected session. A background
   session's retained tabs keep updating through state events, but its focus events
   cannot replace the session the user is viewing. A forwarded focus opens the
@@ -90,8 +109,11 @@ An `ask` rule does not supply per-action protection in this version.
 - Serialize conflicting commands. Stop and Close may release a waiting navigation.
   Forward cancellation, retain native operations until settlement, and await
   cleanup before deleting temporary files. Never replay uncertain mutations.
-- The server already closes attachments on session deletion/movement. The renderer
-  projects terminal events rather than adding a second session cleanup coordinator.
+- A usable connection that drops arms one automatic reconnect, consumed only while
+  the selected session's Browser panel is open. Replacement and protocol failures
+  never reclaim automatically, and a failed automatic attempt falls back to the
+  manual Reconnect button. The renderer forwards session deletion/movement to
+  main, which stops matching attachments and erases the profile's storage.
   Replacement is terminal; selecting the session again does not reclaim ownership.
 
 ## Review of retained production code
@@ -100,27 +122,27 @@ Paths below are relative to `apps/desktop` unless otherwise stated. Each row nam
 a concrete responsibility; the underlying operation dispatch still covers all 44
 pinned tools. Tests, documentation and generated dependencies are counted separately.
 
-| Code                                                                                                     | Why it remains                                                                                                                                                                                                                                                  |
-| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main/browser/host.ts`                                                                               | One attachment owner; authenticated, location-aware RPC; readiness, reply ordering, cancellation, replacement, window lifetime and cleanup.                                                                                                                     |
-| `src/main/browser/native.ts`                                                                             | Native tab inventory, popup ownership, focus, bounded layout and disposal of tabs still closing.                                                                                                                                                                |
-| `src/main/browser/network.ts`                                                                            | Published proxy adaptation, server-side traffic routing, exact proxy authentication and private connection cleanup.                                                                                                                                             |
-| `src/main/browser/upstream/page.ts`                                                                      | Secure page creation; navigation, frames, references, accessibility snapshots, input, evaluation, waits, screenshots, dialogs, uploads/downloads and dispatch to diagnostics/profiling. Stale-document and stale-ref checks prevent acting on replaced content. |
-| `src/main/browser/upstream/cdp.ts`                                                                       | Typed Chromium commands and iframe event routing; listener cleanup and cancellable bounded waits.                                                                                                                                                               |
-| `src/main/browser/upstream/policy.ts`, `errors.ts`                                                       | Allowed navigation destinations and actionable failures, including ambiguous mutation outcomes.                                                                                                                                                                 |
-| `src/main/browser/upstream/files.ts`                                                                     | Private temporary files, download state, bounded transfers and cleanup; exported metadata reuses the pinned schema.                                                                                                                                             |
-| `src/main/browser/upstream/diagnostics.ts`                                                               | Console/error capture, redirects, WebSockets, headers and request/response bodies. Retention limits and credential redaction prevent oversized or sensitive output.                                                                                             |
-| `src/main/browser/upstream/profiling.ts`, `analysis.ts`                                                  | Trace/CPU/heap capture and all analysis operations. Renderer-process filtering, recording ownership, limits and heap validation are required for correct results.                                                                                               |
-| `src/main/browser/upstream/lighthouse.ts`                                                                | Narrow Electron CDP adapter for the pinned Lighthouse snapshot API; scores and report-file exports.                                                                                                                                                             |
-| `src/shared/browser-api.ts`, `desktop-api.ts`, `src/main/index.ts`, `src/preload/index.ts`               | One validated request channel plus events, trusted sender checks, capability exposure and integration into the existing runtime/shutdown path.                                                                                                                  |
-| `src/renderer/components/App/ConnectedApp/Browser/createSessionBrowser.ts`                               | Workspace-scoped attach calls and atom state; automatic connection, explicit recovery and guarded commands. No second native inventory or idle attachment fiber.                                                                                                |
-| `BrowserPane.tsx`, `BrowserRegion.tsx`, `BrowserPane.css` in that directory                              | Controlled, accessible browser controls and error states; region supplies native content while stories exercise the same pane.                                                                                                                                  |
-| `BrowserViewport.tsx` in that directory                                                                  | DOM measurement and visibility only. Native views must hide under dialogs, when covered, and on unmount; resize and scroll update bounds.                                                                                                                       |
-| `ConnectedApp.tsx`, `createWorkspace.ts`, `src/renderer/connection.ts`, `Shell/createShellPanelState.ts` | Existing workspace/connection ownership, selected-session wiring and context-panel selection.                                                                                                                                                                   |
-| `Shell/ContextTitlebarRegion.tsx`, `Changes/ContextPanel/ContextTabs.css`                                | Shared Diff/Browser controls, including mobile placement; replaces the previous Diff-only titlebar.                                                                                                                                                             |
-| `Conversation/SessionPane/TranscriptView/AssistantMessage/ToolCall.tsx`, `SessionPane.css`               | Render returned browser images instead of exposing a giant data URI. Existing annotations and nonimage attachments remain intact.                                                                                                                               |
-| Root workspace/lockfile, desktop package/build configuration and `tools/stage-opencode.mjs`              | Direct protocol dependency, Chromium protocol types and Lighthouse runtime/assets. Existing package-closure staging is reused. ES2024 supplies the native backend's promise settlement API.                                                                     |
-| Root `vite.config.ts`                                                                                    | The adapted native backend retains upstream Promise/CDP conventions; oc-ui workflow code remains under Effect lint rules and the backend remains type/build checked.                                                                                            |
+| Code                                                                                                     | Why it remains                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/main/browser/host.ts`                                                                               | One attachment owner; authenticated, location-aware RPC; readiness, reply ordering, cancellation, replacement, window lifetime and cleanup. Also window-scoped profiles (retained partition and tab checkpoint), bounded restoration, recoverable-disconnect classification and profile erasure. |
+| `src/main/browser/native.ts`                                                                             | Native tab inventory, popup ownership, focus, bounded layout and disposal of tabs still closing. Captures URL checkpoints and reopens saved tabs without announcing a user focus.                                                                                                                |
+| `src/main/browser/network.ts`                                                                            | Published proxy adaptation, server-side traffic routing, exact proxy authentication, retained-partition configuration and private connection and storage cleanup.                                                                                                                                |
+| `src/main/browser/upstream/page.ts`                                                                      | Secure page creation; navigation, frames, references, accessibility snapshots, input, evaluation, waits, screenshots, dialogs, uploads/downloads and dispatch to diagnostics/profiling. Stale-document and stale-ref checks prevent acting on replaced content.                                  |
+| `src/main/browser/upstream/cdp.ts`                                                                       | Typed Chromium commands and iframe event routing; listener cleanup and cancellable bounded waits.                                                                                                                                                                                                |
+| `src/main/browser/upstream/policy.ts`, `errors.ts`                                                       | Allowed navigation destinations and actionable failures, including ambiguous mutation outcomes.                                                                                                                                                                                                  |
+| `src/main/browser/upstream/files.ts`                                                                     | Private temporary files, download state, bounded transfers and cleanup; exported metadata reuses the pinned schema.                                                                                                                                                                              |
+| `src/main/browser/upstream/diagnostics.ts`                                                               | Console/error capture, redirects, WebSockets, headers and request/response bodies. Retention limits and credential redaction prevent oversized or sensitive output.                                                                                                                              |
+| `src/main/browser/upstream/profiling.ts`, `analysis.ts`                                                  | Trace/CPU/heap capture and all analysis operations. Renderer-process filtering, recording ownership, limits and heap validation are required for correct results.                                                                                                                                |
+| `src/main/browser/upstream/lighthouse.ts`                                                                | Narrow Electron CDP adapter for the pinned Lighthouse snapshot API; scores and report-file exports.                                                                                                                                                                                              |
+| `src/shared/browser-api.ts`, `desktop-api.ts`, `src/main/index.ts`, `src/preload/index.ts`               | One validated request channel plus events, trusted sender checks, capability exposure and integration into the existing runtime/shutdown path.                                                                                                                                                   |
+| `src/renderer/components/App/ConnectedApp/Browser/createSessionBrowser.ts`                               | Workspace-scoped attach calls and atom state; automatic connection, one visibility-gated recovery opportunity, session-removal forwarding and guarded commands. No second native inventory or idle attachment fiber.                                                                             |
+| `BrowserPane.tsx`, `BrowserRegion.tsx`, `BrowserPane.css` in that directory                              | Controlled, accessible browser controls and error states; region supplies native content while stories exercise the same pane.                                                                                                                                                                   |
+| `BrowserViewport.tsx` in that directory                                                                  | DOM measurement and visibility only. Native views must hide under dialogs, when covered, and on unmount; resize and scroll update bounds.                                                                                                                                                        |
+| `ConnectedApp.tsx`, `createWorkspace.ts`, `src/renderer/connection.ts`, `Shell/createShellPanelState.ts` | Existing workspace/connection ownership, selected-session wiring and context-panel selection.                                                                                                                                                                                                    |
+| `Shell/ContextTitlebarRegion.tsx`, `Changes/ContextPanel/ContextTabs.css`                                | Shared Diff/Browser controls, including mobile placement; replaces the previous Diff-only titlebar.                                                                                                                                                                                              |
+| `Conversation/SessionPane/TranscriptView/AssistantMessage/ToolCall.tsx`, `SessionPane.css`               | Render returned browser images instead of exposing a giant data URI. Existing annotations and nonimage attachments remain intact.                                                                                                                                                                |
+| Root workspace/lockfile, desktop package/build configuration and `tools/stage-opencode.mjs`              | Direct protocol dependency, Chromium protocol types and Lighthouse runtime/assets. Existing package-closure staging is reused. ES2024 supplies the native backend's promise settlement API.                                                                                                      |
+| Root `vite.config.ts`                                                                                    | The adapted native backend retains upstream Promise/CDP conventions; oc-ui workflow code remains under Effect lint rules and the backend remains type/build checked.                                                                                                                             |
 
 ## Removed machinery
 
@@ -146,7 +168,10 @@ published upstream implementation or a narrower supported tool set.
 Use [App verification](app-verification.md). Root checks/tests and packaged
 acceptance are required for changes across this native boundary. The focused
 lifetime tests exercise pending setup, state-before-result ordering, in-flight
-cancellation, replacement and cleanup. The packaged fixture uses the real pinned
+cancellation, replacement and cleanup, partition reuse, checkpoint capture,
+bounded restoration, recoverable-disconnect classification and profile erasure;
+the native recovery tests cover URL order, focus without a user-focus callback,
+failed destinations and abort settlement. The packaged fixture uses the real pinned
 server and scripted provider; it covers agent use before opening Browser, shared
 page input, file transfers, diagnostics/profiling, screenshots/Lighthouse, hiding,
 reopening, session switching, tab cleanup and reload. A scripted provider does not
