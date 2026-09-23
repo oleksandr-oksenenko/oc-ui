@@ -40,8 +40,6 @@ type PromptPasteInsert = {
 };
 
 export type PromptEditorControl = {
-  /** Moves focus into the editor without changing the selection. */
-  focus: () => void;
   /**
    * Whether the current selection starts inside a code block. It reads `$from`,
    * the ordered selection start, matching how the paste classifier reads
@@ -332,7 +330,6 @@ export function PromptEditor(props: EditorProps) {
     view = instance;
 
     props.control?.({
-      focus: () => instance.focus(),
       inCodeBlock: () => instance.state.selection.$from.parent.type.spec.code === true,
       composing: () => instance.composing,
       applyPaste: (input) => {

@@ -81,31 +81,25 @@ export function admitAttachments(
   const admitted: File[] = [];
   const tooLarge: File[] = [];
   const overBudget: File[] = [];
-  let budget = remainingAttachmentBudget(existing);
+  let remainingCount = MAX_DRAFT_ATTACHMENTS - existing.length;
+  let remainingBytes =
+    MAX_DRAFT_ATTACHMENT_BYTES - existing.reduce((total, file) => total + file.size, 0);
   for (const file of candidates) {
     if (known.has(file)) continue;
     if (file.size > MAX_ATTACHMENT_BYTES) {
       tooLarge.push(file);
       continue;
     }
-    if (budget.count <= 0 || file.size > budget.bytes) {
+    if (remainingCount <= 0 || file.size > remainingBytes) {
       overBudget.push(file);
       continue;
     }
     known.add(file);
     admitted.push(file);
-    budget = { count: budget.count - 1, bytes: budget.bytes - file.size };
+    remainingCount -= 1;
+    remainingBytes -= file.size;
   }
   return { admitted, tooLarge, overBudget };
-}
-
-/** The attachment count and bytes one session's draft may still hold. */
-function remainingAttachmentBudget(existing: readonly File[]) {
-  const bytes = existing.reduce((total, file) => total + file.size, 0);
-  return {
-    count: MAX_DRAFT_ATTACHMENTS - existing.length,
-    bytes: MAX_DRAFT_ATTACHMENT_BYTES - bytes,
-  };
 }
 
 /**

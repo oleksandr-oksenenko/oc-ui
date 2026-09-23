@@ -14,7 +14,7 @@ import {
  * The subset of `DataTransfer` the paste reader needs. A real clipboard always
  * provides `getData` and `types`; tests and odd sources may omit either.
  */
-export type ClipboardDataLike = FileTransferLike & {
+type ClipboardDataLike = FileTransferLike & {
   readonly getData?: ((type: string) => string) | undefined;
 };
 
@@ -41,6 +41,6 @@ export function readPastedText(data: ClipboardDataLike): string {
  * the bytes are never read here, and the existing size policy belongs to the
  * attachment owner.
  */
-export function readPastedFiles(data: ClipboardDataLike | null): File[] {
+export function readPastedFiles(data: ClipboardDataLike): File[] {
   return collectTransferFiles(data);
 }

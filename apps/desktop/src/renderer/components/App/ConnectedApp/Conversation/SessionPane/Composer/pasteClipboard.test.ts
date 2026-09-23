@@ -41,6 +41,5 @@ describe("readPastedFiles", () => {
   it("collects file metadata without reading bytes", () => {
     const file = new File(["x"], "note.txt", { type: "text/plain" });
     expect(readPastedFiles({ files: [file] })).toEqual([file]);
-    expect(readPastedFiles(null)).toEqual([]);
   });
 });

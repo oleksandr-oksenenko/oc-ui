@@ -23,16 +23,11 @@ export type PasteRoute =
   /** Nothing to insert; the paste must not replace the selection. */
   | "noop";
 
-type PasteFile = {
-  readonly name?: string;
-  readonly type?: string;
-};
-
 export type PastePayload = {
   /** The plain text the clipboard carries; absent when it has no text flavor. */
   readonly text?: string;
-  /** File metadata (`clipboardData.files`); bytes stay outside the classifier. */
-  readonly files?: readonly PasteFile[];
+  /** Files already separated from the payload; only their presence matters here. */
+  readonly files?: readonly unknown[];
   /** The caret sits in a code block, where every paste is implicitly literal. */
   readonly codeBlock?: boolean;
 };
@@ -64,11 +59,24 @@ export const TEXT_ATTACHMENT_LIMIT = 16_384;
 /** Total Markdown signal weight needed before the text is parsed as Markdown. */
 const MARKDOWN_ROUTE_SCORE = 2;
 
-const MARKDOWN_SIGNALS = [
-  { name: "fence", weight: 2, test: /^ {0,3}(`{3,}|~{3,})/ },
-  { name: "heading", weight: 2, test: /^ {0,3}#{1,6}(?:[ \t]|$)/ },
-  { name: "list-item", weight: 2, test: /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/ },
-  { name: "blockquote", weight: 2, test: /^ {0,3}>/ },
+type MarkdownSignal = {
+  readonly name: string;
+  readonly weight: number;
+  /** Matched against each line rather than the whole text. */
+  readonly line?: true;
+  readonly test: RegExp;
+};
+
+const MARKDOWN_SIGNALS: readonly MarkdownSignal[] = [
+  { name: "fence", weight: 2, line: true, test: /^ {0,3}(`{3,}|~{3,})/ },
+  { name: "heading", weight: 2, line: true, test: /^ {0,3}#{1,6}(?:[ \t]|$)/ },
+  {
+    name: "list-item",
+    weight: 2,
+    line: true,
+    test: /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/,
+  },
+  { name: "blockquote", weight: 2, line: true, test: /^ {0,3}>/ },
   { name: "link", weight: 2, test: /\[[^\]\n]+\]\([^()\s]+\)/ },
   { name: "strong", weight: 2, test: /(?:\*\*|__)(?=\S)[^\n]*?\S(?:\*\*|__)/ },
   { name: "code-span", weight: 1, test: /`[^`\n]+`/ },
@@ -82,33 +90,31 @@ const MARKDOWN_SIGNALS = [
     weight: 1,
     test: /(?<![\w_])_[^\s_](?:[^_\n]*[^\s_])?_(?![\w_])/,
   },
-  { name: "thematic-break", weight: 1, test: /^ {0,3}(?:-{3,}|\*{3,}|_{3,})[ \t]*$/ },
-] as const;
+  {
+    name: "thematic-break",
+    weight: 1,
+    line: true,
+    test: /^ {0,3}(?:-{3,}|\*{3,}|_{3,})[ \t]*$/,
+  },
+];
 
-const MARKDOWN_LINE_SIGNALS = new Set([
-  "fence",
-  "heading",
-  "list-item",
-  "blockquote",
-  "thematic-break",
-]);
-
-/** Markdown signals whose match is meaningful only at the start of a line. */
-function markdownSignals(text: string): readonly string[] {
+/**
+ * The matched signals in detector order and their total weight. Markdown needs
+ * at least one strong signal or two weak ones; every match is kept, including
+ * the weak ones a plain-text decision reports for diagnosis.
+ */
+function markdownSignals(text: string) {
   const lines = text.split(/\r?\n/);
-  return MARKDOWN_SIGNALS.filter((signal) =>
-    MARKDOWN_LINE_SIGNALS.has(signal.name)
-      ? lines.some((line) => signal.test.test(line))
-      : signal.test.test(text),
-  ).map((signal) => signal.name);
-}
-
-/** Total weight of the matched signals; Markdown needs at least one strong or two weak. */
-function markdownScore(signals: readonly string[]): number {
-  return signals.reduce(
-    (total, name) => total + (MARKDOWN_SIGNALS.find((signal) => signal.name === name)?.weight ?? 0),
-    0,
-  );
+  const names: string[] = [];
+  let score = 0;
+  for (const signal of MARKDOWN_SIGNALS) {
+    const matched =
+      signal.line === true ? lines.some((line) => signal.test.test(line)) : signal.test.test(text);
+    if (!matched) continue;
+    names.push(signal.name);
+    score += signal.weight;
+  }
+  return { names, score };
 }
 
 /**
@@ -139,9 +145,9 @@ export function classifyPaste(payload: PastePayload): PasteDecision {
   if (text.length >= TEXT_ATTACHMENT_LIMIT) {
     return { route: "attachment-text", reason: "oversize-text", signals: [] };
   }
-  const signals = markdownSignals(text);
-  if (markdownScore(signals) >= MARKDOWN_ROUTE_SCORE) {
-    return { route: "markdown-parse", reason: "markdown-signals", signals };
+  const { names, score } = markdownSignals(text);
+  if (score >= MARKDOWN_ROUTE_SCORE) {
+    return { route: "markdown-parse", reason: "markdown-signals", signals: names };
   }
-  return { route: "plain-text", reason: "plain-text", signals };
+  return { route: "plain-text", reason: "plain-text", signals: names };
 }

@@ -149,7 +149,7 @@ const markdownParser = new MarkdownParser(schema, tokenizer, {
   softbreak: { node: "hard_break" },
 });
 
-export type PromptDraft = {
+type PromptDraft = {
   readonly text: string;
   readonly skills: readonly PromptSkillAttachment[];
 };
@@ -159,11 +159,7 @@ export type PromptDraft = {
  * are written as opaque placeholders and substituted afterwards, so a literal
  * placeholder cannot be mistaken for one.
  */
-export function serializeDraft(doc: PMNode): PromptDraft {
-  return serializeNode(doc);
-}
-
-function serializeNode(node: PMNode): PromptDraft {
+export function serializeDraft(node: PMNode): PromptDraft {
   const nonce = freshNonce(node.textContent);
   const slots: MarkdownSkill[] = [];
   const source = serializeMdast(node, (skill) => {
@@ -174,7 +170,13 @@ function serializeNode(node: PMNode): PromptDraft {
 }
 
 function substitute(source: string, nonce: string, slots: readonly MarkdownSkill[]): PromptDraft {
-  const pattern = placeholderPattern(nonce);
+  // Either boundary may be written raw or as the character reference above; a
+  // raw-only pattern would silently drop the skill slot whose boundary was
+  // encoded.
+  const pattern = new RegExp(
+    `(?:${placeholderStart}|${encodedPlaceholderStart})${nonce}(\\d+)(?:${placeholderStart}|${encodedPlaceholderStart})`,
+    "g",
+  );
   let text = "";
   let cursor = 0;
   const skills: PromptSkillAttachment[] = [];
@@ -208,7 +210,7 @@ export function serializeSlice(content: Fragment): string {
   if (!node) {
     return content.textBetween(0, content.size, "\n", (child) => String(child.attrs.name ?? ""));
   }
-  return serializeNode(node).text;
+  return serializeDraft(node).text;
 }
 
 const placeholderStart = "\uE000";
@@ -223,16 +225,6 @@ const placeholderStart = "\uE000";
  */
 const encodedPlaceholderStart = "&#xE000;";
 
-/**
- * The placeholder pattern in serialized source. Either boundary may be written
- * raw or as the character reference above; a raw-only pattern would silently
- * drop the skill slot whose boundary was encoded.
- */
-function placeholderPattern(nonce: string): RegExp {
-  const boundary = `(?:${placeholderStart}|${encodedPlaceholderStart})`;
-  return new RegExp(`${boundary}${nonce}(\\d+)${boundary}`, "g");
-}
-
 let placeholderGeneration = 0;
 
 /**
@@ -243,14 +235,10 @@ let placeholderGeneration = 0;
 function freshNonce(text: string): string {
   const decoded = decodeNumericEntities(text);
   let nonce = (placeholderGeneration++).toString(36);
-  while (containsPlaceholderPrefix(decoded, nonce)) {
+  while (decoded.includes(placeholderStart + nonce)) {
     nonce = (placeholderGeneration++).toString(36);
   }
   return nonce;
-}
-
-function containsPlaceholderPrefix(text: string, nonce: string): boolean {
-  return text.includes(placeholderStart + nonce);
 }
 
 /**

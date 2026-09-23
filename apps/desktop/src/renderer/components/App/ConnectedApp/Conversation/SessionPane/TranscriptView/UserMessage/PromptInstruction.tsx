@@ -7,30 +7,16 @@ import { renderMarkdownCached } from "../AssistantMessage/Markdown/markdown.ts";
 const placeholderStart = "\uE000";
 
 /**
- * A stable marker prefix derived from the rendering input. It must not occur
- * in the text after numeric references decode, so the hash is extended until
- * it is free; deriving it from the input keeps the render guard stable across
- * identical props.
+ * The first prefix that does not occur in the decoded text. A local counter
+ * keeps the choice deterministic for identical props, so the render guard
+ * stays stable, and it moves past literal markers instead of turning them
+ * into chips.
  */
-function stablePrefix(input: string): string {
-  const decoded = decodeNumericEntities(input);
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
+function placeholderPrefix(decoded: string): string {
+  for (let counter = 0; ; counter += 1) {
+    const prefix = `${placeholderStart}${counter.toString(36)}`;
+    if (!decoded.includes(prefix)) return prefix;
   }
-  let suffix = hash.toString(36);
-  while (
-    input.includes(`${placeholderStart}${suffix}`) ||
-    decoded.includes(`${placeholderStart}${suffix}`)
-  ) {
-    suffix += "0";
-  }
-  return `${placeholderStart}${suffix}`;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 type PreparedInstruction = {
@@ -44,10 +30,10 @@ type PreparedInstruction = {
 
 /**
  * Turns skill mentions into inert placeholders so Markdown can render around
- * them; the placeholders are swapped back for chips after sanitization. Only
- * mentions that still match the instruction text take part, and the prefix is
- * checked against the text (after numeric references decode) so a literal
- * marker cannot become a chip.
+ * them; the placeholders are swapped back for chips after sanitization. The
+ * caller passes ordered, non-overlapping mentions that still match the text
+ * (UserMessage filters them); the prefix is checked against the decoded text
+ * so a literal marker cannot become a chip.
  *
  * TODO: redesign this around custom elements. If the Markdown renderer emitted
  * a chip element per skill (or sanitization preserved a custom tag), the
@@ -57,20 +43,11 @@ function withPlaceholders(
   text: string,
   skills: readonly PromptSkillAttachment[],
 ): PreparedInstruction {
-  const valid: PromptSkillAttachment[] = [];
-  let end = 0;
-  for (const skill of skills) {
-    const mention = skill.mention;
-    if (!mention || mention.start < end || text.slice(mention.start, mention.end) !== skill.name)
-      continue;
-    valid.push(skill);
-    end = mention.end;
-  }
-  const identity = valid.map((slot) => `${slot.id}:${slot.name}`).join("\u0000");
-  const prefix = stablePrefix(`${text}\u0000${identity}`);
+  const identity = skills.map((slot) => `${slot.id}:${slot.name}`).join("\u0000");
+  const prefix = placeholderPrefix(decodeNumericEntities(text));
   let source = "";
-  end = 0;
-  for (const [index, skill] of valid.entries()) {
+  let end = 0;
+  for (const [index, skill] of skills.entries()) {
     const mention = skill.mention!;
     source += `${text.slice(end, mention.start)}${prefix}/${index}${placeholderStart}`;
     end = mention.end;
@@ -78,8 +55,8 @@ function withPlaceholders(
   source += text.slice(end);
   return {
     source,
-    slots: valid,
-    pattern: new RegExp(`${escapeRegExp(prefix)}/(\\d+)${placeholderStart}`, "g"),
+    slots: skills,
+    pattern: new RegExp(`${prefix}/(\\d+)${placeholderStart}`, "g"),
     key: `${source}\u0000${identity}`,
   };
 }
