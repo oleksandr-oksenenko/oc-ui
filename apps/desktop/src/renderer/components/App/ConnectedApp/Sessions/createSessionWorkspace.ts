@@ -3,7 +3,7 @@ import type { DataSessionStatus } from "@opencode/client/solid";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect, Fiber, Semaphore } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { createEffect, createMemo, on, untrack, type Accessor } from "solid-js";
+import { createEffect, createMemo, on, onCleanup, untrack, type Accessor } from "solid-js";
 
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 
@@ -22,10 +22,13 @@ type TranscriptState = {
 
 export type SessionWorkspaceRuntime = {
   readonly api: {
-    readonly session: Pick<ConnectedRuntime["api"]["session"], "active" | "interrupt">;
+    readonly session: Pick<ConnectedRuntime["api"]["session"], "active" | "interrupt" | "view">;
   };
   readonly data: {
+    readonly on: ConnectedRuntime["data"]["on"];
     readonly session: Pick<ConnectedRuntime["data"]["session"], "list" | "status" | "setStatus"> & {
+      /** The SDK returns no record until the session has been hydrated. */
+      readonly get: (sessionID: string) => SessionInfo | undefined;
       readonly message: Pick<ConnectedRuntime["data"]["session"]["message"], "list">;
     };
   };
@@ -307,6 +310,74 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
       },
     ),
   );
+
+  // The server records `time.viewed` from the idle watermark a viewer
+  // acknowledged and dedupes repeated calls itself. Track the highest watermark
+  // sent per session so reactive re-runs stay quiet, and forget it when the
+  // call fails so a later selection or transition can retry.
+  const acknowledgedIdle = new Map<string, number>();
+
+  const acknowledgeIdle = (sessionID: string, idle: number): void => {
+    const acknowledged = acknowledgedIdle.get(sessionID);
+    if (acknowledged !== undefined && idle <= acknowledged) return;
+    acknowledgedIdle.set(sessionID, idle);
+    effects.runFork(
+      effects
+        .request((signal) => input.runtime.api.session.view({ sessionID, idle }, { signal }))
+        .pipe(
+          Effect.catch((error) => {
+            if (acknowledgedIdle.get(sessionID) === idle) acknowledgedIdle.delete(sessionID);
+            return Effect.logWarning("The session view could not be recorded", {
+              sessionID,
+              idle,
+              cause: error.cause,
+            });
+          }),
+        ),
+    );
+  };
+
+  // The server projects each terminal execution event into `time.idle` from the
+  // event's own timestamp and commits that projection before the event reaches
+  // this client. The event timestamp is a committed lower bound of the idle
+  // watermark, so acknowledging it immediately records the completion without
+  // waiting for the session record to sync.
+  const observeCompletion = (sessionID: string, created: number): void => {
+    if (!input.connected() || selectedID() !== sessionID) return;
+    acknowledgeIdle(sessionID, created);
+  };
+  onCleanup(
+    input.runtime.data.on("session.execution.succeeded", (event) =>
+      observeCompletion(event.data.sessionID, event.created),
+    ),
+  );
+  onCleanup(
+    input.runtime.data.on("session.execution.failed", (event) =>
+      observeCompletion(event.data.sessionID, event.created),
+    ),
+  );
+  onCleanup(
+    input.runtime.data.on("session.execution.interrupted", (event) => {
+      // The server skips the idle projection for shutdown interruptions.
+      if (event.data.reason === "shutdown") return;
+      observeCompletion(event.data.sessionID, event.created);
+    }),
+  );
+
+  // The displayed session acknowledges the SDK record's idle watermark (epoch
+  // milliseconds, as the view endpoint expects) whenever it becomes available:
+  // a selection that is already idle and a late or bumped watermark both
+  // surface here. This is the fallback for a missed event and for watermarks
+  // the event timestamp did not reach, so a session left before its watermark
+  // arrives is acknowledged when it is selected again.
+  createEffect(() => {
+    if (!input.bootstrapped() || !input.connected() || running()) return;
+    const sessionID = selectedID();
+    if (sessionID === undefined) return;
+    const idle = input.runtime.data.session.get(sessionID)?.time.idle;
+    if (idle === undefined) return;
+    acknowledgeIdle(sessionID, idle);
+  });
 
   const transcriptLoading = createMemo(() => {
     const state = transcriptState();

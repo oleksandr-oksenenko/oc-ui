@@ -711,6 +711,32 @@ describe.sequential("production browser app", () => {
       .toBe(0);
   });
 
+  it("records the viewed idle watermark when the selected session finishes a turn", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "View acknowledgement",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    await send("E2E_STREAM browser view");
+    await transcript("Acceptance completed with stream.");
+    await idle();
+    await expect
+      .poll(async () => {
+        const info = await api.session.get({ sessionID: session.id });
+        return (
+          info.time.idle !== undefined &&
+          info.time.viewed !== undefined &&
+          info.time.viewed >= info.time.idle
+        );
+      })
+      .toBe(true);
+    await api.session.remove({ sessionID: session.id });
+    await expect
+      .poll(() => page.getByRole("button", { name: /^View acknowledgement,/u }).count())
+      .toBe(0);
+  });
+
   it("submits annotations and reviews through the same server-backed workspace", async () => {
     await page.getByLabel(/^Model:/u).click();
     await page.getByPlaceholder("Search models").fill("Acceptance Alternate");
