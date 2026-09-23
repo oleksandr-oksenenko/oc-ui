@@ -20,6 +20,10 @@ import {
   toolStates,
   shellStates,
   compactionStates,
+  midLengthToolPath,
+  longToolCommand,
+  longToolPath,
+  longShellCommand,
 } from "./transcript-catalog-fixtures.ts";
 import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 import { TranscriptPendingFixture } from "./transcript-catalog/TranscriptPendingFixture.tsx";
@@ -88,6 +92,37 @@ const settle = () =>
   new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
+
+/** The parameter showing `text` verbatim, so an assertion cannot match another row. */
+function findParameter(canvasElement: HTMLElement, text: string): HTMLElement {
+  const parameter = [
+    ...canvasElement.querySelectorAll<HTMLElement>(".transcript-tool-parameter"),
+  ].find((element) => element.textContent === text);
+  if (!parameter) throw new Error(`Tool parameter fixture is missing: ${text}`);
+  return parameter;
+}
+
+/**
+ * The box of one substring, which may sit outside its element when the row clips
+ * the value. Measuring it shows which part of the value is visible.
+ */
+function substringRect(element: HTMLElement, text: string): DOMRect {
+  const node = element.querySelector("bdi")?.firstChild ?? element.firstChild;
+  const value = node?.nodeValue ?? "";
+  const start = value.indexOf(text);
+  if (node === null || start < 0) throw new Error(`Element does not contain: ${text}`);
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, start + text.length);
+  return range.getBoundingClientRect();
+}
+
+/** The box of an element's whole text, which extends past it while it clips. */
+function contentRect(element: HTMLElement): DOMRect {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  return range.getBoundingClientRect();
+}
 
 // A table must fit its transcript column instead of scrolling inside it.
 const tableTranscript: TranscriptViewProps["messages"] = [
@@ -284,13 +319,22 @@ export const AllElements: Story = {
 export const ToolStates: Story = {
   args: { messages: toolStates, sessionStatus: "running" },
   render: renderTranscript,
+  play: async ({ canvasElement, step }) => {
+    await step("Shows a parameter that fits the row in full", async () => {
+      const parameter = findParameter(canvasElement, midLengthToolPath);
+      // The row owns clipping: a value over the header's old 64-character cap is
+      // handed over whole and shown whole while the column has room for it.
+      await expect(parameter.textContent).toBe(midLengthToolPath);
+      await expect(parameter.scrollWidth).toBeLessThanOrEqual(parameter.clientWidth + 1);
+    });
+  },
 };
 export const ToolImageLongMetadata: Story = {
   args: { messages: toolStates, sessionStatus: "idle", loading: false },
   render: renderNarrowTranscript,
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
-    await step("Clips long tool parameters to one line", async () => {
+    await step("Keeps long tool parameters on one line inside the column", async () => {
       const parameters = [
         ...canvasElement.querySelectorAll<HTMLElement>(".transcript-tool-parameter"),
       ];
@@ -302,13 +346,33 @@ export const ToolImageLongMetadata: Story = {
         await expect(parameter.getBoundingClientRect().height).toBeLessThanOrEqual(lineHeight + 1);
         const header = parameter.closest<HTMLElement>(".transcript-tool-header");
         if (!header) throw new Error("Tool header is missing");
-        await expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth + 1);
+        // A parameter holding the whole row leaves the running loader at the row's
+        // edge, where its rotated box overhangs its 14px layout box by ~3px.
+        await expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth + 6);
       }
-      // The long path fixture is wider than its box, so the ellipsis clips it
-      // instead of wrapping or widening the row.
-      const long = parameters.find((parameter) => parameter.textContent?.endsWith("…"));
-      if (!long) throw new Error("Long parameter fixture is missing");
-      await expect(long.scrollWidth).toBeGreaterThan(long.clientWidth + 1);
+      const icon = canvasElement.querySelector<HTMLElement>(
+        '.transcript-tool-header > [data-slot="icon-svg"]',
+      );
+      if (!icon) throw new Error("Tool icon is missing");
+      // The parameter absorbs the row's slack, so the icon keeps its own size.
+      await expect(Math.round(icon.getBoundingClientRect().width)).toBe(14);
+    });
+    await step("Keeps the file name and the command head visible while clipping", async () => {
+      const path = findParameter(canvasElement, longToolPath);
+      const pathBox = path.getBoundingClientRect();
+      // A path keeps its file name: the tail sits inside the row, and the clipped
+      // directory prefix runs out of the row's start instead of its end.
+      const file = substringRect(path, "ToolCall.tsx");
+      await expect(file.left).toBeGreaterThanOrEqual(pathBox.left - 1);
+      await expect(file.right).toBeLessThanOrEqual(pathBox.right + 1);
+      await expect(contentRect(path).left).toBeLessThan(pathBox.left - 1);
+
+      const command = findParameter(canvasElement, longToolCommand);
+      const commandBox = command.getBoundingClientRect();
+      // Everything that is not a path keeps its head, so the command stays read-
+      // able and only its flags are clipped away.
+      await expect(substringRect(command, "pnpm").left).toBeGreaterThanOrEqual(commandBox.left - 1);
+      await expect(contentRect(command).right).toBeGreaterThan(commandBox.right + 1);
     });
     await step("Keeps the image preview readable under long metadata", async () => {
       await userEvent.click(canvas.getByRole("button", { name: "browser_capture Completed" }));
@@ -359,6 +423,21 @@ export const ShellStates: Story = {
       await waitFor(() => expect(output).toHaveFocus());
       await expect(output.matches(":focus-visible")).toBe(true);
       await expect(getComputedStyle(output).outlineStyle).not.toBe("none");
+    });
+    await step("Clips a long command inside the transcript column", async () => {
+      const label = [
+        ...canvasElement.querySelectorAll<HTMLElement>(".transcript-context-label"),
+      ].find((element) => element.textContent === longShellCommand);
+      if (!label) throw new Error("Long command fixture is missing");
+      const trigger = label.closest<HTMLElement>(".transcript-context-trigger");
+      if (!trigger) throw new Error("Shell row is missing");
+      const labelBox = label.getBoundingClientRect();
+      // The command stays inside its row and keeps its head; only the flags that
+      // run past the row are clipped.
+      await expect(trigger.scrollWidth).toBeLessThanOrEqual(trigger.clientWidth + 1);
+      await expect(label.scrollWidth).toBeGreaterThan(label.clientWidth + 1);
+      await expect(substringRect(label, "pnpm").left).toBeGreaterThanOrEqual(labelBox.left - 1);
+      await expect(contentRect(label).right).toBeGreaterThan(labelBox.right + 1);
     });
   },
 };

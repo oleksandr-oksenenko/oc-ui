@@ -258,6 +258,24 @@ const reviewMessage: SessionMessageInfo = {
   metadata: reviewPrompt.metadata,
 };
 
+/**
+ * Longer than the header's old 64-character cap and still narrower than a row at
+ * the desktop preset, so a story can show the full value on one line.
+ */
+export const midLengthToolPath =
+  "src/renderer/components/App/ConnectedApp/Conversation/SessionPane/SessionPane.css";
+
+/** A command wide enough to leave only its head visible in a narrow column. */
+export const longToolCommand = "pnpm exec vp test run --project=storybook --reporter=verbose";
+
+/** A path wider than a row at the desktop preset, so it clips to its file name. */
+export const longToolPath =
+  "src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/AssistantMessage/ToolCall.tsx";
+
+/** A shell command wider than a row at the desktop preset. */
+export const longShellCommand =
+  "pnpm exec vp test run --project=storybook --reporter=verbose --coverage --runInBand --silent --watch=false --maxWorkers=2";
+
 export const toolStates: readonly SessionMessageInfo[] = [
   {
     id: "tool-states",
@@ -321,9 +339,31 @@ export const toolStates: readonly SessionMessageInfo[] = [
         state: {
           status: "completed",
           input: {
-            path: "src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/AssistantMessage/ToolCall.tsx",
+            path: longToolPath,
           },
           content: [{ type: "text", text: "Read 1 file." }],
+        },
+      },
+      {
+        type: "tool",
+        id: "mid-length-parameter",
+        name: "read",
+        time: { created: 14, ran: 14, completed: 15 },
+        state: {
+          status: "completed",
+          input: { path: midLengthToolPath },
+          content: [{ type: "text", text: "Read 1 file." }],
+        },
+      },
+      {
+        type: "tool",
+        id: "long-command",
+        name: "bash",
+        time: { created: 14, ran: 14, completed: 15 },
+        state: {
+          status: "completed",
+          input: { command: longToolCommand },
+          content: [{ type: "text", text: "Ran 1 command." }],
         },
       },
       {
@@ -429,6 +469,17 @@ export const shellStates: readonly SessionMessageInfo[] = [
     command: "pnpm watch",
     status: "killed",
     output: { output: "Last lines of the watch log…", cursor: 4096, size: 4096, truncated: true },
+  },
+  {
+    id: "shell-long-command",
+    type: "shell",
+    shellID: "long-command",
+    time: { created: 16, completed: 17 },
+    // Wider than a row at the desktop preset, so only its head stays visible.
+    command: longShellCommand,
+    status: "exited",
+    exit: 0,
+    output: { output: "Test Files  110 passed", cursor: 23, size: 23, truncated: false },
   },
 ];
 

@@ -47,7 +47,14 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
         <span class="transcript-tool-copy">
           <span class="transcript-tool-name">{props.tool.name}</span>
           <Show when={parameter()}>
-            {(value) => <span class="transcript-tool-parameter">{value()}</span>}
+            {(value) => (
+              <span
+                class="transcript-tool-parameter"
+                classList={{ "transcript-tool-parameter-path": value().path }}
+              >
+                <bdi>{value().text}</bdi>
+              </span>
+            )}
           </Show>
         </span>
         <span class="transcript-tool-status">

@@ -191,6 +191,14 @@
   line-height: var(--oc-type-body-line-height);
 }
 
+/* A row's leading icon keeps its own size while the text beside it absorbs the
+   row's slack; without this, a long value squeezes the icon. */
+.transcript-tool-header > [data-slot="icon-svg"],
+.transcript-context-trigger > [data-slot="icon-svg"],
+.transcript-timeline-row > [data-slot="icon-svg"] {
+  flex: none;
+}
+
 .transcript-code-review-trigger {
   display: flex;
   align-items: center;
@@ -536,6 +544,19 @@
   white-space: nowrap;
 }
 
+/* A path is identified by its file name, so the row keeps the tail visible and
+   clips the directory prefix. The parameter's own direction moves the clipping
+   side; the value sits in an LTR isolate so its characters stay in order. */
+.transcript-tool-parameter-path {
+  direction: rtl;
+  text-align: left;
+}
+
+.transcript-tool-parameter-path > bdi {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .transcript-tool-status {
   display: inline-flex;
   flex: none;
@@ -673,8 +694,12 @@
 }
 
 .transcript-context-label {
+  min-width: 0;
+  overflow: hidden;
   color: var(--oc-text-strong);
   font-weight: var(--oc-type-heading-weight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .transcript-context-detail {

@@ -12,7 +12,6 @@ import { mount } from "../../../../../test/mount.ts";
 import { stubResizeObserver } from "../../../../../test/resize-observer.ts";
 import { createAnnotationHighlights } from "../createAnnotationHighlights.ts";
 import { TranscriptView } from "./TranscriptView.tsx";
-import { TOOL_PARAMETER_LIMIT } from "./TranscriptView/AssistantMessage/toolParameter.ts";
 import { UserMessage } from "./TranscriptView/UserMessage.tsx";
 import { CODE_REVIEW_METADATA_KEY } from "../../../../../opencode/code-review.ts";
 
@@ -619,9 +618,11 @@ describe("TranscriptView", () => {
     });
     const span = row.querySelector<HTMLElement>(".transcript-tool-parameter");
     if (!span) throw new Error("Tool parameter did not render");
-    const text = span.textContent ?? "";
-    expect(text.length).toBeLessThanOrEqual(TOOL_PARAMETER_LIMIT);
-    expect(text.endsWith("…")).toBe(true);
+    // The row owns clipping, so the value arrives whole however wide it is, and a
+    // path keeps its file name visible when the row runs out of space.
+    expect(span.textContent).toBe(path);
+    expect(span.classList.contains("transcript-tool-parameter-path")).toBe(true);
+    expect(span.querySelector("bdi")?.textContent).toBe(path);
 
     setMessages(0, "content", 0, {
       type: "tool",

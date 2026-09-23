@@ -1,7 +1,13 @@
 import type { JsonValue, SessionMessageAssistantTool } from "@opencode/client";
 import { describe, expect, it } from "vite-plus/test";
 
-import { toolParameter, TOOL_PARAMETER_LIMIT } from "./toolParameter.ts";
+import { toolParameter, TOOL_PARAMETER_TEXT_BOUND } from "./toolParameter.ts";
+
+/** A parameter whose row keeps its file name visible. */
+const asPath = (text: string) => ({ text, path: true });
+
+/** A parameter that is not a path. */
+const asText = (text: string) => ({ text, path: false });
 
 function running(name: string, input: Record<string, JsonValue>): SessionMessageAssistantTool {
   return {
@@ -45,28 +51,30 @@ function failed(name: string, input: Record<string, JsonValue>): SessionMessageA
 
 describe("toolParameter", () => {
   it("shows the primary path for file tools", () => {
-    expect(toolParameter(running("read", { path: "src/index.ts", offset: 10 }))).toBe(
-      "src/index.ts",
+    expect(toolParameter(running("read", { path: "src/index.ts", offset: 10 }))).toEqual(
+      asPath("src/index.ts"),
     );
     expect(
       toolParameter(completed("edit", { path: "src/app.ts", oldString: "a", newString: "b" })),
-    ).toBe("src/app.ts");
-    expect(toolParameter(running("write", { path: "notes.md", content: "text" }))).toBe("notes.md");
+    ).toEqual(asPath("src/app.ts"));
+    expect(toolParameter(running("write", { path: "notes.md", content: "text" }))).toEqual(
+      asPath("notes.md"),
+    );
   });
 
   it("shows file tool paths relative to the session directory", () => {
     const directory = "/srv/worktrees/misty-rocket";
-    expect(toolParameter(running("read", { path: `${directory}/src/index.ts` }), directory)).toBe(
-      "src/index.ts",
+    expect(
+      toolParameter(running("read", { path: `${directory}/src/index.ts` }), directory),
+    ).toEqual(asPath("src/index.ts"));
+    expect(
+      toolParameter(completed("edit", { path: `${directory}/src/app.ts` }), directory),
+    ).toEqual(asPath("src/app.ts"));
+    expect(toolParameter(running("write", { path: `${directory}/notes.md` }), directory)).toEqual(
+      asPath("notes.md"),
     );
-    expect(toolParameter(completed("edit", { path: `${directory}/src/app.ts` }), directory)).toBe(
-      "src/app.ts",
-    );
-    expect(toolParameter(running("write", { path: `${directory}/notes.md` }), directory)).toBe(
-      "notes.md",
-    );
-    expect(toolParameter(running("read", { path: `${directory}/src/index.ts` }))).toBe(
-      `${directory}/src/index.ts`,
+    expect(toolParameter(running("read", { path: `${directory}/src/index.ts` }))).toEqual(
+      asPath(`${directory}/src/index.ts`),
     );
   });
 
@@ -74,43 +82,49 @@ describe("toolParameter", () => {
     const directory = "/srv/worktrees/misty-rocket";
     expect(
       toolParameter(running("read", { path: "/srv/projects/other/index.ts" }), directory),
-    ).toBe("/srv/projects/other/index.ts");
-    expect(toolParameter(running("read", { path: `${directory}-archive/a.ts` }), directory)).toBe(
-      `${directory}-archive/a.ts`,
+    ).toEqual(asPath("/srv/projects/other/index.ts"));
+    expect(
+      toolParameter(running("read", { path: `${directory}-archive/a.ts` }), directory),
+    ).toEqual(asPath(`${directory}-archive/a.ts`));
+    expect(toolParameter(running("read", { path: directory }), directory)).toEqual(
+      asPath(directory),
     );
-    expect(toolParameter(running("read", { path: directory }), directory)).toBe(directory);
   });
 
   it("rebases Windows separators and leaves non-path inputs verbatim", () => {
     const directory = "C:\\Users\\alex\\worktree";
-    expect(toolParameter(running("read", { path: `${directory}\\src\\app.ts` }), directory)).toBe(
-      "src\\app.ts",
-    );
+    expect(
+      toolParameter(running("read", { path: `${directory}\\src\\app.ts` }), directory),
+    ).toEqual(asPath("src\\app.ts"));
     expect(
       toolParameter(running("shell", { command: `cd ${directory} && pnpm test` }), directory),
-    ).toBe(`cd ${directory} && pnpm test`);
-    expect(toolParameter(running("grep", { pattern: `${directory}/src` }), directory)).toBe(
-      `${directory}/src`,
+    ).toEqual(asText(`cd ${directory} && pnpm test`));
+    expect(toolParameter(running("grep", { pattern: `${directory}/src` }), directory)).toEqual(
+      asText(`${directory}/src`),
     );
   });
 
   it("shows the query for search tools", () => {
-    expect(toolParameter(running("grep", { pattern: "unused", include: "*.ts" }))).toBe("unused");
-    expect(toolParameter(running("glob", { pattern: "**/*.tsx" }))).toBe("**/*.tsx");
-    expect(toolParameter(running("websearch", { query: "tool call headers" }))).toBe(
-      "tool call headers",
+    expect(toolParameter(running("grep", { pattern: "unused", include: "*.ts" }))).toEqual(
+      asText("unused"),
     );
-    expect(toolParameter(running("webfetch", { url: "https://example.com" }))).toBe(
-      "https://example.com",
+    expect(toolParameter(running("glob", { pattern: "**/*.tsx" }))).toEqual(asText("**/*.tsx"));
+    expect(toolParameter(running("websearch", { query: "tool call headers" }))).toEqual(
+      asText("tool call headers"),
+    );
+    expect(toolParameter(running("webfetch", { url: "https://example.com" }))).toEqual(
+      asText("https://example.com"),
     );
   });
 
   it("shows the skill id and command-like inputs", () => {
-    expect(toolParameter(running("skill", { id: "release-checklist" }))).toBe("release-checklist");
-    expect(toolParameter(running("shell", { command: "pnpm test", timeout: 1000 }))).toBe(
-      "pnpm test",
+    expect(toolParameter(running("skill", { id: "release-checklist" }))).toEqual(
+      asText("release-checklist"),
     );
-    expect(toolParameter(running("bash", { command: "git status" }))).toBe("git status");
+    expect(toolParameter(running("shell", { command: "pnpm test", timeout: 1000 }))).toEqual(
+      asText("pnpm test"),
+    );
+    expect(toolParameter(running("bash", { command: "git status" }))).toEqual(asText("git status"));
   });
 
   it("prefers the subagent description over its first input", () => {
@@ -122,7 +136,7 @@ describe("toolParameter", () => {
           prompt: "Locate the tool header",
         }),
       ),
-    ).toBe("Find tool renderers");
+    ).toEqual(asText("Find tool renderers"));
   });
 
   it("extracts the first file from patch text", () => {
@@ -132,7 +146,7 @@ describe("toolParameter", () => {
           patchText: "*** Begin Patch\n*** Update File: src/app.ts\n@@\n-old\n+new\n*** End Patch",
         }),
       ),
-    ).toBe("src/app.ts");
+    ).toEqual(asPath("src/app.ts"));
   });
 
   it("shows nothing for a patch without a file marker", () => {
@@ -152,25 +166,30 @@ describe("toolParameter", () => {
   });
 
   it("keeps streamed parameters on one line", () => {
-    expect(toolParameter(running("shell", { command: "pnpm test\necho done" }))).toBe(
-      "pnpm test echo done",
+    expect(toolParameter(running("shell", { command: "pnpm test\necho done" }))).toEqual(
+      asText("pnpm test echo done"),
     );
   });
 
-  it("truncates long values within the limit", () => {
+  it("returns a value wider than the row without shortening it", () => {
     const value = `src/${"nested-directory/".repeat(20)}index.ts`;
-    const parameter = toolParameter(running("read", { path: value }))!;
-    expect(parameter.length).toBeLessThanOrEqual(TOOL_PARAMETER_LIMIT);
-    expect(parameter.endsWith("…")).toBe(true);
-    expect(parameter).not.toContain("\n");
+    expect(toolParameter(running("read", { path: value }))).toEqual(asPath(value));
   });
 
-  it("keeps exact-limit values untouched and clips one over", () => {
-    const exact = "a".repeat(TOOL_PARAMETER_LIMIT);
-    expect(toolParameter(running("read", { path: exact }))).toBe(exact);
-    const over = "a".repeat(TOOL_PARAMETER_LIMIT + 1);
-    expect(toolParameter(running("read", { path: over }))).toBe(
-      `${"a".repeat(TOOL_PARAMETER_LIMIT - 1)}…`,
+  it("hands over values up to the text bound unchanged", () => {
+    const exact = "a".repeat(TOOL_PARAMETER_TEXT_BOUND);
+    expect(toolParameter(running("read", { path: exact }))).toEqual(asPath(exact));
+  });
+
+  it("bounds a longer value while keeping both of its ends", () => {
+    const head = "h".repeat(TOOL_PARAMETER_TEXT_BOUND);
+    const tail = "t".repeat(TOOL_PARAMETER_TEXT_BOUND);
+    expect(toolParameter(running("shell", { command: `${head}${tail}` }))).toEqual(
+      // The row shows the head of a command and the tail of a path, so the bound
+      // keeps both ends and can never change what is visible.
+      asText(
+        `${head.slice(0, TOOL_PARAMETER_TEXT_BOUND / 2)}…${tail.slice(TOOL_PARAMETER_TEXT_BOUND / 2)}`,
+      ),
     );
   });
 
@@ -183,7 +202,7 @@ describe("toolParameter", () => {
   });
 
   it("shows the parameter for error states", () => {
-    expect(toolParameter(failed("read", { path: "src/app.ts" }))).toBe("src/app.ts");
+    expect(toolParameter(failed("read", { path: "src/app.ts" }))).toEqual(asPath("src/app.ts"));
   });
 
   it("waits for parsed input instead of reading streamed JSON text", () => {
@@ -194,9 +213,15 @@ describe("toolParameter", () => {
     expect(toolParameter(streaming("read", "raw input"))).toBeUndefined();
   });
 
-  it("does not split a surrogate pair when truncating", () => {
-    expect(toolParameter(running("read", { path: `${"a".repeat(62)}😀tail` }))).toBe(
-      `${"a".repeat(62)}…`,
+  it("does not split a surrogate pair when bounding a long value", () => {
+    const half = TOOL_PARAMETER_TEXT_BOUND / 2;
+    const head = `${"a".repeat(half - 1)}😀`;
+    expect(toolParameter(running("shell", { command: `${head}${"b".repeat(400)}` }))).toEqual(
+      asText(`${head}…${"b".repeat(half)}`),
+    );
+    const tail = `😀${"b".repeat(half - 1)}`;
+    expect(toolParameter(running("shell", { command: `${"a".repeat(400)}${tail}` }))).toEqual(
+      asText(`${"a".repeat(half)}…${tail}`),
     );
   });
 });
