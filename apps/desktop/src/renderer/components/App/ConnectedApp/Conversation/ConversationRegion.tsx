@@ -37,8 +37,6 @@ export type ConversationRegionProps = {
   readonly forms: SessionFormsController;
   readonly permissions: SessionPermissionsController;
   readonly connected: () => boolean;
-  /** Reads the system clipboard for the composer's literal-paste gesture; `undefined` when denied or unavailable. */
-  readonly readClipboardText: () => Promise<string | undefined>;
 };
 
 const formRenderKey = (form: { readonly sessionID: string; readonly id: string }): string =>
@@ -309,7 +307,6 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               files={props.composer.files()}
               onAttachFiles={props.composer.attachFiles}
               onAttachText={props.composer.attachText}
-              readClipboardText={props.readClipboardText}
               onRemoveFile={props.composer.removeFile}
               action={composerAction()}
               disabled={props.composer.disabled()}

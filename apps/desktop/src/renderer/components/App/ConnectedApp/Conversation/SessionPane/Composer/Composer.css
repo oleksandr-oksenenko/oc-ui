@@ -511,29 +511,6 @@
   color: var(--oc-text-muted);
 }
 
-.composer-paste-menu {
-  z-index: 20;
-  min-width: 180px;
-  padding: 4px;
-  border: 1px solid var(--oc-border-strong);
-  border-radius: var(--oc-radius);
-  color: var(--oc-text-contrast);
-  background: var(--oc-surface-raised);
-  box-shadow: var(--oc-shadow-popover);
-}
-
-.composer-paste-menu-item {
-  padding: 4px 8px;
-  border-radius: var(--oc-radius);
-  font-size: var(--oc-type-caption-size);
-  line-height: var(--oc-type-caption-line-height);
-  cursor: default;
-}
-
-.composer-paste-menu-item[data-highlighted] {
-  background: var(--oc-surface-control);
-}
-
 @media (width <= 620px) {
   .composer {
     width: calc(100% - 20px);

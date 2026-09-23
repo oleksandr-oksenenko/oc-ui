@@ -652,13 +652,9 @@ export const NarrowLongSelections: Story = {
 };
 
 /** Dispatches a real clipboard paste on the editor, as a source app would. */
-function pasteSource(
-  editor: HTMLElement,
-  flavors: { readonly text?: string; readonly html?: string },
-) {
+function pasteSource(editor: HTMLElement, text: string) {
   const clipboardData = new DataTransfer();
-  if (flavors.text !== undefined) clipboardData.setData("text/plain", flavors.text);
-  if (flavors.html !== undefined) clipboardData.setData("text/html", flavors.html);
+  clipboardData.setData("text/plain", text);
   editor.dispatchEvent(
     new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
   );
@@ -685,67 +681,11 @@ export const PasteRouting: Story = {
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
 
     await step("Plain text keeps single newlines without Markdown parsing", async () => {
-      pasteSource(prompt, { text: "\nfirst line\nsecond line" });
+      pasteSource(prompt, "\nfirst line\nsecond line");
       await waitFor(() => expect(prompt.textContent).toContain("second line"));
       // The plain route maps the one newline to a hard break.
       await expect(prompt.querySelectorAll("br").length).toBe(1);
       await expect(prompt.textContent).toContain("first linesecond line");
-    });
-  },
-};
-
-export const OversizedLiteralPaste: Story = {
-  render: () => {
-    const [value, setValue] = createSignal("");
-    const [files, setFiles] = createSignal<readonly File[]>([]);
-    return (
-      <Composer
-        {...composerPasteProps}
-        value={value()}
-        disabled={false}
-        action="send"
-        files={files()}
-        readClipboardText={async () => "x".repeat(16_384)}
-        // The attachment owner names pasted text; this story shows the chip the
-        // composer renders for that name. The naming rule itself belongs to
-        // createSessionComposer and is covered by its controller tests.
-        onAttachText={(text) =>
-          setFiles([new File([text], "pasted-text.txt", { type: "text/plain" })])
-        }
-        onRemoveFile={() => setFiles([])}
-        modelSelection={composerModelSelection()}
-        agentSelection={composerAgentSelection()}
-        onInput={setValue}
-        onSubmit={() => undefined}
-      />
-    );
-  },
-  play: async ({ canvasElement, step }) => {
-    const canvas = within(canvasElement);
-    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    const pressChord = () =>
-      prompt.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "v",
-          metaKey: true,
-          ctrlKey: true,
-          shiftKey: true,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-
-    await step("An oversized literal paste becomes a named attachment", async () => {
-      pressChord();
-      await waitFor(() => expect(canvas.getByText("pasted-text.txt")).not.toBeNull());
-      // The clipboard text never entered the editor.
-      await expect(prompt.textContent).toBe("");
-    });
-
-    await step("Removing the attachment returns the draft to empty", async () => {
-      await userEvent.click(canvas.getByRole("button", { name: "Remove pasted-text.txt" }));
-      await expect(canvas.queryByRole("list", { name: "Images and files" })).toBeNull();
-      await expect(prompt.textContent).toBe("");
     });
   },
 };

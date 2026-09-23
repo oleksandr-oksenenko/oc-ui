@@ -43,11 +43,10 @@ export function composerAgentSelection(
 }
 
 /**
- * Inert paste callbacks for stories that do not exercise clipboard routing.
- * The composer requires both; a story that does exercise them passes its own
- * attributes after the spread, so they override it.
+ * Inert paste callback for stories that do not exercise clipboard routing.
+ * The composer requires it; a story that does exercise routing passes its own
+ * attribute after the spread, so it overrides it.
  */
 export const composerPasteProps = {
   onAttachText: () => undefined,
-  readClipboardText: () => Promise.resolve(undefined),
-} satisfies Pick<ComposerProps, "onAttachText" | "readClipboardText">;
+} satisfies Pick<ComposerProps, "onAttachText">;

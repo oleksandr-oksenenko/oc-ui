@@ -1,5 +1,4 @@
 import type { CommandInfo, PromptSkillAttachment, SkillInfo } from "@opencode/client";
-import { ContextMenu as KobalteContextMenu } from "@kobalte/core/context-menu";
 import { PromptEditor } from "./Composer/PromptEditor.tsx";
 import type { PromptEditorControl } from "./Composer/PromptEditor.tsx";
 import { Button } from "@opencode/ui/button";
@@ -21,7 +20,7 @@ import type { ModelPickerOption } from "./Composer/ModelPicker.tsx";
 import { VariantPicker } from "./Composer/VariantPicker.tsx";
 import type { VariantPickerOption } from "./Composer/VariantPicker.tsx";
 import { readClipboardFiles, readClipboardText } from "./Composer/pasteClipboard.ts";
-import { classifyPaste, TEXT_ATTACHMENT_LIMIT } from "./Composer/pasteRoute.ts";
+import { classifyPaste } from "./Composer/pasteRoute.ts";
 
 export type ComposerReview = {
   readonly count: number;
@@ -49,22 +48,6 @@ export type ComposerCatalog = {
 /** The renderer marks the document with its platform before mounting (mount-app.tsx). */
 const isMacPlatform = () => document.documentElement.dataset.platform === "macos";
 
-/**
- * The explicit literal-paste gesture. Electron's default menu has no
- * paste-and-match-style accelerator and the runtime denies web clipboard
- * permissions, so the chord initiates the literal paste through the host
- * clipboard capability instead of a native paste event.
- */
-const isLiteralPasteChord = (event: KeyboardEvent): boolean => {
-  const modifier = isMacPlatform() ? event.metaKey : event.ctrlKey;
-  return (
-    modifier && event.shiftKey && !event.altKey && event.key.toLowerCase() === "v" && !event.repeat
-  );
-};
-
-const CLIPBOARD_UNAVAILABLE_NOTICE =
-  "Clipboard access is unavailable in this app. Press the paste shortcut instead.";
-
 export type ComposerProps = {
   readonly value: string;
   readonly sessionID?: string;
@@ -78,12 +61,6 @@ export type ComposerProps = {
    * inline.
    */
   readonly onAttachText: (text: string) => void;
-  /**
-   * Reads the system clipboard for the literal-paste escape hatch. The session
-   * allows the web clipboard for the trusted renderer; a denied or unavailable
-   * read resolves to `undefined` and the composer explains it.
-   */
-  readonly readClipboardText: () => Promise<string | undefined>;
   /** Session execution and prompt admission state. */
   readonly action: "send" | "sending" | "running";
   /** Disables submission. Omit onStop when stopping is unavailable. */
@@ -243,17 +220,6 @@ export function Composer(props: ComposerProps) {
   let pickerSessionID: string | undefined;
   let dragDepth = 0;
   /**
-   * The latest literal-clipboard read. Every read captures the session and the
-   * generation that started it; a newer gesture, a session change, an emptied
-   * draft, or disposal invalidates the pending insertion, so clipboard text can
-   * never land in a draft it did not originate from.
-   */
-  let literalRead = 0;
-  /** Invalidates a literal read that is still in flight. */
-  const invalidateLiteralRead = () => {
-    literalRead += 1;
-  };
-  /**
    * Holding a paste chord repeats the event. A repeated identical payload is
    * one intent, so the attachment path runs once per burst; the event's own
    * timestamp avoids a wall-clock global.
@@ -268,7 +234,6 @@ export function Composer(props: ComposerProps) {
     return repeat;
   };
   const [dropping, setDropping] = createSignal(false);
-  const [pasteNotice, setPasteNotice] = createSignal<string | undefined>();
   const canAttach = () => props.onAttachFiles !== undefined;
   const review = () => props.review;
   const annotations = () => ((props.annotations?.count ?? 0) > 0 ? props.annotations : undefined);
@@ -290,10 +255,6 @@ export function Composer(props: ComposerProps) {
   const submit = (event?: Event) => {
     event?.preventDefault();
     if (!canSubmit()) return;
-    // A successful submission resets the draft, so a pending literal read must
-    // not land in the next one. This is the lifecycle boundary the parent's
-    // `clearIfUnchanged` is invisible at for empty-text, attachment-only sends.
-    invalidateLiteralRead();
     props.onSubmit();
   };
 
@@ -314,9 +275,6 @@ export function Composer(props: ComposerProps) {
       // The queue gesture never falls through to send, even when queueing is
       // unavailable or the draft is not eligible for submission.
       if (props.onQueue && canSubmit()) {
-        // Queueing resets the draft like sending does; a pending literal read
-        // must not land in the next draft.
-        invalidateLiteralRead();
         props.onQueue();
       }
       return;
@@ -381,18 +339,6 @@ export function Composer(props: ComposerProps) {
   };
 
   /**
-   * The explicit literal-paste gesture. The clipboard read owns the payload;
-   * preventing the keydown default also stops a platform that maps the chord
-   * to its own paste-and-match-style from inserting a second time.
-   */
-  const literalChord = (event: KeyboardEvent) => {
-    if (event.isComposing || event.keyCode === 229) return;
-    if (!isLiteralPasteChord(event)) return;
-    event.preventDefault();
-    pasteAsPlainText();
-  };
-
-  /**
    * The routing owner. One capture-phase listener decides the handling for the
    * whole payload, consumes the event it owns, and never lets ProseMirror or
    * native paste process the same paste twice.
@@ -419,68 +365,24 @@ export function Composer(props: ComposerProps) {
     switch (decision.route) {
       case "noop":
         consume();
-        setPasteNotice(undefined);
         return;
       case "attachment-files":
         // Without an attachment owner the payload stays with native paste.
         if (!canAttach()) return;
         consume();
-        setPasteNotice(undefined);
         attach(files);
         return;
       case "attachment-text":
         consume();
-        setPasteNotice(undefined);
         if (!isRepeatedTextAttachment(read, event.timeStamp)) props.onAttachText(read);
         return;
       default: {
         if (control === undefined) return;
         consume();
         control.applyPaste({ route: decision.route, text: read });
-        setPasteNotice(undefined);
         return;
       }
     }
-  };
-
-  /**
-   * The context-menu escape hatch, also used by the keyboard chord. It reads
-   * the clipboard and inserts its text through the editor's plain-text
-   * route, so Markdown and HTML on the clipboard are never interpreted. Oversized
-   * text still becomes an attachment, and a denied read is explained instead of
-   * failing silently.
-   */
-  const pasteAsPlainText = () => {
-    const sessionID = props.sessionID;
-    invalidateLiteralRead();
-    const generation = literalRead;
-    void props.readClipboardText().then((text) => {
-      // Only the latest read may insert, and only into the session that
-      // started it. A -> B -> A still invalidates, because the session change
-      // advanced the generation.
-      if (generation !== literalRead || sessionID !== props.sessionID) return undefined;
-      // The composer may have become unavailable while the host read was in
-      // flight, and an IME owns the document during a composition.
-      if (props.disabled || props.action === "sending") return undefined;
-      if (editorControl?.composing() === true) return undefined;
-      if (text === undefined) {
-        setPasteNotice(CLIPBOARD_UNAVAILABLE_NOTICE);
-        editorControl?.focus();
-        return undefined;
-      }
-      // Even the explicit literal gesture must not insert an enormous payload;
-      // it becomes a text attachment like the automatic route.
-      if (text.length >= TEXT_ATTACHMENT_LIMIT) {
-        setPasteNotice(undefined);
-        props.onAttachText(text);
-        editorControl?.focus();
-        return undefined;
-      }
-      if (text !== "") editorControl?.applyPaste({ route: "plain-text", text });
-      editorControl?.focus();
-      setPasteNotice(undefined);
-      return undefined;
-    });
   };
 
   onMount(() => {
@@ -493,16 +395,12 @@ export function Composer(props: ComposerProps) {
     element.addEventListener("dragleave", dragLeave, true);
     element.addEventListener("drop", drop, true);
     element.addEventListener("paste", paste, true);
-    element.addEventListener("keydown", literalChord, true);
     onCleanup(() => {
-      // Disposal invalidates a literal read that is still in flight.
-      invalidateLiteralRead();
       element.removeEventListener("dragenter", dragEnter, true);
       element.removeEventListener("dragover", dragOver, true);
       element.removeEventListener("dragleave", dragLeave, true);
       element.removeEventListener("drop", drop, true);
       element.removeEventListener("paste", paste, true);
-      element.removeEventListener("keydown", literalChord, true);
     });
   });
 
@@ -510,25 +408,10 @@ export function Composer(props: ComposerProps) {
     on(
       () => props.sessionID,
       () => {
-        // A drag, an open chooser, a paste notice, or a pending literal read
-        // does not survive a session change.
-        invalidateLiteralRead();
+        // A drag or an open chooser does not survive a session change.
         dragDepth = 0;
         setDropping(false);
         pickerSessionID = undefined;
-        setPasteNotice(undefined);
-      },
-      { defer: true },
-    ),
-  );
-
-  createEffect(
-    on(
-      () => props.value,
-      (value) => {
-        // A clear or a completed send empties the draft a pending literal read
-        // was bound to; the read must not recreate it.
-        if (value === "") invalidateLiteralRead();
       },
       { defer: true },
     ),
@@ -672,50 +555,23 @@ export function Composer(props: ComposerProps) {
             </For>
           </ul>
         </Show>
-        <Show when={pasteNotice()}>
-          <p class="composer-status composer-status--error" role="alert">
-            {pasteNotice()}
-          </p>
-        </Show>
-        <KobalteContextMenu
-          onOpenChange={(open) => {
-            // The menu is anchored to the editor: closing it, whatever the
-            // reason, returns focus to the prompt without moving the caret.
-            if (!open) editorControl?.focus();
-          }}
-        >
-          <KobalteContextMenu.Trigger as="div" class="composer-editor-row">
-            <PromptEditor
-              ref={(element) => {
-                editor = element;
-              }}
-              control={(value) => {
-                editorControl = value;
-              }}
-              value={props.value}
-              skills={props.skills}
-              catalog={props.catalog}
-              sessionID={props.sessionID}
-              onInput={props.onInput}
-              onKeyDown={keyDown}
-              placeholder={
-                props.action === "running" ? "Draft your next prompt…" : "Send a message…"
-              }
-            />
-          </KobalteContextMenu.Trigger>
-          <KobalteContextMenu.Portal>
-            <KobalteContextMenu.Content class="composer-paste-menu">
-              <KobalteContextMenu.Item
-                class="composer-paste-menu-item"
-                onSelect={() => {
-                  pasteAsPlainText();
-                }}
-              >
-                <KobalteContextMenu.ItemLabel>Paste as plain text</KobalteContextMenu.ItemLabel>
-              </KobalteContextMenu.Item>
-            </KobalteContextMenu.Content>
-          </KobalteContextMenu.Portal>
-        </KobalteContextMenu>
+        <div class="composer-editor-row">
+          <PromptEditor
+            ref={(element) => {
+              editor = element;
+            }}
+            control={(value) => {
+              editorControl = value;
+            }}
+            value={props.value}
+            skills={props.skills}
+            catalog={props.catalog}
+            sessionID={props.sessionID}
+            onInput={props.onInput}
+            onKeyDown={keyDown}
+            placeholder={props.action === "running" ? "Draft your next prompt…" : "Send a message…"}
+          />
+        </div>
 
         <div class="composer-controls-row">
           {selectionControls(props, attachButton())}

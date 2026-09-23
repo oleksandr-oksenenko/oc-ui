@@ -16,14 +16,6 @@ export type ConnectedAppProps = {
   readonly server: VerifiedServer;
   readonly model: WorkspaceModel;
   readonly onChangeServer: () => void;
-  /**
-   * Reads the system clipboard as text for the composer's literal-paste
-   * gesture (Mod+Shift+V or the context action), which inserts the text
-   * without Markdown or HTML interpretation. Resolves to `undefined` when the
-   * read is denied or unavailable; the composer explains that instead of
-   * failing silently.
-   */
-  readonly readClipboardText: () => Promise<string | undefined>;
 };
 
 /** Renders the model retained by the connection's workspace. */
@@ -97,7 +89,6 @@ export function ConnectedApp(props: ConnectedAppProps) {
             forms={forms}
             permissions={permissions}
             connected={connected}
-            readClipboardText={props.readClipboardText}
           />
         }
         context={

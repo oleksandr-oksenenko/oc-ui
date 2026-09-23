@@ -23,8 +23,7 @@ export const unavailableAgentSelection: ComposerProps["agentSelection"] = {
   onSelectAgent: () => undefined,
 };
 
-/** Inert paste callbacks; routing tests override them on their own mount. */
+/** Inert paste callback; routing tests override it on their own mount. */
 export const inertPasteProps = {
   onAttachText: () => undefined,
-  readClipboardText: () => Promise.resolve(undefined),
-} satisfies Pick<ComposerProps, "onAttachText" | "readClipboardText">;
+} satisfies Pick<ComposerProps, "onAttachText">;

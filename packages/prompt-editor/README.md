@@ -20,7 +20,7 @@ In the app:
 
 - the Solid view, node views, CSS, menus, and focus
 - the controlled-value echo guard, submission shortcuts, and the composition
-  rechecks around clipboard reads
+  guard around clipboard paste
 - clipboard acquisition, attachments, MIME routing, and upload limits
 - transcript rendering
 

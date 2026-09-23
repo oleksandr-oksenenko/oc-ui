@@ -68,7 +68,6 @@ export function App(props: { readonly renderer: Renderer }) {
                       server={workspace.server}
                       model={workspace.model}
                       onChangeServer={connection.changeServer}
-                      readClipboardText={props.renderer.readClipboardText}
                     />
                   </ServerProvider>
                 </div>
