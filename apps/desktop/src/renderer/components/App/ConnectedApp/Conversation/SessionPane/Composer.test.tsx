@@ -1180,12 +1180,17 @@ describe("Composer", () => {
     form.dispatchEvent(dragEvent("dragenter", { files: [], types: ["Files"] }));
     expect(host.querySelector(".composer-drop-overlay")).toBeNull();
 
+    const editor = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]');
+    if (!editor) throw new Error("Composer did not render its prompt");
     const event = new Event("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "clipboardData", {
       value: { files: [new File(["x"], "x.txt")], getData: () => "" },
     });
-    form.dispatchEvent(event);
+    // Dispatch on the editor so the payload would reach ProseMirror if the
+    // composer did not leave it to native handling.
+    editor.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
+    expect(editor.textContent).toBe("");
     dispose();
   });
 

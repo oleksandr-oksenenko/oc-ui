@@ -2522,34 +2522,46 @@ describe("TranscriptView", () => {
     dispose();
   });
 
-  it("keeps a literal placeholder in the instruction text", () => {
-    const instruction = "\uE000k0\uE000 review this";
+  it("keeps literal placeholder candidates in the instruction text", () => {
+    // The first two prefixes a render can choose are occupied by literal text,
+    // so the render must move past them instead of turning the text into chips.
+    const instruction = "review \uE0000/0\uE000 and \uE0001/0\uE000";
+    const start = instruction.indexOf("review");
     const { host, dispose } = renderUserMessage({
       id: "literal-marker",
       time: base,
       type: "user",
       text: instruction,
-      skills: [{ id: "review", name: "review", mention: { start: 5, end: 11, text: "review" } }],
+      skills: [
+        { id: "review", name: "review", mention: { start, end: start + 6, text: "review" } },
+      ],
     });
 
     const bubble = host.querySelector<HTMLElement>(".transcript-user-bubble")!;
-    expect(bubble.querySelectorAll(".transcript-skill-chip")).toHaveLength(1);
+    const chips = [...bubble.querySelectorAll<HTMLElement>(".transcript-skill-chip")];
+    expect(chips.map((chip) => chip.textContent)).toEqual(["review"]);
     expect(bubble.textContent).toBe(instruction);
     dispose();
   });
 
-  it("keeps an encoded marker from becoming another chip", () => {
-    const instruction = "&#xE000;abc/0&#xE000; review";
+  it("keeps encoded placeholder candidates from becoming chips", () => {
+    const instruction = "review &#xE000;0/0&#xE000; and &#xE000;1/0&#xE000;";
+    const decoded = "review \uE0000/0\uE000 and \uE0001/0\uE000";
+    const start = instruction.indexOf("review");
     const { host, dispose } = renderUserMessage({
       id: "encoded-marker",
       time: base,
       type: "user",
       text: instruction,
-      skills: [{ id: "review", name: "review", mention: { start: 22, end: 28, text: "review" } }],
+      skills: [
+        { id: "review", name: "review", mention: { start, end: start + 6, text: "review" } },
+      ],
     });
 
     const bubble = host.querySelector<HTMLElement>(".transcript-user-bubble")!;
-    expect(bubble.querySelectorAll(".transcript-skill-chip")).toHaveLength(1);
+    const chips = [...bubble.querySelectorAll<HTMLElement>(".transcript-skill-chip")];
+    expect(chips.map((chip) => chip.textContent)).toEqual(["review"]);
+    expect(bubble.textContent).toBe(decoded);
     dispose();
   });
 

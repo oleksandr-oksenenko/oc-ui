@@ -20,11 +20,12 @@ type ClipboardFlavors = {
 };
 
 /** Dispatches a paste event with the payload a source would provide. */
-function pasteClipboard(editor: HTMLElement, flavors: ClipboardFlavors): Event {
+function pasteClipboard(editor: HTMLElement, flavors: ClipboardFlavors, at?: number): Event {
   const values: Record<string, string> = {};
   if (flavors.text !== undefined) values["text/plain"] = flavors.text;
   if (flavors.html !== undefined) values["text/html"] = flavors.html;
   const event = new Event("paste", { bubbles: true, cancelable: true });
+  if (at !== undefined) Object.defineProperty(event, "timeStamp", { value: at });
   Object.defineProperty(event, "clipboardData", {
     value: {
       files: flavors.files ?? [],
@@ -72,6 +73,19 @@ function openComposer(
 /** The editor's current draft text, even when it never changed. */
 const textOf = (editor: HTMLElement) => editor.textContent ?? "";
 
+/** Selects the editor's whole text the way a browser selection would. */
+function selectAll(editor: HTMLElement): void {
+  editor.focus();
+  const textNode = editor.querySelector("p")?.firstChild;
+  if (!textNode) throw new Error("Composer did not render selectable text");
+  const range = document.createRange();
+  range.selectNodeContents(textNode);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+}
+
 describe("Composer paste routing", () => {
   it("keeps files with the attachment owner and drops the text flavor", () => {
     setPlatform("macos");
@@ -98,6 +112,7 @@ describe("Composer paste routing", () => {
   it("makes a whitespace-only paste a no-op instead of deleting the selection", () => {
     setPlatform("macos");
     const harness = openComposer({ value: "keep this" });
+    selectAll(harness.editor);
     const event = pasteClipboard(harness.editor, { text: "\n\n\n" });
     expect(event.defaultPrevented).toBe(true);
     expect(harness.draft()).toBeUndefined();
@@ -108,6 +123,7 @@ describe("Composer paste routing", () => {
   it("leaves the selection unchanged for an HTML-only payload", () => {
     setPlatform("macos");
     const harness = openComposer({ value: "keep this" });
+    selectAll(harness.editor);
     const event = pasteClipboard(harness.editor, { html: "<p>rich</p>" });
     expect(event.defaultPrevented).toBe(true);
     expect(textOf(harness.editor)).toBe("keep this");
@@ -118,12 +134,13 @@ describe("Composer paste routing", () => {
 });
 
 describe("Composer code-block paste", () => {
-  it("pastes raw newlines into a code block, where every paste is literal", () => {
+  it("inserts raw newlines into a code block instead of treating the paste as empty", () => {
     setPlatform("macos");
     const harness = openComposer({ value: "```\ncode\n```" });
-    // The caret starts inside the code block; no special gesture is needed.
-    pasteClipboard(harness.editor, { text: "a\nb" });
-    expect(harness.editor.querySelector("code")?.textContent).toContain("a\nb");
+    // The caret starts inside the code block; the whitespace-only payload is
+    // literal there instead of the no-op route it takes outside code.
+    pasteClipboard(harness.editor, { text: "\n\n" });
+    expect(harness.editor.querySelector("code")?.textContent).toBe("\n\ncode");
     harness.dispose();
   });
 });
@@ -137,6 +154,41 @@ describe("Composer text attachment intent", () => {
     pasteClipboard(harness.editor, { text });
     expect(attachText).toHaveBeenCalledWith(text);
     expect(harness.draft()).toBeUndefined();
+    harness.dispose();
+  });
+
+  it("suppresses a repeated identical large paste from a held chord", () => {
+    setPlatform("macos");
+    const attachText = vi.fn<(text: string) => void>();
+    const harness = openComposer({ onAttachText: attachText });
+    const huge = "x".repeat(16_384);
+    pasteClipboard(harness.editor, { text: huge }, 1_000);
+    pasteClipboard(harness.editor, { text: huge }, 1_100);
+    expect(attachText).toHaveBeenCalledTimes(1);
+    expect(textOf(harness.editor)).toBe("");
+    harness.dispose();
+  });
+
+  it("attaches the same large paste again at the 400 ms boundary", () => {
+    setPlatform("macos");
+    const attachText = vi.fn<(text: string) => void>();
+    const harness = openComposer({ onAttachText: attachText });
+    const huge = "x".repeat(16_384);
+    pasteClipboard(harness.editor, { text: huge }, 1_000);
+    pasteClipboard(harness.editor, { text: huge }, 1_400);
+    expect(attachText).toHaveBeenCalledTimes(2);
+    harness.dispose();
+  });
+
+  it("attaches different large pastes separately", () => {
+    setPlatform("macos");
+    const attachText = vi.fn<(text: string) => void>();
+    const harness = openComposer({ onAttachText: attachText });
+    pasteClipboard(harness.editor, { text: "x".repeat(16_384) }, 1_000);
+    pasteClipboard(harness.editor, { text: "y".repeat(16_384) }, 1_100);
+    expect(attachText).toHaveBeenCalledTimes(2);
+    expect(attachText.mock.calls[0]?.[0]).toBe("x".repeat(16_384));
+    expect(attachText.mock.calls[1]?.[0]).toBe("y".repeat(16_384));
     harness.dispose();
   });
 });
