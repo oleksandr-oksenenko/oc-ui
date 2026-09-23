@@ -684,16 +684,6 @@ export const PasteRouting: Story = {
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
 
-    await step("Rich HTML keeps its structure, link and list", async () => {
-      pasteSource(prompt, {
-        html: '<article><h1>Paste routing</h1><p>See <a href="https://example.com/spec">the spec</a>.</p><ul><li>one</li><li>two</li></ul></article>',
-        text: "Paste routing\nSee the spec.\none\ntwo",
-      });
-      await waitFor(() => expect(prompt.querySelector("a")).not.toBeNull());
-      await expect(prompt.querySelector("h1")).toHaveTextContent("Paste routing");
-      await expect(prompt.querySelectorAll("li")).toHaveLength(2);
-    });
-
     await step("Plain text keeps single newlines without Markdown parsing", async () => {
       pasteSource(prompt, { text: "\nfirst line\nsecond line" });
       await waitFor(() => expect(prompt.textContent).toContain("second line"));

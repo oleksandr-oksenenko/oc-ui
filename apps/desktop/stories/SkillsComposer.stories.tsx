@@ -385,7 +385,6 @@ export const PlainTextPasteAndReset: Story = {
     await userEvent.keyboard("{Enter}");
     const clipboardData = new DataTransfer();
     clipboardData.setData("text/plain", "one\n\ntwo");
-    clipboardData.setData("text/html", "<b>wrong</b>");
     prompt.dispatchEvent(
       new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }),
     );

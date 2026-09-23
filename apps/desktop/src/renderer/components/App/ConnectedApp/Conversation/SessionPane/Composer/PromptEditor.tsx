@@ -2,7 +2,7 @@ import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
 import { List, type ListRef } from "@opencode/ui/list";
 import { closeHistory } from "prosemirror-history";
-import { EditorState, TextSelection, type Transaction } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import {
   batch,
@@ -26,22 +26,17 @@ import {
   schema,
   serializeSlice,
   slashQuery,
-  sliceHasInsertableContent,
   toDraft,
 } from "@oc-ui/prompt-editor";
 import "prosemirror-view/style/prosemirror.css";
-import { sanitizePastedHtml } from "./pasteHtml.ts";
-import { textFallbackRoute, type PasteRoute } from "./pasteRoute.ts";
+import type { PasteRoute } from "./pasteRoute.ts";
 import "./PromptEditor/PromptEditor.css";
 
 /** One already-classified paste the composer hands to the editor to apply. */
 type PromptPasteInsert = {
   /** The composer owns the attachment and no-op routes; only these reach the editor. */
-  readonly route: Extract<PasteRoute, "plain-text" | "markdown-parse" | "html-parse">;
+  readonly route: Extract<PasteRoute, "plain-text" | "markdown-parse">;
   readonly text: string;
-  readonly html?: string;
-  /** The originating paste event, forwarded to ProseMirror's pipeline. */
-  readonly event?: ClipboardEvent;
 };
 
 export type PromptEditorControl = {
@@ -53,10 +48,9 @@ export type PromptEditorControl = {
   composing: () => boolean;
   /**
    * Applies one classified paste to the current selection, dispatching at most
-   * one transaction. `unsupported` means the HTML flavor produced nothing
-   * insertable and there was no text fallback; the selection is unchanged.
+   * one transaction.
    */
-  applyPaste: (input: PromptPasteInsert) => "inserted" | "unsupported";
+  applyPaste: (input: PromptPasteInsert) => void;
 };
 
 type EditorProps = Pick<ComposerProps, "value" | "skills" | "catalog" | "sessionID" | "onInput"> & {
@@ -207,10 +201,6 @@ export function PromptEditor(props: EditorProps) {
     close();
   };
   onMount(() => {
-    // Set only while `applyPaste` runs an HTML paste, so ProseMirror's own
-    // pipeline can replace a parse that produced nothing insertable. `doPaste`
-    // always calls the `handlePaste` hook before it returns.
-    let pendingHtmlFallback: Transaction | undefined;
     const instance = new EditorView(
       { mount: host },
       {
@@ -273,20 +263,8 @@ export function PromptEditor(props: EditorProps) {
             return false;
           },
         },
-        // Runs inside ProseMirror's clipboard pipeline for the HTML route the
-        // composer asked for. A usable parse is left to the pipeline itself
-        // (return false); otherwise the fallback transaction is dispatched
-        // here, so success and fallback each insert exactly once.
-        handlePaste(editor, _event, slice) {
-          const fallback = pendingHtmlFallback;
-          if (fallback === undefined) return false;
-          if (sliceHasInsertableContent(slice)) return false;
-          editor.dispatch(fallback);
-          return true;
-        },
-        // Unsafe link and image URIs are dropped before the schema parser can
-        // turn them into marks or nodes.
-        transformPastedHTML: (html) => sanitizePastedHtml(html),
+        // Clipboard copies write skill atoms as their names, matching the draft
+        // text the same content serializes to.
         clipboardTextSerializer: (slice) => serializeSlice(slice.content),
         nodeViews: {
           skill(node, editor, getPos) {
@@ -341,56 +319,17 @@ export function PromptEditor(props: EditorProps) {
     );
     view = instance;
 
-    /** Applies one routed paste; the composer consumes the event exactly once. */
-    const applyHtmlPaste = (
-      text: string,
-      html: string,
-      event: ClipboardEvent | undefined,
-    ): "inserted" | "unsupported" => {
-      const fallbackRoute = textFallbackRoute(text);
-      if (fallbackRoute === "noop") {
-        // Nothing to fall back to. Inserting the empty parse would delete the
-        // selection, so the caller surfaces feedback instead.
-        return "unsupported";
-      }
-      const state = instance.state;
-      pendingHtmlFallback =
-        fallbackRoute === "markdown-parse"
-          ? pasteContent(state, text)
-          : pastePlainText(state, text);
-      try {
-        instance.pasteHTML(
-          html,
-          // ProseMirror constructs a ClipboardEvent when none is given, which
-          // some test environments do not provide; the originating event is
-          // forwarded instead so the pipeline hook can see it.
-          event,
-        );
-        return "inserted";
-      } finally {
-        pendingHtmlFallback = undefined;
-      }
-    };
-
     props.control?.({
       focus: () => instance.focus(),
       inCodeBlock: () => instance.state.selection.$from.parent.type.spec.code === true,
       composing: () => instance.composing,
       applyPaste: (input) => {
-        switch (input.route) {
-          case "plain-text":
-            instance.dispatch(pastePlainText(instance.state, input.text));
-            return "inserted";
-          case "markdown-parse":
-            instance.dispatch(pasteContent(instance.state, input.text));
-            return "inserted";
-          case "html-parse":
-            return applyHtmlPaste(input.text, input.html ?? "", input.event);
-          default: {
-            const unreachable: never = input.route;
-            return unreachable;
-          }
-        }
+        // The composer only routes the two insertion policies here.
+        const transaction =
+          input.route === "plain-text"
+            ? pastePlainText(instance.state, input.text)
+            : pasteContent(instance.state, input.text);
+        instance.dispatch(transaction);
       },
     });
     createEffect(() => {

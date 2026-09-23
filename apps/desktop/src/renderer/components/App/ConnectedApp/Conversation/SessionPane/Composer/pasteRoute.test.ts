@@ -8,20 +8,12 @@ import {
 } from "./pasteRoute.ts";
 
 /**
- * Hand-written clipboard payloads for the paste router. Each pair mirrors what
- * the named source puts on the macOS/Chromium clipboard: `text/html` is the
- * rich flavor, `text/plain` the fallback serialization. Strings stay small but
- * keep the shapes that matter for routing: token spans and a wrapper `div` for
- * VS Code, `<pre>`/`<p>`/`<li>` for chat messages, marker-free prose for a
- * browser article serialization, a Finder file reference, and so on.
+ * Hand-written clipboard payloads for the paste router. Each fixture mirrors
+ * what the named source puts on the macOS/Chromium clipboard as text; strings
+ * stay small but keep the shapes that matter for routing: compiler output,
+ * Markdown with structural markers, JSON, plain source code, a lone URL, and
+ * so on.
  */
-
-/** VS Code "Copy" of a TypeScript snippet: HTML with token spans + plain code. */
-const vscodeCodeHtml = `<meta charset='utf-8'><div style="color: #d4d4d4;background-color: #1e1e1e;font-family: Menlo, Monaco, 'Courier New', monospace;font-weight: normal;font-size: 12px;line-height: 18px;white-space: pre;"><div><span style="color: #569CD6;">const</span><span style="color: #D4D4D4;"> </span><span style="color: #4FC1FF;">total</span><span style="color: #D4D4D4;"> = </span><span style="color: #9CDCFE;">items</span><span style="color: #D4D4D4;">.</span><span style="color: #DCDCAA;">reduce</span><span style="color: #D4D4D4;">((</span><span style="color: #9CDCFE;">sum</span><span style="color: #D4D4D4;">, </span><span style="color: #9CDCFE;">item</span><span style="color: #D4D4D4;">) => </span><span style="color: #9CDCFE;">sum</span><span style="color: #D4D4D4;"> + </span><span style="color: #9CDCFE;">item</span><span style="color: #D4D4D4;">.</span><span style="color: #9CDCFE;">price</span><span style="color: #D4D4D4;">, </span><span style="color: #B5CEA8;">0</span><span style="color: #D4D4D4;">);</span></div><div><span style="color: #D4D4D4;"></span></div><div><span style="color: #6A9955;">// The list is small, so a linear scan is fine.</span></div><div><span style="color: #569CD6;">const</span><span style="color: #D4D4D4;"> </span><span style="color: #4FC1FF;">names</span><span style="color: #D4D4D4;"> = </span><span style="color: #9CDCFE;">items</span><span style="color: #D4D4D4;">.</span><span style="color: #DCDCAA;">map</span><span style="color: #D4D4D4;">((</span><span style="color: #9CDCFE;">item</span><span style="color: #D4D4D4;">) => </span><span style="color: #9CDCFE;">item</span><span style="color: #D4D4D4;">.</span><span style="color: #9CDCFE;">name</span><span style="color: #D4D4D4;">);</span></div></div>`;
-const vscodeCodeText = `const total = items.reduce((sum, item) => sum + item.price, 0);
-
-// The list is small, so a linear scan is fine.
-const names = items.map((item) => item.name);`;
 
 /** Terminal selection: plain text, no rich flavor, shell prompt included. */
 const terminalOutput = `$ pnpm --filter desktop exec tsc -p tsconfig.renderer.json --noEmit
@@ -31,29 +23,6 @@ src/renderer/components/App.tsx:42:18 - error TS2322: Type 'string | undefined' 
                     ~~~~~~~~~
 
 Found 1 error in 2 files.`;
-
-/** Browser article selection: HTML with headings, links and a list. */
-const browserArticleHtml = `<article><h1>Paste routing</h1><p>A paste carries up to three formats. The <a href="https://example.com/spec">clipboard specification</a> does not say which one to prefer.</p><h2>Fallback order</h2><ul><li>Files win over text.</li><li>Rich HTML beats the plain serialization.</li><li>Plain text is the last resort.</li></ul></article>`;
-const browserArticleText = `Paste routing
-A paste carries up to three formats. The clipboard specification does not say which one to prefer.
-Fallback order
-Files win over text.
-Rich HTML beats the plain serialization.
-Plain text is the last resort.`;
-
-/** ChatGPT assistant message: paragraphs, a bold phrase, a list and a code block. */
-const chatGptMessageHtml = `<p>There are two ways to read the payload:</p><ul><li><strong>Prefer the richest format</strong> that the schema can hold.</li><li>Fall back to <code>text/plain</code> when the rich format is empty.</li></ul><p>For example:</p><pre><code class="language-ts">const route = classifyPaste(payload);
-</code></pre><p>Keep the original text when nothing else applies.</p>`;
-const chatGptMessageText = `There are two ways to read the payload:
-
-• Prefer the richest format that the schema can hold.
-• Fall back to text/plain when the rich format is empty.
-
-For example:
-
-const route = classifyPaste(payload);
-
-Keep the original text when nothing else applies.`;
 
 /** Markdown source copied from an editor: plain text with structural markers. */
 const markdownSource = `# Review checklist
@@ -141,32 +110,11 @@ type PasteFixture = {
 
 const fixtures: readonly PasteFixture[] = [
   {
-    name: "vscode-code",
-    source: "VS Code copy of a TypeScript snippet",
-    payload: { html: vscodeCodeHtml, text: vscodeCodeText },
-    route: "html-parse",
-    why: "Token spans and the wrapper div carry the code block and the comment line; the plain fallback loses the block structure.",
-  },
-  {
     name: "terminal-output",
     source: "Terminal selection",
     payload: { text: terminalOutput },
     route: "plain-text",
     why: "Compiler output has no structural Markdown signal; the underline rule is indented and is not a thematic break.",
-  },
-  {
-    name: "browser-article",
-    source: "Browser article selection",
-    payload: { html: browserArticleHtml, text: browserArticleText },
-    route: "html-parse",
-    why: "The HTML keeps the heading levels, the link and the list; the serialization flattened them to lines.",
-  },
-  {
-    name: "chatgpt-message",
-    source: "ChatGPT assistant message",
-    payload: { html: chatGptMessageHtml, text: chatGptMessageText },
-    route: "html-parse",
-    why: "Paragraphs, bold text, a bullet list and a fenced code block are all in the HTML flavor.",
   },
   {
     name: "markdown-source",
@@ -242,12 +190,6 @@ describe("paste route fixtures", () => {
     expect(
       fixtures.find((fixture) => fixture.name === "huge-prose")!.payload.text!.length,
     ).toBeGreaterThanOrEqual(50_000);
-    // The HTML fixtures carry both flavors and route through the HTML pipeline.
-    for (const name of ["vscode-code", "browser-article", "chatgpt-message"]) {
-      const fixture = fixtures.find((candidate) => candidate.name === name)!;
-      expect(classifyPaste(fixture.payload).route).toBe("html-parse");
-      expect(fixture.payload.text!.length).toBeGreaterThan(0);
-    }
   });
 
   it("does not detect Markdown in prose, terminal output, JSON or code", () => {
@@ -280,9 +222,6 @@ describe("paste route fixtures", () => {
     const hugeMarkdown = `# Big document\n\n${"Some prose paragraph.\n\n".repeat(3_000)}`;
     expect(hugeMarkdown.length).toBeGreaterThan(50_000);
     expect(route({ text: hugeMarkdown })).toBe("attachment-text");
-    expect(route({ text: hugeMarkdown, html: "<p>Some prose paragraph.</p>" })).toBe(
-      "attachment-text",
-    );
   });
 });
 
@@ -299,7 +238,7 @@ describe("paste route precedence", () => {
 
   it("inserts code-block text literally, including whitespace and oversized text", () => {
     expect(route({ text: "# heading", codeBlock: true })).toBe("plain-text");
-    expect(route({ html: "<p>hello</p>", text: "hello", codeBlock: true })).toBe("plain-text");
+    expect(route({ text: "hello", codeBlock: true })).toBe("plain-text");
     expect(route({ text: "\n\n", codeBlock: true })).toBe("plain-text");
     // A code block keeps its characters instead of becoming an attachment.
     expect(route({ text: "a".repeat(TEXT_ATTACHMENT_LIMIT), codeBlock: true })).toBe("plain-text");
@@ -314,19 +253,17 @@ describe("paste route precedence", () => {
     });
     expect(route({ text: "" })).toBe("noop");
     expect(route({ text: "\n\n\n" })).toBe("noop");
-    expect(route({ text: "   ", html: "  " })).toBe("noop");
+    expect(route({ text: "   " })).toBe("noop");
   });
 
-  it("routes text over the threshold to an attachment before reading HTML", () => {
+  it("routes text over the threshold to an attachment before parsing it", () => {
     const atLimit = "a".repeat(TEXT_ATTACHMENT_LIMIT);
     const belowLimit = "a".repeat(TEXT_ATTACHMENT_LIMIT - 1);
     expect(route({ text: atLimit })).toBe("attachment-text");
     expect(route({ text: belowLimit })).toBe("plain-text");
-    // Oversized text becomes an attachment even when the payload also carries
-    // Markdown or HTML flavors: the threshold is decided before parsing.
-    expect(route({ text: `# ${atLimit}`, html: "<article><p>rich</p></article>" })).toBe(
-      "attachment-text",
-    );
+    // Oversized text becomes an attachment even when it also carries Markdown
+    // markers: the threshold is decided before parsing.
+    expect(route({ text: `# ${atLimit}` })).toBe("attachment-text");
     expect(classifyPaste({ text: atLimit }).reason).toBe("oversize-text");
   });
 
@@ -341,38 +278,9 @@ describe("paste route precedence", () => {
     expect(route({ text: "a".repeat(TEXT_ATTACHMENT_LIMIT - 2) + "😀" })).toBe("attachment-text");
     expect(route({ text: "a".repeat(TEXT_ATTACHMENT_LIMIT - 3) + "😀" })).toBe("plain-text");
   });
-
-  it("reports HTML that exceeded the size bound when there is no usable text", () => {
-    const decision = classifyPaste({ htmlTooLarge: true });
-    expect(decision.route).toBe("noop");
-    expect(decision.reason).toBe("html-too-large");
-    // A usable text flavor still routes normally when the HTML was skipped.
-    expect(classifyPaste({ htmlTooLarge: true, text: "- one\n- two" }).route).toBe(
-      "markdown-parse",
-    );
-  });
 });
 
 describe("paste route edge cases", () => {
-  it("falls back to the text flavor when text/html is empty", () => {
-    expect(route({ text: "- one\n- two", html: "" })).toBe("markdown-parse");
-    expect(route({ text: "first\nsecond", html: "   " })).toBe("plain-text");
-    expect(route({ text: "https://example.com/x", html: "" })).toBe("plain-text");
-  });
-
-  it("parses HTML when there is no plain text flavor", () => {
-    expect(route({ html: "<p>hello</p>" })).toBe("html-parse");
-    expect(route({ html: "<meta charset='utf-8'><span>hi</span>" })).toBe("noop");
-    // The router receives HTML-derived text for a block-flavored payload, so
-    // the derived characters, not the tags, decide the route.
-    expect(route({ html: "<p>hello</p>", text: "hello" })).toBe("html-parse");
-  });
-
-  it("treats text/html without tags as plain text", () => {
-    expect(route({ text: "hello", html: "hello" })).toBe("plain-text");
-    expect(route({ text: "hello", html: "&lt;p&gt;hello&lt;/p&gt;" })).toBe("plain-text");
-  });
-
   it("keeps a lone URL as ordinary text", () => {
     expect(route({ text: "https://example.com/a" })).toBe("plain-text");
     expect(route({ text: "  https://example.com/a  " })).toBe("plain-text");
@@ -380,19 +288,6 @@ describe("paste route edge cases", () => {
     expect(route({ text: "see https://example.com/a" })).toBe("plain-text");
     expect(route({ text: "ftp://example.com/a" })).toBe("plain-text");
     expect(route({ text: "www.example.com/a" })).toBe("plain-text");
-  });
-
-  it("prefers rich HTML over a lone URL serialization", () => {
-    expect(
-      route({
-        text: "https://example.com/a",
-        html: '<article><p><a href="https://example.com/a">Example</a></p></article>',
-      }),
-    ).toBe("html-parse");
-    // A bare anchor is not richer than the URL itself, so the text stays text.
-    expect(
-      route({ text: "https://example.com/a", html: '<a href="https://example.com/a">Example</a>' }),
-    ).toBe("plain-text");
   });
 
   it("needs one strong or two weak Markdown signals", () => {

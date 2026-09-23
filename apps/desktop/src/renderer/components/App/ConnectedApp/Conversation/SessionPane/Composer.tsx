@@ -62,12 +62,6 @@ const isLiteralPasteChord = (event: KeyboardEvent): boolean => {
   );
 };
 
-const HTML_TOO_LARGE_NOTICE =
-  "The copied content is too large to inspect, so it was not inserted. Copy a smaller part and paste again.";
-
-const UNSUPPORTED_HTML_NOTICE =
-  "That copied content has no text this editor can hold. Copy it as plain text and paste again.";
-
 const CLIPBOARD_UNAVAILABLE_NOTICE =
   "Clipboard access is unavailable in this app. Press the paste shortcut instead.";
 
@@ -412,12 +406,10 @@ export function Composer(props: ComposerProps) {
     // browser and the IME, exactly as ProseMirror's own handler leaves it.
     if (files.length === 0 && control?.composing() === true) return;
     const codeBlock = control?.inCodeBlock() ?? false;
-    const read = readClipboardText(data, { codeBlock });
+    const read = readClipboardText(data);
     const decision = classifyPaste({
       files,
-      text: read.text,
-      html: read.html,
-      htmlTooLarge: read.htmlTooLarge,
+      text: read,
       codeBlock,
     });
     const consume = () => {
@@ -427,13 +419,7 @@ export function Composer(props: ComposerProps) {
     switch (decision.route) {
       case "noop":
         consume();
-        setPasteNotice(
-          decision.reason === "html-too-large"
-            ? HTML_TOO_LARGE_NOTICE
-            : decision.reason === "unsupported-html"
-              ? UNSUPPORTED_HTML_NOTICE
-              : undefined,
-        );
+        setPasteNotice(undefined);
         return;
       case "attachment-files":
         // Without an attachment owner the payload stays with native paste.
@@ -445,18 +431,13 @@ export function Composer(props: ComposerProps) {
       case "attachment-text":
         consume();
         setPasteNotice(undefined);
-        if (!isRepeatedTextAttachment(read.text, event.timeStamp)) props.onAttachText(read.text);
+        if (!isRepeatedTextAttachment(read, event.timeStamp)) props.onAttachText(read);
         return;
       default: {
         if (control === undefined) return;
         consume();
-        const outcome = control.applyPaste({
-          route: decision.route,
-          text: read.text,
-          html: read.html,
-          event,
-        });
-        setPasteNotice(outcome === "unsupported" ? UNSUPPORTED_HTML_NOTICE : undefined);
+        control.applyPaste({ route: decision.route, text: read });
+        setPasteNotice(undefined);
         return;
       }
     }

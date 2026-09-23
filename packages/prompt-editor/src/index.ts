@@ -5,7 +5,6 @@ export {
   pastePlainText,
   serializeSlice,
   slashQuery,
-  sliceHasInsertableContent,
   toDraft,
 } from "./document.ts";
 export { promptPlugins } from "./plugins.ts";

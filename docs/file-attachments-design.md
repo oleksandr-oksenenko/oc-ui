@@ -128,11 +128,24 @@ changes. Do not rely on `dragend` for OS-origin drags. Keep the overlay
 
 ### Paste
 
-Composer owns file-paste extraction through a native capture `paste` listener on
-its form; ProseMirror owns text paste. For a payload with files, Composer calls
-`onAttachFiles` once, cancels, and stops propagation; for text it does nothing and
-lets the corrected ProseMirror handler run. This also covers paste while another
-composer button has focus.
+Composer owns paste through a native capture `paste` listener on its form. One
+listener classifies the whole payload, consumes the event it owns, and never
+lets ProseMirror or the native paste path process the same paste twice:
+
+- a payload with files attaches them once and cancels; text beside the files is
+  dropped;
+- a payload with only `text/html` carries no usable text: it is a no-op, so the
+  selection stays unchanged;
+- text in a code block is inserted literally, whatever it looks like and however
+  large it is;
+- whitespace-only text is a no-op instead of replacing the selection;
+- text at or over the 16 KiB routing threshold becomes a file-backed text
+  attachment;
+- text with explicit Markdown signals parses as draft Markdown; everything else
+  inserts as plain text with single newlines as hard breaks.
+
+`text/html` is never parsed or inspected. The reader takes `text/plain`, the
+legacy `Text` spelling, or `text/uri-list` with its line feeds flattened.
 
 Scope is explicit: paste works anywhere inside the composer. It does not reach
 paste targeted at the sidebar, transcript, or `body`. Making paste
@@ -259,7 +272,7 @@ forwarded.
 | Boundary      | Assertions                                                                                                                                                                                                                                                                         |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extraction    | non-image `files`; items-only; null `getAsFile`; files and items both present attach once; stable order                                                                                                                                                                            |
-| Paste/editor  | file plus text attaches once without text insertion; URI-only fallback behaves deliberately (empty plain text and selection preservation are covered); ordinary multiline text inserts                                                                                             |
+| Paste/editor  | file plus text attaches once without text insertion; an HTML-only payload leaves the selection unchanged; code-block text stays literal; oversized text attaches; Markdown and plain text routes insert                                                                            |
 | Drop          | drop on ProseMirror with file and text payload inserts no text; file drag accepted while `files` is empty during dragover; child transitions do not flicker; text/internal drags still work                                                                                        |
 | Picker        | multiple files; repeated selection after reset; cancellation; callback absent; session change while open                                                                                                                                                                           |
 | Controller    | exact 2 MiB boundary; oversize rejection before reads; mixed batch policy; over-cap and over-budget paste refusal leaves the draft unchanged and reports the reason; prompt and command local read failure produce no API call and a specific message; errors isolated per session |

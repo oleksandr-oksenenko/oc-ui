@@ -66,22 +66,6 @@ export function pastePlainText(state: EditorState, text: string): Transaction {
   return state.tr.replaceSelection(Slice.maxOpen(fromPlainText(text).content));
 }
 
-/**
- * Whether a parsed slice carries content worth inserting. Empty paragraphs and
- * whitespace are not content: inserting them would replace the selection with
- * nothing, which is how a failed HTML parse used to delete selected text.
- */
-export function sliceHasInsertableContent(slice: Slice): boolean {
-  if (slice.content.size === 0) return false;
-  let insertable = false;
-  slice.content.descendants((node) => {
-    if (insertable) return false;
-    if (node.isText ? (node.text ?? "").trim() !== "" : node.isLeaf) insertable = true;
-    return !insertable;
-  });
-  return insertable;
-}
-
 export function slashQuery(
   state: EditorState,
 ): { text: string; from: number; to: number } | undefined {

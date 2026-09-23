@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { PromptSkillAttachment } from "@opencode/client";
-import { Fragment, Slice, type Node as PMNode } from "prosemirror-model";
+import { Fragment, type Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import {
   fromDraft,
@@ -10,7 +10,6 @@ import {
   schema,
   serializeSlice,
   slashQuery,
-  sliceHasInsertableContent,
   toDraft,
 } from "./document.ts";
 
@@ -67,12 +66,6 @@ function blocks(doc: PMNode): { type: string; text: string; breaks: number }[] {
   });
   return result;
 }
-
-/** A paragraph node with the given inline content. */
-const paragraphBlock = (content: PMNode[]) => schema.node("paragraph", null, content);
-
-/** A closed slice containing exactly one node. */
-const singleNodeSlice = (node: PMNode) => new Slice(Fragment.from(node), 0, 0);
 
 /** The single skill atom in a document, or `undefined` when it has none. */
 function skillAtom(doc: PMNode): PMNode | undefined {
@@ -416,22 +409,5 @@ describe("prompt document", () => {
     });
     expect(pastePlainText(codeState, "b\nc").doc.textContent).toBe("ab\nc");
     expect(pastePlainText(codeState, "*x*").doc.textContent).toBe("a*x*");
-  });
-
-  it("treats empty and whitespace-only slices as nothing to insert", () => {
-    expect(sliceHasInsertableContent(Slice.empty)).toBe(false);
-    expect(sliceHasInsertableContent(singleNodeSlice(paragraphBlock([])))).toBe(false);
-    expect(sliceHasInsertableContent(singleNodeSlice(paragraphBlock([schema.text("   ")])))).toBe(
-      false,
-    );
-    expect(sliceHasInsertableContent(singleNodeSlice(paragraphBlock([schema.text("hi")])))).toBe(
-      true,
-    );
-    // An image is content even though it carries no text.
-    expect(
-      sliceHasInsertableContent(
-        singleNodeSlice(schema.node("image", { src: "https://example.com/a.png" })),
-      ),
-    ).toBe(true);
   });
 });

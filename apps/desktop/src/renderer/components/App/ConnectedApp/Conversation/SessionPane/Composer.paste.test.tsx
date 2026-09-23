@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { mount } from "../../../../../test/mount.ts";
 import { Composer } from "./Composer.tsx";
-import { MAX_HTML_INSPECTION_UNITS, MAX_HTML_NESTING } from "./Composer/pasteHtml.ts";
 import { unavailableAgentSelection, unavailableSelection } from "./composer-test-fixtures.ts";
 
 const setPlatform = (platform: "macos" | "other") => {
@@ -211,239 +210,14 @@ describe("Composer paste routing", () => {
     harness.dispose();
   });
 
-  it("uses the schema clipboard pipeline for rich HTML", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    pasteClipboard(harness.editor, {
-      html: '<article><h1>Paste routing</h1><p>See <a href="https://example.com/spec">the spec</a>.</p><ul><li>one</li><li>two</li></ul></article>',
-      text: "Paste routing\nSee the spec.\none\ntwo",
-    });
-    expect(harness.editor.querySelector("h1")?.textContent).toBe("Paste routing");
-    expect(harness.editor.querySelectorAll("li")).toHaveLength(2);
-    expect(harness.draft()).toContain("[the spec](https://example.com/spec)");
-    harness.dispose();
-  });
-
-  it("falls back to the text flavor when the HTML parse has no content", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    pasteClipboard(harness.editor, {
-      html: "<script>alert(1)</script>",
-      text: "- one\n- two",
-    });
-    // Markdown classification independently succeeds, so the fallback parses.
-    expect(harness.host.querySelectorAll("li")).toHaveLength(2);
-    expect(harness.notice()).toBe("");
-    harness.dispose();
-  });
-
-  it("falls back to the text flavor when the sanitized HTML has no insertable content", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    pasteClipboard(harness.editor, {
-      html: "<p><script>alert(1)</script></p>",
-      text: "fallback after sanitizing",
-    });
-    // The rich HTML flavor routed to the schema pipeline, but its sanitized
-    // parse held nothing: the prepared text fallback is dispatched instead.
-    expect(harness.notice()).toBe("");
-    expect(harness.draft()).toBe("fallback after sanitizing");
-    expect(textOf(harness.editor)).toBe("fallback after sanitizing");
-    harness.dispose();
-  });
-
-  it("inserts the text fallback once when the rich parse is an empty block", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    pasteClipboard(harness.editor, { html: "<p> </p>", text: "one copy" });
-    expect(harness.notice()).toBe("");
-    expect(harness.draft()).toBe("one copy");
-    expect(harness.editor.querySelectorAll("p")).toHaveLength(1);
-    expect(textOf(harness.editor)).toBe("one copy");
-    harness.dispose();
-  });
-
-  it("leaves the selection unchanged and explains when HTML-only content cannot be used", () => {
+  it("leaves the selection unchanged for an HTML-only payload", () => {
     setPlatform("macos");
     const harness = openComposer({ value: "keep this" });
-    const event = pasteClipboard(harness.editor, { html: "<script>alert(1)</script>" });
+    const event = pasteClipboard(harness.editor, { html: "<p>rich</p>" });
     expect(event.defaultPrevented).toBe(true);
     expect(textOf(harness.editor)).toBe("keep this");
-    expect(harness.notice()).toContain("no text");
-    harness.dispose();
-  });
-
-  it("strips unsafe link targets and unsupported images from HTML", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    pasteClipboard(harness.editor, {
-      html: '<p><a href="javascript:alert(1)">click</a></p><p><img src="file:///tmp/a.png" alt="local"></p>',
-      text: "click",
-    });
-    expect(harness.draft()).not.toContain("javascript:");
-    expect(harness.editor.querySelector("a")).toBeNull();
-    expect(harness.draft()).toContain("click");
-    harness.dispose();
-  });
-
-  it("keeps table cell text without crashing", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    pasteClipboard(harness.editor, {
-      html: "<table><tr><td>Cell A</td><td>Cell B</td></tr></table>",
-      text: "Cell A\tCell B",
-    });
-    expect(harness.draft()).toContain("Cell A");
-    expect(harness.draft()).toContain("Cell B");
-    harness.dispose();
-  });
-
-  it("falls back to the text flavor for malformed markup", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    pasteClipboard(harness.editor, {
-      html: "<p>unclosed <b>bold",
-      text: "unclosed bold",
-    });
-    expect(textOf(harness.editor)).toContain("unclosed bold");
-    expect(harness.editor.querySelector("strong")?.textContent).toBe("bold");
-    harness.dispose();
-  });
-});
-
-describe("Composer adversarial paste", () => {
-  it("falls back to the text flavor for markup nested past the schema bound", () => {
-    setPlatform("macos");
-    const harness = openComposer({ value: "keep this" });
-    const text = "deep paste fallback";
-    const depth = MAX_HTML_NESTING + 5;
-    const html = `${"<div>".repeat(depth)}${text}${"</div>".repeat(depth)}`;
-    const started = performance.now();
-    const event = pasteClipboard(harness.editor, { html, text });
-    const elapsed = performance.now() - started;
-    expect(event.defaultPrevented).toBe(true);
-    // The payload is never parsed as markup, so the draft keeps its text and
-    // gains the fallback instead of a deep element tree.
-    expect(harness.draft()).toContain("keep this");
-    expect(harness.draft()).toContain(text);
-    expect(harness.editor.querySelector("div div div")).toBeNull();
-    expect(elapsed).toBeLessThan(1_000);
-    harness.dispose();
-  });
-
-  it("keeps the draft and explains a deep markup payload with no text flavor", () => {
-    setPlatform("macos");
-    const harness = openComposer({ value: "keep this" });
-    const depth = MAX_HTML_NESTING + 5;
-    const html = `${"<div>".repeat(depth)}${"</div>".repeat(depth)}`;
-    const event = pasteClipboard(harness.editor, { html });
-    expect(event.defaultPrevented).toBe(true);
-    expect(textOf(harness.editor)).toBe("keep this");
+    expect(harness.notice()).toBe("");
     expect(harness.draft()).toBeUndefined();
-    // The deep payload is size-bounded, so the old inspection-limit notice no
-    // longer applies; there is genuinely no text to insert.
-    expect(harness.notice()).toContain("no text");
-    harness.dispose();
-  });
-
-  it("derives a fallback from deeply nested HTML when the plain flavor is blank", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    const depth = MAX_HTML_NESTING + 5;
-    const html = `${"<div>".repeat(depth)}<p>deep paste fallback</p>${"</div>".repeat(depth)}`;
-    const start = performance.now();
-    const event = pasteClipboard(harness.editor, { html });
-    const elapsed = performance.now() - start;
-    // Rich parsing rejects the nesting, but the reader extracted the text
-    // iteratively, so the fallback inserts it exactly once.
-    expect(event.defaultPrevented).toBe(true);
-    expect(harness.notice()).toBe("");
-    expect(harness.draft()).toBe("deep paste fallback");
-    expect(harness.editor.querySelector("div div div")).toBeNull();
-    expect(elapsed).toBeLessThan(1_000);
-    harness.dispose();
-  });
-
-  it("excludes script and style text from a deep HTML fallback", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    const depth = MAX_HTML_NESTING + 5;
-    const html = `${"<div>".repeat(depth)}<script>alert(1)</script><style>p{color:red}</style><p>kept text</p>${"</div>".repeat(depth)}`;
-    pasteClipboard(harness.editor, { html });
-    expect(harness.notice()).toBe("");
-    expect(harness.draft()).toBe("kept text");
-    harness.dispose();
-  });
-
-  it("refuses oversized HTML with no usable text and explains the size", () => {
-    setPlatform("macos");
-    const harness = openComposer({ value: "keep this" });
-    const html = `<p>${"a".repeat(MAX_HTML_INSPECTION_UNITS)}</p>`;
-    const start = performance.now();
-    const event = pasteClipboard(harness.editor, { html });
-    const elapsed = performance.now() - start;
-    // The DOM parser is never given the oversized string.
-    expect(elapsed).toBeLessThan(1_000);
-    expect(event.defaultPrevented).toBe(true);
-    expect(textOf(harness.editor)).toBe("keep this");
-    expect(harness.draft()).toBeUndefined();
-    expect(harness.notice()).toContain("too large");
-    harness.dispose();
-  });
-
-  it("prefers a usable text flavor when the HTML flavor is oversized", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    const html = `<p>${"a".repeat(MAX_HTML_INSPECTION_UNITS)}</p>`;
-    pasteClipboard(harness.editor, { html, text: "# Heading from text" });
-    expect(harness.notice()).toBe("");
-    expect(harness.editor.querySelector("h1")?.textContent).toBe("Heading from text");
-    harness.dispose();
-  });
-
-  it("preserves the selection when sanitized HTML has no content and no text", () => {
-    setPlatform("macos");
-    const harness = openComposer({ value: "keep this" });
-    const event = pasteClipboard(harness.editor, { html: "<p><script>alert(1)</script></p>" });
-    expect(event.defaultPrevented).toBe(true);
-    expect(textOf(harness.editor)).toBe("keep this");
-    expect(harness.draft()).toBeUndefined();
-    expect(harness.notice()).toContain("no text");
-    harness.dispose();
-  });
-
-  it("parses very many anchors and attributes within a bounded time", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    const html = Array.from(
-      { length: 2_000 },
-      (_, index) =>
-        `<p><a href="https://x.dev/${index}" title="link ${index}" rel="nofollow">anchor ${index}</a></p>`,
-    ).join("");
-    const started = performance.now();
-    const event = pasteClipboard(harness.editor, { html, text: "anchors fallback" });
-    const elapsed = performance.now() - started;
-    expect(event.defaultPrevented).toBe(true);
-    expect(harness.draft()).toContain("anchor 1999");
-    expect(harness.editor.querySelectorAll("a")).toHaveLength(2_000);
-    expect(elapsed).toBeLessThan(2_000);
-    harness.dispose();
-  });
-
-  it("survives malformed markup and keeps its text", () => {
-    setPlatform("macos");
-    const harness = openComposer();
-    const html =
-      `${"<p>".repeat(200)}unclosed <b>bold <a href="https://x.dev/a(b)">link</a>` +
-      `${"</div>".repeat(100)}<<script>alert(1)</script>`;
-    const started = performance.now();
-    const event = pasteClipboard(harness.editor, { html, text: "malformed fallback" });
-    const elapsed = performance.now() - started;
-    expect(event.defaultPrevented).toBe(true);
-    expect(textOf(harness.editor)).toContain("unclosed");
-    expect(textOf(harness.editor)).toContain("bold");
-    expect(harness.notice()).toBe("");
-    expect(elapsed).toBeLessThan(2_000);
     harness.dispose();
   });
 });
@@ -462,8 +236,8 @@ describe("Composer literal paste gesture", () => {
     expect(harness.editor.querySelector("ul")).toBeNull();
     expect(textOf(harness.editor)).toContain("- not a list");
 
-    // The gesture is not sticky: an ordinary paste still uses the HTML pipeline.
-    pasteClipboard(harness.editor, { html: "<p><strong>bold</strong></p>", text: "bold" });
+    // The gesture is not sticky: an ordinary paste still routes as Markdown.
+    pasteClipboard(harness.editor, { text: "**bold**" });
     expect(harness.editor.querySelectorAll("strong")).toHaveLength(1);
     harness.dispose();
   });

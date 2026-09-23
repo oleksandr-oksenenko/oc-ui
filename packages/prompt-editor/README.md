@@ -11,8 +11,7 @@ In this package:
 - the schema and the `skill` atom specification (headings admit the atom)
 - the draft codec: `fromDraft`, `toDraft`, `serializeSlice`
 - the literal codec: `fromPlainText`, `pastePlainText`
-- document queries and policies: `pasteContent`, `sliceHasInsertableContent`,
-  `slashQuery`
+- document queries and policies: `pasteContent`, `slashQuery`
 - editor plugins: `promptPlugins` (composition guard, history, keymap, input
   rules)
 - `decodeNumericEntities` on the `./markdown-text` subpath
@@ -45,8 +44,7 @@ In the app:
   anywhere else the text parses as a draft. `pastePlainText` is the literal
   policy: characters are never reinterpreted, carriage returns normalize to
   line feeds, and a single newline becomes a hard break. An all-blank payload
-  has no insertion of its own (`sliceHasInsertableContent` is the HTML fallback
-  guard for the same reason).
+  has no insertion of its own; the router refuses it as a no-op.
 - Formatting policy belongs to the serializer, not to callers; callers choose
   between the Markdown and literal policies and do not post-process output.
 
@@ -61,10 +59,9 @@ In the app:
 
 ## App-side bounds
 
-The app owns clipboard acquisition and attachment memory: a bounded `text/html`
-inspection (1 MiB / 512 nesting levels) with the text flavor as fallback, a
-16,384 UTF-16-unit routing threshold for inline text, a 2 MiB UTF-8 cap per text
-attachment, and per-session draft bounds (16 attachments / 24 MiB). An over-cap
-or over-budget text paste is refused with an error notice and retains nothing.
-The numbers and their refusal behavior are documented in
+The app owns clipboard acquisition and attachment memory: the text-flavor
+fallback order, a 16,384 UTF-16-unit routing threshold for inline text, a 2 MiB
+UTF-8 cap per text attachment, and per-session draft bounds (16 attachments /
+24 MiB). An over-cap or over-budget text paste is refused with an error notice
+and retains nothing. The numbers and their refusal behavior are documented in
 `docs/file-attachments-design.md`.
