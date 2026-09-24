@@ -147,3 +147,61 @@ browser inspection covers the full workspace card and narrow long-content story;
 keyboard checks cover resource scrolling, action focus, and Escape without reply.
 No Electron-native or packaging boundary changed, so those checks are not part of
 this renderer-only integration.
+
+## Subagent bubbling
+
+Subagent sessions run in child sessions, and the server raises their permission
+requests and question forms on the child session, not the parent. Without help a
+blocked subagent is invisible while the parent transcript waits on its tool call,
+so descendant requests now surface in the selected session's pending area.
+
+- The selected session's own permissions and questions render first, unchanged.
+- Descendant sessions with pending items render as always-visible groups titled
+  `Subagent: <title>` (falling back to the agent ID, then `Subagent`). Ordering is
+  the selected-first tree order from `sessionSubtreeIDs`; each group shows its
+  permissions before its questions. Groups are keyed by session ID and resolve
+  their cards and label reactively, so an unrelated update cannot remount a form
+  and erase a draft. The sidebar attention rollup shows “Subagent permission
+  required” or “Subagent question awaiting answer” on every ancestor row,
+  including collapsed ones; it reads the unfiltered tree, so a search query cannot
+  hide a blocked descendant; unread completions never roll up.
+- Replies, cancels, and reconciliation still target the owning session. The pinned
+  reply API already takes `sessionID`; mutation keys, fences, and blocked recovery
+  were already session-keyed, so `createPermissions` now projects
+  `selectedID + subagentIDs` and resolves an item's owner from `request.sessionID`.
+  A replied event fences every visible descendant, not only the selected session,
+  so a racing snapshot cannot resurrect a request answered by another client.
+- `createFormController` gained an optional `relatedIDs` accessor. The primary
+  session keeps the loading/failed status; related sessions are projected and
+  mutable but never publish controller status. Form operations carry the owning
+  `sessionID`, so the same form ID in two displayed sessions can never misroute a
+  reply or indicator. `createSessionForms` passes the subtree and invalidates plus
+  syncs a related session on `form.created`.
+- `SessionWorkspace.subagentIDs` owns the descendant projection. Descendant caches
+  are hydrated only when missing, on connect, selection, and subtree changes.
+  Descendant reads share one four-permit pool per controller; event reads re-check
+  connection and membership after a permit is granted, one `latest` runner owns
+  the related batches, and a selection or subtree change cancels queued hydration
+  while in-flight SDK reads stay owned until settlement. Recovery retries union the
+  failed sessions with still-unloaded caches so it never discards queued work. The
+  pinned client remains the only request store; no projection or inbox cache is
+  added.
+- A descendant read that fails surfaces as “Some subagent requests could not be
+  loaded.” with a combined retry in the pending area. Only current descendants can
+  record or show that state; it clears on the next successful sync, including a
+  reply's reconciliation sync.
+
+Verification: `session-attention-rollup.test.ts` covers priority and origins;
+`createPermissions.test.ts` and `createSessionForms.test.ts` cover projection
+order, owning-session routing (including duplicate form IDs), event syncs,
+descendant fencing and fence clearing, the read bound, subtree cancellation,
+queued-read re-checks, retry that preserves queued hydration, failed-load
+recovery, and blocked recovery; `SessionTree.test.tsx` and
+`ConversationRegion.test.tsx` cover rollup labels, search-independent rollup,
+grouped rendering, draft retention, per-owner disabling, and cross-session focus
+restoration across ancestor navigation. The production browser acceptance scenario
+“bubbles a running subagent's permission request into the selected parent” runs a
+real subagent through the scripted provider, asserts the group, the sidebar
+rollup, navigation away and back, and an inline reply that lets the subagent
+finish. `TranscriptView.stories.tsx` carries the grouped pending state for visual
+inspection.
