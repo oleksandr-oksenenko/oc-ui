@@ -1361,6 +1361,66 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
+  it("bubbles a running subagent's permission request into the selected parent", async () => {
+    await ensureConnected();
+    const title = "Subagent bubble acceptance";
+    const directory = await realpath(project);
+    const parent = await api.session.create(
+      {
+        title,
+        agent: "build",
+        model: { providerID: "acceptance", id: "stream" },
+        location: { directory },
+      },
+      locationRequestOptions(directory),
+    );
+    await selectSession(title);
+    await send("E2E_SUBAGENT_BUBBLE browser");
+
+    await expect
+      .poll(async () =>
+        (await api.session.list({ limit: 100 })).data.some(
+          (session) => session.parentID === parent.id && session.title === "Bubble probe",
+        ),
+      )
+      .toBe(true);
+    const child = (await api.session.list({ limit: 100 })).data.find(
+      (session) => session.parentID === parent.id,
+    );
+    expect(child).toBeTruthy();
+
+    const group = page.locator(`[data-subagent-session-id="${child.id}"]`);
+    await group.getByRole("heading", { name: "Subagent: Bubble probe", exact: true }).waitFor();
+    const card = group.locator("[data-permission-request-id]");
+    await card.waitFor();
+    await expect.poll(() => card.textContent()).toContain("external_directory");
+    await expect.poll(() => card.textContent()).toContain("/acceptance-external/*");
+    await page
+      .getByRole("button", { name: `${title}, Subagent permission required`, exact: true })
+      .waitFor();
+
+    const navigationTitle = "Bubble navigation target";
+    await createPermissionSession(navigationTitle);
+    await selectSession(navigationTitle);
+    expect(await card.count()).toBe(0);
+    await selectSession(title);
+    await card.waitFor();
+
+    await card.getByRole("button", { name: "Allow once", exact: true }).click();
+    await expect.poll(() => card.count()).toBe(0);
+    await transcript("Acceptance bubbling verified:");
+    await idle();
+    await expect
+      .poll(
+        async () =>
+          (await api.session.list({ limit: 100 })).data.find((session) => session.id === child.id)
+            ?.outcome,
+      )
+      .toBe("succeeded");
+    await page.getByRole("button", { name: `${title}, Idle`, exact: true }).waitFor();
+    expect(errors).toEqual([]);
+  });
+
   it("keeps background permission dots across locations and answers requests inside sessions", async () => {
     // Build the unavailable-location fixture without a live UI reloading its services.
     await page.goto("about:blank");

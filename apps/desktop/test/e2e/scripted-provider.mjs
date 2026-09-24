@@ -182,6 +182,19 @@ function requestedTool(prompt) {
   if (prompt.includes("E2E_CREATE_SESSION")) {
     return { name: "session_create", input: { prompt: "Independent acceptance task" } };
   }
+  if (prompt.includes("E2E_SUBAGENT_BUBBLE")) {
+    return {
+      name: "subagent",
+      input: {
+        agent: "explore",
+        description: "Bubble probe",
+        prompt: "E2E_BUBBLE_CHILD",
+      },
+    };
+  }
+  if (prompt.includes("E2E_BUBBLE_CHILD")) {
+    return { name: "read", input: { path: "/acceptance-external/bubble.txt" } };
+  }
   if (prompt.includes("E2E_QUESTION")) {
     return {
       name: "question",
@@ -310,7 +323,9 @@ function respondTool(prompt, toolReply, body, send, finish, requestID) {
   if (toolReply) {
     const label = prompt.includes("E2E_CREATE_SESSION")
       ? "Acceptance session created"
-      : "Acceptance question resolved";
+      : prompt.includes("E2E_SUBAGENT_BUBBLE")
+        ? "Acceptance bubbling verified"
+        : "Acceptance question resolved";
     send({ content: `${label}: ${JSON.stringify(toolReply.content)}` });
     finish();
     return true;
