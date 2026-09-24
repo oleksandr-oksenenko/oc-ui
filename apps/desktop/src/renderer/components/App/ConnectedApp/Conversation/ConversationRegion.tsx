@@ -47,6 +47,9 @@ const permissionRenderKey = (request: {
   readonly id: string;
 }): string => `${request.sessionID}\u0000${request.id}`;
 
+const sameKeyList = (previous: readonly string[], next: readonly string[]): boolean =>
+  previous.length === next.length && previous.every((key, index) => key === next[index]);
+
 export function ConversationRegion(props: ConversationRegionProps): JSX.Element {
   const runtime = useServerRuntimeOptional();
   const visibleTranscript = createMemo(() => {
@@ -83,20 +86,155 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
     const location = serverFileImageLocation(session.location);
     return (fileUrl) => runtime.fileImages.read(fileUrl, location);
   });
-  const formKeys = createMemo(() => props.forms.sessionForms().map(formRenderKey), undefined, {
-    equals: (previous, next) =>
-      previous.length === next.length && previous.every((key, index) => key === next[index]),
-  });
-  const permissionKeys = createMemo(
-    () => props.permissions.requests().map(permissionRenderKey),
+  const requestFor = (key: string) =>
+    props.permissions.requests().find((item) => permissionRenderKey(item) === key);
+  const formFor = (key: string) =>
+    props.forms.sessionForms().find((item) => formRenderKey(item) === key);
+  const isSubagentSession = (sessionID: string) =>
+    props.workspace.subagentIDs().includes(sessionID);
+  const ownPermissionKeys = createMemo(
+    () =>
+      props.permissions
+        .requests()
+        .filter((request) => !isSubagentSession(request.sessionID))
+        .map(permissionRenderKey),
     undefined,
-    {
-      equals: (previous, next) =>
-        previous.length === next.length && previous.every((key, index) => key === next[index]),
-    },
+    { equals: sameKeyList },
   );
+  const ownFormKeys = createMemo(
+    () =>
+      props.forms
+        .sessionForms()
+        .filter((form) => !isSubagentSession(form.sessionID))
+        .map(formRenderKey),
+    undefined,
+    { equals: sameKeyList },
+  );
+  const renderPermissionCard = (key: string): JSX.Element => {
+    const request = () => requestFor(key);
+    const ownerID = key.slice(0, key.indexOf("\u0000"));
+    let root: HTMLDivElement | undefined;
+    onCleanup(() => {
+      const active = document.activeElement;
+      if (!root || !(active instanceof HTMLElement) || !root.contains(active)) return;
+      const pane = root.closest<HTMLElement>(".session-pane-shell");
+      const removed = root.querySelector<HTMLElement>("[data-permission-request-id]");
+      const cards = pane
+        ? [...pane.querySelectorAll<HTMLElement>("[data-permission-request-id]")]
+        : [];
+      const position = removed ? cards.indexOf(removed) : -1;
+      queueMicrotask(() => {
+        // The card's session must still be visible: a surviving descendant stays
+        // reachable across ancestor navigation, but leaving the subtree must not
+        // pull focus into the new view.
+        const stillVisible =
+          ownerID === props.workspace.selectedID() ||
+          props.workspace.subagentIDs().includes(ownerID);
+        if (
+          !pane?.isConnected ||
+          !stillVisible ||
+          (document.activeElement !== document.body &&
+            document.activeElement !== document.documentElement)
+        )
+          return;
+        const next =
+          position < 0
+            ? undefined
+            : [...pane.querySelectorAll<HTMLElement>("[data-permission-request-id]")][position];
+        (next ?? pane.querySelector<HTMLDivElement>('[aria-label="Prompt"]'))?.focus({
+          preventScroll: true,
+        });
+      });
+    });
+    return (
+      <div
+        class="permission-request-entry"
+        ref={(element) => {
+          root = element;
+        }}
+      >
+        <PermissionRequestCard
+          request={request()!}
+          disabled={
+            !props.connected() ||
+            props.permissions.pending() ||
+            (request()!.sessionID === props.workspace.selectedID() &&
+              props.permissions.state() !== "ready")
+          }
+          submitting={props.permissions.submitting(request()!.id)}
+          error={props.permissions.errorFor(request()!.id)}
+          onReply={(reply) => {
+            const current = request();
+            if (current && root?.contains(document.activeElement))
+              root
+                .querySelector<HTMLElement>("[data-permission-request-id]")
+                ?.focus({ preventScroll: true });
+            if (current) void props.permissions.reply(current.id, reply);
+          }}
+        />
+      </div>
+    );
+  };
+  const renderForm = (key: string): JSX.Element => {
+    const form = () => formFor(key);
+    return (
+      <QuestionForm
+        form={form()!}
+        disabled={!props.connected()}
+        submitting={props.forms.submitting(form()!.sessionID, form()!.id)}
+        error={props.forms.errorFor(form()!.sessionID, form()!.id)}
+        onSubmit={(answer) => void props.forms.reply(form()!.sessionID, form()!.id, answer)}
+        onCancel={() => void props.forms.cancel(form()!.sessionID, form()!.id)}
+      />
+    );
+  };
+  const renderSubagentGroup = (sessionID: string) => {
+    const permissionKeys = createMemo(
+      () =>
+        props.permissions
+          .requests()
+          .filter((request) => request.sessionID === sessionID)
+          .map(permissionRenderKey),
+      undefined,
+      { equals: sameKeyList },
+    );
+    const formKeys = createMemo(
+      () =>
+        props.forms
+          .sessionForms()
+          .filter((form) => form.sessionID === sessionID)
+          .map(formRenderKey),
+      undefined,
+      { equals: sameKeyList },
+    );
+    const label = createMemo(() => {
+      const session = props.workspace.sessions().find((candidate) => candidate.id === sessionID);
+      const detail = session?.title?.trim() || session?.agent || "Subagent";
+      return `Subagent: ${detail}`;
+    });
+    return (
+      <Show when={permissionKeys().length > 0 || formKeys().length > 0}>
+        <section
+          class="transcript-pending-subagent"
+          data-subagent-session-id={sessionID}
+          aria-labelledby={`transcript-pending-subagent-${sessionID}`}
+        >
+          <h3
+            id={`transcript-pending-subagent-${sessionID}`}
+            class="transcript-pending-subagent-title"
+          >
+            {label()}
+          </h3>
+          <For each={permissionKeys()}>{(key) => renderPermissionCard(key)}</For>
+          <For each={formKeys()}>{(key) => renderForm(key)}</For>
+        </section>
+      </Show>
+    );
+  };
   const pendingVisible = () =>
     props.permissions.recoveryError() !== undefined ||
+    props.permissions.subagentError() !== undefined ||
+    props.forms.subagentError() !== undefined ||
     props.permissions.state() !== "ready" ||
     props.permissions.requests().length > 0 ||
     props.forms.state() !== "ready" ||
@@ -118,6 +256,25 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               onClick={() => void props.permissions.sync()}
             >
               Refresh permissions
+            </Button>
+          </div>
+        )}
+      </Show>
+      <Show when={props.permissions.subagentError() ?? props.forms.subagentError()}>
+        {(error) => (
+          <div class="transcript-state transcript-error-state" role="alert">
+            <p>{error()}</p>
+            <Button
+              type="button"
+              size="small"
+              variant="outline"
+              disabled={!props.connected()}
+              onClick={() => {
+                void props.permissions.retrySubagents();
+                void props.forms.retrySubagents();
+              }}
+            >
+              Retry subagent requests
             </Button>
           </div>
         )}
@@ -144,72 +301,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
         </div>
       </Show>
 
-      <For each={permissionKeys()}>
-        {(permissionKey, index) => {
-          const request = () =>
-            props.permissions
-              .requests()
-              .find((item) => permissionRenderKey(item) === permissionKey);
-          let root: HTMLDivElement | undefined;
-          onCleanup(() => {
-            const active = document.activeElement;
-            const sessionID = request()?.sessionID ?? permissionKey.split("\u0000", 1)[0];
-            if (
-              !root ||
-              !(active instanceof HTMLElement) ||
-              !root.contains(active) ||
-              props.workspace.selectedID() !== sessionID
-            )
-              return;
-            const pane = root.closest<HTMLElement>(".session-pane-shell");
-            queueMicrotask(() => {
-              if (
-                !pane?.isConnected ||
-                props.workspace.selectedID() !== sessionID ||
-                (document.activeElement !== document.body &&
-                  document.activeElement !== document.documentElement)
-              )
-                return;
-              const nextRequest = props.permissions.requests()[index()];
-              const nextCard = nextRequest
-                ? [...pane.querySelectorAll<HTMLElement>("[data-permission-request-id]")].find(
-                    (card) => card.dataset.permissionRequestId === nextRequest.id,
-                  )
-                : undefined;
-              (nextCard ?? pane.querySelector<HTMLDivElement>('[aria-label="Prompt"]'))?.focus({
-                preventScroll: true,
-              });
-            });
-          });
-          return (
-            <div
-              class="permission-request-entry"
-              ref={(element) => {
-                root = element;
-              }}
-            >
-              <PermissionRequestCard
-                request={request()!}
-                disabled={
-                  !props.connected() ||
-                  props.permissions.state() !== "ready" ||
-                  props.permissions.pending()
-                }
-                submitting={props.permissions.submitting(request()!.id)}
-                error={props.permissions.errorFor(request()!.id)}
-                onReply={(reply) => {
-                  const current = request();
-                  if (current && root?.contains(document.activeElement))
-                    root
-                      .querySelector<HTMLElement>("[data-permission-request-id]")
-                      ?.focus({ preventScroll: true });
-                  if (current) void props.permissions.reply(current.id, reply);
-                }}
-              />
-            </div>
-          );
-        }}
-      </For>
+      <For each={ownPermissionKeys()}>{(key) => renderPermissionCard(key)}</For>
 
       <Show when={props.forms.state() === "loading"}>
         <output class="transcript-state" aria-live="polite">
@@ -233,21 +325,10 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
         </div>
       </Show>
 
-      <For each={formKeys()}>
-        {(formKey) => {
-          const form = () =>
-            props.forms.sessionForms().find((item) => formRenderKey(item) === formKey);
-          return (
-            <QuestionForm
-              form={form()!}
-              disabled={!props.connected()}
-              submitting={props.forms.submitting(form()!.id)}
-              error={props.forms.errorFor(form()!.id)}
-              onSubmit={(answer) => void props.forms.reply(form()!.id, answer)}
-              onCancel={() => void props.forms.cancel(form()!.id)}
-            />
-          );
-        }}
+      <For each={ownFormKeys()}>{(key) => renderForm(key)}</For>
+
+      <For each={props.workspace.subagentIDs()}>
+        {(sessionID) => renderSubagentGroup(sessionID)}
       </For>
     </article>
   );

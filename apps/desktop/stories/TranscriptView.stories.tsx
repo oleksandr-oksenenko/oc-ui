@@ -385,6 +385,37 @@ export const PendingRequestsFailure: Story = {
       ),
     }),
 };
+export const PendingSubagentRequests: Story = {
+  args: { messages: [], sessionStatus: "idle" },
+  render: (args) =>
+    renderNarrowTranscript({
+      ...args,
+      pendingInteraction: <TranscriptPendingFixture subagent />,
+    }),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("heading", { name: "Subagent: Explore auth" }),
+    ).toBeInTheDocument();
+    const group = canvasElement.querySelector<HTMLElement>(".transcript-pending-subagent");
+    if (!group) throw new Error("Subagent group did not render");
+    await expect(group.querySelectorAll("[data-permission-request-id]").length).toBe(1);
+    await expect(group.querySelectorAll(".question-form-card").length).toBe(1);
+
+    const article = canvasElement.querySelector<HTMLElement>(".transcript-pending-interaction");
+    if (!article) throw new Error("Pending interaction area did not render");
+    for (const node of [
+      article,
+      group,
+      ...group.querySelectorAll<HTMLElement>(".permission-request-card, .question-form-card"),
+    ]) {
+      await expect(node.scrollWidth).toBeLessThanOrEqual(node.clientWidth + 1);
+    }
+    await expect(group.getBoundingClientRect().width).toBeLessThanOrEqual(
+      article.getBoundingClientRect().width + 1,
+    );
+  },
+};
 export const Refreshing: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: true },
   render: renderTranscript,

@@ -19,10 +19,12 @@ export function createWorkspacePermissions() {
     state: () => "ready",
     error: () => undefined,
     recoveryError: () => undefined,
+    subagentError: () => undefined,
     pending: () => requests().length > 0,
     submitting: () => false,
     errorFor: () => undefined,
     sync,
+    retrySubagents: sync,
     reply: (id) => {
       setRequests((items) => items.filter((item) => item.id !== id));
       return Promise.resolve();

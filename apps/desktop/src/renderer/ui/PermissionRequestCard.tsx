@@ -41,7 +41,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps): JSX.El
         {(message) => <p class="permission-request-message">{message()}</p>}
       </Show>
 
-      <section class="permission-request-section" aria-labelledby={`${titleID}-resources`}>
+      <section class="permission-request-section">
         <h3 id={`${titleID}-resources`}>Resources</h3>
         <ul
           class="permission-request-values oc-scrollable"
@@ -69,7 +69,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps): JSX.El
       </Show>
 
       <Show when={savePatterns().length > 0}>
-        <section class="permission-request-section" aria-labelledby={`${titleID}-saved-patterns`}>
+        <section class="permission-request-section">
           <h3 id={`${titleID}-saved-patterns`}>Always allow patterns</h3>
           <ul
             class="permission-request-values oc-scrollable"

@@ -26,8 +26,9 @@ function optionToken(index: number): string {
   return `option:${index}`;
 }
 
-function fieldErrorID(formID: string, field: FormField): string {
-  return `question-form-field-error-${formID}-${field.key}`;
+/** Error ids are namespaced by the mounted instance, not the possibly shared form id. */
+function fieldErrorID(instanceID: string, field: FormField): string {
+  return `question-form-field-error-${instanceID}-${field.key}`;
 }
 
 type StringField = Extract<FormField, { readonly type: "string" }>;
@@ -177,7 +178,8 @@ function radioLabel(label: string) {
 }
 
 export function QuestionForm(props: QuestionFormProps) {
-  const titleID = `question-form-title-${createUniqueId()}`;
+  const instanceID = createUniqueId();
+  const titleID = `question-form-title-${instanceID}`;
   const [answer, setAnswerState] = createSignal<FormAnswer>(
     answerForForm(props.form.fields, props.initialAnswer),
   );
@@ -255,7 +257,7 @@ export function QuestionForm(props: QuestionFormProps) {
       );
     }
 
-    const errorID = fieldErrorID(props.form.id, field);
+    const errorID = fieldErrorID(instanceID, field);
     const selected = () => {
       if (customStringFields().has(field.key)) return CUSTOM_TOKEN;
       const text = answerText(answer()[field.key]);
@@ -397,7 +399,7 @@ export function QuestionForm(props: QuestionFormProps) {
         }
         disabled={unavailable()}
         required={field.required}
-        aria-describedby={error ? fieldErrorID(props.form.id, field) : undefined}
+        aria-describedby={error ? fieldErrorID(instanceID, field) : undefined}
         validationState={error ? "invalid" : "valid"}
         onChange={(value) => setAnswer(field.key, value === "true")}
       >
@@ -406,7 +408,7 @@ export function QuestionForm(props: QuestionFormProps) {
       </RadioGroup>
       <Show when={error}>
         {(message) => (
-          <p id={fieldErrorID(props.form.id, field)} class="question-form-field-error">
+          <p id={fieldErrorID(instanceID, field)} class="question-form-field-error">
             {message()}
           </p>
         )}
@@ -439,7 +441,7 @@ export function QuestionForm(props: QuestionFormProps) {
       <fieldset
         class="question-form-multiselect"
         data-invalid={error ? "" : undefined}
-        aria-describedby={error ? fieldErrorID(props.form.id, field) : undefined}
+        aria-describedby={error ? fieldErrorID(instanceID, field) : undefined}
       >
         <legend>{fieldLabel(field)}</legend>
         <Show when={field.description}>
@@ -509,11 +511,7 @@ export function QuestionForm(props: QuestionFormProps) {
         </Show>
         <Show when={error}>
           {(message) => (
-            <p
-              id={fieldErrorID(props.form.id, field)}
-              class="question-form-field-error"
-              role="alert"
-            >
+            <p id={fieldErrorID(instanceID, field)} class="question-form-field-error" role="alert">
               {message()}
             </p>
           )}

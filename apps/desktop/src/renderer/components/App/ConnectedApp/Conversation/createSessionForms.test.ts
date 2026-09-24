@@ -24,20 +24,30 @@ function form(id: string, sessionID: string): FormInfo {
 function setup(
   options: {
     readonly selectedID?: string;
+    readonly subagentIDs?: readonly string[];
     readonly listed?: FormInfo[];
     readonly sync?: FormData["sync"];
   } = {},
 ) {
   return withTestWorkspace((effects, dispose) => {
     const [selectedID, setSelectedID] = createSignal(options.selectedID);
+    const [subagentIDs, setSubagentIDs] = createSignal<readonly string[]>(
+      options.subagentIDs ?? [],
+    );
     const [connected, setConnected] = createSignal(true);
-    const [listed, setListed] = createSignal<ReturnType<FormData["list"]>>(options.listed ?? []);
+    const [listed, setListed] = createSignal<readonly FormInfo[]>(options.listed ?? []);
+    const loaded = new Set<string>([
+      ...(options.listed ?? []).map((item) => item.sessionID),
+      ...(options.selectedID === undefined ? [] : [options.selectedID]),
+    ]);
     const sync = vi.fn<FormData["sync"]>(options.sync ?? (() => Promise.resolve()));
     const invalidate = vi.fn<FormData["invalidate"]>();
     const reply = vi.fn<FormData["reply"]>(() => Promise.resolve());
     const cancel = vi.fn<FormData["cancel"]>(() => Promise.resolve());
     const events = createOpenCodeEventSource();
-    const list = vi.fn<FormData["list"]>(() => listed());
+    const list = vi.fn<FormData["list"]>((sessionID) =>
+      loaded.has(sessionID) ? listed().filter((item) => item.sessionID === sessionID) : undefined,
+    );
     const forms = createSessionForms({
       effects,
       data: {
@@ -45,6 +55,7 @@ function setup(
         session: { form: { list, sync, invalidate, reply, cancel } },
       },
       selectedID,
+      subagentIDs,
       connected,
     });
 
@@ -53,8 +64,12 @@ function setup(
       dispose,
       forms,
       setSelectedID,
+      setSubagentIDs,
       setConnected,
-      setListed,
+      setListed: (next: readonly FormInfo[]) => {
+        for (const item of next) loaded.add(item.sessionID);
+        setListed(next);
+      },
       sync,
       invalidate,
       reply,
@@ -193,8 +208,8 @@ describe("createSessionForms", () => {
     await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
 
     fixture.setConnected(false);
-    await fixture.forms.reply("one-form", { answer: "no" });
-    await fixture.forms.cancel("one-form");
+    await fixture.forms.reply("one", "one-form", { answer: "no" });
+    await fixture.forms.cancel("one", "one-form");
     expect(fixture.reply).not.toHaveBeenCalled();
     expect(fixture.cancel).not.toHaveBeenCalled();
 
@@ -302,11 +317,11 @@ describe("createSessionForms", () => {
     fixture.cancel.mockReturnValueOnce(cancelRequest.promise);
 
     const answer: FormAnswer = { answer: "yes" };
-    const reply = fixture.forms.reply("reply-form", answer);
-    void fixture.forms.reply("reply-form", answer);
-    const cancel = fixture.forms.cancel("cancel-form");
-    expect(fixture.forms.submitting("reply-form")).toBe(true);
-    expect(fixture.forms.submitting("cancel-form")).toBe(true);
+    const reply = fixture.forms.reply("one", "reply-form", answer);
+    void fixture.forms.reply("one", "reply-form", answer);
+    const cancel = fixture.forms.cancel("one", "cancel-form");
+    expect(fixture.forms.submitting("one", "reply-form")).toBe(true);
+    expect(fixture.forms.submitting("one", "cancel-form")).toBe(true);
     expect(fixture.forms.sessionForms()).toHaveLength(2);
     expect(fixture.reply).toHaveBeenCalledWith(
       { sessionID: "one", formID: "reply-form", answer },
@@ -320,13 +335,13 @@ describe("createSessionForms", () => {
 
     cancelRequest.reject(new Error("cancel failed"));
     await expect(cancel).resolves.toBeUndefined();
-    expect(fixture.forms.errorFor("cancel-form")).toBe(
+    expect(fixture.forms.errorFor("one", "cancel-form")).toBe(
       "The form could not be cancelled. Try again.",
     );
-    expect(fixture.forms.errorFor("reply-form")).toBeUndefined();
+    expect(fixture.forms.errorFor("one", "reply-form")).toBeUndefined();
     replyRequest.resolve();
     await expect(reply).resolves.toBeUndefined();
-    expect(fixture.forms.submitting("reply-form")).toBe(false);
+    expect(fixture.forms.submitting("one", "reply-form")).toBe(false);
     expect(fixture.forms.sessionForms()).toHaveLength(2);
     fixture.dispose();
   });
@@ -336,20 +351,231 @@ describe("createSessionForms", () => {
     const fixture = setup({ selectedID: "one", listed: [form("one-form", "one")] });
     await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
     fixture.reply.mockReturnValueOnce(replyRequest.promise);
-    const reply = fixture.forms.reply("one-form", { answer: "yes" });
+    const reply = fixture.forms.reply("one", "one-form", { answer: "yes" });
     fixture.setSelectedID("two");
     fixture.setSelectedID("one");
     replyRequest.reject(new Error("late"));
     await expect(reply).resolves.toBeUndefined();
-    expect(fixture.forms.errorFor("one-form")).toBeUndefined();
+    expect(fixture.forms.errorFor("one", "one-form")).toBeUndefined();
 
     fixture.setSelectedID("one");
     await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
     const unmountedReply = deferred();
     fixture.reply.mockReturnValueOnce(unmountedReply.promise);
-    const unmounted = fixture.forms.reply("one-form", { answer: "again" });
+    const unmounted = fixture.forms.reply("one", "one-form", { answer: "again" });
     fixture.dispose();
     unmountedReply.reject(new Error("unmounted"));
     await unmounted;
+  });
+});
+
+describe("createSessionForms subagent bubbling", () => {
+  it("projects related session forms after the selected session's own", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: [form("own-form", "one"), form("child-form", "child")],
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+
+    expect(fixture.forms.sessionForms().map((item) => item.id)).toEqual(["own-form", "child-form"]);
+
+    fixture.setSubagentIDs([]);
+    expect(fixture.forms.sessionForms().map((item) => item.id)).toEqual(["own-form"]);
+    fixture.dispose();
+  });
+
+  it("answers and cancels a related form through its owning session", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: [form("child-form", "child")],
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+
+    await fixture.forms.reply("child", "child-form", { answer: "yes" });
+    expect(fixture.reply).toHaveBeenCalledExactlyOnceWith(
+      { sessionID: "child", formID: "child-form", answer: { answer: "yes" } },
+      undefined,
+    );
+    await fixture.forms.cancel("child", "child-form");
+    expect(fixture.cancel).toHaveBeenCalledExactlyOnceWith(
+      { sessionID: "child", formID: "child-form" },
+      undefined,
+    );
+    expect(fixture.forms.submitting("child", "child-form")).toBe(false);
+    fixture.dispose();
+  });
+
+  it("hydrates unloaded related caches when connected and syncs created forms", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      sync: async (sessionID) => {
+        if (sessionID === "child") fixture.setListed([form("child-form", "child")]);
+      },
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+
+    fixture.setSubagentIDs(["child"]);
+    await vi.waitFor(() =>
+      expect(fixture.forms.sessionForms().map((item) => item.id)).toEqual(["child-form"]),
+    );
+    expect(fixture.sync).toHaveBeenCalledWith("child", undefined);
+
+    fixture.emitCreated(created("child", "event-form"));
+    await vi.waitFor(() => expect(fixture.invalidate).toHaveBeenCalledWith("child"));
+    await vi.waitFor(() =>
+      expect(
+        fixture.sync.mock.calls.filter(([sessionID]) => sessionID === "child").length,
+      ).toBeGreaterThan(1),
+    );
+    fixture.dispose();
+  });
+
+  it("keeps primary status independent from a failing related read", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      sync: async (sessionID) => {
+        if (sessionID === "child") throw new Error("offline");
+      },
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+
+    fixture.setSubagentIDs(["child"]);
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("child", undefined));
+    expect(fixture.forms.state()).toBe("ready");
+    expect(fixture.forms.error()).toBeUndefined();
+    fixture.dispose();
+  });
+
+  it("scopes related mutation errors to their own form", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: [form("child-form", "child")],
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+    fixture.reply.mockRejectedValueOnce(new Error("nope"));
+
+    await fixture.forms.reply("child", "child-form", { answer: "x" });
+    expect(fixture.forms.errorFor("child", "child-form")).toBe(
+      "The form could not be submitted. Try again.",
+    );
+    expect(fixture.forms.state()).toBe("ready");
+    fixture.dispose();
+  });
+
+  it("reports a failed related load and recovers it on retry", async () => {
+    let available = false;
+    const fixture = setup({
+      selectedID: "one",
+      sync: async (sessionID) => {
+        if (sessionID !== "child") return;
+        if (!available) throw new Error("offline");
+        fixture.setListed([form("child-form", "child")]);
+      },
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+
+    fixture.setSubagentIDs(["child"]);
+    await vi.waitFor(() =>
+      expect(fixture.forms.subagentError()).toBe("Some subagent questions could not be loaded."),
+    );
+
+    available = true;
+    await fixture.forms.retrySubagents();
+    expect(fixture.forms.subagentError()).toBeUndefined();
+    expect(fixture.forms.sessionForms().map((item) => item.id)).toEqual(["child-form"]);
+    fixture.dispose();
+  });
+
+  it("bounds concurrent related reads across event bursts", async () => {
+    const ids = ["a", "b", "c", "d", "e", "f"];
+    const started: string[] = [];
+    const releases: Array<() => void> = [];
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ids,
+      listed: ids.map((id) => form(`f-${id}`, id)),
+      sync: (sessionID) =>
+        sessionID === "one"
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              started.push(sessionID);
+              releases.push(resolve);
+            }),
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+
+    for (const id of ids) fixture.emitCreated(created(id, `event-${id}`));
+    await vi.waitFor(() => expect(started).toHaveLength(4));
+    expect(new Set(started)).toEqual(new Set(["a", "b", "c", "d"]));
+
+    releases.splice(0).forEach((release) => release());
+    await vi.waitFor(() => expect(started).toHaveLength(6));
+    releases.splice(0).forEach((release) => release());
+    fixture.dispose();
+  });
+
+  it("cancels queued related hydration when the subtree shrinks", async () => {
+    const started: string[] = [];
+    const releases: Array<() => void> = [];
+    const fixture = setup({
+      selectedID: "one",
+      sync: (sessionID) =>
+        sessionID === "one"
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              started.push(sessionID);
+              releases.push(resolve);
+            }),
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+
+    fixture.setSubagentIDs(["a", "b", "c", "d", "e", "f"]);
+    await vi.waitFor(() => expect(started).toHaveLength(4));
+    fixture.setSubagentIDs([]);
+    releases.splice(0).forEach((release) => release());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toHaveLength(4);
+    fixture.dispose();
+  });
+
+  it("routes duplicate form IDs to their own sessions", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: [form("shared", "one"), form("shared", "child")],
+    });
+    await vi.waitFor(() => expect(fixture.sync).toHaveBeenCalledWith("one", undefined));
+
+    await fixture.forms.reply("child", "shared", { answer: "child" });
+    await fixture.forms.reply("one", "shared", { answer: "own" });
+    expect(fixture.reply.mock.calls.map(([input]) => input)).toEqual([
+      { sessionID: "child", formID: "shared", answer: { answer: "child" } },
+      { sessionID: "one", formID: "shared", answer: { answer: "own" } },
+    ]);
+    fixture.dispose();
+  });
+
+  it("does not start a second related hydration after the primary refresh settles", async () => {
+    const primaryRead = deferred();
+    const relatedReleases: Array<() => void> = [];
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["a", "b"],
+      sync: (sessionID) => {
+        if (sessionID === "one") return primaryRead.promise;
+        return new Promise<void>((resolve) => relatedReleases.push(resolve));
+      },
+    });
+    await vi.waitFor(() => expect(relatedReleases).toHaveLength(2));
+
+    primaryRead.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(relatedReleases).toHaveLength(2);
+
+    relatedReleases.forEach((release) => release());
+    fixture.dispose();
   });
 });

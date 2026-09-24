@@ -14,6 +14,8 @@ type SessionFormsInput = {
   readonly effects: WorkspaceOwner;
   readonly data: SessionFormsData;
   readonly selectedID: Accessor<string | undefined>;
+  /** Descendant sessions of the selection, in display order; their forms bubble up. */
+  readonly subagentIDs: Accessor<readonly string[]>;
   readonly connected: Accessor<boolean>;
 };
 
@@ -23,11 +25,14 @@ export type SessionFormsController = {
   readonly sessionForms: Accessor<readonly FormInfo[]>;
   readonly state: Accessor<SessionFormsState>;
   readonly error: Accessor<string | undefined>;
-  readonly submitting: (formID: string) => boolean;
-  readonly errorFor: (formID: string) => string | undefined;
+  /** Set when a descendant session's forms could not be loaded. */
+  readonly subagentError: Accessor<string | undefined>;
+  readonly submitting: (sessionID: string, formID: string) => boolean;
+  readonly errorFor: (sessionID: string, formID: string) => string | undefined;
   readonly sync: () => Promise<void>;
-  readonly reply: (formID: string, answer: FormAnswer) => Promise<void>;
-  readonly cancel: (formID: string) => Promise<void>;
+  readonly retrySubagents: () => Promise<void>;
+  readonly reply: (sessionID: string, formID: string, answer: FormAnswer) => Promise<void>;
+  readonly cancel: (sessionID: string, formID: string) => Promise<void>;
 };
 
 const SYNC_FAILURE_MESSAGE = "Forms could not be refreshed. Try again.";
@@ -40,6 +45,7 @@ export function createSessionForms(input: SessionFormsInput): SessionFormsContro
     effects: input.effects,
     connected: input.connected,
     sessionID: input.selectedID,
+    relatedIDs: input.subagentIDs,
     form: input.data.session.form,
     errorMessage: (kind) => {
       if (kind === "sync") return SYNC_FAILURE_MESSAGE;
@@ -52,6 +58,7 @@ export function createSessionForms(input: SessionFormsInput): SessionFormsContro
     if (sessionID === "global") return;
     input.data.session.form.invalidate(sessionID);
     if (sessionID === input.selectedID()) controller.startSync();
+    else if (input.subagentIDs().includes(sessionID)) controller.syncSession(sessionID);
   });
 
   onCleanup(stopCreated);
@@ -60,10 +67,13 @@ export function createSessionForms(input: SessionFormsInput): SessionFormsContro
     sessionForms: controller.forms,
     state: controller.state,
     error: controller.error,
+    subagentError: controller.relatedError,
     submitting: controller.submitting,
     errorFor: controller.errorFor,
     sync: controller.sync,
-    reply: (formID, answer) => controller.reply(formID, answer).then(() => undefined),
-    cancel: (formID) => controller.cancel(formID).then(() => undefined),
+    retrySubagents: controller.retryRelated,
+    reply: (sessionID, formID, answer) =>
+      controller.reply(sessionID, formID, answer).then(() => undefined),
+    cancel: (sessionID, formID) => controller.cancel(sessionID, formID).then(() => undefined),
   };
 }

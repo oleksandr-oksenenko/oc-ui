@@ -1,4 +1,9 @@
-import type { FormInfo, PermissionRequest, SessionMessageAssistant } from "@opencode/client";
+import type {
+  FormInfo,
+  PermissionRequest,
+  SessionInfo,
+  SessionMessageAssistant,
+} from "@opencode/client";
 import { createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -47,6 +52,8 @@ function setup(
   options: {
     readonly transcript?: SessionWorkspace["transcript"];
     readonly contextLimit?: () => number | undefined;
+    readonly sessions?: readonly SessionInfo[];
+    readonly subagentIDs?: readonly string[];
   } = {},
 ) {
   stubResizeObserver();
@@ -61,13 +68,17 @@ function setup(
   );
   const [permissionsPending, setPermissionsPending] = createSignal(false);
   const [recoveryError, setRecoveryError] = createSignal<string>();
+  const [permissionsSubagentError, setPermissionsSubagentError] = createSignal<string>();
+  const [formsSubagentError, setFormsSubagentError] = createSignal<string>();
   const formsController: SessionFormsController = {
     sessionForms: forms,
     state,
     error: () => (state() === "failed" ? "Refresh failed." : undefined),
+    subagentError: formsSubagentError,
     submitting: () => false,
     errorFor: () => undefined,
     sync: vi.fn<SessionFormsController["sync"]>(async () => undefined),
+    retrySubagents: vi.fn<SessionFormsController["retrySubagents"]>(async () => undefined),
     reply: vi.fn<SessionFormsController["reply"]>(async () => undefined),
     cancel: vi.fn<SessionFormsController["cancel"]>(async () => undefined),
   };
@@ -79,16 +90,19 @@ function setup(
         ? "Permissions could not be refreshed. Try again."
         : undefined,
     recoveryError,
+    subagentError: permissionsSubagentError,
     pending: permissionsPending,
     submitting: (requestID) => permissionsPending() && requestID === permissions()[0]?.id,
     errorFor: () => undefined,
     sync: vi.fn<SessionPermissionsController["sync"]>(async () => undefined),
+    retrySubagents: vi.fn<SessionPermissionsController["retrySubagents"]>(async () => undefined),
     reply: vi.fn<SessionPermissionsController["reply"]>(async () => undefined),
   };
   const workspace: SessionWorkspace = {
-    sessions: () => [session],
+    sessions: () => options.sessions ?? [session],
     selectedSession: () => session,
     selectedID,
+    subagentIDs: () => options.subagentIDs ?? [],
     running: () => false,
     stopError: () => undefined,
     transcript: options.transcript ?? (() => []),
@@ -179,6 +193,8 @@ function setup(
     setPermissionsState,
     setPermissionsPending,
     setRecoveryError,
+    setPermissionsSubagentError,
+    setFormsSubagentError,
     dispose: () => {
       dispose();
       vi.unstubAllGlobals();
@@ -417,6 +433,170 @@ describe("ConversationRegion session permissions", () => {
     mounted.setPermissions([]);
     await Promise.resolve();
     expect(document.activeElement).not.toBe(prompt);
+    mounted.dispose();
+  });
+});
+
+const subagentSession = sessionFixture({
+  id: "ses_child",
+  title: "Explore auth",
+  parentID: session.id,
+  location: { directory: "/workspace" },
+});
+
+describe("ConversationRegion subagent bubbling", () => {
+  it("renders subagent cards and forms under a named group after the session's own", () => {
+    const mounted = setup(
+      [
+        form("own-form", "Own question"),
+        formForSession("ses_child", "child-form", "Child question"),
+      ],
+      [
+        permission("own_read", "read own", session.id),
+        permission("child_read", "read child", "ses_child"),
+      ],
+      { sessions: [session, subagentSession], subagentIDs: ["ses_child"] },
+    );
+
+    const pending = mounted.host.querySelector(".transcript-pending-interaction");
+    const group = pending?.querySelector('[data-subagent-session-id="ses_child"]');
+    expect(group?.querySelector(".transcript-pending-subagent-title")?.textContent).toBe(
+      "Subagent: Explore auth",
+    );
+    expect(group?.querySelector("[data-permission-request-id]")?.textContent).toContain(
+      "read child",
+    );
+    expect(group?.querySelector(".question-form-card")?.textContent).toContain("Child question");
+
+    const ownCard = pending?.querySelector("[data-permission-request-id]");
+    expect(ownCard?.textContent).toContain("read own");
+    expect(ownCard!.compareDocumentPosition(group!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    mounted.dispose();
+  });
+
+  it("routes a subagent card reply through the controller", () => {
+    const mounted = setup([], [permission("child_read", "read child", "ses_child")], {
+      sessions: [session, subagentSession],
+      subagentIDs: ["ses_child"],
+    });
+    const group = mounted.host.querySelector('[data-subagent-session-id="ses_child"]');
+    [...(group?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+      .find((button) => button.textContent === "Allow once")
+      ?.click();
+
+    expect(mounted.permissionsController.reply).toHaveBeenCalledWith("child_read", "once");
+    mounted.dispose();
+  });
+
+  it("restores focus to a subagent card when the preceding own card is removed", async () => {
+    const child = permission("child_read", "read child", "ses_child");
+    const mounted = setup([], [permission("own_read", "read own", session.id), child], {
+      sessions: [session, subagentSession],
+      subagentIDs: ["ses_child"],
+    });
+    mounted.host
+      .querySelector<HTMLButtonElement>('[data-permission-request-id="own_read"] button')
+      ?.focus();
+
+    mounted.setPermissions([child]);
+    await Promise.resolve();
+
+    expect(document.activeElement).toBe(
+      mounted.host.querySelector('[data-permission-request-id="child_read"]'),
+    );
+    mounted.dispose();
+  });
+
+  it("keeps a subagent form draft across unrelated permission updates", () => {
+    const mounted = setup([formForSession("ses_child", "child-form", "Child question")], [], {
+      sessions: [session, subagentSession],
+      subagentIDs: ["ses_child"],
+    });
+    const input = mounted.host.querySelector<HTMLInputElement>(
+      '[data-subagent-session-id="ses_child"] [data-form-field-key="answer"] input',
+    );
+    expect(input).not.toBeNull();
+    if (!input) return;
+    input.value = "Draft for the subagent";
+    input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+    mounted.setPermissions([permission("own_read", "read own", session.id)]);
+
+    const after = mounted.host.querySelector<HTMLInputElement>(
+      '[data-subagent-session-id="ses_child"] [data-form-field-key="answer"] input',
+    );
+    expect(after).toBe(input);
+    expect(after?.value).toBe("Draft for the subagent");
+    mounted.dispose();
+  });
+
+  it("keeps a subagent card actionable while the selected session read fails", () => {
+    const mounted = setup(
+      [],
+      [
+        permission("own_read", "read own", session.id),
+        permission("child_read", "read child", "ses_child"),
+      ],
+      { sessions: [session, subagentSession], subagentIDs: ["ses_child"] },
+    );
+    mounted.setPermissionsState("failed");
+    const allowButton = (requestID: string) =>
+      [
+        ...mounted.host.querySelectorAll<HTMLButtonElement>(
+          `[data-permission-request-id="${requestID}"] button`,
+        ),
+      ].find((button) => button.textContent === "Allow once");
+
+    expect(allowButton("own_read")?.disabled).toBe(true);
+    expect(allowButton("child_read")?.disabled).toBe(false);
+    mounted.dispose();
+  });
+
+  it("shows a descendant load failure with a combined retry", () => {
+    const mounted = setup();
+    mounted.setPermissionsSubagentError("Some subagent requests could not be loaded.");
+    const alert = mounted.host.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Some subagent requests could not be loaded.");
+    const retry = [...mounted.host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Retry subagent requests",
+    );
+    retry?.click();
+    expect(mounted.permissionsController.retrySubagents).toHaveBeenCalledOnce();
+    expect(mounted.formsController.retrySubagents).toHaveBeenCalledOnce();
+    mounted.dispose();
+  });
+
+  it("restores focus for a descendant card after navigating between ancestors", async () => {
+    const grandchild = sessionFixture({
+      id: "ses_grandchild",
+      title: "Fix tests",
+      parentID: subagentSession.id,
+      location: { directory: "/workspace" },
+    });
+    const grandchildPermission = permission("grand_read", "read grandchild", grandchild.id);
+    const mounted = setup([], [grandchildPermission], {
+      sessions: [session, subagentSession, grandchild],
+      subagentIDs: [subagentSession.id, grandchild.id],
+    });
+    mounted.host
+      .querySelector<HTMLButtonElement>('[data-permission-request-id="grand_read"] button')
+      ?.focus();
+    mounted.setSelectedID(subagentSession.id);
+
+    mounted.setPermissions([]);
+    await Promise.resolve();
+
+    expect(document.activeElement).toBe(
+      mounted.host.querySelector<HTMLDivElement>('[aria-label="Prompt"]'),
+    );
+    mounted.dispose();
+  });
+
+  it("hides subagent cards when the selected session has no descendants", () => {
+    const mounted = setup([], [permission("child_read", "read child", "ses_child")], {
+      sessions: [session, subagentSession],
+    });
+    expect(mounted.host.querySelector('[data-subagent-session-id="ses_child"]')).toBeNull();
     mounted.dispose();
   });
 });

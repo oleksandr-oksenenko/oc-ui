@@ -68,10 +68,10 @@ export function createGlobalForms(input: CreateGlobalFormsInput): GlobalFormsCon
     loadError: controller.error,
     connected: input.connected,
     pending: controller.pending,
-    submitting: controller.submitting,
-    errorFor: controller.errorFor,
+    submitting: (formID) => controller.submitting(GLOBAL_SESSION_ID, formID),
+    errorFor: (formID) => controller.errorFor(GLOBAL_SESSION_ID, formID),
     refresh: controller.sync,
-    reply: controller.reply,
-    cancel: controller.cancel,
+    reply: (formID, answer) => controller.reply(GLOBAL_SESSION_ID, formID, answer),
+    cancel: (formID) => controller.cancel(GLOBAL_SESSION_ID, formID),
   };
 }

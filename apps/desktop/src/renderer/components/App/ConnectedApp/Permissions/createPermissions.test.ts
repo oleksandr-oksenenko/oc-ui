@@ -23,9 +23,18 @@ function replied(request: PermissionRequest, reply: PermissionReply = "once"): R
     data: { sessionID: request.sessionID, requestID: request.id, reply },
   };
 }
+function asked(request: PermissionRequest): AskedEvent {
+  return {
+    id: `event-asked-${request.id}`,
+    created: 1,
+    type: "permission.asked",
+    data: request,
+  };
+}
 function setup(
   options: {
     readonly selectedID?: string;
+    readonly subagentIDs?: readonly string[];
     readonly connected?: boolean;
     readonly listed?: Record<string, PermissionRequest[]>;
     readonly sessionSync?: PermissionData["sync"];
@@ -33,8 +42,13 @@ function setup(
 ) {
   return withTestWorkspace((effects, dispose) => {
     const [selectedID, setSelectedID] = createSignal(options.selectedID);
+    const [subagentIDs, setSubagentIDs] = createSignal<readonly string[]>(
+      options.subagentIDs ?? [],
+    );
     const [connected, setConnected] = createSignal(options.connected ?? true);
-    const [listed, setListedState] = createSignal(options.listed ?? {});
+    const [listed, setListedState] = createSignal<Record<string, PermissionRequest[]>>(
+      options.listed ?? {},
+    );
     const sessionSync = vi.fn<PermissionData["sync"]>(
       options.sessionSync ?? (() => Promise.resolve()),
     );
@@ -51,12 +65,13 @@ function setup(
     const permissions = createPermissions({
       effects,
       selectedID,
+      subagentIDs,
       connected,
       data: {
         on: events.on,
         session: {
           permission: {
-            list: (id) => listed()[id] ?? [],
+            list: (id) => listed()[id],
             sync: sessionSync,
             invalidate: sessionInvalidate,
             reply,
@@ -72,6 +87,7 @@ function setup(
       sessionInvalidate,
       reply,
       setSelectedID,
+      setSubagentIDs,
       setConnected,
       setListed(sessionID: string, requests: PermissionRequest[]) {
         setListedState((current) => ({ ...current, [sessionID]: requests }));
@@ -304,5 +320,322 @@ describe("createPermissions", () => {
     response.resolve();
     await Promise.all([operation, shutdown]);
     expect(closed).toHaveBeenCalledOnce();
+  });
+});
+
+describe("createPermissions subagent bubbling", () => {
+  it("projects subagent requests after the selected session's own and hides unrelated sessions", async () => {
+    const own = permission("own", "one");
+    const subagent = permission("sub", "child");
+    const unrelated = permission("unrelated", "other");
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: { one: [own], child: [subagent], other: [unrelated] },
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    expect(fixture.permissions.requests()).toEqual([own, subagent]);
+    fixture.dispose();
+  });
+
+  it("routes a subagent reply through its owning session", async () => {
+    const subagent = permission("sub", "child", ["/tmp/**"]);
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: { one: [], child: [subagent] },
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    await fixture.permissions.reply("sub", "always");
+    expect(fixture.reply).toHaveBeenCalledExactlyOnceWith({
+      sessionID: "child",
+      requestID: "sub",
+      reply: "always",
+    });
+    expect(fixture.permissions.requests()).toEqual([]);
+    fixture.dispose();
+  });
+
+  it("syncs a trusted subagent on permission events and ignores unrelated sessions", async () => {
+    const subagent = permission("sub", "child");
+    const unrelated = permission("other", "other");
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      sessionSync: async (sessionID) => {
+        if (sessionID === "child") fixture.setListed("child", [subagent]);
+      },
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    fixture.emitAsked(asked(unrelated));
+    await Promise.resolve();
+    expect(fixture.sessionSync).not.toHaveBeenCalledWith("other");
+
+    fixture.emitAsked(asked(subagent));
+    await vi.waitFor(() => expect(fixture.permissions.requests()).toEqual([subagent]));
+    expect(fixture.sessionInvalidate).toHaveBeenCalledWith("child");
+    expect(fixture.sessionSync).toHaveBeenCalledWith("child");
+    fixture.dispose();
+  });
+
+  it("hydrates unloaded subagent caches when connected and re-checks on reconnect", async () => {
+    const subagent = permission("sub", "child");
+    const fixture = setup({
+      selectedID: "one",
+      sessionSync: async (sessionID) => {
+        if (sessionID === "child") fixture.setListed("child", [subagent]);
+      },
+    });
+    await vi.waitFor(() => expect(fixture.sessionSync).toHaveBeenCalledWith("one"));
+
+    fixture.setConnected(false);
+    fixture.setSubagentIDs(["child"]);
+    await Promise.resolve();
+    expect(fixture.sessionSync).not.toHaveBeenCalledWith("child");
+
+    fixture.setConnected(true);
+    await vi.waitFor(() => expect(fixture.permissions.requests()).toEqual([subagent]));
+    expect(fixture.sessionSync).toHaveBeenCalledWith("child");
+    fixture.dispose();
+  });
+
+  it("recovers a blocked subagent reply without changing the selected session status", async () => {
+    const subagent = permission("sub", "child");
+    let available = false;
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: { one: [], child: [subagent] },
+      sessionSync: async (sessionID) => {
+        if (sessionID === "child" && !available) throw new Error("offline");
+      },
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    fixture.reply.mockRejectedValueOnce(new Error("reply failed"));
+    await fixture.permissions.reply("sub", "once");
+
+    expect(fixture.permissions.pending()).toBe(true);
+    expect(fixture.permissions.recoveryError()).toContain("permission response");
+    expect(fixture.permissions.state()).toBe("ready");
+
+    available = true;
+    await fixture.permissions.sync();
+    expect(fixture.permissions.pending()).toBe(false);
+    expect(fixture.permissions.state()).toBe("ready");
+    expect(fixture.permissions.errorFor("sub")).toContain("could not be sent");
+    fixture.dispose();
+  });
+
+  it("rejects Always replies without saved patterns from subagents too", async () => {
+    const subagent = permission("sub", "child");
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: { one: [], child: [subagent] },
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    await fixture.permissions.reply("sub", "always");
+    expect(fixture.reply).not.toHaveBeenCalled();
+    fixture.dispose();
+  });
+
+  it("fences an externally replied subagent request against stale snapshots", async () => {
+    const request = permission("sub", "child");
+    const replacement = permission("next", "child");
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: { one: [], child: [request] },
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    expect(fixture.permissions.requests()).toEqual([request]);
+
+    fixture.emitReplied(replied(request));
+    expect(fixture.permissions.requests()).toEqual([]);
+
+    // A racing snapshot may republish the request; the fence keeps it hidden.
+    fixture.setListed("child", [request]);
+    expect(fixture.permissions.requests()).toEqual([]);
+
+    // The next authoritative child read drops the fence and keeps it gone.
+    fixture.setListed("child", [replacement]);
+    fixture.emitAsked(asked(replacement));
+    await vi.waitFor(() => expect(fixture.permissions.requests()).toEqual([replacement]));
+
+    // A later snapshot may list the old request again; the cleared fence shows it.
+    fixture.setListed("child", [request, replacement]);
+    expect(fixture.permissions.requests()).toEqual([request, replacement]);
+    fixture.dispose();
+  });
+
+  it("bounds concurrent subagent reads across event bursts", async () => {
+    const ids = ["a", "b", "c", "d", "e", "f"];
+    const started: string[] = [];
+    const releases: Array<() => void> = [];
+    const listed: Record<string, PermissionRequest[]> = {};
+    for (const id of ids) listed[id] = [];
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ids,
+      listed,
+      sessionSync: (sessionID) =>
+        sessionID === "one"
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              started.push(sessionID);
+              releases.push(resolve);
+            }),
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    for (const id of ids) fixture.emitAsked(asked(permission(`req-${id}`, id)));
+    await vi.waitFor(() => expect(started).toHaveLength(4));
+    expect(new Set(started)).toEqual(new Set(["a", "b", "c", "d"]));
+
+    releases.splice(0).forEach((release) => release());
+    await vi.waitFor(() => expect(started).toHaveLength(6));
+    releases.splice(0).forEach((release) => release());
+    fixture.dispose();
+  });
+
+  it("cancels queued descendant hydration when the subtree shrinks", async () => {
+    const started: string[] = [];
+    const releases: Array<() => void> = [];
+    const fixture = setup({
+      selectedID: "one",
+      sessionSync: (sessionID) =>
+        sessionID === "one"
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              started.push(sessionID);
+              releases.push(resolve);
+            }),
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    fixture.setSubagentIDs(["a", "b", "c", "d", "e", "f"]);
+    await vi.waitFor(() => expect(started).toHaveLength(4));
+    fixture.setSubagentIDs([]);
+    releases.splice(0).forEach((release) => release());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toHaveLength(4);
+    fixture.dispose();
+  });
+
+  it("skips queued descendant event reads after the subtree shrinks", async () => {
+    const ids = ["a", "b", "c", "d", "e", "f"];
+    const started: string[] = [];
+    const releases: Array<() => void> = [];
+    const listed: Record<string, PermissionRequest[]> = {};
+    for (const id of ids) listed[id] = [];
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ids,
+      listed,
+      sessionSync: (sessionID) =>
+        sessionID === "one"
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              started.push(sessionID);
+              releases.push(resolve);
+            }),
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    for (const id of ids) fixture.emitAsked(asked(permission(`req-${id}`, id)));
+    await vi.waitFor(() => expect(started).toHaveLength(4));
+    fixture.setSubagentIDs(["a", "b", "c", "d"]);
+    releases.splice(0).forEach((release) => release());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toHaveLength(4);
+    fixture.dispose();
+  });
+
+  it("keeps queued hydration alive when retrying a failed descendant", async () => {
+    const releases: Array<() => void> = [];
+    const sessionSync = vi.fn<PermissionData["sync"]>((sessionID) => {
+      if (sessionID === "one") return Promise.resolve();
+      if (sessionID === "a") return Promise.reject(new Error("offline"));
+      return new Promise<void>((resolve) => releases.push(resolve));
+    });
+    const fixture = setup({ selectedID: "one", sessionSync });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    fixture.setSubagentIDs(["a", "b", "c", "d", "e", "f"]);
+    await vi.waitFor(() =>
+      expect(sessionSync.mock.calls.some(([sessionID]) => sessionID === "e")).toBe(true),
+    );
+    expect(sessionSync.mock.calls.some(([sessionID]) => sessionID === "f")).toBe(false);
+    await vi.waitFor(() =>
+      expect(fixture.permissions.subagentError()).toBe(
+        "Some subagent requests could not be loaded.",
+      ),
+    );
+
+    const retry = fixture.permissions.retrySubagents();
+    try {
+      for (let round = 0; round < 6; round += 1) {
+        releases.splice(0).forEach((release) => release());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(sessionSync.mock.calls.some(([sessionID]) => sessionID === "f")).toBe(true);
+    } finally {
+      releases.splice(0).forEach((release) => release());
+      await retry;
+      fixture.dispose();
+    }
+  });
+
+  it("reports a failed descendant load and recovers it on retry", async () => {
+    const subagent = permission("sub", "child");
+    let available = false;
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      sessionSync: async (sessionID) => {
+        if (sessionID !== "child") return;
+        if (!available) throw new Error("offline");
+        fixture.setListed("child", [subagent]);
+      },
+    });
+    await vi.waitFor(() =>
+      expect(fixture.permissions.subagentError()).toBe(
+        "Some subagent requests could not be loaded.",
+      ),
+    );
+
+    available = true;
+    await fixture.permissions.retrySubagents();
+    expect(fixture.permissions.subagentError()).toBeUndefined();
+    expect(fixture.permissions.requests()).toEqual([subagent]);
+    fixture.dispose();
+  });
+
+  it("ignores a late descendant failure after the session leaves the subtree", async () => {
+    const childRead = deferred();
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: { one: [], child: [] },
+      sessionSync: (sessionID) => (sessionID === "child" ? childRead.promise : Promise.resolve()),
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+
+    fixture.emitAsked(asked(permission("req", "child")));
+    await vi.waitFor(() => expect(fixture.sessionSync).toHaveBeenCalledWith("child"));
+    fixture.setSubagentIDs([]);
+    childRead.reject(new Error("offline"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fixture.permissions.subagentError()).toBeUndefined();
+
+    // Re-adding a loaded child must not resurface the departed session's failure.
+    fixture.setSubagentIDs(["child"]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fixture.permissions.subagentError()).toBeUndefined();
+    fixture.dispose();
   });
 });

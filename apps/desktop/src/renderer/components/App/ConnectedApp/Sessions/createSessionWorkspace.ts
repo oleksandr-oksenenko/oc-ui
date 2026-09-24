@@ -10,7 +10,11 @@ import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import type { SessionCatalog } from "../../../../opencode/session-catalog.ts";
 import { syncActiveStatuses } from "../../../../opencode/session-catalog.ts";
-import { chooseSessionFallback, sessionAncestorIDs } from "./session-selection.ts";
+import {
+  chooseSessionFallback,
+  sessionAncestorIDs,
+  sessionSubtreeIDs,
+} from "./session-selection.ts";
 
 type SessionMessage = ReturnType<ConnectedRuntime["data"]["session"]["message"]["list"]>[number];
 
@@ -41,6 +45,8 @@ export type SessionWorkspace = {
   readonly sessions: Accessor<readonly SessionInfo[]>;
   readonly selectedID: Accessor<string | undefined>;
   readonly selectedSession: Accessor<SessionInfo | undefined>;
+  /** Descendants of the selection in tree order, excluding the selection itself. */
+  readonly subagentIDs: Accessor<readonly string[]>;
   readonly running: Accessor<boolean>;
   readonly stopError: Accessor<string | undefined>;
   readonly transcript: Accessor<readonly SessionMessage[]>;
@@ -99,6 +105,12 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   const selectedSession = createMemo(() => {
     const id = selectedID();
     return id === undefined ? undefined : sessions().find((session) => session.id === id);
+  });
+
+  const subagentIDs = createMemo<readonly string[]>(() => {
+    const selected = selectedID();
+    if (selected === undefined) return [];
+    return sessionSubtreeIDs(selected, sessions()).filter((sessionID) => sessionID !== selected);
   });
 
   const transcriptStatus = createMemo<DataSessionStatus>(() => {
@@ -393,6 +405,7 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     sessions,
     selectedID,
     selectedSession,
+    subagentIDs,
     running,
     stopError,
     transcript,

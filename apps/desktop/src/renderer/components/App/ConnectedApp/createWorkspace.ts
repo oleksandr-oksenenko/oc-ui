@@ -103,12 +103,14 @@ export function createWorkspaceModel(
     effects: runtime.effects,
     data: runtime.data,
     selectedID: sessions.selectedID,
+    subagentIDs: sessions.subagentIDs,
     connected,
   });
   const permissions = createPermissions({
     effects: runtime.effects,
     data: runtime.data,
     selectedID: sessions.selectedID,
+    subagentIDs: sessions.subagentIDs,
     connected,
   });
   createConnectedLifecycle({
