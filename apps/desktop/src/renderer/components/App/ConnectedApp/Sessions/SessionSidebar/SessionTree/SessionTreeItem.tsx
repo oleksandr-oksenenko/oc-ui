@@ -1,4 +1,4 @@
-import type { SessionAttention } from "../../createSessionAttention.ts";
+import type { SessionAttentionState } from "../../session-attention-rollup.ts";
 import { Collapsible } from "@opencode/ui/collapsible";
 import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
@@ -12,7 +12,7 @@ import "./SessionTreeItem.css";
 
 export type SessionTreeItemProps = {
   readonly session: SessionInfo;
-  readonly attention?: SessionAttention;
+  readonly attention?: SessionAttentionState;
   readonly status: DataSessionStatus;
   readonly hasChildren: boolean;
   readonly selected: boolean;
@@ -27,16 +27,18 @@ export type SessionTreeItemProps = {
 
 export function SessionTreeItem(props: SessionTreeItemProps) {
   const title = () => props.session.title?.trim() || "Untitled session";
-  const statusLabel = () =>
-    props.attention === "permission"
-      ? "Permission required"
-      : props.attention === "question"
-        ? "Question awaiting answer"
-        : props.attention === "completed"
-          ? "Turn completed"
-          : props.status === "running"
-            ? "Running"
-            : "Idle";
+  const inherited = () => props.attention?.origin === "subagents";
+  const statusLabel = () => {
+    const attention = props.attention;
+    if (attention?.kind === "permission") {
+      return inherited() ? "Subagent permission required" : "Permission required";
+    }
+    if (attention?.kind === "question") {
+      return inherited() ? "Subagent question awaiting answer" : "Question awaiting answer";
+    }
+    if (attention?.kind === "completed") return "Turn completed";
+    return props.status === "running" ? "Running" : "Idle";
+  };
 
   return (
     <div class="shell-session-tree-item">
@@ -87,7 +89,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             {props.attention || props.status === "running" ? (
               <span
                 class="shell-session-status"
-                data-status={props.attention ?? props.status}
+                data-status={props.attention?.kind ?? props.status}
                 aria-hidden="true"
                 title={statusLabel()}
               >

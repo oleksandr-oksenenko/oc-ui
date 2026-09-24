@@ -576,7 +576,7 @@ describe("session attention indicators", () => {
       <SessionTreeItem
         session={session("waiting", "Waiting")}
         status="running"
-        attention="permission"
+        attention={{ kind: "permission", origin: "session" }}
         hasChildren={false}
         selected={false}
         expanded={false}
@@ -592,6 +592,70 @@ describe("session attention indicators", () => {
     expect(host.querySelector(".shell-session-status")?.parentElement?.className).toBe(
       "shell-session-row-end",
     );
+    dispose();
+  });
+
+  it("rolls a collapsed descendant's permission up to every ancestor row", () => {
+    const { host, dispose } = mount(() => (
+      <SessionTree
+        sessions={[
+          session("root", "Root"),
+          session("child", "Child", "root"),
+          session("grandchild", "Grandchild", "child"),
+        ]}
+        statusForSession={() => "running"}
+        expandedIDs={[]}
+        canDelete
+        deletionStatusForSession={() => "ready"}
+        attentionForSession={(id) => (id === "grandchild" ? "permission" : undefined)}
+        onSelect={() => undefined}
+        onToggleExpanded={() => undefined}
+        onDelete={() => undefined}
+      />
+    ));
+
+    expect(host.querySelector('[aria-label="Root, Subagent permission required"]')).not.toBeNull();
+    expect(host.querySelectorAll(".shell-session-attention-dot")).toHaveLength(1);
+    dispose();
+  });
+
+  it("prefers a descendant's permission over the row's own question", () => {
+    const { host, dispose } = mount(() => (
+      <SessionTree
+        sessions={[session("root", "Root"), session("child", "Child", "root")]}
+        statusForSession={() => "idle"}
+        expandedIDs={["root"]}
+        canDelete
+        deletionStatusForSession={() => "ready"}
+        attentionForSession={(id) => (id === "child" ? "permission" : "question")}
+        onSelect={() => undefined}
+        onToggleExpanded={() => undefined}
+        onDelete={() => undefined}
+      />
+    ));
+
+    expect(host.querySelector('[aria-label="Root, Subagent permission required"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Child, Permission required"]')).not.toBeNull();
+    dispose();
+  });
+
+  it("keeps a pending descendant's attention visible while searching", () => {
+    const { host, dispose } = mount(() => (
+      <SessionTree
+        sessions={[session("root", "Root"), session("child", "Unrelated name", "root")]}
+        statusForSession={() => "idle"}
+        expandedIDs={[]}
+        query="Root"
+        canDelete
+        deletionStatusForSession={() => "ready"}
+        attentionForSession={(id) => (id === "child" ? "permission" : undefined)}
+        onSelect={() => undefined}
+        onToggleExpanded={() => undefined}
+        onDelete={() => undefined}
+      />
+    ));
+
+    expect(host.querySelector('[aria-label="Root, Subagent permission required"]')).not.toBeNull();
     dispose();
   });
 });

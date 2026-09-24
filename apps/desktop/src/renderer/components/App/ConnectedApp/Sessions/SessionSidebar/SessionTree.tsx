@@ -4,6 +4,7 @@ import type { SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
 import { For, Show, createMemo } from "solid-js";
 
+import { rollupSessionAttention, type SessionAttentionState } from "../session-attention-rollup.ts";
 import { projectSessionTree, type SessionTreeNode } from "../session-tree-projection.ts";
 import type { SessionDeletionStatus } from "../createSessionFlows.ts";
 import { SessionTreeItem } from "./SessionTree/SessionTreeItem.tsx";
@@ -28,6 +29,12 @@ export function SessionTree(props: SessionTreeProps) {
   const isExpanded = (id: string) => props.expandedIDs.includes(id);
   const query = createMemo(() => props.query?.trim().toLowerCase() ?? "");
   const projection = createMemo(() => projectSessionTree(props.sessions, query(), props.now));
+  // Attention covers the unfiltered tree so search cannot hide a blocked descendant.
+  const fullProjection = createMemo(() => projectSessionTree(props.sessions, "", props.now));
+  const attentionByID = createMemo<ReadonlyMap<string, SessionAttentionState>>(() => {
+    const own = props.attentionForSession;
+    return own === undefined ? new Map() : rollupSessionAttention(fullProjection().roots, own);
+  });
 
   const renderSessions = (nodes: readonly SessionTreeNode[]) => (
     <For each={nodes}>
@@ -49,7 +56,7 @@ export function SessionTree(props: SessionTreeProps) {
           <SessionTreeItem
             session={session()}
             status={props.statusForSession(session().id)}
-            attention={props.attentionForSession?.(session().id)}
+            attention={attentionByID().get(session().id)}
             hasChildren={node.children.length > 0}
             selected={props.selectedID === session().id}
             expanded={filtering() || isExpanded(session().id)}
