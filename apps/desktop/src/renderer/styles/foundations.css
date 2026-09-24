@@ -19,18 +19,21 @@
   --oc-border-strong: #cbcbcb;
   --oc-border-emphasis: #777;
   --oc-content-divider: var(--oc-border-muted);
+
+  /* One text ramp with visible steps: strong, base, muted, then a genuinely
+     faint tone for incidental labels. Icons keep their own two steps. */
   --oc-text-strong: #0d0d0d;
   --oc-text-contrast: #0a0a0a;
   --oc-text-on-selection: #f5f5f5;
-  --oc-text-base: #2f2f2f;
-  --oc-text-muted: #606060;
-  --oc-text-faint: #666;
-  --oc-icon-faint: #707070;
-  --oc-icon-base: #5a5a5a;
+  --oc-text-base: #3a3a3a;
+  --oc-text-muted: #565656;
+  --oc-text-faint: #6b6b6b;
+  --oc-icon-faint: #8f8f8f;
+  --oc-icon-base: #5f5f5f;
   --oc-accent: #075ebd;
-  --oc-focus-ring: var(--oc-border-emphasis);
-  --oc-focus-ring-width: 1px;
-  --oc-focus-ring-offset: 0px;
+  --oc-focus-ring: rgb(9 105 218 / 55%);
+  --oc-focus-ring-width: 2px;
+  --oc-focus-ring-offset: 1px;
   --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
   --oc-focus-ring-inset-offset: calc(-1 * var(--oc-focus-ring-width));
   --oc-status-info: #075ebd;
@@ -44,18 +47,32 @@
   --oc-selection-hover: #075ebd;
   --oc-selection-pressed: #064f9d;
   --oc-selection-ring: rgb(9 105 218 / 14%);
+  --oc-selection-tint: rgb(9 105 218 / 10%);
+  --oc-selection-tint-strong: rgb(9 105 218 / 18%);
   --oc-diff-addition: var(--oc-status-success);
   --oc-diff-deletion: #b42318;
-  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 12%), 0 0 0 1px var(--oc-border-base);
+
+  /* Three elevation roles: card for content objects, lift for the composer
+     and floating cards, floating for menus and dialogs. Shadows only: every
+     surface keeps its own 1px border for the edge. */
+  --oc-shadow-card: 0 1px 2px rgb(0 0 0 / 6%), 0 3px 8px rgb(0 0 0 / 5%);
+  --oc-shadow-lift: 0 1px 2px rgb(0 0 0 / 5%), 0 12px 32px rgb(0 0 0 / 7%);
+  --oc-shadow-action: 0 1px 2px rgb(0 0 0 / 18%);
+  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 12%);
   --oc-shadow-popover: 0 8px 24px rgb(0 0 0 / 10%);
 
-  /* Ordinary controls share one compact radius; reserve full rounding for
-     circles and pills. */
+  /* Ordinary controls share one compact radius; cards and panels step up so
+     containment is legible. Reserve full rounding for circles and pills. */
   --oc-dropdown-padding-block: 2px;
   --oc-dropdown-padding-inline: 5px;
-  --oc-radius: 4px;
+  --oc-radius: 6px;
+  --oc-radius-card: 10px;
+  --oc-radius-panel: 12px;
   --oc-radius-full: 9999px;
   --oc-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --oc-motion-duration: 140ms;
+  --oc-motion-duration-fast: 100ms;
+  --oc-titlebar-height: 40px;
   --oc-scrollbar-thumb: var(--oc-border-strong);
   --oc-scrollbar-thumb-hover: var(--oc-border-emphasis);
   --oc-scrollbar-track: transparent;
@@ -63,13 +80,20 @@
   --oc-scrollbar-size: 8px;
 
   /* Product typography roles. Feature styles consume roles instead of
-     recreating combinations of family, size, rhythm, and weight. */
-  --oc-font-sans: var(--font-family-sans, Inter, system-ui, sans-serif);
-  --oc-font-mono: var(--font-family-mono, ui-monospace, monospace);
+     recreating combinations of family, size, rhythm, and weight. The product
+     owns the system stack: desktop platforms already ship a UI face, and a
+     named webfont is never loaded here. */
+  --font-family-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Roboto", sans-serif;
+  --font-family-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
+  --oc-font-sans: var(--font-family-sans);
+  --oc-font-mono: var(--font-family-mono);
   --oc-type-page-title-size: 21px;
   --oc-type-page-title-line-height: 1.2;
   --oc-type-page-title-weight: 600;
   --oc-type-page-title-letter-spacing: -0.03em;
+  --oc-type-title-size: 15px;
+  --oc-type-title-line-height: 20px;
+  --oc-type-title-weight: 600;
   --oc-type-heading-size: 18px;
   --oc-type-heading-line-height: 24px;
   --oc-type-heading-weight: 600;
@@ -94,6 +118,9 @@
   --oc-type-tab-size: 11px;
   --oc-type-tab-line-height: 14px;
   --oc-type-tab-weight: 600;
+  --oc-type-label-size: 12px;
+  --oc-type-label-line-height: 16px;
+  --oc-type-label-weight: 500;
   --oc-type-kicker-size: 10px;
   --oc-type-kicker-line-height: 14px;
   --oc-type-kicker-weight: 600;
@@ -164,13 +191,13 @@
   --v2-state-border-danger: var(--oc-status-danger-border);
   --v2-state-bg-danger: var(--oc-status-danger-surface);
 
-  /* Upstream's published radius family remains available, but all five
-     legacy names resolve to the same product radius. */
+  /* Upstream's published radius family maps onto the product scale: compact
+     controls keep the control radius, larger surfaces step up. */
   --radius-xs: var(--oc-radius);
   --radius-sm: var(--oc-radius);
   --radius-md: var(--oc-radius);
-  --radius-lg: var(--oc-radius);
-  --radius-xl: var(--oc-radius);
+  --radius-lg: var(--oc-radius-card);
+  --radius-xl: var(--oc-radius-panel);
 
   font-family: var(--oc-font-sans);
   color: var(--oc-text-strong);
@@ -179,31 +206,26 @@
   text-rendering: optimizelegibility;
 }
 
-:root[data-color-scheme="dark"] {
+/* Dark themes share text, status, selection, and elevation roles. `dark` is
+   the AMOLED palette; `dim` lifts surfaces off pure black for everyday use. */
+:root[data-color-scheme="dark"],
+:root[data-color-scheme="dim"] {
   color-scheme: dark;
 
-  --oc-surface-canvas: #000;
-  --oc-surface-subtle: #050505;
-  --oc-surface-raised: #0a0a0a;
-  --oc-surface-control: #111;
-  --oc-surface-selected: #171717;
-  --oc-surface-hover: #1c1c1c;
-  --oc-surface-elevated: #1f1f1f;
   --oc-overlay-hover: rgb(255 255 255 / 6%);
   --oc-overlay-pressed: rgb(255 255 255 / 10%);
   --oc-scrim: rgb(0 0 0 / 72%);
-  --oc-border-muted: #1a1a1a;
-  --oc-border-base: #242424;
-  --oc-border-strong: #343434;
-  --oc-border-emphasis: #686868;
   --oc-text-strong: #f2f2f2;
   --oc-text-contrast: #f5f5f5;
-  --oc-text-base: #d0d0d0;
-  --oc-text-muted: #888;
-  --oc-text-faint: #7f7f7f;
-  --oc-icon-faint: #6f6f6f;
+  --oc-text-base: #c9c9c9;
+  --oc-text-muted: #9b9b9b;
+  --oc-text-faint: #838383;
+  --oc-icon-faint: #757575;
   --oc-icon-base: #a5a5a5;
   --oc-accent: #74a7ff;
+  --oc-focus-ring: rgb(116 167 255 / 60%);
+  --oc-selection-tint: rgb(116 167 255 / 16%);
+  --oc-selection-tint-strong: rgb(116 167 255 / 26%);
   --oc-status-info: #5598f6;
   --oc-status-success: #7ee787;
   --oc-status-warning: #f5b942;
@@ -211,8 +233,39 @@
   --oc-status-danger-muted: #e6aab1;
   --oc-status-danger-surface: rgb(255 93 102 / 10%);
   --oc-diff-deletion: #ff7b72;
-  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 72%), 0 0 0 1px #29292f;
+  --oc-shadow-card: 0 1px 2px rgb(0 0 0 / 50%), 0 3px 8px rgb(0 0 0 / 45%);
+  --oc-shadow-lift: 0 1px 2px rgb(0 0 0 / 50%), 0 16px 40px rgb(0 0 0 / 55%);
+  --oc-shadow-action: none;
+  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 72%);
   --oc-shadow-popover: 0 8px 24px rgb(0 0 0 / 55%);
+}
+
+:root[data-color-scheme="dark"] {
+  --oc-surface-canvas: #000;
+  --oc-surface-subtle: #050505;
+  --oc-surface-raised: #0a0a0a;
+  --oc-surface-control: #111;
+  --oc-surface-selected: #171717;
+  --oc-surface-hover: #1c1c1c;
+  --oc-surface-elevated: #1f1f1f;
+  --oc-border-muted: #1a1a1a;
+  --oc-border-base: #242424;
+  --oc-border-strong: #343434;
+  --oc-border-emphasis: #686868;
+}
+
+:root[data-color-scheme="dim"] {
+  --oc-surface-canvas: #0a0a0b;
+  --oc-surface-subtle: #0e0e10;
+  --oc-surface-raised: #141416;
+  --oc-surface-control: #1a1a1d;
+  --oc-surface-selected: #202024;
+  --oc-surface-hover: #26262b;
+  --oc-surface-elevated: #2a2a2f;
+  --oc-border-muted: #232327;
+  --oc-border-base: #2e2e33;
+  --oc-border-strong: #3d3d44;
+  --oc-border-emphasis: #6f6f76;
 }
 
 /* Shared spacing for native and custom dropdown triggers. */

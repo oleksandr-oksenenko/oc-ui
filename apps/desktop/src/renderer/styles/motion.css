@@ -1,0 +1,48 @@
+/* One motion policy for interactive surfaces. Only paint properties animate;
+ * layout, size, and transforms stay with the components that own them.
+ * Reduced motion removes the animation without disabling focus or state. */
+:where(
+  button,
+  [role="button"],
+  [role="tab"],
+  a[href],
+  summary,
+  .shell-session-row,
+  .transcript-tool-header,
+  .transcript-context-trigger,
+  .transcript-code-review-trigger,
+  .diff-file-toggle,
+  .context-view-button,
+  .question-form-choice-group [data-slot="radio-v2-item"],
+  .question-form-options [data-component="checkbox"],
+  [data-slot="collapsible-trigger"],
+  [data-slot="list-item"]
+) {
+  transition:
+    background-color var(--oc-motion-duration-fast) var(--oc-motion-ease),
+    border-color var(--oc-motion-duration-fast) var(--oc-motion-ease),
+    color var(--oc-motion-duration-fast) var(--oc-motion-ease),
+    box-shadow var(--oc-motion-duration) var(--oc-motion-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    button,
+    [role="button"],
+    [role="tab"],
+    a[href],
+    summary,
+    .shell-session-row,
+    .transcript-tool-header,
+    .transcript-context-trigger,
+    .transcript-code-review-trigger,
+    .diff-file-toggle,
+    .context-view-button,
+    .question-form-choice-group [data-slot="radio-v2-item"],
+    .question-form-options [data-component="checkbox"],
+    [data-slot="collapsible-trigger"],
+    [data-slot="list-item"]
+  ) {
+    transition: none;
+  }
+}

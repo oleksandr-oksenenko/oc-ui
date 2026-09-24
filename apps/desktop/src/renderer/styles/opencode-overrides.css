@@ -9,13 +9,23 @@
 :root [data-component="text-input-v2"],
 :root [data-component="textarea-v2"],
 :root [data-component="select-v2"],
-:root [data-component="menu-v2-content"][data-slot="select-v2-content"],
-:root [data-component="dialog-v2"] [data-slot="dialog-container"],
 :root [data-component="text-input-v2"] [data-slot="text-input-v2-icon-button"],
 :root [data-component="select-v2"] [data-slot="select-v2-chevron"],
 :root [data-component="dialog-v2"] [data-slot="dialog-close-button"],
 :root [data-component="line-comment-v2"] [data-slot="line-comment-v2-shell"] {
   border-radius: var(--oc-radius);
+}
+
+/* Floating surfaces step up to the panel radius. */
+:root [data-component="menu-v2-content"][data-slot="select-v2-content"],
+:root [data-component="dialog-v2"] [data-slot="dialog-container"] {
+  border-radius: var(--oc-radius-panel);
+}
+
+/* The toast is upstream's only borderless floating surface, so it owns its
+ * edge now that the floating shadow no longer draws a hairline ring. */
+:root .toast-v2 {
+  border: 1px solid var(--oc-border-base);
 }
 
 /* Contrast actions use a solid, accessible selection color. The upstream
