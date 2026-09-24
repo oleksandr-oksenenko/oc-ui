@@ -59,6 +59,7 @@ afterEach(() => {
 describe("activeDiffTheme", () => {
   it("selects the single active theme name", () => {
     expect(activeDiffTheme("light")).toBe("github-light-high-contrast");
+    expect(activeDiffTheme("dim")).toBe("github-dark-high-contrast");
     expect(activeDiffTheme("dark")).toBe("github-dark-high-contrast");
   });
 });

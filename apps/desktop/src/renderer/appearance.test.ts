@@ -6,6 +6,7 @@ import { makeAppearance } from "./appearance.ts";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   localStorage.clear();
 });
 
@@ -45,6 +46,32 @@ it.each(["broken", "system", '"dark"'])("ignores invalid stored preference %s", 
         Effect.gen(function* () {
           const appearance = yield* makeAppearance(registry);
           expect(registry.get(appearance.state).theme).toBe("light");
+        }),
+      ),
+    );
+  } finally {
+    registry.dispose();
+  }
+});
+
+it("starts in the dim palette on a dark system and keeps an explicit choice", () => {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: true, media: query }));
+  const registry = AtomRegistry.make();
+  try {
+    Effect.runSync(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const appearance = yield* makeAppearance(registry);
+          expect(registry.get(appearance.state).theme).toBe("dim");
+          yield* appearance.setTheme("light");
+        }),
+      ),
+    );
+    Effect.runSync(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const restored = yield* makeAppearance(registry);
+          expect(registry.get(restored.state).theme).toBe("light");
         }),
       ),
     );

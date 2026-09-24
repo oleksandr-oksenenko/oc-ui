@@ -3,7 +3,7 @@ import type { CodeViewItem, CodeViewOptions } from "@pierre/diffs";
 import { createEffect, createMemo, createSignal, on, onCleanup, untrack } from "solid-js";
 import { render } from "solid-js/web";
 
-import { activeDiffTheme } from "../../../../../../diff-highlighter.ts";
+import { activeDiffTheme, activeDiffThemeType } from "../../../../../../diff-highlighter.ts";
 import { useDiffHighlight } from "../../../../../../ui/DiffHighlightProvider.tsx";
 import { useTheme } from "../../../../../../ui/ThemeProvider.tsx";
 
@@ -201,7 +201,7 @@ export function DiffCodeView(props: DiffCodeViewProps) {
 
   const optionsFor = (): CodeViewOptions<AnnotationMetadata> => ({
     theme: activeDiffTheme(theme()),
-    themeType: theme(),
+    themeType: activeDiffThemeType(theme()),
     diffStyle: "unified",
     overflow: "scroll",
     disableFileHeader: false,
