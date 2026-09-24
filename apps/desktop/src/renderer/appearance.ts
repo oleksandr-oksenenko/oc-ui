@@ -1,17 +1,17 @@
 import { Context, Effect, Schema } from "effect";
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";
 
-const ThemeSchema = Schema.Literals(["light", "dim", "dark"]);
+const ThemeSchema = Schema.Literals(["light", "dark"]);
 export type Theme = typeof ThemeSchema.Type;
 const parseTheme = Schema.decodeUnknownSync(ThemeSchema);
 const storageKey = "ocui.theme.v1";
 
-/** First run follows the desktop appearance; `dim` is the everyday dark. */
+/** First run follows the desktop appearance. */
 const systemTheme = (): Theme => {
   // SAFETY: Browsers expose matchMedia; non-DOM hosts such as tests may omit
   // it, and this optional shape is the boundary the check reads.
   const media = (globalThis as { matchMedia?: (query: string) => MediaQueryList }).matchMedia;
-  return media?.("(prefers-color-scheme: dark)").matches === true ? "dim" : "light";
+  return media?.("(prefers-color-scheme: dark)").matches === true ? "dark" : "light";
 };
 
 /** Window-owned preference. Synchronous storage settles before each change returns. */

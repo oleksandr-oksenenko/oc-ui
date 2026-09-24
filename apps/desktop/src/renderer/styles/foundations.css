@@ -205,10 +205,8 @@
   text-rendering: optimizelegibility;
 }
 
-/* Dark themes share text, status, selection, and elevation roles. `dark` is
-   the AMOLED palette; `dim` lifts surfaces off pure black for everyday use. */
-:root[data-color-scheme="dark"],
-:root[data-color-scheme="dim"] {
+/* Dark (AMOLED) palette. */
+:root[data-color-scheme="dark"] {
   color-scheme: dark;
 
   --oc-overlay-hover: rgb(255 255 255 / 6%);
@@ -233,15 +231,12 @@
   --oc-status-danger-surface: rgb(255 93 102 / 10%);
   --oc-diff-deletion: #ff7b72;
 
-  /* Black cannot shade black: dark themes keep the border and surface steps
+  /* Black cannot shade black: the dark theme keeps the border and surface steps
      for separation, and only `floating` keeps a shadow where an overlay
      crosses content. A light glow here would read as haze, not elevation. */
   --oc-shadow-card: none;
   --oc-shadow-lift: none;
   --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 55%);
-}
-
-:root[data-color-scheme="dark"] {
   --oc-surface-canvas: #000;
   --oc-surface-subtle: #050505;
   --oc-surface-raised: #0a0a0a;
@@ -253,20 +248,6 @@
   --oc-border-base: #242424;
   --oc-border-strong: #343434;
   --oc-border-emphasis: #686868;
-}
-
-:root[data-color-scheme="dim"] {
-  --oc-surface-canvas: #0a0a0b;
-  --oc-surface-subtle: #0e0e10;
-  --oc-surface-raised: #141416;
-  --oc-surface-control: #1a1a1d;
-  --oc-surface-selected: #202024;
-  --oc-surface-hover: #26262b;
-  --oc-surface-elevated: #2a2a2f;
-  --oc-border-muted: #232327;
-  --oc-border-base: #2e2e33;
-  --oc-border-strong: #3d3d44;
-  --oc-border-emphasis: #6f6f76;
 }
 
 /* Shared spacing for native and custom dropdown triggers. */

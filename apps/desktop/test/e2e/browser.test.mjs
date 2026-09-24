@@ -497,13 +497,6 @@ describe.sequential("production browser app", () => {
 
   it("switches palettes without replacing the workspace and restores the choice after reload", async () => {
     const prompt = await page.getByLabel("Prompt", { exact: true }).elementHandle();
-    await page.getByRole("button", { name: "Switch to dim theme" }).click();
-    await expect.poll(() => page.locator("html").getAttribute("data-color-scheme")).toBe("dim");
-    expect(
-      await page.locator("html").evaluate((node) => getComputedStyle(node).backgroundColor),
-    ).toBe("rgb(10, 10, 11)");
-    expect(await prompt.evaluate((node) => node.isConnected)).toBe(true);
-
     await page.getByRole("button", { name: "Switch to dark theme" }).click();
     await expect.poll(() => page.locator("html").getAttribute("data-color-scheme")).toBe("dark");
     expect(
@@ -520,7 +513,7 @@ describe.sequential("production browser app", () => {
       await second.reload();
       await second.getByRole("button", { name: "Switch to light theme" }).click();
       await second.reload();
-      await second.getByRole("button", { name: "Switch to dim theme" }).waitFor();
+      await second.getByRole("button", { name: "Switch to dark theme" }).waitFor();
       expect(await second.locator("html").getAttribute("data-color-scheme")).toBe("light");
     } finally {
       await second.close();
@@ -826,13 +819,10 @@ describe.sequential("production browser app", () => {
     const review = "Browser review survives panel remount.";
     await page.getByLabel("Comment on working.txt").fill(review);
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: "Switch to dim theme" }).click();
+    await page.getByRole("button", { name: "Switch to dark theme" }).click();
     await expect
       .poll(() => diff.evaluate((node) => getComputedStyle(node).colorScheme))
       .toBe("dark");
-    await expect.poll(() => page.locator(".diff-review-text").textContent()).toBe(review);
-    await page.getByRole("button", { name: "Switch to dark theme" }).click();
-    await expect.poll(() => page.locator("html").getAttribute("data-color-scheme")).toBe("dark");
     await expect.poll(() => page.locator(".diff-review-text").textContent()).toBe(review);
     await page.getByRole("button", { name: "Switch to light theme" }).click();
     await expect

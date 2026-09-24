@@ -37,7 +37,7 @@ function ElevationPage() {
   return (
     <CatalogPage
       title="Elevation"
-      intro="Elevation is a role, not decoration: light themes grow by distance and spread rather than darker edges, every surface keeps its own 1px border, and no shadow draws a ring. Black cannot shade black, so dark themes keep only the floating recipe. Switch the toolbar theme to compare light, dim, and AMOLED."
+      intro="Elevation is a role, not decoration: light-theme shadows grow by distance and spread rather than darker edges, every surface keeps its own 1px border, and no shadow draws a ring. Black cannot shade black, so the dark theme keeps only the floating recipe. Switch the toolbar theme to compare Light and Dark (AMOLED)."
     >
       <CatalogCard
         title="Roles"
@@ -60,8 +60,8 @@ function ElevationPage() {
       </CatalogCard>
 
       <CatalogCard
-        title="Dark themes"
-        description="Dim and AMOLED keep the border and the surface step for separation. Only overlays that cross text or images keep a shadow."
+        title="Dark theme"
+        description="AMOLED keeps the border and the surface step for separation. Only overlays that cross text or images keep a shadow."
       >
         <p class="design-system-elevation-use">
           Card: none · Lift: none · Floating: 0 10px 28px rgb(0 0 0 / 55%)

@@ -54,7 +54,7 @@ it.each(["broken", "system", '"dark"'])("ignores invalid stored preference %s", 
   }
 });
 
-it("starts in the dim palette on a dark system and keeps an explicit choice", () => {
+it("starts in the dark palette on a dark system and keeps an explicit choice", () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: true, media: query }));
   const registry = AtomRegistry.make();
   try {
@@ -62,7 +62,7 @@ it("starts in the dim palette on a dark system and keeps an explicit choice", ()
       Effect.scoped(
         Effect.gen(function* () {
           const appearance = yield* makeAppearance(registry);
-          expect(registry.get(appearance.state).theme).toBe("dim");
+          expect(registry.get(appearance.state).theme).toBe("dark");
           yield* appearance.setTheme("light");
         }),
       ),

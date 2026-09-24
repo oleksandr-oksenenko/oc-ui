@@ -20,11 +20,6 @@ export function activeDiffTheme(theme: Theme): DiffThemeName {
   return theme === "light" ? LIGHT : DARK;
 }
 
-/** Pierre's base theme type for CSS variables; `dim` uses the dark base. */
-export function activeDiffThemeType(theme: Theme): "light" | "dark" {
-  return theme === "light" ? "light" : "dark";
-}
-
 /** The subset of Pierre's pool that the renderer owns and drives. */
 export interface DiffHighlightPool {
   isInitialized(): boolean;
