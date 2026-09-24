@@ -156,9 +156,9 @@
 .transcript-user-bubble {
   width: fit-content;
   max-width: 62%;
-  padding: 6px 8px;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius);
+  padding: 7px 11px;
+  border: 0;
+  border-radius: var(--oc-radius-panel);
   color: var(--oc-text-strong);
   background: var(--oc-surface-raised);
   font-size: var(--oc-type-body-relaxed-size);
@@ -403,10 +403,10 @@
 }
 
 .transcript-markdown :not(pre) > code {
-  padding: 1px 4px;
-  border: 1px solid var(--oc-border-muted);
+  padding: 1px 5px;
+  border: 0;
   border-radius: var(--oc-radius);
-  background: var(--oc-surface-raised);
+  background: var(--oc-surface-control);
 }
 
 .transcript-code-block {
@@ -435,10 +435,10 @@
 
 .transcript-markdown pre {
   max-width: 100%;
-  padding: 10px 40px 10px 12px;
+  padding: 11px 40px 11px 12px;
   overflow-x: auto;
   border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius);
+  border-radius: var(--oc-radius-card);
   background: var(--oc-surface-raised);
 }
 
@@ -455,14 +455,33 @@
 }
 
 .transcript-markdown table {
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius-card);
   border-collapse: collapse;
 }
 
+/* The block-level table paints the outer outline; cells draw only the inner
+   separators. Collapsing cannot merge the two, and both together read as a
+   2px edge beside the 1px corner arc. */
 .transcript-markdown :is(th, td) {
   padding: 5px 8px;
-  border: 1px solid var(--oc-border-muted);
+  border: 0;
+  border-right: 1px solid var(--oc-border-muted);
+  border-bottom: 1px solid var(--oc-border-muted);
   text-align: left;
   overflow-wrap: anywhere;
+}
+
+.transcript-markdown :is(th, td):last-child {
+  border-right: 0;
+}
+
+.transcript-markdown tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.transcript-markdown th {
+  background: var(--oc-surface-subtle);
 }
 
 .transcript-markdown img {
@@ -477,8 +496,12 @@
   font-size: var(--oc-type-body-size);
 }
 
+/* Tool calls read as one work log: a quiet rail binds the rows together
+   without turning every call into its own card. */
 .transcript-tool-call {
-  border: 0;
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--oc-border-muted);
 }
 
 .transcript-tool-header {

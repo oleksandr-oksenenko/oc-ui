@@ -578,6 +578,7 @@ export function Composer(props: ComposerProps) {
           <Tooltip class="composer-action-tooltip" value={sendTooltip()}>
             <button
               class="composer-action"
+              data-action={stopping() ? "stop" : "send"}
               type={stopping() ? "button" : "submit"}
               aria-label={stopping() ? "Stop" : "Send"}
               disabled={stopping() ? props.onStop === undefined : !canSubmit()}

@@ -8,10 +8,10 @@
   gap: 14px;
   padding: 12px 16px;
   overflow: hidden;
-  border: 1px solid var(--oc-border-base);
-  border-radius: var(--oc-radius);
-  background: var(--oc-surface-control);
-  box-shadow: var(--oc-shadow-popover);
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius-card);
+  background: var(--oc-surface-raised);
+  box-shadow: var(--oc-shadow-card);
 }
 
 .permission-request-card::before {
@@ -26,20 +26,18 @@
 
 .permission-request-eyebrow {
   color: var(--oc-text-muted);
-  font-size: var(--oc-type-kicker-size);
-  font-weight: var(--oc-type-kicker-weight);
-  letter-spacing: var(--oc-type-kicker-letter-spacing);
-  line-height: var(--oc-type-kicker-line-height);
-  text-transform: uppercase;
+  font-size: var(--oc-type-label-size);
+  font-weight: var(--oc-type-label-weight);
+  line-height: var(--oc-type-label-line-height);
 }
 
 .permission-request-header h2 {
   margin: 0;
   color: var(--oc-text-strong);
-  font-size: var(--oc-type-heading-size);
-  font-weight: var(--oc-type-heading-weight);
-  letter-spacing: -0.015em;
-  line-height: var(--oc-type-heading-line-height);
+  font-size: var(--oc-type-title-size);
+  font-weight: var(--oc-type-title-weight);
+  letter-spacing: -0.01em;
+  line-height: var(--oc-type-title-line-height);
   overflow-wrap: anywhere;
 }
 

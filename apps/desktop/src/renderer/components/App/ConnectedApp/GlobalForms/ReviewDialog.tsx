@@ -267,7 +267,7 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
         </span>
         <Button
           type="button"
-          variant="ghost-muted"
+          variant="outline"
           disabled={props.controller.pending()}
           onClick={() => dialog.close()}
         >

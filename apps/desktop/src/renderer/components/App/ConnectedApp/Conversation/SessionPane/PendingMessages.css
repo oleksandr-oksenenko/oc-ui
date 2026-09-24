@@ -3,9 +3,10 @@
   max-height: 240px;
   margin: 0 auto 8px;
   overflow-y: auto;
-  border: 1px solid var(--oc-border-strong);
-  border-radius: var(--oc-radius);
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius-card);
   background: var(--oc-surface-raised);
+  box-shadow: var(--oc-shadow-card);
 }
 
 .pending-messages ul {
@@ -22,7 +23,7 @@
 }
 
 .pending-messages li + li {
-  border-top: 1px solid var(--oc-border-strong);
+  border-top: 1px solid var(--oc-border-muted);
 }
 
 .pending-message {

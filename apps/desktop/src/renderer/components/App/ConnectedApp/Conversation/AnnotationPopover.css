@@ -1,8 +1,10 @@
 .annotation-selection-action {
   position: fixed;
   z-index: 20;
+  border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius);
   background: var(--oc-surface-raised);
+  box-shadow: var(--oc-shadow-floating);
 }
 
 .annotation-selection-error {
@@ -17,6 +19,7 @@
   width: min(390px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   border: 1px solid var(--oc-border-strong);
+  border-radius: var(--oc-radius-panel);
   background: var(--oc-surface-raised);
   box-shadow: none;
   color: var(--oc-text-contrast);

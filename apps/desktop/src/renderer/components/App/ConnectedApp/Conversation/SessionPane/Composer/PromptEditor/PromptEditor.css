@@ -30,7 +30,7 @@
   width: min(420px, 100%);
   padding: 4px;
   border: 1px solid var(--oc-border-strong);
-  border-radius: var(--oc-radius);
+  border-radius: var(--oc-radius-panel);
   background: var(--oc-surface-raised);
   box-shadow: var(--oc-shadow-popover);
 }

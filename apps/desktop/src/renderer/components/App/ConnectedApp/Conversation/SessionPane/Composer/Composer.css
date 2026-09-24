@@ -8,10 +8,11 @@
   min-height: 76px;
   margin: 0 auto 16px;
   padding: 3px 6px;
-  border: 1px solid var(--oc-border-strong);
-  border-radius: var(--oc-radius);
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius-panel);
   color: var(--oc-text-contrast);
-  background: var(--oc-surface-raised);
+  background: var(--oc-surface-canvas);
+  box-shadow: var(--oc-shadow-lift);
 }
 
 .composer-editor-row {
@@ -111,8 +112,8 @@
   color: var(--oc-text-contrast);
   background: transparent;
   font-family: inherit;
-  font-size: var(--oc-type-body-size);
-  line-height: var(--oc-type-body-line-height);
+  font-size: var(--oc-type-body-relaxed-size);
+  line-height: var(--oc-type-body-relaxed-line-height);
 }
 
 .composer-action-tooltip {
@@ -123,25 +124,39 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid var(--oc-border-strong);
-  border-radius: var(--oc-radius);
-  color: var(--oc-text-contrast);
-  background: var(--oc-surface-raised);
+  border: 1px solid transparent;
+  border-radius: var(--oc-radius-full);
+  color: var(--oc-text-on-selection);
+  background: var(--oc-selection);
   background-image: none;
-  box-shadow: none;
+  box-shadow: var(--oc-shadow-action);
 }
 
 .composer-action:disabled {
-  opacity: 0.35;
+  border-color: var(--oc-border-muted);
+  color: var(--oc-icon-faint);
+  background: var(--oc-surface-control);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
 .composer-action:hover:not(:disabled) {
+  background: var(--oc-selection-hover);
+}
+
+.composer-action[data-action="stop"] {
+  border-color: var(--oc-border-strong);
+  color: var(--oc-text-contrast);
   background: var(--oc-surface-control);
+  box-shadow: none;
+}
+
+.composer-action[data-action="stop"]:hover:not(:disabled) {
+  background: var(--oc-surface-hover);
 }
 
 .composer-action-icon {
@@ -177,7 +192,7 @@
   align-items: center;
   justify-content: center;
   border: 1px dashed var(--oc-border-emphasis);
-  border-radius: var(--oc-radius);
+  border-radius: var(--oc-radius-panel);
   color: var(--oc-text-muted);
   background: var(--oc-surface-raised);
   font-size: var(--oc-type-caption-size);
@@ -232,15 +247,15 @@
   display: inline-flex;
   align-items: center;
   flex: 0 1 auto;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   color: var(--oc-text-muted);
-  font-size: var(--oc-type-caption-size);
-  line-height: var(--oc-type-caption-line-height);
+  font-size: var(--oc-type-metadata-size);
+  line-height: var(--oc-type-metadata-line-height);
 }
 
 .composer-picker--unavailable {
-  height: 22px;
+  height: 24px;
   padding: 0 7px;
 }
 
@@ -249,7 +264,7 @@
   align-items: center;
   min-width: 0;
   max-width: 220px;
-  height: 22px;
+  height: 24px;
   gap: 2px;
   border: 0;
   border-radius: var(--oc-radius);
@@ -273,8 +288,8 @@
 }
 
 .composer-model-trigger:disabled {
+  color: var(--oc-text-faint);
   cursor: not-allowed;
-  opacity: 0.45;
 }
 
 .composer-model-trigger:hover:not(:disabled) {
@@ -285,7 +300,7 @@
   width: min(288px, calc(100vw - 24px));
   max-width: none;
   border: 1px solid var(--oc-border-strong);
-  border-radius: var(--oc-radius);
+  border-radius: var(--oc-radius-panel);
   color: var(--oc-text-contrast);
   background: var(--oc-surface-raised);
   box-shadow: var(--oc-shadow-popover);
@@ -434,7 +449,7 @@
   min-width: 0;
   max-width: 100%;
   width: max-content;
-  height: 22px;
+  height: 24px;
   gap: 0;
   border: 0;
   border-radius: var(--oc-radius);
@@ -487,12 +502,19 @@
 .composer-picker + .composer-picker {
   margin-left: 6px;
   padding-left: 6px;
-  border-left: 1px solid var(--oc-border-strong);
+  border-left: 1px solid var(--oc-border-base);
 }
 
+/* Explicit unavailable styling keeps labels readable instead of washing the
+   whole control out with opacity. */
 .composer-picker-control[data-component="select-v2"][data-disabled] {
-  opacity: 0.45;
+  color: var(--oc-text-faint);
   cursor: not-allowed;
+}
+
+.composer-picker-control[data-component="select-v2"][data-disabled]
+  [data-slot="select-v2-value-text"] {
+  color: var(--oc-text-faint);
 }
 
 .composer-status {

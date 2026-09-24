@@ -13,8 +13,8 @@
   min-width: 0;
   margin: 0;
   color: var(--oc-text-contrast);
-  font-size: var(--oc-type-heading-size);
-  font-weight: var(--oc-type-heading-weight);
+  font-size: var(--oc-type-title-size);
+  font-weight: var(--oc-type-title-weight);
   letter-spacing: -0.01em;
 }
 
@@ -23,6 +23,23 @@
   flex: none;
   align-items: center;
   gap: 4px;
+}
+
+/* The create action is a quiet accent affordance, not the loudest control in
+   the window. The solid contrast role stays reserved for the one primary
+   action inside flows. */
+.shell-create-session[data-component="icon-button-v2"][data-variant="contrast"] {
+  color: var(--oc-selection);
+  background-color: var(--oc-selection-tint);
+  background-image: none;
+  box-shadow: none;
+}
+
+.shell-create-session[data-component="icon-button-v2"][data-variant="contrast"]:hover:not(
+    :disabled
+  ) {
+  color: var(--oc-selection-hover);
+  background-color: var(--oc-selection-tint-strong);
 }
 
 .shell-create-session {

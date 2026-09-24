@@ -31,8 +31,8 @@
   border: 0;
   color: var(--oc-text-muted);
   background: transparent;
-  font-size: var(--oc-type-tab-size);
-  font-weight: var(--oc-type-tab-weight);
+  font-size: var(--oc-type-label-size);
+  font-weight: var(--oc-type-label-weight);
   letter-spacing: normal;
 }
 
@@ -44,8 +44,8 @@
   padding: 0 8px;
   box-sizing: border-box;
   color: var(--oc-text-strong);
-  font-size: var(--oc-type-tab-size);
-  font-weight: var(--oc-type-tab-weight);
+  font-size: var(--oc-type-label-size);
+  font-weight: var(--oc-type-label-weight);
   letter-spacing: normal;
 }
 
@@ -71,8 +71,8 @@
 }
 
 .context-tabs .context-panel-close {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
 }
 
 .context-tab:hover {
@@ -93,7 +93,7 @@
   bottom: 0;
   left: 2px;
   height: 3px;
-  background: var(--oc-accent);
+  background: var(--oc-selection);
   content: "";
 }
 
@@ -112,11 +112,12 @@
   color: var(--oc-text-muted);
   background: transparent;
   cursor: pointer;
-  font-size: var(--oc-type-tab-size);
+  font-size: var(--oc-type-label-size);
+  font-weight: var(--oc-type-label-weight);
 }
 
 .context-view-button[aria-pressed="true"] {
-  border-bottom-color: var(--oc-accent);
+  border-bottom-color: var(--oc-selection);
   color: var(--oc-text-strong);
 }
 

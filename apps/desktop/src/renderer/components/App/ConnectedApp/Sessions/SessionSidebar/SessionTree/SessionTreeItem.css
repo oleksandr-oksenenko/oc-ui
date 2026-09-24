@@ -16,13 +16,14 @@
   color: var(--oc-text-muted);
 }
 
-.shell-session-row:hover {
+.shell-session-row:hover:not(.selected) {
   color: var(--oc-text-contrast);
+  background: var(--oc-overlay-hover);
 }
 
 .shell-session-row.selected {
   color: var(--oc-text-contrast);
-  background: var(--oc-surface-selected);
+  background: var(--oc-selection-tint);
 }
 
 .shell-session-row.selected::before {

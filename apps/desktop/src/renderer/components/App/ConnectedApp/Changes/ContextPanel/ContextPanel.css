@@ -53,7 +53,7 @@
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  padding-left: 4px;
+  padding-inline: 4px;
 }
 
 .context-state {
@@ -148,6 +148,8 @@
   font-size: var(--oc-type-diff-stat-size);
 }
 
+/* One shared viewport: files share the pooled diffs container and their
+   headers stick while it scrolls, so no per-file card is drawn. */
 .diff-code-view {
   flex: 1 1 auto;
   min-height: 0;
@@ -171,7 +173,7 @@
   padding: 0 12px 0 4px;
   box-sizing: border-box;
   color: var(--oc-text-base);
-  background: var(--oc-surface-control);
+  background: var(--oc-surface-subtle);
   font-size: var(--oc-type-control-size);
 }
 

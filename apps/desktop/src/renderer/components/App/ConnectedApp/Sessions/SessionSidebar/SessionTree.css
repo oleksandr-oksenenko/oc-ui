@@ -16,12 +16,10 @@
 .shell-session-group h2 {
   margin: 0;
   padding: 8px 7px 7px;
-  color: var(--oc-text-faint);
-  font-size: var(--oc-type-kicker-size);
-  font-weight: var(--oc-type-kicker-weight);
-  letter-spacing: var(--oc-type-kicker-letter-spacing);
-  line-height: var(--oc-type-kicker-line-height);
-  text-transform: uppercase;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-label-size);
+  font-weight: var(--oc-type-label-weight);
+  line-height: var(--oc-type-label-line-height);
 }
 
 .shell-session-group-tree {
