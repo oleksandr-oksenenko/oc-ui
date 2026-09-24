@@ -19,7 +19,7 @@ const roles = [
   {
     token: "--oc-shadow-card",
     label: "--oc-shadow-card",
-    use: "Diff files, pending messages, question and permission cards.",
+    use: "Pending messages, question and permission cards.",
   },
   {
     token: "--oc-shadow-lift",
@@ -29,12 +29,7 @@ const roles = [
   {
     token: "--oc-shadow-floating",
     label: "--oc-shadow-floating",
-    use: "Menus, dialogs, and the selection popover.",
-  },
-  {
-    token: "--oc-shadow-popover",
-    label: "--oc-shadow-popover",
-    use: "Composer pickers and prompt editor menus.",
+    use: "Menus, dialogs, popovers, and the toast.",
   },
 ] as const;
 
@@ -42,7 +37,7 @@ function ElevationPage() {
   return (
     <CatalogPage
       title="Elevation"
-      intro="Elevation is a role, not decoration: content cards sit on a soft contact shadow, the composer lifts off the canvas, and overlays reuse the two existing recipes. Switch the toolbar theme to compare light, dim, and AMOLED."
+      intro="Elevation is a role, not decoration: light themes grow by distance and spread rather than darker edges, every surface keeps its own 1px border, and no shadow draws a ring. Black cannot shade black, so dark themes keep only the floating recipe. Switch the toolbar theme to compare light, dim, and AMOLED."
     >
       <CatalogCard
         title="Roles"
@@ -65,19 +60,12 @@ function ElevationPage() {
       </CatalogCard>
 
       <CatalogCard
-        title="Primary action"
-        description="The filled send action keeps a small contact shadow; disabled and stop states opt out."
+        title="Dark themes"
+        description="Dim and AMOLED keep the border and the surface step for separation. Only overlays that cross text or images keep a shadow."
       >
-        <div class="design-system-elevation-actions">
-          <figure class="design-system-elevation-item">
-            <span class="design-system-elevation-action design-system-elevation-action-raised" />
-            <figcaption class="design-system-elevation-label">--oc-shadow-action</figcaption>
-          </figure>
-          <figure class="design-system-elevation-item">
-            <span class="design-system-elevation-action" />
-            <figcaption class="design-system-elevation-label">none</figcaption>
-          </figure>
-        </div>
+        <p class="design-system-elevation-use">
+          Card: none · Lift: none · Floating: 0 10px 28px rgb(0 0 0 / 55%)
+        </p>
       </CatalogCard>
     </CatalogPage>
   );

@@ -32,7 +32,7 @@
   border: 1px solid var(--oc-border-strong);
   border-radius: var(--oc-radius-panel);
   background: var(--oc-surface-raised);
-  box-shadow: var(--oc-shadow-popover);
+  box-shadow: var(--oc-shadow-floating);
 }
 
 .prompt-suggestion-heading {

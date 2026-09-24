@@ -343,23 +343,6 @@
   line-height: var(--oc-type-caption-line-height);
 }
 
-.design-system-elevation-actions {
-  display: flex;
-  align-items: start;
-  gap: 20px;
-}
-
-.design-system-elevation-action {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--oc-radius-full);
-  background: var(--oc-selection);
-}
-
-.design-system-elevation-action-raised {
-  box-shadow: var(--oc-shadow-action);
-}
-
 .design-system-family-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
@@ -583,7 +566,7 @@
   border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius);
   background: var(--oc-surface-control);
-  box-shadow: var(--oc-shadow-popover);
+  box-shadow: var(--oc-shadow-floating);
 }
 
 .design-system-picker-search {

@@ -52,14 +52,13 @@
   --oc-diff-addition: var(--oc-status-success);
   --oc-diff-deletion: #b42318;
 
-  /* Three elevation roles: card for content objects, lift for the composer
-     and floating cards, floating for menus and dialogs. Shadows only: every
-     surface keeps its own 1px border for the edge. */
-  --oc-shadow-card: 0 1px 2px rgb(0 0 0 / 6%), 0 3px 8px rgb(0 0 0 / 5%);
-  --oc-shadow-lift: 0 1px 2px rgb(0 0 0 / 5%), 0 12px 32px rgb(0 0 0 / 7%);
-  --oc-shadow-action: 0 1px 2px rgb(0 0 0 / 18%);
-  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 12%);
-  --oc-shadow-popover: 0 8px 24px rgb(0 0 0 / 10%);
+  /* Three elevation roles: card for content objects, lift for the composer,
+     floating for overlapping surfaces such as menus, dialogs, and popovers.
+     The light scale grows by distance and spread, never by darker edges;
+     every surface keeps its own 1px border, and shadows never draw a ring. */
+  --oc-shadow-card: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 12px rgb(0 0 0 / 10%);
+  --oc-shadow-lift: 0 2px 4px rgb(0 0 0 / 8%), 0 8px 24px rgb(0 0 0 / 10%);
+  --oc-shadow-floating: 0 2px 4px rgb(0 0 0 / 8%), 0 12px 32px rgb(0 0 0 / 12%);
 
   /* Ordinary controls share one compact radius; cards and panels step up so
      containment is legible. Reserve full rounding for circles and pills. */
@@ -233,11 +232,13 @@
   --oc-status-danger-muted: #e6aab1;
   --oc-status-danger-surface: rgb(255 93 102 / 10%);
   --oc-diff-deletion: #ff7b72;
-  --oc-shadow-card: 0 1px 2px rgb(0 0 0 / 50%), 0 3px 8px rgb(0 0 0 / 45%);
-  --oc-shadow-lift: 0 1px 2px rgb(0 0 0 / 50%), 0 16px 40px rgb(0 0 0 / 55%);
-  --oc-shadow-action: none;
-  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 72%);
-  --oc-shadow-popover: 0 8px 24px rgb(0 0 0 / 55%);
+
+  /* Black cannot shade black: dark themes keep the border and surface steps
+     for separation, and only `floating` keeps a shadow where an overlay
+     crosses content. A light glow here would read as haze, not elevation. */
+  --oc-shadow-card: none;
+  --oc-shadow-lift: none;
+  --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 55%);
 }
 
 :root[data-color-scheme="dark"] {

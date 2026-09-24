@@ -35,7 +35,15 @@ const preview: Preview = {
   decorators: [
     (Story, context) => {
       const [theme, setTheme] = createSignal<Theme>("light");
-      createEffect(() => setTheme(context.globals.theme === "dark" ? "dark" : "light"));
+      createEffect(() =>
+        setTheme(
+          context.globals.theme === "dark"
+            ? "dark"
+            : context.globals.theme === "dim"
+              ? "dim"
+              : "light",
+        ),
+      );
       return createComponent(ThemeProvider, {
         theme,
         onChange: setTheme,
@@ -56,6 +64,7 @@ const preview: Preview = {
         dynamicTitle: true,
         items: [
           { value: "light", title: "Light" },
+          { value: "dim", title: "Dim" },
           { value: "dark", title: "Dark (AMOLED)" },
         ],
       },
