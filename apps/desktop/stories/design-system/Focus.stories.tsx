@@ -22,12 +22,12 @@ const meta = {
 
 export default meta;
 
-async function ring(element: Element, offset = "0px") {
+async function ring(element: Element, offset = "1px") {
   await waitFor(async () => {
     const style = getComputedStyle(element);
-    await expect(style.outlineColor).toBe("rgb(119, 119, 119)");
+    await expect(style.outlineColor).toBe("rgba(9, 105, 218, 0.55)");
     await expect(style.outlineStyle).toBe("solid");
-    await expect(style.outlineWidth).toBe("1px");
+    await expect(style.outlineWidth).toBe("2px");
     await expect(style.outlineOffset).toBe(offset);
   });
 }
@@ -36,7 +36,7 @@ export const SharedTreatment: StoryObj = {
   render: () => (
     <CatalogPage
       title="Focus"
-      intro="Neutral focus is shared across controls. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
+      intro="Accent focus is shared across controls. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
     >
       <CatalogCard
         title="Shared controls"
@@ -119,7 +119,7 @@ export const SharedTreatment: StoryObj = {
       getComputedStyle(canvas.getByRole("textbox", { name: "Focus compound editor" })).outlineStyle,
     ).toBe("none");
     await userEvent.tab();
-    await ring(canvas.getByRole("button", { name: "Focus edge action" }), "-1px");
+    await ring(canvas.getByRole("button", { name: "Focus edge action" }), "-2px");
     await userEvent.tab();
     const invalid = canvas.getByRole("textbox", { name: "Focus invalid field" });
     const invalidFrame = invalid.closest('[data-component="text-input-v2"]')!;

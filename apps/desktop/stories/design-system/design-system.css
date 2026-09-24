@@ -143,6 +143,19 @@
   align-items: start;
 }
 
+/* Long values such as shadow recipes stack under their token name. */
+.design-system-token-wrap {
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+}
+
+.design-system-token-wrap .design-system-token-value {
+  grid-column: 2;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .design-system-family-list .design-system-token-swatch {
   display: none;
 }
@@ -186,10 +199,22 @@
   line-height: var(--oc-type-page-title-line-height);
 }
 
+.design-system-type-title {
+  font-size: var(--oc-type-title-size);
+  font-weight: var(--oc-type-title-weight);
+  line-height: var(--oc-type-title-line-height);
+}
+
 .design-system-type-heading {
   font-size: var(--oc-type-heading-size);
   font-weight: var(--oc-type-heading-weight);
   line-height: var(--oc-type-heading-line-height);
+}
+
+.design-system-type-label-role {
+  font-size: var(--oc-type-label-size);
+  font-weight: var(--oc-type-label-weight);
+  line-height: var(--oc-type-label-line-height);
 }
 
 .design-system-type-body {
@@ -280,10 +305,59 @@
 }
 
 .design-system-radius-box {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--oc-border-emphasis);
   background: var(--oc-surface-selected);
+}
+
+.design-system-elevation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr));
+  gap: 16px;
+}
+
+.design-system-elevation-item {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  margin: 0;
+}
+
+.design-system-elevation-sample {
+  height: 88px;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius-card);
+  background: var(--oc-surface-canvas);
+}
+
+.design-system-elevation-label {
+  color: var(--oc-text-muted);
+  font-family: var(--oc-font-mono);
+  font-size: var(--oc-type-caption-size);
+}
+
+.design-system-elevation-use {
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.design-system-elevation-actions {
+  display: flex;
+  align-items: start;
+  gap: 20px;
+}
+
+.design-system-elevation-action {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--oc-radius-full);
+  background: var(--oc-selection);
+}
+
+.design-system-elevation-action-raised {
+  box-shadow: var(--oc-shadow-action);
 }
 
 .design-system-family-grid {

@@ -10,6 +10,7 @@ type Token = {
   name: string;
   label: string;
   swatch?: boolean;
+  wrap?: boolean;
 };
 
 const tokenGroups: Array<{ title: string; tokens: Token[] }> = [
@@ -61,13 +62,26 @@ const tokenGroups: Array<{ title: string; tokens: Token[] }> = [
       { name: "--oc-diff-addition", label: "Diff addition", swatch: true },
       { name: "--oc-diff-deletion", label: "Diff deletion", swatch: true },
       { name: "--oc-selection", label: "Selection", swatch: true },
+      { name: "--oc-selection-tint", label: "Selected surface tint", swatch: true },
       { name: "--oc-accent", label: "Interactive text and indicators", swatch: true },
+    ],
+  },
+  {
+    title: "Shape and elevation",
+    tokens: [
+      { name: "--oc-radius", label: "Control radius" },
+      { name: "--oc-radius-card", label: "Card and file radius" },
+      { name: "--oc-radius-panel", label: "Panel and dialog radius" },
+      { name: "--oc-shadow-card", label: "Content card elevation", wrap: true },
+      { name: "--oc-shadow-lift", label: "Composer and floating card elevation", wrap: true },
+      { name: "--oc-shadow-floating", label: "Menu and dialog elevation", wrap: true },
     ],
   },
 ];
 
 const typeTokens = [
   ["Page title", "--oc-type-page-title-*", "design-system-type-page-title"],
+  ["Title", "--oc-type-title-*", "design-system-type-title"],
   ["Heading", "--oc-type-heading-*", "design-system-type-heading"],
   ["Body", "--oc-type-body-*", "design-system-type-body"],
   ["Body relaxed", "--oc-type-body-relaxed-*", "design-system-type-body-relaxed"],
@@ -76,12 +90,17 @@ const typeTokens = [
   ["Status", "--oc-type-status-*", "design-system-type-status"],
   ["Caption", "--oc-type-caption-*", "design-system-type-caption"],
   ["Tab", "--oc-type-tab-*", "design-system-type-tab"],
+  ["Label", "--oc-type-label-*", "design-system-type-label-role"],
   ["Kicker", "--oc-type-kicker-*", "design-system-type-kicker"],
   ["Code", "--oc-type-code-*", "design-system-type-code"],
   ["Diff statistic", "--oc-type-diff-stat-*", "design-system-type-diff-stat"],
 ] as const;
 
-const radiusToken = "--oc-radius";
+const radiusTokens = [
+  ["--oc-radius", "Controls"],
+  ["--oc-radius-card", "Cards and files"],
+  ["--oc-radius-panel", "Panels, dialogs, and popovers"],
+] as const;
 
 const meta = {
   title: "Design System/Foundations",
@@ -103,7 +122,7 @@ function TokenRow(props: { token: Token }) {
   });
 
   return (
-    <div class="design-system-token">
+    <div class="design-system-token" classList={{ "design-system-token-wrap": props.token.wrap }}>
       <Show
         when={props.token.swatch}
         fallback={
@@ -123,6 +142,33 @@ function TokenRow(props: { token: Token }) {
         {props.token.name}
       </span>
       <span class="design-system-token-value">{value()}</span>
+    </div>
+  );
+}
+
+function RadiusSample(props: { token: string; label: string }) {
+  const { theme } = useTheme();
+  const [value, setValue] = createSignal("reading token…");
+
+  createEffect(() => {
+    theme();
+    setValue(
+      getComputedStyle(document.documentElement).getPropertyValue(props.token).trim() ||
+        "not defined",
+    );
+  });
+
+  return (
+    <div class="design-system-measure">
+      <span class="design-system-measure-label" title={props.label}>
+        {props.token}
+      </span>
+      <span
+        class="design-system-radius-box"
+        style={{ "border-radius": `var(${props.token})` }}
+        aria-hidden="true"
+      />
+      <span class="design-system-measure-value">{value()}</span>
     </div>
   );
 }
@@ -194,8 +240,10 @@ function FoundationsPage() {
             Density
           </h2>
           <p class="design-system-section-description">
-            The product uses one ordinary 4px radius token: <code>--oc-radius</code>. Spacing stays
-            with the upstream component or the feature layout that owns it.
+            Shape uses a three-step scale: <code>--oc-radius</code> for controls,{" "}
+            <code>--oc-radius-card</code> for content objects, and <code>--oc-radius-panel</code>{" "}
+            for panels, dialogs, and popovers. Spacing stays with the upstream component or the
+            feature layout that owns it.
           </p>
           <div class="design-system-grid">
             <article class="design-system-card">
@@ -208,15 +256,9 @@ function FoundationsPage() {
             <article class="design-system-card">
               <h3 class="design-system-card-title">Radius</h3>
               <div class="design-system-radius-list">
-                <div class="design-system-measure">
-                  <span class="design-system-measure-label">{radiusToken}</span>
-                  <span
-                    class="design-system-radius-box"
-                    style={{ "border-radius": `var(${radiusToken}, 4px)` }}
-                    aria-hidden="true"
-                  />
-                  <span class="design-system-measure-value">4px</span>
-                </div>
+                <For each={radiusTokens}>
+                  {([token, label]) => <RadiusSample token={token} label={label} />}
+                </For>
               </div>
             </article>
           </div>
