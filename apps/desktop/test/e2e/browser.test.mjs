@@ -483,7 +483,7 @@ describe.sequential("production browser app", () => {
       true,
     );
     await page.setViewportSize({ width: 1280, height: 860 });
-    await page.getByRole("button", { name: "Show sessions", exact: true }).click();
+    await page.getByRole("button", { name: "Hide sessions", exact: true }).waitFor();
     await opener.click();
     await page.locator('.server-flow-dialog button[type="submit"]').click();
     await expect.poll(() => page.getByLabel("Prompt", { exact: true }).textContent()).toBe("");

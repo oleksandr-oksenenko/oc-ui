@@ -60,6 +60,7 @@
 .shell-session-title-tooltip {
   max-width: min(420px, calc(100vw - 24px));
   overflow-wrap: anywhere;
+  pointer-events: none;
 }
 
 .shell-session-main:hover {

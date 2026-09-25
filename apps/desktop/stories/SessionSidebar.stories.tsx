@@ -225,22 +225,26 @@ export const DisclosureGutterAlignment = {
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);
     const parent = canvas.getByRole("button", { name: "Casual check-in, Idle" });
+    const disclosure = canvas.getByRole("button", { name: "Collapse Casual check-in" });
     await userEvent.click(parent);
     await expect(parent).toHaveAttribute("aria-current", "page");
-    await expect(parent).toHaveAttribute("aria-expanded", "false");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await expect(
       canvas.queryByRole("button", { name: "Verify test change file, Idle" }),
     ).not.toBeInTheDocument();
     await userEvent.keyboard("{Enter}");
-    await expect(parent).toHaveAttribute("aria-expanded", "true");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
     const child = canvas.getByRole("button", { name: "Verify test change file, Idle" });
+    const childDisclosure = canvas.getByRole("button", {
+      name: "Collapse Verify test change file",
+    });
     await expect(child).toBeVisible();
     await userEvent.click(child);
     await expect(child).toHaveAttribute("aria-current", "page");
-    await expect(child).toHaveAttribute("aria-expanded", "true");
-    await expect(parent).toHaveAttribute("aria-expanded", "true");
+    await expect(childDisclosure).toHaveAttribute("aria-expanded", "true");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
     await userEvent.click(child);
-    await expect(child).toHaveAttribute("aria-expanded", "false");
+    await expect(childDisclosure).toHaveAttribute("aria-expanded", "false");
   },
 };
 
@@ -249,19 +253,20 @@ export const ParentSelectionBeforeToggle = {
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);
     const parent = canvas.getByRole("button", { name: "Parent session, Idle" });
+    const disclosure = canvas.getByRole("button", { name: "Expand Parent session" });
     const child = () => canvas.queryByRole("button", { name: "Child session, Idle" });
 
     await expect(parent).not.toHaveAttribute("aria-current", "page");
-    await expect(parent).toHaveAttribute("aria-expanded", "false");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await expect(child()).not.toBeInTheDocument();
 
     await userEvent.click(parent);
     await expect(parent).toHaveAttribute("aria-current", "page");
-    await expect(parent).toHaveAttribute("aria-expanded", "false");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await expect(child()).not.toBeInTheDocument();
 
     await userEvent.click(parent);
-    await expect(parent).toHaveAttribute("aria-expanded", "true");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
     await expect(child()).toBeVisible();
 
     await userEvent.click(canvas.getByRole("button", { name: "Other session, Idle" }));
@@ -270,11 +275,11 @@ export const ParentSelectionBeforeToggle = {
     parent.focus();
     await userEvent.keyboard("{Enter}");
     await expect(parent).toHaveAttribute("aria-current", "page");
-    await expect(parent).toHaveAttribute("aria-expanded", "true");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
     await expect(child()).toBeVisible();
 
     await userEvent.keyboard("{Enter}");
-    await expect(parent).toHaveAttribute("aria-expanded", "false");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await expect(child()).not.toBeInTheDocument();
   },
 };
