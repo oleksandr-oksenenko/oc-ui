@@ -15,7 +15,7 @@ type ResizeSide = "left" | "right";
 
 const LEFT_MIN = 220;
 const LEFT_MAX = 420;
-const LEFT_DEFAULT = 220;
+const LEFT_DEFAULT = 248;
 const RIGHT_MIN = 280;
 const RIGHT_MAX = 840;
 const RIGHT_DEFAULT = 360;

@@ -3,28 +3,33 @@
   align-items: center;
   min-width: 0;
   max-width: 100%;
-  pointer-events: none;
 }
 
 .global-forms-region-button {
-  min-width: 0;
-  max-width: 100%;
-  pointer-events: auto;
+  position: relative;
+  flex: 0 0 auto;
 }
 
-.global-forms-region-button-label,
-.global-forms-region-button-location,
-.global-forms-region-request-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.global-forms-region-count {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: var(--oc-radius-full);
+  background: var(--oc-selection);
+  color: var(--oc-text-on-selection);
+  font-size: var(--oc-type-caption-size);
+  font-weight: var(--oc-type-title-weight);
+  line-height: 1;
 }
 
-.global-forms-region-button-location {
-  max-width: 180px;
-  color: var(--oc-text-muted);
-  font-family: var(--oc-font-mono);
-  font-size: var(--oc-type-kicker-size);
+.global-forms-region-button[data-error] .global-forms-region-count {
+  background: var(--oc-status-danger);
+  color: var(--oc-surface-canvas);
 }
 
 .global-forms-region-dialog-title {
@@ -85,8 +90,11 @@
 
 .global-forms-region-request-title {
   min-width: 0;
+  overflow: hidden;
   color: inherit;
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .global-forms-region-detail {
@@ -99,6 +107,7 @@
 
 .global-forms-region-detail-body {
   display: grid;
+  grid-auto-rows: max-content;
   align-content: start;
   justify-items: center;
   flex: 1;
@@ -166,10 +175,6 @@
 }
 
 @media (width <= 520px) {
-  .global-forms-region-button-location {
-    display: none;
-  }
-
   .global-forms-region-request-list ul {
     grid-template-columns: 1fr;
   }

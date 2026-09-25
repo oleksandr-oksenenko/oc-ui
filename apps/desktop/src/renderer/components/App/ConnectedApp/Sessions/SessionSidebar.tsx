@@ -5,7 +5,7 @@ import { Loader } from "@opencode/ui/loader";
 import { TextInput } from "@opencode/ui/text-input";
 import type { SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
-import { Show, createSignal } from "solid-js";
+import { Show, createSignal, type JSX } from "solid-js";
 
 import { SessionHeader } from "./SessionSidebar/SessionHeader.tsx";
 import { SessionTree } from "./SessionSidebar/SessionTree.tsx";
@@ -30,6 +30,8 @@ export type SessionSidebarProps = {
   readonly showHeader?: boolean;
   readonly autoFocusClose?: boolean;
   readonly serverName: string;
+  readonly globalControls?: JSX.Element;
+  readonly sidebarVisible?: boolean;
   readonly serverStatus: SessionSidebarStatus;
   readonly onSelect: (sessionID: string) => void;
   readonly onToggleExpanded: (sessionID: string) => void;
@@ -118,6 +120,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
           canDelete={props.canDelete}
           deletionStatusForSession={props.deletionStatusForSession}
           query={filter()}
+          sidebarVisible={props.sidebarVisible}
           onSelect={props.onSelect}
           onToggleExpanded={props.onToggleExpanded}
           onDelete={props.onDelete}
@@ -125,7 +128,10 @@ export function SessionSidebar(props: SessionSidebarProps) {
       </Show>
 
       <div class="shell-sidebar-footer">
-        <ThemeToggle />
+        <div class="shell-sidebar-footer-top">
+          <ThemeToggle />
+          {props.globalControls}
+        </div>
         <Button
           class="shell-server-selector oc-focus-inset"
           type="button"

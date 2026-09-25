@@ -4,7 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { mount } from "../../../../test/mount.ts";
 import { createMemorySessionPanelStorage } from "../../../../test/session-panel-storage.ts";
 import { withTestWorkspace } from "../../../../test/workspace.ts";
-import { createShellPanelState, MOBILE_SHELL_MEDIA_QUERY } from "./createShellPanelState.ts";
+import {
+  COMPACT_SHELL_MEDIA_QUERY,
+  createShellPanelState,
+  MOBILE_SHELL_MEDIA_QUERY,
+} from "./createShellPanelState.ts";
 import { createSessionPanelLayouts } from "./sessionPanelLayouts.ts";
 
 function mountState(options?: { leftSidebarOpen?: boolean; rightPanelOpen?: boolean }) {
@@ -48,6 +52,30 @@ function stubChangeableMatchMedia(initial: boolean) {
   return {
     set(next: boolean) {
       matches = next;
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
+function stubResponsiveMatchMedia(initialWidth: number) {
+  const listeners = new Set<() => void>();
+  let width = initialWidth;
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      get matches() {
+        if (query === MOBILE_SHELL_MEDIA_QUERY) return width <= 719;
+        if (query === COMPACT_SHELL_MEDIA_QUERY) return width >= 720 && width <= 959;
+        return false;
+      },
+      media: query,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    })),
+  );
+  return {
+    set(next: number) {
+      width = next;
       for (const listener of listeners) listener();
     },
   };
@@ -132,6 +160,31 @@ describe("createShellPanelState", () => {
     expect(mounted.state.mobile()).toBe(false);
     expect(mounted.state.leftSidebarOpen()).toBe(true);
     expect(mounted.state.rightPanelOpen()).toBe(true);
+    mounted.dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults the compact sessions pane closed while preserving explicit pane choices", () => {
+    const media = stubResponsiveMatchMedia(1280);
+    const mounted = mountState({ leftSidebarOpen: true, rightPanelOpen: true });
+    expect(mounted.state.leftSidebarOpen()).toBe(true);
+
+    media.set(800);
+    expect(mounted.state.leftSidebarOpen()).toBe(false);
+    expect(mounted.state.rightPanelOpen()).toBe(true);
+    mounted.state.toggleLeftSidebar();
+    expect(mounted.state.leftSidebarOpen()).toBe(true);
+
+    media.set(1280);
+    expect(mounted.state.leftSidebarOpen()).toBe(true);
+    media.set(800);
+    expect(mounted.state.leftSidebarOpen()).toBe(true);
+
+    media.set(390);
+    expect(mounted.state.leftSidebarOpen()).toBe(false);
+    expect(mounted.state.rightPanelOpen()).toBe(false);
+    media.set(800);
+    expect(mounted.state.leftSidebarOpen()).toBe(true);
     mounted.dispose();
     vi.unstubAllGlobals();
   });

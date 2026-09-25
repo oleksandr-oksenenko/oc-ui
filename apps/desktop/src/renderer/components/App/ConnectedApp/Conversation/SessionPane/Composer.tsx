@@ -10,6 +10,7 @@ import { For, Show, createEffect, createSignal, on, onCleanup, onMount, type JSX
 
 import { collectTransferFiles, isFileTransfer } from "../../../../../opencode/attachments.ts";
 import { ImagePreview, isImageFile } from "../../../../../ui/ImagePreview.tsx";
+import { RemoveButton } from "../../../../../ui/RemoveButton.tsx";
 import "./Composer/Composer.css";
 import { AgentPicker } from "./Composer/AgentPicker.tsx";
 import type { AgentPickerOption } from "./Composer/AgentPicker.tsx";
@@ -109,7 +110,6 @@ function selectionControls(
   return (
     <div class="composer-picker-row">
       {attachButton}
-      <Show when={props.contextUsage}>{(usage) => <ContextMeter usage={usage()} />}</Show>
       {props.agentSelection.state === "ready" ? (
         <AgentPicker
           placeholder="Default agent"
@@ -132,18 +132,24 @@ function selectionControls(
         </span>
       )}
       {props.modelSelection.state === "ready" ? (
-        <>
-          <ModelPicker
-            options={props.modelSelection.models}
-            selectedID={props.modelSelection.selectedModelID}
-            disabled={
-              props.modelSelection.disabled ||
-              props.agentSelection.switching ||
-              props.modelSelection.switching ||
-              props.action === "sending"
-            }
-            onSelect={props.modelSelection.onSelectModel}
-          />
+        <ModelPicker
+          options={props.modelSelection.models}
+          selectedID={props.modelSelection.selectedModelID}
+          disabled={
+            props.modelSelection.disabled ||
+            props.agentSelection.switching ||
+            props.modelSelection.switching ||
+            props.action === "sending"
+          }
+          onSelect={props.modelSelection.onSelectModel}
+        />
+      ) : (
+        <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
+          {props.modelSelection.state === "loading" ? "Loading models…" : "Models unavailable"}
+        </span>
+      )}
+      <span class="composer-variant-context">
+        {props.modelSelection.state === "ready" ? (
           <VariantPicker
             placeholder="Select variant"
             unavailableLabel={
@@ -161,19 +167,15 @@ function selectionControls(
             }
             onSelect={props.modelSelection.onSelectVariant}
           />
-        </>
-      ) : (
-        <>
-          <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
-            {props.modelSelection.state === "loading" ? "Loading models…" : "Models unavailable"}
-          </span>
+        ) : (
           <span class="composer-picker composer-picker--unavailable" aria-disabled="true">
             {props.modelSelection.state === "loading"
               ? "Loading variants…"
               : "Variants unavailable"}
           </span>
-        </>
-      )}
+        )}
+        <Show when={props.contextUsage}>{(usage) => <ContextMeter usage={usage()} />}</Show>
+      </span>
     </div>
   );
 }
@@ -459,56 +461,52 @@ export function Composer(props: ComposerProps) {
           hidden
           onChange={onPickerChange}
         />
-        {review() ? (
-          <div class="composer-review-row">
-            <span class="composer-review-label">
-              Code review · {review()!.count} {review()!.count === 1 ? "comment" : "comments"}
-            </span>
-            <IconButton
-              class="composer-review-discard"
-              type="button"
-              size="small"
-              variant="ghost-muted"
-              aria-label={`Discard ${review()!.count} code review comments`}
-              title={`Discard ${review()!.count} code review comments`}
-              icon={<Icon name="close" size="small" aria-hidden="true" />}
-              onClick={(event) => {
-                review()?.onDiscard(event.currentTarget);
-              }}
-            />
+        <Show when={review() || annotations()}>
+          <div class="composer-context-chips">
+            {review() ? (
+              <div class="composer-review-row">
+                <span class="composer-review-label">
+                  Code review · {review()!.count} {review()!.count === 1 ? "comment" : "comments"}
+                </span>
+                <RemoveButton
+                  class="composer-review-discard"
+                  label={`Discard ${review()!.count} code review comments`}
+                  title={`Discard ${review()!.count} code review comments`}
+                  onClick={(event) => {
+                    review()?.onDiscard(event.currentTarget);
+                  }}
+                />
+              </div>
+            ) : null}
+            <Show when={annotations()}>
+              {(annotation) => (
+                <div class="composer-annotation-row">
+                  <Button
+                    class="composer-annotation-count"
+                    ref={annotation().ref}
+                    type="button"
+                    size="small"
+                    variant="ghost-muted"
+                    onClick={(event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
+                      annotation().onOpen(event.currentTarget);
+                    }}
+                  >
+                    Annotations · {annotation().count}{" "}
+                    {annotation().count === 1 ? "comment" : "comments"}
+                  </Button>
+                  <RemoveButton
+                    class="composer-annotation-discard"
+                    disabled={props.disabled || props.action === "sending"}
+                    label={`Discard ${annotation().count} annotations`}
+                    title={`Discard ${annotation().count} annotations`}
+                    onClick={(event) => {
+                      annotation().onDiscard(event.currentTarget);
+                    }}
+                  />
+                </div>
+              )}
+            </Show>
           </div>
-        ) : null}
-        <Show when={annotations()}>
-          {(annotation) => (
-            <div class="composer-annotation-row">
-              <Button
-                class="composer-annotation-count"
-                ref={annotation().ref}
-                type="button"
-                size="small"
-                variant="ghost-muted"
-                onClick={(event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
-                  annotation().onOpen(event.currentTarget);
-                }}
-              >
-                Annotations · {annotation().count}{" "}
-                {annotation().count === 1 ? "comment" : "comments"}
-              </Button>
-              <IconButton
-                class="composer-annotation-discard"
-                disabled={props.disabled || props.action === "sending"}
-                type="button"
-                size="small"
-                variant="ghost-muted"
-                aria-label={`Discard ${annotation().count} annotations`}
-                title={`Discard ${annotation().count} annotations`}
-                icon={<Icon name="close" size="small" aria-hidden="true" />}
-                onClick={(event) => {
-                  annotation().onDiscard(event.currentTarget);
-                }}
-              />
-            </div>
-          )}
         </Show>
         <Show
           when={
@@ -538,13 +536,9 @@ export function Composer(props: ComposerProps) {
                       class="composer-file-preview"
                     />
                   </Show>
-                  <IconButton
+                  <RemoveButton
                     class="composer-file-remove"
-                    type="button"
-                    size="small"
-                    variant="ghost-muted"
-                    aria-label={`Remove ${file.name || "Pasted file"}`}
-                    icon={<Icon name="close" size="small" aria-hidden="true" />}
+                    label={`Remove ${file.name || "Pasted file"}`}
                     onClick={() => {
                       props.onRemoveFile?.(file);
                       editor?.focus();

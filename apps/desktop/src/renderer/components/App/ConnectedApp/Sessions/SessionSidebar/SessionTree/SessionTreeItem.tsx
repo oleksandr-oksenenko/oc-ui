@@ -1,12 +1,12 @@
 import type { SessionAttentionState } from "../../session-attention-rollup.ts";
 import { Collapsible } from "@opencode/ui/collapsible";
 import { Button } from "@opencode/ui/button";
-import { Icon } from "@opencode/ui/icon";
-import { IconButton } from "@opencode/ui/icon-button";
 import { Loader } from "@opencode/ui/loader";
+import { Tooltip } from "@opencode/ui/tooltip";
 import type { SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
-import type { JSX } from "solid-js";
+import { createEffect, createSignal, type JSX } from "solid-js";
+import { RemoveButton } from "../../../../../../ui/RemoveButton.tsx";
 
 import "./SessionTreeItem.css";
 
@@ -19,6 +19,7 @@ export type SessionTreeItemProps = {
   readonly expanded: boolean;
   readonly deleteDisabled: boolean;
   readonly deleteDisabledReason?: string;
+  readonly sidebarVisible?: boolean;
   readonly children?: JSX.Element;
   readonly onSelect: (sessionID: string) => void;
   readonly onToggleExpanded: (sessionID: string) => void;
@@ -26,6 +27,10 @@ export type SessionTreeItemProps = {
 };
 
 export function SessionTreeItem(props: SessionTreeItemProps) {
+  const [titleFocused, setTitleFocused] = createSignal(false);
+  createEffect(() => {
+    if (props.sidebarVisible === false) setTitleFocused(false);
+  });
   const title = () => props.session.title?.trim() || "Untitled session";
   const inherited = () => props.attention?.origin === "subagents";
   const statusLabel = () => {
@@ -70,21 +75,37 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
               </Collapsible.Trigger>
             ) : null}
           </span>
-          <Button
-            class="shell-session-main oc-focus-inset"
-            type="button"
-            size="small"
-            variant="ghost-muted"
-            aria-current={props.selected ? "page" : undefined}
-            aria-label={`${title()}, ${statusLabel()}`}
-            aria-expanded={props.hasChildren ? props.expanded : undefined}
-            onClick={() => {
-              if (props.hasChildren && props.selected) props.onToggleExpanded(props.session.id);
-              props.onSelect(props.session.id);
-            }}
+          <Tooltip
+            inactive={props.sidebarVisible === false}
+            class="shell-session-title-tooltip-trigger"
+            contentClass="shell-session-title-tooltip"
+            appearance="standard"
+            forceOpen={titleFocused() ? true : undefined}
+            value={title()}
           >
-            <span class="shell-session-title">{title()}</span>
-          </Button>
+            <Button
+              class="shell-session-main oc-focus-inset"
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              aria-current={props.selected ? "page" : undefined}
+              aria-label={`${title()}, ${statusLabel()}`}
+              onFocus={(event: FocusEvent & { currentTarget: HTMLButtonElement }) =>
+                setTitleFocused(event.currentTarget.matches(":focus-visible"))
+              }
+              onBlur={() => setTitleFocused(false)}
+              onPointerDown={() => setTitleFocused(false)}
+              onKeyDown={(event: KeyboardEvent) => {
+                setTitleFocused(event.key !== "Enter" && event.key !== " ");
+              }}
+              onClick={() => {
+                if (props.hasChildren && props.selected) props.onToggleExpanded(props.session.id);
+                props.onSelect(props.session.id);
+              }}
+            >
+              <span class="shell-session-title">{title()}</span>
+            </Button>
+          </Tooltip>
           <span class="shell-session-row-end">
             {props.attention || props.status === "running" ? (
               <span
@@ -100,15 +121,11 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
                 )}
               </span>
             ) : null}
-            <IconButton
+            <RemoveButton
               class="shell-session-delete"
-              type="button"
-              size="small"
-              variant="ghost-muted"
               disabled={props.deleteDisabled}
-              aria-label={`Delete ${title()}`}
+              label={`Delete ${title()}`}
               title={props.deleteDisabledReason ?? `Delete ${title()}`}
-              icon={<Icon name="close" size="small" aria-hidden="true" />}
               onClick={(event) => props.onDelete(props.session.id, event.currentTarget)}
             />
           </span>

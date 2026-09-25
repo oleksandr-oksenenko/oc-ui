@@ -64,8 +64,9 @@
 }
 
 .shell-sidebar-filter {
+  grid-row: 2;
   width: 100%;
-  padding: 0 5px 12px;
+  padding: 4px 5px 12px;
 }
 
 .shell-session-filter[data-component="text-input-v2"] {
@@ -79,6 +80,14 @@
   min-width: 0;
   padding: 6px 9px 8px;
   border-top: 1px solid var(--oc-border-muted);
+}
+
+.shell-sidebar-footer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
 .shell-server-selector[data-component="button-v2"][data-size="small"] {

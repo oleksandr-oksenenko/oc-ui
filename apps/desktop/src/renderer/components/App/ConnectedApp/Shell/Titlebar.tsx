@@ -1,11 +1,12 @@
 import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
-import { createEffect, onCleanup, type JSX } from "solid-js";
+import { createEffect, onCleanup, Show, type JSX } from "solid-js";
 
 import "./Titlebar.css";
 
 export type TitlebarProps = {
   readonly selectedTitle?: string;
+  readonly sidebarActions?: JSX.Element;
   readonly globalControls?: JSX.Element;
   readonly rightControls?: JSX.Element;
   readonly leftSidebarOpen: boolean;
@@ -96,6 +97,7 @@ export function Titlebar(props: TitlebarProps): JSX.Element {
           title={props.leftSidebarOpen ? "Hide sessions" : "Show sessions"}
           onClick={props.onToggleLeftSidebar}
         />
+        <Show when={props.leftSidebarOpen && !props.mobile}>{props.sidebarActions}</Show>
       </div>
 
       <div class="titlebar-center-region">

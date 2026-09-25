@@ -7,7 +7,7 @@
   width: min(calc(100% - 32px), 820px);
   min-height: 76px;
   margin: 0 auto 16px;
-  padding: 3px 6px;
+  padding: 8px;
   border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius-panel);
   color: var(--oc-text-contrast);
@@ -18,7 +18,7 @@
 .composer-editor-row {
   display: flex;
   align-items: flex-end;
-  min-height: 40px;
+  min-height: 30px;
 }
 
 .composer-files {
@@ -35,7 +35,7 @@
   gap: 4px;
   min-width: 0;
   min-height: 22px;
-  padding: 2px 2px 2px 7px;
+  padding: 2px 0;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-caption-size);
   line-height: var(--oc-type-caption-line-height);
@@ -57,7 +57,14 @@
 .composer-file-remove[data-component="icon-button-v2"] {
   flex: 0 0 20px;
   margin-left: auto;
-  color: var(--oc-text-muted);
+}
+
+.composer-context-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+  padding-bottom: 2px;
 }
 
 .composer-review-row,
@@ -65,8 +72,12 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 22px;
-  padding: 0 2px 0 7px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius-full);
+  background: var(--oc-surface-raised);
   gap: 4px;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-caption-size);
@@ -97,16 +108,15 @@
 .composer-annotation-discard[data-component="icon-button-v2"] {
   flex: 0 0 20px;
   margin-left: auto;
-  color: var(--oc-text-muted);
 }
 
 .composer-input {
   box-sizing: border-box;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 40px;
+  min-height: 30px;
   max-height: 168px;
-  padding: 10px 2px;
+  padding: 6px 0 2px;
   border: 0;
   border-radius: var(--oc-radius);
   color: var(--oc-text-contrast);
@@ -173,6 +183,9 @@
   gap: 0;
   min-width: 0;
   min-height: 22px;
+
+  /* The plus glyph is inset inside its hit box; align its painted edges with Send. */
+  transform: translate(-5px, 9px);
 }
 
 .composer-attach[data-component="icon-button-v2"] {
@@ -200,7 +213,15 @@
 .composer-context {
   display: inline-flex;
   align-items: center;
-  margin-right: 8px;
+  flex: 0 0 auto;
+  margin-left: 8px;
+}
+
+.composer-variant-context {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .composer-context-meter {
@@ -440,7 +461,12 @@
   white-space: nowrap;
 }
 
-.composer-picker-control[data-component="select-v2"] {
+.composer-picker > [data-component="select-v2-root"] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.composer-picker-control[data-component="select-v2"][data-appearance="inline"] {
   display: inline-flex;
   align-items: center;
   min-width: 0;
@@ -456,14 +482,14 @@
 .composer-picker-control[data-component="select-v2"] [data-slot="select-v2-value"] {
   display: flex;
   align-items: center;
+  min-width: 0;
   height: 100%;
 }
 
 .composer-picker-control[data-component="select-v2"] [data-slot="select-v2-value-text"] {
-  display: flex;
-  align-items: center;
+  display: block;
   width: max-content;
-  height: 100%;
+  height: auto;
   min-width: 0;
   max-width: 100%;
   padding: 0;
@@ -472,7 +498,10 @@
   color: var(--oc-text-contrast);
   background: transparent;
   font: inherit;
-  line-height: 1;
+  line-height: var(--oc-type-metadata-line-height);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer-picker-control[data-component="select-v2"]
@@ -496,7 +525,8 @@
   height: 14px;
 }
 
-.composer-picker + .composer-picker {
+.composer-picker + .composer-picker,
+.composer-picker + .composer-variant-context {
   margin-left: 6px;
   padding-left: 6px;
   border-left: 1px solid var(--oc-border-base);
@@ -526,7 +556,7 @@
 }
 
 .composer-kept-notice {
-  padding: 0 2px 0 7px;
+  padding: 0;
   color: var(--oc-text-muted);
 }
 
@@ -536,6 +566,39 @@
   }
 
   .composer-picker-row {
+    flex: 1 1 0;
     flex-wrap: wrap;
+    gap: 4px;
+    transform: none;
+  }
+
+  .composer-picker-row > .composer-picker,
+  .composer-variant-context {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+
+  .composer-picker-row > .composer-picker {
+    max-width: min(160px, 100%);
+  }
+
+  .composer-picker + .composer-picker,
+  .composer-picker + .composer-variant-context {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .composer-picker-control[data-component="select-v2"][data-appearance="inline"] {
+    max-width: min(140px, 100%);
+  }
+
+  .composer-model-trigger {
+    max-width: min(160px, 100%);
+  }
+
+  .composer-controls-row {
+    align-items: flex-end;
+    gap: 4px;
   }
 }

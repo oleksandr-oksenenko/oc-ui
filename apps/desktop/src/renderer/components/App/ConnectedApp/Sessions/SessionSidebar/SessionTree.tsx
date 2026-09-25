@@ -20,6 +20,7 @@ export type SessionTreeProps = {
   readonly canDelete: boolean;
   readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
   readonly query?: string;
+  readonly sidebarVisible?: boolean;
   readonly onSelect: (sessionID: string) => void;
   readonly onToggleExpanded: (sessionID: string) => void;
   readonly onDelete: (sessionID: string, opener: HTMLButtonElement) => void;
@@ -62,6 +63,7 @@ export function SessionTree(props: SessionTreeProps) {
             expanded={filtering() || isExpanded(session().id)}
             deleteDisabled={deleteDisabledReason() !== undefined}
             deleteDisabledReason={deleteDisabledReason()}
+            sidebarVisible={props.sidebarVisible}
             onSelect={props.onSelect}
             onToggleExpanded={(sessionID) => {
               if (!filtering()) props.onToggleExpanded(sessionID);

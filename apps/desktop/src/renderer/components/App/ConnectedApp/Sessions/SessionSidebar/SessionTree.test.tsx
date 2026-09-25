@@ -55,6 +55,38 @@ const inputEvent = (input: HTMLInputElement, value: string) => {
 const fixedNow = 1788004800000;
 
 describe("SessionTree", () => {
+  it("dismisses a focused title tooltip when its sidebar is hidden", async () => {
+    const [visible, setVisible] = createSignal(true);
+    const { host, dispose } = mount(() => (
+      <SessionTreeItem
+        session={session("long", "Add configuration options for remote development server connections")}
+        status="running"
+        hasChildren={false}
+        selected
+        expanded={false}
+        deleteDisabled={false}
+        sidebarVisible={visible()}
+        onSelect={() => undefined}
+        onToggleExpanded={() => undefined}
+        onDelete={() => undefined}
+      />
+    ));
+    const title = host.querySelector<HTMLButtonElement>(".shell-session-main")!;
+    const matches = title.matches.bind(title);
+    vi.spyOn(title, "matches").mockImplementation((selector) =>
+      selector === ":focus-visible" ? true : matches(selector),
+    );
+    title.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+    expect(document.querySelector('[data-component="tooltip-v2"]')?.textContent).toContain(
+      "Add configuration options",
+    );
+    setVisible(false);
+    expect(document.querySelector('[data-component="tooltip-v2"]')).toBeNull();
+    setVisible(true);
+    expect(document.querySelector('[data-component="tooltip-v2"]')).toBeNull();
+    dispose();
+  });
+
   it("renders recursive children and selects them through the same callback", async () => {
     const onSelect = vi.fn<(sessionID: string) => void>();
     const { host, dispose } = mount(() => (
@@ -111,7 +143,10 @@ describe("SessionTree", () => {
     ));
 
     const disclosure = host.querySelector<HTMLButtonElement>('[aria-label="Parent, Idle"]');
-    expect(disclosure?.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure?.hasAttribute("aria-expanded")).toBe(false);
+    expect(
+      host.querySelector('[aria-label="Collapse Parent"]')?.getAttribute("aria-expanded"),
+    ).toBe("true");
 
     expect(host.textContent).toContain("Child");
 
@@ -147,11 +182,14 @@ describe("SessionTree", () => {
     ));
 
     const title = host.querySelector<HTMLButtonElement>('[aria-label="Parent, Idle"]');
-    expect(title?.getAttribute("aria-expanded")).toBe("false");
+    expect(title?.hasAttribute("aria-expanded")).toBe(false);
+    expect(host.querySelector('[aria-label="Expand Parent"]')?.getAttribute("aria-expanded")).toBe(
+      "false",
+    );
     title?.click();
     expect(onSelect).toHaveBeenCalledExactlyOnceWith("parent");
     expect(onToggleExpanded).not.toHaveBeenCalled();
-    expect(title?.getAttribute("aria-expanded")).toBe("false");
+    expect(title?.hasAttribute("aria-expanded")).toBe(false);
 
     dispose();
   });
@@ -239,11 +277,15 @@ describe("SessionTree", () => {
 
     parent?.click();
     expect(parent?.getAttribute("aria-current")).toBe("page");
-    expect(parent?.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector('[aria-label="Expand Parent"]')?.getAttribute("aria-expanded")).toBe(
+      "false",
+    );
     expect(child()).toBeNull();
 
     parent?.click();
-    expect(parent?.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      host.querySelector('[aria-label="Collapse Parent"]')?.getAttribute("aria-expanded"),
+    ).toBe("true");
     expect(child()).not.toBeNull();
 
     child()?.click();
@@ -252,11 +294,15 @@ describe("SessionTree", () => {
 
     parent?.click();
     expect(parent?.getAttribute("aria-current")).toBe("page");
-    expect(parent?.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      host.querySelector('[aria-label="Collapse Parent"]')?.getAttribute("aria-expanded"),
+    ).toBe("true");
     expect(child()).not.toBeNull();
 
     parent?.click();
-    expect(parent?.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector('[aria-label="Expand Parent"]')?.getAttribute("aria-expanded")).toBe(
+      "false",
+    );
     expect(child()).toBeNull();
 
     dispose();
@@ -471,10 +517,12 @@ describe("SessionSidebar", () => {
     expect(host.querySelector('[aria-label="Personal notes, Idle"]')).toBeNull();
     expect(host.querySelector('[aria-label="Unrelated child, Idle"]')).toBeNull();
     expect(
-      host.querySelector('[aria-label="Project work, Idle"]')?.getAttribute("aria-expanded"),
+      host.querySelector('[aria-label="Collapse Project work"]')?.getAttribute("aria-expanded"),
     ).toBe("true");
     expect(
-      host.querySelector('[aria-label="Architecture notes, Idle"]')?.getAttribute("aria-expanded"),
+      host
+        .querySelector('[aria-label="Collapse Architecture notes"]')
+        ?.getAttribute("aria-expanded"),
     ).toBe("true");
 
     dispose();
@@ -498,12 +546,12 @@ describe("SessionSidebar", () => {
 
     inputEvent(filter!, "matching");
     expect(host.querySelector('[aria-label="Matching child, Idle"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Root, Idle"]')?.getAttribute("aria-expanded")).toBe(
+    expect(host.querySelector('[aria-label="Collapse Root"]')?.getAttribute("aria-expanded")).toBe(
       "true",
     );
 
     inputEvent(filter!, "");
-    expect(host.querySelector('[aria-label="Root, Idle"]')?.getAttribute("aria-expanded")).toBe(
+    expect(host.querySelector('[aria-label="Expand Root"]')?.getAttribute("aria-expanded")).toBe(
       "false",
     );
 
@@ -527,10 +575,14 @@ describe("SessionSidebar", () => {
     inputEvent(filter!, "matching");
 
     const root = host.querySelector<HTMLButtonElement>('[aria-label="Root, Idle"]');
-    expect(root?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector('[aria-label="Collapse Root"]')?.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
     root?.click();
     expect(onToggleExpanded).not.toHaveBeenCalled();
-    expect(root?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector('[aria-label="Collapse Root"]')?.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
     expect(host.querySelector('[aria-label="Matching child, Idle"]')).not.toBeNull();
 
     dispose();

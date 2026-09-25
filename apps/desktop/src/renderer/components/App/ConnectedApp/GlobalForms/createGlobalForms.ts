@@ -6,7 +6,7 @@ import { createMemo, onCleanup, type Accessor } from "solid-js";
 import { createFormController } from "../Forms/createFormController.ts";
 
 const GLOBAL_SESSION_ID = "global" as const;
-const LOAD_ERROR = "Could not load global forms.";
+const LOAD_ERROR = "Could not load requests.";
 const ACTION_ERROR = "Could not complete the form action.";
 
 const errorMessage = (kind: "sync" | "reply" | "cancel", cause: unknown): string => {

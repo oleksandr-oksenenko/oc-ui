@@ -42,13 +42,6 @@
   line-height: var(--oc-type-metadata-line-height);
 }
 
-.global-forms-beacon-home p.global-forms-beacon-story-note {
-  max-width: 540px;
-  margin-top: 22px;
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-caption-size);
-}
-
 .global-forms-beacon-status {
   min-height: 18px;
   margin: 20px 0 0;

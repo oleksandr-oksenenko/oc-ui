@@ -30,7 +30,7 @@ export const defaultForms: readonly FormWithLocation[] = [
         title: "Release summary",
         description: "A short sentence for the release feed.",
         placeholder: "What changed in this release?",
-        default: "Ship the global forms flow",
+        default: "Ship the requests flow",
         required: true,
         minLength: 8,
       },

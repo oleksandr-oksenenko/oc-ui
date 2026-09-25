@@ -13,7 +13,7 @@
 }
 
 .shell-titlebar.left-sidebar-open {
-  grid-template-columns: var(--shell-left-sidebar-width, 220px) minmax(0, 1fr) auto;
+  grid-template-columns: var(--shell-left-sidebar-width, 248px) minmax(0, 1fr) auto;
 }
 
 .shell-titlebar.right-panel-open {
@@ -22,7 +22,7 @@
 
 .shell-titlebar.left-sidebar-open.right-panel-open {
   grid-template-columns:
-    var(--shell-left-sidebar-width, 220px)
+    var(--shell-left-sidebar-width, 248px)
     minmax(0, 1fr)
     var(--shell-right-panel-width, 360px);
 }
@@ -59,8 +59,8 @@
   box-sizing: border-box;
   height: 100%;
   min-width: 0;
-  width: 100%;
-  padding: 0 min(30%, 220px);
+  flex: 1;
+  padding: 0 12px;
   overflow: hidden;
 }
 
@@ -77,9 +77,8 @@
 }
 
 .titlebar-global-controls {
-  position: absolute;
-  top: 0;
-  right: 4px;
+  flex: 0 1 auto;
+  margin-right: 4px;
   display: flex;
   align-items: center;
   max-width: min(30%, 220px);
@@ -87,6 +86,16 @@
   min-width: 0;
   overflow: hidden;
   -webkit-app-region: no-drag;
+}
+
+.titlebar-global-controls:empty {
+  display: none;
+}
+
+.titlebar-left-region > .shell-session-header {
+  flex: 1;
+  width: auto;
+  height: 100%;
 }
 
 .titlebar-actions {
@@ -125,6 +134,11 @@
   background: var(--oc-surface-raised);
 }
 
+.shell-titlebar.right-panel-open .titlebar-right-region {
+  box-sizing: border-box;
+  border-left: 1px solid var(--oc-border-base);
+}
+
 [data-host="desktop"][data-platform="macos"]
   .shell-titlebar:not(.left-sidebar-open)
   .titlebar-left-region {
@@ -154,6 +168,10 @@
   .shell-titlebar.left-sidebar-open .titlebar-left-region,
   .shell-titlebar.right-panel-open .titlebar-right-region {
     padding: 0;
+  }
+
+  .shell-titlebar.right-panel-open .titlebar-right-region {
+    border-left: 0;
   }
 
   [data-host="desktop"][data-platform="macos"]

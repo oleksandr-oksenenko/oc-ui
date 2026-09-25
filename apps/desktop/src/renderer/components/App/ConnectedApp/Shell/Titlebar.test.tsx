@@ -9,6 +9,40 @@ import { Titlebar } from "./Titlebar.tsx";
 const settleFocus = () => new Promise<void>((resolve) => queueMicrotask(resolve));
 
 describe("Titlebar", () => {
+  it("offers the sidebar action only while the desktop sidebar is visible", () => {
+    const [open, setOpen] = createSignal(true);
+    const [mobile, setMobile] = createSignal(false);
+    const create = vi.fn<() => void>();
+    const { host, dispose } = mount(() => (
+      <Titlebar
+        leftSidebarOpen={open()}
+        mobile={mobile()}
+        sidebarActions={
+          <button type="button" onClick={create}>
+            Create session
+          </button>
+        }
+        rightPanelOpen={false}
+        rightPanelAvailable={false}
+        onToggleLeftSidebar={() => setOpen(!open())}
+        onToggleRightPanel={() => undefined}
+      />
+    ));
+    const action = () =>
+      host.querySelector<HTMLButtonElement>(".titlebar-left-region > button:last-child");
+    action()!.click();
+    expect(create).toHaveBeenCalledTimes(1);
+    setOpen(false);
+    expect(host.textContent).not.toContain("Create session");
+    setOpen(true);
+    setMobile(true);
+    expect(host.textContent).not.toContain("Create session");
+    setMobile(false);
+    action()!.click();
+    expect(create).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+
   it("keeps global controls visible without replacing the context controls", () => {
     const [rightPanelOpen, setRightPanelOpen] = createSignal(true);
     const { host, dispose } = mount(() => (

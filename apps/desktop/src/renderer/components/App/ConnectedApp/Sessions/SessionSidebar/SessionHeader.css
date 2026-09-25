@@ -1,21 +1,12 @@
 .shell-session-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   width: 100%;
-  height: 60px;
+  height: 40px;
   min-width: 0;
   gap: 4px;
-  padding: 0 8px 0 16px;
-}
-
-.shell-session-header h1 {
-  min-width: 0;
-  margin: 0;
-  color: var(--oc-text-contrast);
-  font-size: var(--oc-type-title-size);
-  font-weight: var(--oc-type-title-weight);
-  letter-spacing: -0.01em;
+  padding: 0 8px;
 }
 
 .shell-session-header-actions {

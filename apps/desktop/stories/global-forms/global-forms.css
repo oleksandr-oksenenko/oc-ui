@@ -35,6 +35,24 @@
   list-style: none;
 }
 
+.global-forms-sidebar-footer {
+  display: grid;
+  gap: 4px;
+  margin-top: auto;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--oc-border-muted);
+}
+
+.global-forms-sidebar-server {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-muted);
+  background: transparent;
+  text-align: left;
+}
+
 .global-forms-sidebar-item {
   display: flex;
   align-items: center;

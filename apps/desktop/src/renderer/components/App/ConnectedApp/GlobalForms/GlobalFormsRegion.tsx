@@ -1,6 +1,8 @@
-import { Button } from "@opencode/ui/button";
+import { IconButton } from "@opencode/ui/icon-button";
+import { Icon } from "@opencode/ui/icon";
+import { Tooltip } from "@opencode/ui/tooltip";
 import { useDialog } from "@opencode/ui/context/dialog";
-import { createEffect, onCleanup, type JSX } from "solid-js";
+import { Show, createEffect, onCleanup, type JSX } from "solid-js";
 
 import { restoreDialogFocusAfterClose } from "../../../../ui/restoreDialogFocusAfterClose.ts";
 import type { GlobalFormsController } from "./createGlobalForms.ts";
@@ -10,6 +12,7 @@ import "./GlobalFormsRegion.css";
 
 export type GlobalFormsRegionProps = {
   readonly controller: GlobalFormsController;
+  readonly visible?: boolean;
   readonly onOpenExternal?: (url: string) => void;
 };
 
@@ -31,26 +34,39 @@ export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
   });
 
   const forms = () => props.controller.forms();
+  const count = () => forms().length;
   const statusLabel = () => {
-    if (!props.controller.connected()) {
-      const count = forms().length;
-      return count === 0
-        ? "Global forms · Disconnected"
-        : `${count} cached global form${count === 1 ? "" : "s"} · Disconnected`;
+    if (props.controller.loadError()) {
+      return count() === 0
+        ? "Requests unavailable"
+        : `${count()} request${count() === 1 ? "" : "s"} available; updates unavailable`;
     }
-    if (props.controller.loading()) return "Loading global forms";
-    if (props.controller.loadError()) return "Global forms unavailable";
-    const count = forms().length;
-    return count === 0 ? "No global forms" : `${count} global form${count === 1 ? "" : "s"}`;
+    if (!props.controller.connected()) {
+      return count() === 0
+        ? "Requests · Disconnected"
+        : `${count()} cached request${count() === 1 ? "" : "s"} · Disconnected`;
+    }
+    if (props.controller.loading()) return "Loading requests";
+    return count() === 0 ? "No requests" : `${count()} request${count() === 1 ? "" : "s"}`;
   };
   const launcherLabel = () => {
-    const directory = props.controller.location.directory;
-    if (!props.controller.connected()) {
-      return `Disconnected; inspect cached global forms for ${directory}`;
+    if (props.controller.loadError()) {
+      return count() === 0
+        ? "Requests unavailable; open to retry"
+        : `Review ${count()} request${count() === 1 ? "" : "s"}; updates unavailable; open to retry`;
     }
-    if (props.controller.loading()) return `Loading global forms for ${directory}`;
-    if (props.controller.loadError()) return `Global forms unavailable for ${directory}`;
-    return forms().length > 0 ? `Review ${statusLabel()} for ${directory}` : "Review global forms";
+    if (!props.controller.connected()) {
+      return `Review ${count()} cached request${count() === 1 ? "" : "s"}; disconnected`;
+    }
+    return `Review ${count()} request${count() === 1 ? "" : "s"}`;
+  };
+  const focusTarget = (): HTMLElement | undefined => {
+    if (launcher?.isConnected) return launcher;
+    return (
+      document.querySelector<HTMLElement>(".shell-session-sidebar .shell-server-selector") ??
+      document.querySelector<HTMLElement>('.shell-titlebar [aria-label="Show sessions"]') ??
+      undefined
+    );
   };
   const openReview = () => {
     if (openingDialog || (ownedDialogID && dialog.active?.id === ownedDialogID)) return;
@@ -69,7 +85,7 @@ export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
         ),
         () => {
           ownedDialogID = undefined;
-          restoreDialogFocusAfterClose(() => launcher);
+          restoreDialogFocusAfterClose(focusTarget);
         },
       )
       .then(() => {
@@ -82,27 +98,36 @@ export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
 
   return (
     <div class="global-forms-region-launcher">
-      <Button
-        ref={(element: HTMLButtonElement) => {
-          launcher = element;
-        }}
-        class="global-forms-region-button"
-        type="button"
-        variant="ghost-muted"
-        icon="mcp"
-        aria-label={launcherLabel()}
-        onClick={openReview}
-      >
-        <span class="global-forms-region-button-label">{statusLabel()}</span>
-        <span
-          class="global-forms-region-button-location"
-          title={props.controller.location.directory}
-        >
-          {props.controller.location.directory}
-        </span>
-      </Button>
+      <Show when={count() > 0 || props.controller.loadError() !== undefined}>
+        <Tooltip value={launcherLabel()} appearance="compact" inactive={props.visible === false}>
+          <IconButton
+            ref={(element: HTMLButtonElement) => {
+              launcher = element;
+            }}
+            class="global-forms-region-button oc-focus-inset"
+            data-error={props.controller.loadError() !== undefined ? true : undefined}
+            type="button"
+            size="large"
+            variant="ghost-muted"
+            aria-label={launcherLabel()}
+            onClick={openReview}
+            icon={
+              <>
+                <Icon
+                  name={props.controller.loadError() ? "warning" : "notifications"}
+                  size="small"
+                  aria-hidden="true"
+                />
+                <span class="global-forms-region-count" aria-hidden="true">
+                  {count() > 0 ? count() : "!"}
+                </span>
+              </>
+            }
+          />
+        </Tooltip>
+      </Show>
       <span class="sr-only" aria-live="polite">
-        {`${statusLabel()} at ${props.controller.location.directory}`}
+        {statusLabel()}
       </span>
     </div>
   );

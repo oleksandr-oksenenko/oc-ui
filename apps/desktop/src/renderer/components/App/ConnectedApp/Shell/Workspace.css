@@ -9,7 +9,7 @@
 }
 
 .shell-workspace.left-sidebar-open {
-  grid-template-columns: var(--shell-left-sidebar-width, 220px) minmax(0, 1fr);
+  grid-template-columns: var(--shell-left-sidebar-width, 248px) minmax(0, 1fr);
 }
 
 .shell-workspace.right-panel-open {
@@ -18,7 +18,7 @@
 
 .shell-workspace.left-sidebar-open.right-panel-open {
   grid-template-columns:
-    var(--shell-left-sidebar-width, 220px)
+    var(--shell-left-sidebar-width, 248px)
     minmax(0, 1fr)
     var(--shell-right-panel-width, 360px);
 }
@@ -60,7 +60,7 @@
 }
 
 .shell-left-resize-handle {
-  left: var(--shell-left-sidebar-width, 220px);
+  left: var(--shell-left-sidebar-width, 248px);
   transform: translateX(-50%);
 }
 

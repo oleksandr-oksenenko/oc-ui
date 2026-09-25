@@ -10,7 +10,7 @@ import "./global-forms.css";
 type GlobalFormsShellProps = {
   readonly children: JSXElement;
   readonly selectedTitle?: string;
-  readonly globalControls?: JSXElement;
+  readonly sidebarControls?: (visible: () => boolean) => JSXElement;
   readonly initialLeftSidebarOpen?: boolean;
 };
 
@@ -23,7 +23,6 @@ export function GlobalFormsShell(props: GlobalFormsShellProps) {
         titlebar={
           <Titlebar
             selectedTitle={props.selectedTitle ?? "Review MCP requests"}
-            globalControls={props.globalControls}
             leftSidebarOpen={leftSidebarOpen()}
             rightPanelOpen={false}
             rightPanelAvailable={false}
@@ -42,15 +41,17 @@ export function GlobalFormsShell(props: GlobalFormsShellProps) {
                   <span>Workspace</span>
                 </div>
                 <ul class="global-forms-sidebar-list">
-                  <li class="global-forms-sidebar-item" data-active>
-                    <Icon name="mcp" aria-hidden="true" />
-                    <span>Requests</span>
-                  </li>
                   <li class="global-forms-sidebar-item">
                     <Icon name="terminal" aria-hidden="true" />
                     <span>Terminal</span>
                   </li>
                 </ul>
+                <div class="global-forms-sidebar-footer">
+                  {props.sidebarControls?.(leftSidebarOpen)}
+                  <button type="button" class="global-forms-sidebar-server">
+                    Local server
+                  </button>
+                </div>
               </nav>
             }
             main={<div class="global-forms-main">{props.children}</div>}

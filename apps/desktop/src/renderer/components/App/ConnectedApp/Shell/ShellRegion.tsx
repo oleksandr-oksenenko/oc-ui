@@ -10,7 +10,7 @@ type ShellPanelState = ReturnType<typeof createShellPanelState>;
 export type ShellRegionProps = {
   readonly panels: ShellPanelState;
   readonly selectedTitle: Accessor<string | undefined>;
-  readonly globalControls?: JSX.Element;
+  readonly sidebarActions?: JSX.Element;
   readonly rightControls?: JSX.Element;
   readonly sidebar?: JSX.Element;
   readonly main: JSX.Element;
@@ -32,7 +32,7 @@ export function ShellRegion(props: ShellRegionProps): JSX.Element {
       titlebar={
         <Titlebar
           selectedTitle={props.selectedTitle()}
-          globalControls={props.globalControls}
+          sidebarActions={props.sidebarActions}
           leftSidebarOpen={leftSidebarOpen()}
           rightPanelOpen={rightPanelOpen()}
           rightPanelAvailable

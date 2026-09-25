@@ -53,6 +53,15 @@
   cursor: pointer;
 }
 
+.shell-session-title-tooltip-trigger[data-component="tooltip-v2-trigger"] {
+  min-width: 0;
+}
+
+.shell-session-title-tooltip {
+  max-width: min(420px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
+}
+
 .shell-session-main:hover {
   color: inherit;
 }
@@ -86,7 +95,7 @@
   display: grid;
   align-self: center;
   width: 12px;
-  height: 20px;
+  height: 24px;
   place-items: center;
   padding: 0;
   border: 0;
@@ -164,9 +173,6 @@
 
 .shell-session-delete[data-component="icon-button-v2"] {
   grid-area: 1 / 1;
-  width: 20px;
-  height: 20px;
-  color: var(--oc-status-danger);
   opacity: 0;
   pointer-events: none;
   transform: scale(0);
@@ -182,16 +188,6 @@
   opacity: 1;
   pointer-events: auto;
   transform: scale(1);
-}
-
-.shell-session-delete[data-component="icon-button-v2"]:hover:not(:disabled),
-.shell-session-delete[data-component="icon-button-v2"]:focus-visible:not(:disabled) {
-  color: var(--oc-status-danger);
-}
-
-.shell-session-delete svg {
-  width: 20px;
-  height: 20px;
 }
 
 .shell-session-attention-dot {

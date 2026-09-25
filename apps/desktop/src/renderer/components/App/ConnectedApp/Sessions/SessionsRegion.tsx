@@ -1,5 +1,6 @@
 import type { SessionAttention } from "./createSessionAttention.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
+import type { JSX } from "solid-js";
 
 import { SessionSidebar } from "./SessionSidebar.tsx";
 import type { SessionWorkspace } from "./createSessionWorkspace.ts";
@@ -10,8 +11,10 @@ export type SessionsRegionProps = {
   readonly runtime: ConnectedRuntime;
   readonly workspace: SessionWorkspace;
   readonly flows: SessionFlows;
+  readonly globalControls?: JSX.Element;
   readonly serverUrl: string;
   readonly mobile: boolean;
+  readonly sidebarVisible: boolean;
   readonly onHide?: () => void;
   readonly onSessionOpened: (sessionID: string) => void;
   readonly onChangeServer: () => void;
@@ -33,8 +36,11 @@ export function SessionsRegion(props: SessionsRegionProps) {
       canCreate={connected() && props.runtime.sessions.state() === "ready"}
       canDelete={connected() && props.runtime.sessions.state() === "ready"}
       deletionStatusForSession={props.flows.deletionStatusForSession}
+      showHeader={props.mobile}
       autoFocusClose={props.mobile}
+      sidebarVisible={props.sidebarVisible}
       serverName={friendlyServerName(props.serverUrl)}
+      globalControls={props.globalControls}
       serverStatus={connected() ? "connected" : "reconnecting"}
       onSelect={(sessionID) => {
         if (!connected()) return;

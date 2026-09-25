@@ -1,5 +1,4 @@
 import { Icon } from "@opencode/ui/icon";
-import { IconButton } from "@opencode/ui/icon-button";
 import { List, type ListRef } from "@opencode/ui/list";
 import { closeHistory } from "prosemirror-history";
 import { EditorState, TextSelection } from "prosemirror-state";
@@ -16,6 +15,7 @@ import {
   type JSX,
 } from "solid-js";
 import { render } from "solid-js/web";
+import { RemoveButton } from "../../../../../../ui/RemoveButton.tsx";
 import type { PromptSkillAttachment } from "@opencode/client";
 import type { ComposerProps } from "../Composer.tsx";
 import {
@@ -286,13 +286,9 @@ export function PromptEditor(props: EditorProps) {
               () => (
                 <>
                   <span class="prompt-skill-label">{attrs().name}</span>
-                  <IconButton
-                    type="button"
-                    size="small"
-                    variant="ghost-muted"
-                    aria-label={"Remove " + attrs().name + " skill"}
+                  <RemoveButton
+                    label={"Remove " + attrs().name + " skill"}
                     title="Remove skill"
-                    icon={<Icon name="close" size="small" aria-hidden="true" />}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       const pos = getPos();

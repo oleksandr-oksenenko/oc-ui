@@ -8,6 +8,7 @@ import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegi
 import { GlobalFormsRegion } from "./ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
 import { ReviewRegion } from "./ConnectedApp/Review/ReviewRegion.tsx";
 import { SessionFlowsRegion } from "./ConnectedApp/Sessions/SessionFlowsRegion.tsx";
+import { SessionHeader } from "./ConnectedApp/Sessions/SessionSidebar/SessionHeader.tsx";
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
 import { ShellRegion } from "./ConnectedApp/Shell/ShellRegion.tsx";
 import type { WorkspaceModel } from "./ConnectedApp/createWorkspace.ts";
@@ -55,7 +56,12 @@ export function ConnectedApp(props: ConnectedAppProps) {
             ? sessions.selectedSession()?.title?.trim() || "Untitled session"
             : undefined
         }
-        globalControls={<GlobalFormsRegion controller={globalForms} />}
+        sidebarActions={
+          <SessionHeader
+            canCreate={connected() && runtime.sessions.state() === "ready"}
+            onCreate={flows.openNewSession}
+          />
+        }
         rightControls={
           <ContextTitlebarRegion
             onClose={closeRightPanel}
@@ -70,8 +76,12 @@ export function ConnectedApp(props: ConnectedAppProps) {
             runtime={runtime}
             workspace={sessions}
             flows={flows}
+            globalControls={
+              <GlobalFormsRegion controller={globalForms} visible={panels.leftSidebarOpen()} />
+            }
             serverUrl={props.server.serverUrl}
             mobile={panels.mobile()}
+            sidebarVisible={panels.leftSidebarOpen()}
             onHide={panels.mobile() ? closeLeftSidebarOnMobile : undefined}
             onSessionOpened={closeLeftSidebarOnMobile}
             onChangeServer={props.onChangeServer}

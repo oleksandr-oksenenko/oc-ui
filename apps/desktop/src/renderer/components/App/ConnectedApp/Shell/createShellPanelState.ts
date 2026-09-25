@@ -7,6 +7,7 @@ import {
 } from "./sessionPanelLayouts.ts";
 
 export const MOBILE_SHELL_MEDIA_QUERY = "(max-width: 719px)";
+export const COMPACT_SHELL_MEDIA_QUERY = "(min-width: 720px) and (max-width: 959px)";
 
 type PanelStateOptions = {
   readonly leftSidebarOpen?: boolean;
@@ -37,7 +38,12 @@ type NarrowOverride = {
 
 export function createShellPanelState(options: PanelStateOptions = {}): PanelState {
   const [mobile, setMobile] = createSignal(false);
-  const [leftSidebarOpen, setLeftSidebarOpenSignal] = createSignal(options.leftSidebarOpen ?? true);
+  const [compact, setCompact] = createSignal(false);
+  const [sidebarOpenByMode, setSidebarOpenByMode] = createSignal({
+    wide: options.leftSidebarOpen ?? true,
+    compact: false,
+    mobile: false,
+  });
   const [emptyOpen, setEmptyOpen] = createSignal(options.rightPanelOpen ?? false);
   const [emptyView, setEmptyView] = createSignal<ContextView>("diff");
   // Narrow layouts show the panel as an overlay: hidden until an explicit
@@ -45,6 +51,9 @@ export function createShellPanelState(options: PanelStateOptions = {}): PanelSta
   const [narrowOverride, setNarrowOverride] = createSignal<NarrowOverride | undefined>(undefined);
 
   const selectedID = (): string | undefined => options.selectedID?.();
+  const sidebarMode = (): "wide" | "compact" | "mobile" =>
+    mobile() ? "mobile" : compact() ? "compact" : "wide";
+  const leftSidebarOpen = (): boolean => sidebarOpenByMode()[sidebarMode()];
 
   const layout = (): SessionPanelLayout => {
     const id = selectedID();
@@ -61,7 +70,7 @@ export function createShellPanelState(options: PanelStateOptions = {}): PanelSta
   const contextView = (): ContextView => layout().view;
 
   const setRightPanelOpen = (open: boolean): void => {
-    if (open && mobile()) setLeftSidebarOpenSignal(false);
+    if (open && mobile()) setLeftSidebarOpen(false);
     const id = selectedID();
     if (options.layouts !== undefined && id !== undefined) options.layouts.remember(id, { open });
     else setEmptyOpen(open);
@@ -77,7 +86,7 @@ export function createShellPanelState(options: PanelStateOptions = {}): PanelSta
   const setLeftSidebarOpen = (open: boolean): void => {
     // Opening the sessions overlay closes the context overlay without remembering it.
     if (open && mobile()) setNarrowOverride(undefined);
-    setLeftSidebarOpenSignal(open);
+    setSidebarOpenByMode((current) => ({ ...current, [sidebarMode()]: open }));
   };
 
   const toggleLeftSidebar = (): void => setLeftSidebarOpen(!leftSidebarOpen());
@@ -98,25 +107,31 @@ export function createShellPanelState(options: PanelStateOptions = {}): PanelSta
 
   onMount(() => {
     if (!("matchMedia" in window)) return;
-    const media = window.matchMedia(MOBILE_SHELL_MEDIA_QUERY);
+    const mobileMedia = window.matchMedia(MOBILE_SHELL_MEDIA_QUERY);
+    const compactMedia = window.matchMedia(COMPACT_SHELL_MEDIA_QUERY);
     const syncMode = (): void => {
-      setMobile(media.matches);
+      setMobile(mobileMedia.matches);
+      setCompact(compactMedia.matches);
       setNarrowOverride(undefined);
-      if (media.matches) setLeftSidebarOpenSignal(false);
+      if (mobileMedia.matches) {
+        setSidebarOpenByMode((current) => ({ ...current, mobile: false }));
+      }
     };
     const closeMobileOverlay = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || !mobile()) return;
       if (!leftSidebarOpen() && !rightPanelOpen()) return;
       event.preventDefault();
-      setLeftSidebarOpenSignal(false);
+      setLeftSidebarOpen(false);
       setNarrowOverride(undefined);
     };
 
     syncMode();
-    media.addEventListener("change", syncMode);
+    mobileMedia.addEventListener("change", syncMode);
+    compactMedia.addEventListener("change", syncMode);
     window.addEventListener("keydown", closeMobileOverlay);
     onCleanup(() => {
-      media.removeEventListener("change", syncMode);
+      mobileMedia.removeEventListener("change", syncMode);
+      compactMedia.removeEventListener("change", syncMode);
       window.removeEventListener("keydown", closeMobileOverlay);
     });
   });

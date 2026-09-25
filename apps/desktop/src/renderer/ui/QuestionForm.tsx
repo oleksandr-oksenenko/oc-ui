@@ -11,12 +11,11 @@ import { Button } from "@opencode/ui/button";
 import { Card } from "@opencode/ui/card";
 import { Checkbox } from "@opencode/ui/checkbox";
 import { Field } from "@opencode/ui/field";
-import { Icon } from "@opencode/ui/icon";
-import { IconButton } from "@opencode/ui/icon-button";
 import { Loader } from "@opencode/ui/loader";
 import { RadioGroup, RadioItem } from "@opencode/ui/radio";
 import { TextInput } from "@opencode/ui/text-input";
 import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on } from "solid-js";
+import { RemoveButton } from "./RemoveButton.tsx";
 
 import "./QuestionForm.css";
 
@@ -168,15 +167,6 @@ function inputType(field: StringField): "text" | "email" | "url" | "date" | "dat
   return "text";
 }
 
-function radioLabel(label: string) {
-  return (
-    <>
-      <Icon class="question-form-radio-check" name="check-small" />
-      <span>{label}</span>
-    </>
-  );
-}
-
 export function QuestionForm(props: QuestionFormProps) {
   const instanceID = createUniqueId();
   const titleID = `question-form-title-${instanceID}`;
@@ -306,7 +296,7 @@ export function QuestionForm(props: QuestionFormProps) {
             {(option, index) => (
               <RadioItem
                 value={optionToken(index())}
-                label={radioLabel(option.label)}
+                label={option.label}
                 description={option.description}
               />
             )}
@@ -323,7 +313,6 @@ export function QuestionForm(props: QuestionFormProps) {
                   <ItemIndicator data-slot="radio-v2-item-indicator" />
                 </ItemControl>
               </div>
-              <Icon class="question-form-radio-check" name="check-small" />
               <Show
                 when={selected() === CUSTOM_TOKEN}
                 fallback={<ItemLabel data-slot="radio-v2-item-label">Custom answer</ItemLabel>}
@@ -403,8 +392,8 @@ export function QuestionForm(props: QuestionFormProps) {
         validationState={error ? "invalid" : "valid"}
         onChange={(value) => setAnswer(field.key, value === "true")}
       >
-        <RadioItem value="true" label={radioLabel("Yes")} />
-        <RadioItem value="false" label={radioLabel("No")} />
+        <RadioItem value="true" label="Yes" />
+        <RadioItem value="false" label="No" />
       </RadioGroup>
       <Show when={error}>
         {(message) => (
@@ -467,12 +456,8 @@ export function QuestionForm(props: QuestionFormProps) {
               {(value) => (
                 <span class="question-form-custom-value">
                   <span>{value}</span>
-                  <IconButton
-                    type="button"
-                    size="small"
-                    variant="ghost-muted"
-                    aria-label={`Remove ${value}`}
-                    icon={<Icon name="xmark-small" />}
+                  <RemoveButton
+                    label={`Remove ${value}`}
                     disabled={unavailable()}
                     onClick={() => toggle(value, false)}
                   />

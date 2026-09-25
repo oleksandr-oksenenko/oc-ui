@@ -470,6 +470,9 @@ export const ContextUsage: Story = {
     await expect(meter).toHaveAttribute("data-context-percentage", "82");
     await expect(meter).toHaveAttribute("data-level", "warning");
     await expect(meter?.querySelector(".composer-context-fill")).not.toBeNull();
+    await expect(
+      canvasElement.querySelector(".composer-picker-row")?.lastElementChild,
+    ).toContainElement(meter);
   },
 };
 
@@ -629,6 +632,7 @@ export const NarrowLongSelections: Story = {
       value="Review the complete remote workspace context and preserve the server-provided path."
       disabled={false}
       action="send"
+      contextUsage={{ used: 82_000, limit: 100_000 }}
       modelSelection={composerModelSelection({
         models: [
           {
@@ -649,4 +653,25 @@ export const NarrowLongSelections: Story = {
       onSubmit={() => undefined}
     />
   ),
+  play: async ({ canvasElement }) => {
+    const composer = canvasElement.querySelector<HTMLElement>(".composer");
+    const input = composer?.querySelector<HTMLElement>(".composer-input");
+    const picker = composer?.querySelector<HTMLElement>(".composer-picker-row");
+    const variant = picker?.querySelector<HTMLElement>('[aria-label^="Variant:"]');
+    const meter = picker?.querySelector<HTMLElement>(".composer-context-meter");
+    const send = composer?.querySelector<HTMLElement>(".composer-action");
+    await expect(composer).not.toBeNull();
+    await expect(input).not.toBeNull();
+    await expect(variant).not.toBeNull();
+    await expect(meter).not.toBeNull();
+    await expect(send).not.toBeNull();
+    await expect(input!.getBoundingClientRect().height).toBeGreaterThan(30);
+    await expect(composer!.scrollWidth).toBeLessThanOrEqual(composer!.clientWidth);
+    await expect(
+      Math.abs(variant!.getBoundingClientRect().top - meter!.getBoundingClientRect().top),
+    ).toBeLessThanOrEqual(6);
+    await expect(
+      Math.abs(send!.getBoundingClientRect().bottom - picker!.getBoundingClientRect().bottom),
+    ).toBeLessThanOrEqual(1);
+  },
 };

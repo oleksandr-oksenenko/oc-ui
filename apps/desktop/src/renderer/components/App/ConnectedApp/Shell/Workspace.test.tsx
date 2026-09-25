@@ -69,10 +69,10 @@ describe("Workspace", () => {
     leftSeparator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     rightSeparator.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
 
-    expect(leftSeparator.getAttribute("aria-valuenow")).toBe("236");
+    expect(leftSeparator.getAttribute("aria-valuenow")).toBe("264");
     expect(rightSeparator.getAttribute("aria-valuenow")).toBe("376");
     const shell = host.querySelector<HTMLElement>(".app-shell-v2");
-    expect(shell?.style.getPropertyValue("--shell-left-sidebar-width")).toBe("236px");
+    expect(shell?.style.getPropertyValue("--shell-left-sidebar-width")).toBe("264px");
     expect(shell?.style.getPropertyValue("--shell-right-panel-width")).toBe("376px");
 
     dispose();
@@ -104,7 +104,7 @@ describe("Workspace", () => {
       host
         .querySelector<HTMLElement>(".app-shell-v2")
         ?.style.getPropertyValue("--shell-left-sidebar-width"),
-    ).toBe("260px");
+    ).toBe("288px");
     window.dispatchEvent(pointerEvent("pointerup", { pointerID: 7, clientX: 260 }));
     expect(workspace.classList.contains("resizing")).toBe(false);
 
@@ -125,7 +125,7 @@ describe("Workspace", () => {
       host
         .querySelector<HTMLElement>(".app-shell-v2")
         ?.style.getPropertyValue("--shell-left-sidebar-width"),
-    ).toBe("260px");
+    ).toBe("288px");
     window.dispatchEvent(pointerEvent("pointercancel", { pointerID: 9, clientX: 260 }));
     expect(workspace.classList.contains("resizing")).toBe(false);
 

@@ -15,7 +15,7 @@
 
 .question-form {
   display: grid;
-  gap: 16px;
+  gap: 8px 16px;
   padding: 10px 16px 12px;
 }
 
@@ -111,30 +111,12 @@
   display: none;
 }
 
-.question-form-radio-check {
-  position: absolute;
-  top: 50%;
-  left: 5px;
-  z-index: 1;
-  color: var(--oc-icon-base);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%) scale(0.9);
-  transition:
-    opacity 180ms var(--oc-motion-ease),
-    transform 220ms var(--oc-motion-ease);
-}
-
-.question-form-choice-group [data-slot="radio-v2-item"][data-checked] .question-form-radio-check {
-  opacity: 1;
-  transform: translateY(-50%) scale(1);
-}
-
 .question-form-choice-group
   [data-slot="radio-v2-item"][data-checked]
   [data-slot="radio-v2-item-control"] {
-  border-color: var(--oc-border-strong);
-  background: var(--oc-surface-selected);
+  border-color: var(--oc-radio-outline);
+  background: var(--oc-selection);
+  box-shadow: inset 0 0 0 2px var(--oc-text-on-selection);
 }
 
 .question-form-choice-group [data-slot="radio-v2-item"]:where(:not([data-disabled])):hover,
@@ -194,6 +176,19 @@
 .question-form-options [data-component="checkbox"][data-checked] {
   border-color: var(--oc-border-strong);
   background: var(--oc-surface-control);
+}
+
+.question-form-options [data-component="checkbox"][data-checked]:not([data-disabled])
+  [data-slot="checkbox-checkbox-control"],
+.question-form-options [data-component="checkbox"][data-checked]:not([data-disabled]):hover
+  [data-slot="checkbox-checkbox-control"] {
+  border-color: var(--oc-selection);
+  background: var(--oc-selection);
+}
+
+.question-form-options [data-component="checkbox"][data-checked]:not([data-disabled])
+  [data-slot="checkbox-checkbox-indicator"] {
+  color: var(--oc-text-on-selection);
 }
 
 .question-form-multiselect[data-invalid] .question-form-options [data-component="checkbox"] {
@@ -281,13 +276,14 @@
   gap: 8px;
 }
 
-.question-form-submit {
+:root .question-form-submit[data-component="button-v2"] {
   min-width: 112px;
+  box-shadow: none;
 }
 
 @media (width <= 520px) {
   .question-form {
-    gap: 14px;
+    gap: 8px 14px;
     padding: 10px 12px 12px;
   }
 

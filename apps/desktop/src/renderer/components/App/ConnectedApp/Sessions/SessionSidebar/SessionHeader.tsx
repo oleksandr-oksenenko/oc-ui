@@ -13,8 +13,7 @@ export type SessionHeaderProps = {
 
 export function SessionHeader(props: SessionHeaderProps) {
   return (
-    <div class="shell-session-header" classList={{ "has-close": props.onHide !== undefined }}>
-      <h1>Sessions</h1>
+    <div class="shell-session-header">
       <div class="shell-session-header-actions">
         <IconButton
           class="shell-create-session"
