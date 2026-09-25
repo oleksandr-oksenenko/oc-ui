@@ -8,7 +8,7 @@ import { ConversationRegion } from "./ConnectedApp/Conversation/ConversationRegi
 import { GlobalFormsRegion } from "./ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
 import { ReviewRegion } from "./ConnectedApp/Review/ReviewRegion.tsx";
 import { SessionFlowsRegion } from "./ConnectedApp/Sessions/SessionFlowsRegion.tsx";
-import { SessionHeader } from "./ConnectedApp/Sessions/SessionSidebar/SessionHeader.tsx";
+import { SessionActionsRegion } from "./ConnectedApp/Sessions/SessionActionsRegion.tsx";
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
 import { ShellRegion } from "./ConnectedApp/Shell/ShellRegion.tsx";
 import type { WorkspaceModel } from "./ConnectedApp/createWorkspace.ts";
@@ -57,7 +57,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
             : undefined
         }
         sidebarActions={
-          <SessionHeader
+          <SessionActionsRegion
             canCreate={connected() && runtime.sessions.state() === "ready"}
             onCreate={flows.openNewSession}
           />

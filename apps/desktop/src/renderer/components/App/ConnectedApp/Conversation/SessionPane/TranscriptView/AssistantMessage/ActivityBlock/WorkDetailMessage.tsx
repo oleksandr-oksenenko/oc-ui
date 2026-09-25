@@ -1,11 +1,11 @@
 import type { SessionMessageInfo } from "@opencode/client";
 import type { JSX } from "solid-js";
 
-import { CompactionMessage } from "./CompactionMessage.tsx";
-import { ContextMessage } from "./ContextMessage.tsx";
-import { ShellMessage } from "./ShellMessage.tsx";
-import { SkillMessage } from "./SkillMessage.tsx";
-import { TimelineRow } from "./TimelineRow.tsx";
+import { CompactionMessage } from "./WorkDetailMessage/CompactionMessage.tsx";
+import { ContextMessage } from "./WorkDetailMessage/ContextMessage.tsx";
+import { ShellMessage } from "./WorkDetailMessage/ShellMessage.tsx";
+import { SkillMessage } from "./WorkDetailMessage/SkillMessage.tsx";
+import { TimelineRow } from "./WorkDetailMessage/TimelineRow.tsx";
 
 export type WorkDetailInfo = Exclude<
   SessionMessageInfo,

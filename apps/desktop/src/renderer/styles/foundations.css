@@ -72,6 +72,9 @@
   --oc-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --oc-motion-duration: 140ms;
   --oc-motion-duration-fast: 100ms;
+
+  /* Transcript viewport measurements override this fallback locally. */
+  --oc-activity-max-height: 240px;
   --oc-titlebar-height: 40px;
   --oc-scrollbar-thumb: var(--oc-border-strong);
   --oc-scrollbar-thumb-hover: var(--oc-border-emphasis);

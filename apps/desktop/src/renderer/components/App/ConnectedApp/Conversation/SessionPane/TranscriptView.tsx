@@ -28,7 +28,7 @@ import {
   projectTranscriptRows,
   type TranscriptRow,
 } from "./TranscriptView/workDetailProjection.ts";
-import { WorkDetailMessage } from "./TranscriptView/WorkDetailMessage.tsx";
+import { WorkDetailMessage } from "./TranscriptView/AssistantMessage/ActivityBlock/WorkDetailMessage.tsx";
 
 import "./SessionPane.css";
 

@@ -7,7 +7,7 @@ import type { ServerFileImageReader } from "../../../../../../opencode/file-imag
 
 import { Markdown } from "./AssistantMessage/Markdown.tsx";
 import { ActivityBlock } from "./AssistantMessage/ActivityBlock.tsx";
-import type { WorkDetailInfo } from "./WorkDetailMessage.tsx";
+import type { WorkDetailInfo } from "./AssistantMessage/ActivityBlock/WorkDetailMessage.tsx";
 
 export type AssistantMessageProps = {
   readonly message: SessionMessageAssistant;

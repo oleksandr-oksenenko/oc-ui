@@ -7,7 +7,7 @@ import { annotationBlock } from "../../../annotation-source.ts";
 import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMount.ts";
 import { ReasoningBlock } from "./ActivityBlock/ReasoningBlock.tsx";
 import { ToolCall } from "./ActivityBlock/ToolCall.tsx";
-import { WorkDetailMessage, type WorkDetailInfo } from "../WorkDetailMessage.tsx";
+import { WorkDetailMessage, type WorkDetailInfo } from "./ActivityBlock/WorkDetailMessage.tsx";
 import { activitySummary } from "./ActivityBlock/activitySummary.ts";
 import "./ActivityBlock.css";
 

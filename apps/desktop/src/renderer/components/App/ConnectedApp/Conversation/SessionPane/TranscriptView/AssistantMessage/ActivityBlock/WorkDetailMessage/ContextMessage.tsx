@@ -2,8 +2,8 @@ import { Collapsible } from "@opencode/ui/collapsible";
 import { Icon } from "@opencode/ui/icon";
 import { Show, type JSX } from "solid-js";
 
-import { annotationBlock } from "../../annotation-source.ts";
-import { createDeferredCollapsibleMount } from "./createDeferredCollapsibleMount.ts";
+import { annotationBlock } from "../../../../../annotation-source.ts";
+import { createDeferredCollapsibleMount } from "../../../createDeferredCollapsibleMount.ts";
 
 export function ContextMessage(props: {
   readonly id: string;

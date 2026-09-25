@@ -1,6 +1,6 @@
 import type { SessionMessageInfo } from "@opencode/client";
 
-import type { WorkDetailInfo } from "./WorkDetailMessage.tsx";
+import type { WorkDetailInfo } from "./AssistantMessage/ActivityBlock/WorkDetailMessage.tsx";
 
 type RenderableMessage = Exclude<SessionMessageInfo, { readonly type: "idle" }>;
 

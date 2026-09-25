@@ -1,5 +1,5 @@
 import type { SessionMessageAssistant } from "@opencode/client";
-import type { WorkDetailInfo } from "../../WorkDetailMessage.tsx";
+import type { WorkDetailInfo } from "./WorkDetailMessage.tsx";
 import { toolParameter } from "../toolParameter.ts";
 
 type Step = Exclude<SessionMessageAssistant["content"][number], { type: "text" }>;
