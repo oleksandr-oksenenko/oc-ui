@@ -1,0 +1,111 @@
+/* Moment B — approval under connection loss. Lab-only controls and the
+   uncertain/delivered/not-delivered blocks. */
+
+.lab-lab-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--oc-border-muted);
+  background: var(--oc-surface-subtle);
+}
+
+.lab-lab-controls-label {
+  color: var(--oc-text-faint);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.lab-lab-controls-state {
+  color: var(--oc-text-base);
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-control-weight);
+  line-height: var(--oc-type-metadata-line-height);
+}
+
+.lab-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-canvas);
+}
+
+.lab-branch-button {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+  cursor: pointer;
+}
+
+.lab-branch-button:hover {
+  color: var(--oc-text-base);
+}
+
+.lab-branch-button[aria-pressed="true"] {
+  color: var(--oc-text-strong);
+  background: var(--oc-surface-control);
+}
+
+.lab-uncertain {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--oc-status-warning);
+  border-radius: var(--oc-radius-card);
+  background: var(--oc-surface-subtle);
+}
+
+.lab-approval-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius-card);
+  color: var(--oc-status-success);
+  background: var(--oc-surface-subtle);
+}
+
+.lab-approval-note[data-tone="warning"] {
+  border-color: var(--oc-status-warning);
+  color: var(--oc-status-warning);
+}
+
+.lab-approval-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.lab-approval-note-title {
+  margin: 0;
+  color: var(--oc-text-strong);
+  font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-control-weight);
+  line-height: var(--oc-type-body-line-height);
+}
+
+.lab-approval-note-detail {
+  margin: 2px 0 0;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
+
+.lab-state-summary-stale {
+  margin: 2px 0 0;
+  color: var(--oc-status-warning);
+  font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
+}
