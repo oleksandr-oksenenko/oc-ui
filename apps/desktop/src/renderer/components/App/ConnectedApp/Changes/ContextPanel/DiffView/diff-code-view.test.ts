@@ -174,7 +174,7 @@ describe("createDiffCodeViewItem", () => {
 describe("createReviewAnnotation", () => {
   it("renders an editable comment and forwards its controls", () => {
     const onEditComment = vi.fn<(commentID: string) => void>();
-    const onRemoveComment = vi.fn<(commentID: string, opener: HTMLElement) => void>();
+    const onRemoveComment = vi.fn<(commentID: string) => void>();
     const annotation = createReviewAnnotation(
       {
         id: "comment-1",
@@ -186,15 +186,20 @@ describe("createReviewAnnotation", () => {
       review({ onEditComment, onRemoveComment }),
     );
 
-    expect(annotation.dataset.commentId).toBe("comment-1");
-    expect(annotation.querySelector(".diff-review-text")?.textContent).toBe(
+    expect(annotation.element.dataset.commentId).toBe("comment-1");
+    expect(annotation.element.querySelector(".diff-review-text")?.textContent).toBe(
       "Use the existing helper.",
     );
-    annotation.querySelector<HTMLButtonElement>(".diff-review-text")?.click();
+    annotation.element.querySelector<HTMLButtonElement>(".diff-review-text")?.click();
     expect(onEditComment).toHaveBeenCalledWith("comment-1");
-    const remove = annotation.querySelector<HTMLButtonElement>(".diff-review-remove");
+    const remove = annotation.element.querySelector<HTMLButtonElement>(".diff-review-remove");
+    expect(remove?.getAttribute("data-component")).toBe("icon-button-v2");
+    expect(remove?.getAttribute("aria-label")).toBe("Delete review comment");
+    document.body.append(annotation.element);
     remove?.click();
-    expect(onRemoveComment).toHaveBeenCalledWith("comment-1", remove);
+    expect(onRemoveComment).toHaveBeenCalledWith("comment-1");
+    annotation.dispose();
+    annotation.element.remove();
   });
 
   it("autosaves the inline editor and finishes on Enter, Escape, or blur", () => {
@@ -211,7 +216,7 @@ describe("createReviewAnnotation", () => {
       review({ editingCommentID: "comment-1", onUpdateCommentBody, onFinishComment }),
     );
 
-    const editor = annotation.querySelector<HTMLTextAreaElement>("textarea");
+    const editor = annotation.element.querySelector<HTMLTextAreaElement>("textarea");
     expect(editor?.value).toBe("Draft");
     expect(editor?.getAttribute("aria-label")).toBe("Comment on src/example.ts");
     editor!.value = "Autosaved body";
@@ -238,6 +243,7 @@ describe("createReviewAnnotation", () => {
 
     editor?.dispatchEvent(new FocusEvent("blur", { relatedTarget: document.body }));
     expect(onFinishComment).toHaveBeenCalledTimes(3);
+    annotation.dispose();
   });
 });
 

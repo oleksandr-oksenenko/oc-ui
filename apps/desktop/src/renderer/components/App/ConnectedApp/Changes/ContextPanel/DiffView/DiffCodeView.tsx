@@ -122,6 +122,18 @@ export function DiffCodeView(props: DiffCodeViewProps) {
     }) => void;
   };
   const headerRoots = new Map<string, HeaderRoot>();
+  const annotationRoots = new Map<
+    HTMLElement,
+    { readonly path: string; readonly dispose: () => void }
+  >();
+
+  const disposeAnnotations = (include: (element: HTMLElement, path: string) => boolean): void => {
+    for (const [element, root] of annotationRoots) {
+      if (!include(element, root.path)) continue;
+      root.dispose();
+      annotationRoots.delete(element);
+    }
+  };
 
   const headerRootFor = (path: string): HeaderRoot => {
     const existing = headerRoots.get(path);
@@ -231,7 +243,10 @@ export function DiffCodeView(props: DiffCodeViewProps) {
     renderAnnotation: (annotation) => {
       const review = props.review;
       const comment = review?.comments.find((item) => item.id === annotation.metadata?.commentID);
-      return comment && review ? createReviewAnnotation(comment, review) : undefined;
+      if (!comment || !review) return undefined;
+      const root = createReviewAnnotation(comment, review);
+      annotationRoots.set(root.element, { path: comment.path, dispose: root.dispose });
+      return root.element;
     },
     onGutterUtilityClick: (selected, context) => {
       const review = props.review;
@@ -241,7 +256,16 @@ export function DiffCodeView(props: DiffCodeViewProps) {
         review.onBeginComment?.(context.item.id, selected, selectedCode);
     },
     onPostRender: (container, _instance, phase, context) => {
-      if (phase === "unmount") return;
+      if (phase === "unmount") {
+        disposeAnnotations(
+          (element, path) =>
+            path === context.item.id && (!element.isConnected || container.contains(element)),
+        );
+        return;
+      }
+      disposeAnnotations(
+        (element, path) => path === context.item.id && !container.contains(element),
+      );
       container.classList.add("diff-file");
       container.classList.toggle("diff-file-unavailable", context.item.type === "file");
       container.toggleAttribute("data-diff-file-collapsed", context.item.collapsed === true);
@@ -293,6 +317,7 @@ export function DiffCodeView(props: DiffCodeViewProps) {
     const element = host();
     if (!element) return;
     view?.cleanUp();
+    disposeAnnotations(() => true);
     view = new CodeView<AnnotationMetadata>(optionsFor(), manager());
     view.setup(element);
     syncItems();
@@ -321,6 +346,7 @@ export function DiffCodeView(props: DiffCodeViewProps) {
 
   onCleanup(() => {
     view?.cleanUp();
+    disposeAnnotations(() => true);
     view = undefined;
     versions.clear();
     for (const root of headerRoots.values()) root.dispose();

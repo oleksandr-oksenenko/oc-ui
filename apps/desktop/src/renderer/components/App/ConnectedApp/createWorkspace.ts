@@ -132,15 +132,6 @@ export function createWorkspaceModel(
     connected,
     panelOpen: panels.rightPanelOpen,
     reviewDrafts,
-    requestRemoveComment: (key, commentID, opener) => {
-      reviewFlow.confirmRemoval({
-        title: "Delete review comment?",
-        description: "This review comment will be permanently deleted.",
-        confirmLabel: "Delete comment",
-        focusTarget: opener,
-        onConfirm: () => reviewDrafts.remove(key, commentID),
-      });
-    },
   });
   const inbox = createSessionInbox({
     effects: runtime.effects,

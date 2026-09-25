@@ -555,6 +555,41 @@ export const ReviewComments: Story = {
     }));
     return <ContextPanel {...panelProps({ files: diffFiles, loading: false })} review={view()} />;
   },
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const editorName = `Comment on ${diffFiles[0]!.file}`;
+
+    await step("editing preserves comment height and grows with multiline text", async () => {
+      const editor = await canvas.findByRole("textbox", { name: editorName });
+      const initialHeight = editor.parentElement!.getBoundingClientRect().height;
+      await userEvent.click(editor);
+      await userEvent.keyboard("{Escape}");
+      const text = await canvas.findByRole("button", {
+        name: "Please keep this state controlled by the parent.",
+      });
+      await expect(
+        Math.abs(text.parentElement!.getBoundingClientRect().height - initialHeight),
+      ).toBeLessThanOrEqual(1);
+
+      await userEvent.click(text);
+      const reopened = await canvas.findByRole("textbox", { name: editorName });
+      await expect(reopened).toHaveFocus();
+      await userEvent.keyboard("{End}{Shift>}{Enter}{/Shift}Keep the existing behavior.");
+      await expect(reopened).toHaveValue(
+        "Please keep this state controlled by the parent.\nKeep the existing behavior.",
+      );
+      await expect(reopened.parentElement!.getBoundingClientRect().height).toBeGreaterThan(
+        initialHeight,
+      );
+      await expect(reopened.scrollHeight).toBeLessThanOrEqual(reopened.clientHeight + 1);
+      await userEvent.keyboard("{Escape}");
+      await expect(
+        canvas.getByRole("button", {
+          name: /Please keep this state controlled by the parent\.\s+Keep the existing behavior\./,
+        }),
+      ).toBeVisible();
+    });
+  },
 };
 
 export const NoClose: Story = {

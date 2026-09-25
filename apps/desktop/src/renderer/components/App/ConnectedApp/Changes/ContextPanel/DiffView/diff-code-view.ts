@@ -1,4 +1,7 @@
 import type { CodeViewItem, DiffLineAnnotation, FileContents } from "@pierre/diffs";
+import { render } from "solid-js/web";
+
+import { RemoveButton } from "../../../../../../ui/RemoveButton.tsx";
 
 import type { DiffFileData, DiffReviewView } from "../DiffView.tsx";
 import type { DiffRenderData, ReviewComment } from "./diff-render-data.ts";
@@ -114,26 +117,25 @@ export function createDiffCodeViewItem(input: {
   };
 }
 
-export function createReviewAnnotation(
-  comment: ReviewComment,
-  review: DiffReviewView,
-): HTMLElement {
+export function createReviewAnnotation(comment: ReviewComment, review: DiffReviewView) {
   const wrapper = document.createElement("div");
   wrapper.className = "diff-review-annotation";
   wrapper.dataset.commentId = comment.id;
 
-  const remove = document.createElement("button");
-  remove.type = "button";
-  remove.className = "diff-review-remove";
-  remove.setAttribute("aria-label", "Delete review comment");
-  remove.textContent = "×";
-  remove.addEventListener("click", () => review.onRemoveComment?.(comment.id, remove));
-  wrapper.append(remove);
+  const dispose = render(
+    () =>
+      RemoveButton({
+        class: "diff-review-remove",
+        label: "Delete review comment",
+        onClick: () => review.onRemoveComment?.(comment.id),
+      }),
+    wrapper,
+  );
 
   if (review.editingCommentID === comment.id) {
     const editor = document.createElement("textarea");
-    editor.className = "diff-review-editor";
-    editor.rows = 2;
+    editor.className = "diff-review-editor oc-focus-delegate";
+    editor.rows = 1;
     editor.value = comment.body;
     editor.placeholder = "Leave a review comment";
     editor.setAttribute("aria-label", `Comment on ${comment.path}`);
@@ -162,7 +164,7 @@ export function createReviewAnnotation(
     wrapper.append(text);
   }
 
-  return wrapper;
+  return { element: wrapper, dispose };
 }
 
 const observedShadowRoots = new WeakSet<ShadowRoot>();

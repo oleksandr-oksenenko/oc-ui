@@ -42,11 +42,6 @@ export type WorkspaceChangesInput = {
   readonly connected: Accessor<boolean>;
   readonly panelOpen: Accessor<boolean>;
   readonly reviewDrafts: ReviewDraftStore;
-  readonly requestRemoveComment: (
-    key: ReviewDraftKey,
-    commentID: string,
-    opener: HTMLElement,
-  ) => void;
 };
 
 export type WorkspaceChangesController = {
@@ -187,15 +182,7 @@ export function createWorkspaceChanges(input: WorkspaceChangesInput): WorkspaceC
         if (comment.body.trim() === "") input.reviewDrafts.remove(key, commentID);
         else input.reviewDrafts.edit(key);
       },
-      onRemoveComment: (commentID, opener) => {
-        const comment = commentFor(commentID);
-        if (!comment) return;
-        if (comment.body.trim() === "") {
-          input.reviewDrafts.remove(key, commentID);
-          return;
-        }
-        input.requestRemoveComment(key, commentID, opener);
-      },
+      onRemoveComment: (commentID) => input.reviewDrafts.remove(key, commentID),
     };
   });
 

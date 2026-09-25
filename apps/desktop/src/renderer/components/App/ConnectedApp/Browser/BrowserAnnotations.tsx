@@ -1,7 +1,6 @@
 import { Button } from "@opencode/ui/button";
-import { Icon } from "@opencode/ui/icon";
-import { IconButton } from "@opencode/ui/icon-button";
 import { For, Show } from "solid-js";
+import { RemoveButton } from "../../../../ui/RemoveButton.tsx";
 import { BrowserAnnotationThumbnail } from "./BrowserAnnotations/BrowserAnnotationThumbnail.tsx";
 import { MAX_ANNOTATIONS, type BrowserAnnotationDraft } from "./browser-annotations.ts";
 import type { SessionBrowser, SessionBrowserState } from "./createSessionBrowser.ts";
@@ -87,11 +86,8 @@ export function BrowserAnnotations(props: BrowserAnnotationsProps) {
                       </span>
                     </Show>
                   </div>
-                  <IconButton
-                    size="small"
-                    variant="ghost-muted"
-                    icon={<Icon name="close" size="small" />}
-                    aria-label={`Discard annotation ${item.number}`}
+                  <RemoveButton
+                    label={`Discard annotation ${item.number}`}
                     onClick={() => props.controller.discardAnnotation(item.id)}
                   />
                 </div>

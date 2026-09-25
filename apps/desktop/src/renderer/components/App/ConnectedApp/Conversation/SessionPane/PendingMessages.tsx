@@ -1,8 +1,7 @@
 import type { SessionInboxUser } from "@opencode/client";
 import { Button } from "@opencode/ui/button";
-import { Icon } from "@opencode/ui/icon";
-import { IconButton } from "@opencode/ui/icon-button";
 import { For, Show, createMemo } from "solid-js";
+import { RemoveButton } from "../../../../../ui/RemoveButton.tsx";
 import "./PendingMessages.css";
 
 export function PendingMessages(props: {
@@ -60,15 +59,11 @@ export function PendingMessages(props: {
                         Steer now
                       </Button>
                     </Show>
-                    <IconButton
+                    <RemoveButton
                       disabled={props.disabled}
-                      type="button"
-                      size="small"
-                      variant="ghost-muted"
                       class="pending-remove"
-                      aria-label={`Cancel message: ${label()}`}
+                      label={`Cancel message: ${label()}`}
                       title="Cancel message"
-                      icon={<Icon name="close" size="small" aria-hidden="true" />}
                       onClick={() => props.onCancel(message.id)}
                     />
                   </div>

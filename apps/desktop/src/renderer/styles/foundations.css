@@ -49,6 +49,7 @@
   --oc-selection-ring: rgb(9 105 218 / 14%);
   --oc-selection-tint: rgb(9 105 218 / 10%);
   --oc-selection-tint-strong: rgb(9 105 218 / 18%);
+  --oc-radio-outline: #222;
   --oc-diff-addition: var(--oc-status-success);
   --oc-diff-deletion: #b42318;
 

@@ -1,0 +1,9 @@
+[data-component="icon-button-v2"][data-remove-button] {
+  border-radius: var(--oc-radius);
+  color: var(--oc-status-danger-muted);
+}
+
+[data-component="icon-button-v2"][data-remove-button]:hover:not(:disabled) {
+  color: var(--oc-status-danger);
+  background: var(--oc-overlay-hover);
+}

@@ -27,7 +27,7 @@ export type DiffReviewView = {
   readonly onUpdateCommentBody?: (commentID: string, body: string) => void;
   readonly onEditComment?: (commentID: string) => void;
   readonly onFinishComment?: (commentID: string) => void;
-  readonly onRemoveComment?: (commentID: string, opener: HTMLElement) => void;
+  readonly onRemoveComment?: (commentID: string) => void;
 };
 
 /**

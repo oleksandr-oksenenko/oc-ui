@@ -11,21 +11,6 @@ const meta = {
 
 export default meta;
 
-export const DeleteComment = {
-  render: () => (
-    <DialogStory>
-      {() => (
-        <CodeReviewRemovalDialog
-          title="Delete review comment?"
-          description="This review comment will be permanently deleted."
-          confirmLabel="Delete comment"
-          onConfirm={() => undefined}
-        />
-      )}
-    </DialogStory>
-  ),
-};
-
 export const DiscardReview = {
   render: () => (
     <DialogStory>

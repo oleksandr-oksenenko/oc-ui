@@ -1,10 +1,9 @@
-import { Icon } from "@opencode/ui/icon";
-import { IconButton } from "@opencode/ui/icon-button";
 import { LineComment } from "@opencode/ui/line-comment";
 import { Textarea } from "@opencode/ui/textarea";
 import { Show, untrack, type JSX } from "solid-js";
 
 import type { TranscriptAnnotation } from "../../../../../domain/annotation-drafts.ts";
+import { RemoveButton } from "../../../../../ui/RemoveButton.tsx";
 
 export function AnnotationCommentRow(props: {
   readonly annotation: TranscriptAnnotation;
@@ -64,14 +63,10 @@ export function AnnotationCommentRow(props: {
       selection={undefined}
       actions={
         <Show when={!props.readonly}>
-          <IconButton
-            type="button"
+          <RemoveButton
             disabled={props.disabled}
             class="annotation-remove-comment"
-            aria-label="Remove comment"
-            size="small"
-            variant="ghost-muted"
-            icon={<Icon name="trash" size="small" aria-hidden="true" />}
+            label="Remove comment"
             onClick={() => props.onRemove()}
           />
         </Show>

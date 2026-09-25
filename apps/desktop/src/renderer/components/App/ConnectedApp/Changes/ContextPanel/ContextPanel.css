@@ -244,31 +244,37 @@
 .diff-review-annotation {
   position: relative;
   box-sizing: border-box;
-  width: 100%;
-  padding: 8px 36px 8px 12px;
-  border-top: 1px solid var(--oc-border-strong);
+  width: calc(100% - 8px);
+  margin: 6px 4px;
+  padding: 8px 28px 8px 6px;
+  border: 1px solid var(--oc-border-strong);
+  border-left: 3px solid var(--oc-status-info);
+  border-radius: var(--oc-radius);
   color: var(--oc-text-base);
-  background: var(--oc-surface-selected);
-  box-shadow:
-    inset 3px 0 0 var(--oc-status-info),
-    inset 0 -1px 0 var(--oc-border-strong);
+  background: var(--oc-surface-canvas);
   font-family: var(--oc-font-sans);
-  font-size: var(--oc-type-metadata-size);
-  line-height: var(--oc-type-metadata-line-height);
+  font-size: var(--oc-type-body-size);
+  line-height: 18px;
+}
+
+.diff-review-annotation:has(.diff-review-editor) {
+  border-color: var(--oc-status-info);
 }
 
 .diff-review-editor {
   display: block;
   box-sizing: border-box;
   width: 100%;
-  min-height: 52px;
-  padding: 7px 9px;
-  resize: vertical;
-  border: 1px solid var(--oc-border-strong);
-  border-radius: var(--oc-radius);
-  color: var(--oc-text-base);
-  background: var(--oc-surface-raised);
+  min-height: 1lh;
+  padding: 0;
+  resize: none;
+  field-sizing: content;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
   font: inherit;
+  overflow-wrap: anywhere;
 }
 
 .diff-review-text {
@@ -280,25 +286,14 @@
   background: transparent;
   cursor: text;
   font: inherit;
+  overflow-wrap: anywhere;
   text-align: left;
   white-space: pre-wrap;
 }
 
-.diff-review-remove {
+.diff-review-remove[data-component="icon-button-v2"] {
   position: absolute;
-  top: 6px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  color: var(--oc-status-danger-muted);
-  background: transparent;
-  cursor: pointer;
-  font-size: var(--oc-type-heading-size);
-  line-height: var(--oc-type-heading-line-height);
-}
-
-.diff-review-remove:hover {
-  color: var(--oc-status-danger);
+  top: calc(8px + 18px / 2);
+  right: 4px;
+  transform: translateY(-50%);
 }

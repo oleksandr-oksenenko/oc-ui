@@ -15,7 +15,7 @@
   font-size: var(--oc-type-caption-size);
 }
 
-.annotation-popover[data-component="popover-content"] {
+:root .annotation-popover[data-component="popover-content"] {
   width: min(390px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   border: 1px solid var(--oc-border-strong);
@@ -47,6 +47,14 @@
   overflow-wrap: anywhere;
 }
 
+/* The popup owns the only visible frame; the upstream card elevation obscures its corners. */
+.annotation-popover [data-component="line-comment-v2"] [data-slot="line-comment-v2-shell"] {
+  padding: 6px;
+  gap: 4px;
+  background: transparent;
+  box-shadow: none;
+}
+
 .annotation-popover-anchor {
   position: fixed;
   width: 0;
@@ -68,7 +76,7 @@
 .annotation-editable-comment {
   display: block;
   width: 100%;
-  padding: 4px 6px;
+  padding: 2px 4px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -87,18 +95,28 @@
 .annotation-popup-comments
   > [data-component="line-comment-v2"]
   + [data-component="line-comment-v2"] {
-  margin-top: 6px;
-}
-
-.annotation-remove-comment[data-component="icon-button-v2"] {
-  color: var(--oc-status-danger);
+  margin-top: 4px;
 }
 
 .annotation-inline-editor[data-component="textarea-v2"] {
   width: 100%;
   min-height: 0;
-  padding: 4px 6px;
+  padding: 2px 4px;
   background: transparent;
+}
+
+/* Editing uses the popup border as one stable focus frame, like diff review comments. */
+:root
+  .annotation-popover[data-component="popover-content"]:has(
+    .annotation-inline-editor:focus-within
+  ) {
+  border-color: var(--oc-status-info);
+}
+
+:root .annotation-popover .annotation-inline-editor[data-component="textarea-v2"] {
+  /* stylelint-disable-next-line property-disallowed-list, declaration-no-important -- The popup owns this field's focus frame. */
+  outline: none !important;
+  box-shadow: none;
 }
 
 .annotation-inline-editor [data-slot="textarea-v2-textarea"] {

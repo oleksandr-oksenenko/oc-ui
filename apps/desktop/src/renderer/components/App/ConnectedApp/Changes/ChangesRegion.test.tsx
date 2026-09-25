@@ -86,7 +86,6 @@ const setup = (options?: { readonly branch?: Branch }) =>
       connected,
       panelOpen,
       reviewDrafts,
-      requestRemoveComment: () => undefined,
     });
     const { host, dispose } = mount(() => (
       <ChangesRegion

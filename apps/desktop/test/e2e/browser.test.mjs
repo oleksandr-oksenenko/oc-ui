@@ -543,6 +543,7 @@ describe.sequential("production browser app", () => {
       .poll(() => page.locator(".shell-session-row.selected .shell-session-attention-dot").count())
       .toBe(0);
     await idle();
+    await page.locator('.transcript-activity-trigger[aria-expanded="false"]').last().click();
     const answeredTool = page.locator(".transcript-tool-completed").last();
     expect(await answeredTool.locator('[data-slot="collapsible-content"]').count()).toBe(0);
     await answeredTool.locator(".transcript-tool-header").click();
@@ -568,6 +569,7 @@ describe.sequential("production browser app", () => {
       .click();
     await page.locator(".question-form").waitFor({ state: "hidden" });
     await idle();
+    await page.locator('.transcript-activity-trigger[aria-expanded="false"]').last().click();
     await page.locator(".transcript-tool-error .transcript-tool-header").last().click();
     await transcript("The user dismissed this question");
     await send("E2E_PROVIDER_ERROR browser");
@@ -843,6 +845,32 @@ describe.sequential("production browser app", () => {
         (request) => request.prompt.includes(review) && request.prompt.includes("working.txt"),
       ),
     ).toBe(true);
+    const deletedReview = "Delete this unsent review comment.";
+    await expect
+      .poll(
+        async () => {
+          if ((await editor.count()) > 0) return true;
+          await diff
+            .locator('[data-column-number="1"][data-line-type="change-addition"]')
+            .hover()
+            .catch(() => undefined);
+          const utility = diff.locator("[data-utility-button]");
+          if ((await utility.count()) === 0) return false;
+          await utility.click({ timeout: 1_000 }).catch(() => undefined);
+          return (await editor.count()) > 0;
+        },
+        { timeout: 20_000, interval: 200 },
+      )
+      .toBe(true);
+    await editor.fill(deletedReview);
+    await page.keyboard.press("Escape");
+    await expect
+      .poll(() => page.locator(".composer-review-label").textContent())
+      .toBe("Code review · 1 comment");
+    await page.getByRole("button", { name: "Delete review comment" }).click();
+    await page.locator(".diff-review-annotation").waitFor({ state: "hidden" });
+    expect(await page.locator(".composer-review-label").count()).toBe(0);
+    expect(await page.getByRole("dialog").count()).toBe(0);
   });
 
   it("refreshes external disk edits without watcher events and preserves unchanged collapsed files", async () => {

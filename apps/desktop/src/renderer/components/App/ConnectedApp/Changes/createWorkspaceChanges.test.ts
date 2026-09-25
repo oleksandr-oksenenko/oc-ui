@@ -6,11 +6,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { sessionFixture } from "../../../../test/session-fixture.ts";
 import { createReviewDraftStore, type ReviewDraftKey } from "../../../../domain/review-drafts.ts";
-import {
-  createWorkspaceChanges,
-  type WorkspaceChangesInput,
-  type WorkspaceChangesRuntime,
-} from "./createWorkspaceChanges.ts";
+import { createWorkspaceChanges, type WorkspaceChangesRuntime } from "./createWorkspaceChanges.ts";
 
 const location = { directory: "/workspace" } as const;
 
@@ -57,7 +53,6 @@ const setup = (options?: {
     );
     const [branch, setBranch] = createSignal(options?.branch);
     const reviewDrafts = createReviewDraftStore(effects);
-    const requestRemoveComment = vi.fn<WorkspaceChangesInput["requestRemoveComment"]>();
     type Vcs = WorkspaceChangesRuntime["data"]["location"]["vcs"];
     type Diffs = WorkspaceChangesRuntime["diffs"];
     const syncLocation = vi.fn<Vcs["sync"]>(() => Promise.resolve());
@@ -95,7 +90,6 @@ const setup = (options?: {
       connected,
       panelOpen,
       reviewDrafts,
-      requestRemoveComment,
     });
 
     const updateSelectedSession = (next: SessionInfo | undefined): void => {
@@ -117,7 +111,6 @@ const setup = (options?: {
       pollDiff,
       stopPolling,
       reviewDrafts,
-      requestRemoveComment,
     };
   });
 
@@ -382,25 +375,28 @@ describe("createWorkspaceChanges", () => {
     root.dispose();
   });
 
-  it("removes empty comments immediately but delegates non-empty removal", () => {
+  it("removes only the requested comment immediately, including a non-empty draft", () => {
     const root = setup({ selected: session() });
     const key: ReviewDraftKey = { sessionID: "session-1", comparison: "working" };
     const emptyID = root.reviewDrafts.begin(key, "src/example.ts", reviewSelection, "new\n");
-    const emptyOpener = document.createElement("button");
 
-    root.changes.review()?.onRemoveComment?.(emptyID, emptyOpener);
+    root.changes.review()?.onRemoveComment?.(emptyID);
 
-    expect(root.requestRemoveComment).not.toHaveBeenCalled();
     expect(root.reviewDrafts.get(key).comments).toHaveLength(0);
 
-    const nonEmptyID = root.reviewDrafts.begin(key, "src/example.ts", reviewSelection, "new\n");
-    root.reviewDrafts.updateBody(key, nonEmptyID, "Please check this line");
-    const nonEmptyOpener = document.createElement("button");
+    const keepID = root.reviewDrafts.begin(key, "src/example.ts", reviewSelection, "new\n");
+    root.reviewDrafts.updateBody(key, keepID, "Keep this comment");
+    const removeID = root.reviewDrafts.begin(key, "src/other.ts", reviewSelection, "new\n");
+    root.reviewDrafts.updateBody(key, removeID, "Remove this comment");
 
-    root.changes.review()?.onRemoveComment?.(nonEmptyID, nonEmptyOpener);
+    root.changes.review()?.onRemoveComment?.(removeID);
 
-    expect(root.requestRemoveComment).toHaveBeenCalledWith(key, nonEmptyID, nonEmptyOpener);
-    expect(root.reviewDrafts.get(key).comments).toHaveLength(1);
+    expect(root.reviewDrafts.get(key).comments).toMatchObject([
+      { id: keepID, body: "Keep this comment" },
+    ]);
+    expect(root.changes.review()?.comments).toMatchObject([
+      { id: keepID, body: "Keep this comment" },
+    ]);
 
     root.dispose();
   });
