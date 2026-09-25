@@ -125,10 +125,14 @@ describe("GlobalFormsRegion", () => {
   it("shows the pending count, hides at zero, and keeps the complete server location in the dialog", async () => {
     const state = controller([form("one")]);
     const mounted = mount(state.value);
-    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe("1");
+    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe(
+      "1",
+    );
     expect(launcher(mounted.host).getAttribute("aria-label")).toContain("Review 1 request");
     state.setForms([form("one"), form("two")]);
-    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe("2");
+    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe(
+      "2",
+    );
     state.setForms([form("one")]);
     launcher(mounted.host).click();
     await settle();
@@ -257,7 +261,9 @@ describe("GlobalFormsRegion", () => {
     const state = controller([form("one")]);
     state.setLoading(true);
     const mounted = mount(state.value);
-    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe("1");
+    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe(
+      "1",
+    );
     launcher(mounted.host).click();
     await settle();
     expect(document.body.textContent).toContain("Loading requests");
@@ -265,7 +271,9 @@ describe("GlobalFormsRegion", () => {
     state.setLoading(false);
     state.setLoadError("Could not load requests");
     await settle();
-    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe("1");
+    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe(
+      "1",
+    );
     expect(launcher(mounted.host).getAttribute("aria-label")).toContain("updates unavailable");
     expect(launcher(mounted.host).hasAttribute("data-error")).toBe(true);
     expect(launcher(mounted.host).querySelector("svg use")?.getAttribute("href")).toContain(
@@ -300,7 +308,9 @@ describe("GlobalFormsRegion", () => {
     expect(launcher(mounted.host).getAttribute("aria-label")).toBe(
       "Requests unavailable; open to retry",
     );
-    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe("!");
+    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe(
+      "!",
+    );
     expect(launcher(mounted.host).hasAttribute("data-error")).toBe(true);
     launcher(mounted.host).click();
     await settle();
@@ -323,7 +333,9 @@ describe("GlobalFormsRegion", () => {
     expect(state.refresh).toHaveBeenCalledTimes(2);
     expect(dialog?.isConnected).toBe(true);
     expect(dialog?.textContent).toContain("Request one");
-    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe("1");
+    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe(
+      "1",
+    );
     mounted.dispose();
   });
 
@@ -335,7 +347,9 @@ describe("GlobalFormsRegion", () => {
 
     state.setConnected(false);
     await settle();
-    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe("1");
+    expect(launcher(mounted.host).querySelector(".global-forms-region-count")?.textContent).toBe(
+      "1",
+    );
     expect(launcher(mounted.host).getAttribute("aria-label")).toContain("cached request");
     expect(document.body.textContent).toContain("Disconnected");
     expect(document.body.textContent).toContain("Request one");

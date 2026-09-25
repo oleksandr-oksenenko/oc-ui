@@ -59,7 +59,10 @@ describe("SessionTree", () => {
     const [visible, setVisible] = createSignal(true);
     const { host, dispose } = mount(() => (
       <SessionTreeItem
-        session={session("long", "Add configuration options for remote development server connections")}
+        session={session(
+          "long",
+          "Add configuration options for remote development server connections",
+        )}
         status="running"
         hasChildren={false}
         selected

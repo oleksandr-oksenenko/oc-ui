@@ -137,8 +137,7 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
       <DialogBody class="global-forms-region-dialog-body">
         <Show when={disconnected()}>
           <div class="global-forms-region-notice" role="status">
-            Disconnected. Cached requests are available for inspection, but responses are
-            disabled.
+            Disconnected. Cached requests are available for inspection, but responses are disabled.
           </div>
         </Show>
         <Show
