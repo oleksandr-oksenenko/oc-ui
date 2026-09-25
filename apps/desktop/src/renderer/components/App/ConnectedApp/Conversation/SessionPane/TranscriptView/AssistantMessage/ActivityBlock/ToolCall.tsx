@@ -11,11 +11,11 @@ import { Icon } from "@opencode/ui/icon";
 import { Loader } from "@opencode/ui/loader";
 import { For, Show, type JSX } from "solid-js";
 
-import { annotationBlock } from "../../../annotation-source.ts";
-import { ImagePreview } from "../../../../../../../ui/ImagePreview.tsx";
-import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMount.ts";
+import { annotationBlock } from "../../../../annotation-source.ts";
+import { ImagePreview } from "../../../../../../../../ui/ImagePreview.tsx";
+import { createDeferredCollapsibleMount } from "../../createDeferredCollapsibleMount.ts";
 
-import { toolParameter } from "./toolParameter.ts";
+import { toolParameter } from "../toolParameter.ts";
 
 export type ToolCallProps = {
   readonly tool: SessionMessageAssistantTool;

@@ -6,12 +6,16 @@ import { annotationBlock } from "../../annotation-source.ts";
 import type { ServerFileImageReader } from "../../../../../../opencode/file-images.ts";
 
 import { Markdown } from "./AssistantMessage/Markdown.tsx";
-import { ReasoningBlock } from "./AssistantMessage/ReasoningBlock.tsx";
-import { ToolCall } from "./AssistantMessage/ToolCall.tsx";
+import { ActivityBlock } from "./AssistantMessage/ActivityBlock.tsx";
+import type { WorkDetailInfo } from "./WorkDetailMessage.tsx";
 
 export type AssistantMessageProps = {
   readonly message: SessionMessageAssistant;
+  readonly sessionID?: string;
   readonly sessionStatus: DataSessionStatus;
+  readonly turnActive?: boolean;
+  readonly activityOpen?: Map<string, boolean>;
+  readonly workDetails?: readonly WorkDetailInfo[];
   /** Resolves `file:` images in Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
   readonly directory?: string;
@@ -22,7 +26,8 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
   const state = () =>
     failed()
       ? "failed"
-      : props.message.time.completed === undefined && props.sessionStatus === "running"
+      : props.message.time.completed === undefined &&
+          (props.turnActive ?? props.sessionStatus === "running")
         ? "streaming"
         : "complete";
 
@@ -36,6 +41,26 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
         <For each={props.message.content}>
           {(content, index) => renderContent(content, index, props)}
         </For>
+        <Show
+          when={
+            (props.workDetails?.length ?? 0) > 0 &&
+            (props.message.content.at(-1)?.type === "text" || props.message.content.length === 0)
+          }
+        >
+          <ActivityBlock
+            content={[]}
+            start={0}
+            workDetails={props.workDetails}
+            active={props.turnActive === true}
+            disclosureKey={
+              props.sessionID === undefined
+                ? undefined
+                : JSON.stringify([props.sessionID, props.message.id, "work-details"])
+            }
+            activityOpen={props.activityOpen}
+            directory={props.directory}
+          />
+        </Show>
         <Show when={failed()}>
           <p
             class="transcript-message-failure"
@@ -65,14 +90,28 @@ function renderContent(
         />
       );
     case "reasoning":
-      return (
-        <ReasoningBlock
-          reasoning={content}
-          annotationBlock={annotationBlock("content", index(), "reasoning")}
-        />
-      );
     case "tool":
-      return <ToolCall tool={content} directory={props.directory} />;
+      return (
+        <Show when={index() === 0 || props.message.content[index() - 1]?.type === "text"}>
+          <ActivityBlock
+            content={props.message.content}
+            start={index()}
+            workDetails={
+              props.message.content.slice(index()).some((part) => part.type === "text")
+                ? undefined
+                : props.workDetails
+            }
+            active={props.turnActive === true}
+            disclosureKey={
+              props.sessionID === undefined
+                ? undefined
+                : JSON.stringify([props.sessionID, props.message.id, index()])
+            }
+            activityOpen={props.activityOpen}
+            directory={props.directory}
+          />
+        </Show>
+      );
     default: {
       const unreachable: never = content;
       return unreachable;

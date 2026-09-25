@@ -177,6 +177,196 @@ function stubAnimationFrames() {
 }
 
 describe("TranscriptView", () => {
+  it("updates live activity counts and failures without moving prose or resetting expansion", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
+      {
+        id: "activity",
+        time: base,
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "test", id: "test" },
+        content: [{ type: "text", text: "Before" }, assistant("first", "running")],
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(activity.textContent).toContain("Working · 1 step");
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    setMessages(0, "content", 2, { type: "reasoning", text: "Check the result" });
+    expect(activity.textContent).toContain("Working · 2 steps");
+    expect(host.querySelector(".transcript-tool-call")).not.toBeNull();
+    setMessages(0, "content", 1, assistant("first", "error"));
+    expect(activity.textContent).toContain("Failed");
+    const tool = host.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
+    tool.click();
+    setMessages(0, "content", 3, { type: "text", text: "After" });
+    setMessages(0, "content", 4, assistant("second", "completed"));
+    const groups = host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger");
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toBe(activity);
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(groups[1]!.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector(".transcript-tool-header")).toBe(tool);
+    expect(tool.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      [...host.querySelectorAll(".transcript-assistant-document > *")].map((part) =>
+        part.classList.contains("transcript-activity") ? "activity" : part.textContent,
+      ),
+    ).toEqual(["Before", "activity", "After", "activity"]);
+    host
+      .querySelector<HTMLButtonElement>(".transcript-reasoning .transcript-context-trigger")!
+      .click();
+    expect(
+      host.querySelector(".transcript-reasoning-summary")?.getAttribute("data-annotation-block"),
+    ).toBe('["content",2,"reasoning"]');
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a reader's choice during tool cycles and collapses when the turn ends", () => {
+    stubResizeObserver();
+    const user: SessionMessageUser = { id: "prompt", time: base, type: "user", text: "Check" };
+    const [responses, setResponses] = createStore<SessionMessageAssistant[]>([
+      { ...toolAssistantMessage("first-cycle", "read"), time: { created: 1 } },
+    ]);
+    const [status, setStatus] = createSignal<"running" | "idle">("running");
+    const [ended, setEnded] = createSignal(false);
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID="session"
+        messages={[
+          user,
+          ...responses,
+          ...(ended()
+            ? ([{ id: "turn-idle", time: base, type: "idle", outcome: "succeeded" }] as const)
+            : []),
+        ]}
+        sessionStatus={status()}
+      />
+    ));
+    const first = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(first.getAttribute("aria-expanded")).toBe("true");
+    first.click();
+    expect(first.getAttribute("aria-expanded")).toBe("false");
+    setResponses(0, "content", 1, { type: "reasoning", text: "Checking another path" });
+    expect(first.textContent).toContain("2 steps");
+    expect(first.getAttribute("aria-expanded")).toBe("false");
+
+    first.click();
+    setResponses(0, "time", "completed", 2);
+    setResponses(0, "finish", "tool-calls");
+    setResponses(1, toolAssistantMessage("second-cycle", "write"));
+    const panels = host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger");
+    expect(panels).toHaveLength(2);
+    expect(first.getAttribute("aria-expanded")).toBe("true");
+    expect(panels[1]!.getAttribute("aria-expanded")).toBe("true");
+
+    const secondTool = host.querySelector<HTMLButtonElement>(
+      '[data-message-id="second-cycle"] .transcript-tool-header',
+    )!;
+    secondTool.focus();
+    setEnded(true);
+    setStatus("idle");
+    expect(first.textContent).toContain("Activity · 2 steps");
+    expect(first.getAttribute("aria-expanded")).toBe("false");
+    expect(panels[1]!.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(panels[1]);
+
+    first.click();
+    setResponses(1, "content", 1, { type: "text", text: "Done" });
+    expect(first.getAttribute("aria-expanded")).toBe("true");
+
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("remembers a manual close across transcript remounts during an active turn", () => {
+    stubResizeObserver();
+    const activityOpen = new Map<string, boolean>();
+    const messages = [toolAssistantMessage("running-response", "read")];
+    const render = () =>
+      mount(() => (
+        <TranscriptView
+          sessionID="session"
+          messages={messages}
+          sessionStatus="running"
+          activityOpen={activityOpen}
+        />
+      ));
+    const first = render();
+    const trigger = first.host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    trigger.click();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    first.dispose();
+
+    const second = render();
+    const restored = second.host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(restored.getAttribute("aria-expanded")).toBe("false");
+    restored.click();
+    expect(restored.getAttribute("aria-expanded")).toBe("true");
+    second.dispose();
+
+    const third = render();
+    expect(
+      third.host
+        .querySelector<HTMLButtonElement>(".transcript-activity-trigger")
+        ?.getAttribute("aria-expanded"),
+    ).toBe("true");
+    third.dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps selected activity text visible until the selection is cleared", () => {
+    stubResizeObserver();
+    const [status, setStatus] = createSignal<"running" | "idle">("running");
+    const messages: SessionMessageAssistant[] = [toolAssistantMessage("selected", "read")];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
+    ));
+    const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    host.querySelector<HTMLButtonElement>(".transcript-tool-header")!.click();
+    const output = host.querySelector<HTMLElement>(".transcript-tool-output")!;
+    selectNodeContents(output);
+    setStatus("idle");
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(window.getSelection()?.toString()).not.toBe("");
+
+    window.getSelection()?.removeAllRanges();
+    document.dispatchEvent(new Event("selectionchange"));
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a late failure visible after clearing a selection that deferred Activity closing", () => {
+    stubResizeObserver();
+    const [status, setStatus] = createSignal<"running" | "idle">("running");
+    const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
+      toolAssistantMessage("late-failure", "read"),
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
+    ));
+    const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    host.querySelector<HTMLButtonElement>(".transcript-tool-header")!.click();
+    selectNodeContents(host.querySelector<HTMLElement>(".transcript-tool-output")!);
+    setStatus("idle");
+    setMessages(0, "content", (content) => [...content, assistant("late-error", "error")]);
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Failed");
+
+    window.getSelection()?.removeAllRanges();
+    document.dispatchEvent(new Event("selectionchange"));
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    activity.click();
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
   it("preserves message rows and expanded tools across appends and status changes", () => {
     stubResizeObserver();
     const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
@@ -357,6 +547,9 @@ describe("TranscriptView", () => {
     expect(host.textContent).toContain("Review skill");
     expect(host.textContent).toContain("Before");
     expect(host.textContent).toContain("After");
+    expect(host.textContent).toContain("Activity · 6 steps");
+    expect(host.textContent).not.toContain("echo hi");
+    host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger")[1]!.click();
     expect(host.textContent).toContain("echo hi");
     expect(host.textContent).toContain("Skill: Review");
     expect(host.textContent).toContain("Agent switched");
@@ -387,18 +580,7 @@ describe("TranscriptView", () => {
       [...host.querySelectorAll<HTMLElement>(".transcript-document > [data-message-id]")].map(
         (element) => element.dataset.messageId,
       ),
-    ).toEqual([
-      "user",
-      "assistant",
-      "shell",
-      "skill",
-      "agent",
-      "model",
-      "location",
-      "compaction",
-      "system",
-      "synthetic",
-    ]);
+    ).toEqual(["user", "assistant", "system", "synthetic"]);
     const assistantParts = [
       ...host.querySelectorAll<HTMLElement>(
         '[data-message-id="assistant"] .transcript-assistant-document > *',
@@ -406,13 +588,10 @@ describe("TranscriptView", () => {
     ];
     expect(
       assistantParts.map((element) =>
-        element.classList.contains("transcript-reasoning")
-          ? "reasoning"
-          : element.classList.contains("transcript-tool-call")
-            ? "tool"
-            : element.textContent,
+        element.classList.contains("transcript-activity") ? "activity" : element.textContent,
       ),
-    ).toEqual(["Before", "reasoning", "tool", "After"]);
+    ).toEqual(["Before", "activity", "After", "activity"]);
+    host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
     const reasoningTrigger = host.querySelector<HTMLButtonElement>(
       ".transcript-reasoning .transcript-context-trigger",
     );
@@ -420,9 +599,11 @@ describe("TranscriptView", () => {
     expect(reasoningTrigger?.textContent).toBe("Reasoning");
     expect(host.querySelector(".transcript-reasoning-summary")).toBeNull();
     expect(
-      [...host.querySelectorAll<HTMLElement>('[data-slot="collapsible-trigger"]')].every(
-        (trigger) => trigger.getAttribute("aria-expanded") === "false",
-      ),
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '[data-slot="collapsible-trigger"]:not(.transcript-activity-trigger)',
+        ),
+      ].every((trigger) => trigger.getAttribute("aria-expanded") === "false"),
     ).toBe(true);
     expect(
       [
@@ -459,6 +640,139 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps focused live output inside Activity through completion and collapses after selection clears", () => {
+    stubResizeObserver();
+    const [sessionStatus, setSessionStatus] = createSignal<"running" | "idle">("running");
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      textAssistantMessage("assistant", "Working"),
+      {
+        id: "shell",
+        type: "shell",
+        time: base,
+        shellID: "shell",
+        command: "pnpm test",
+        status: "running",
+        output: { output: "Live output", cursor: 11, size: 11, truncated: false },
+      },
+      { id: "context", type: "synthetic", time: base, text: "Inserted context" },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus={sessionStatus()} />
+    ));
+    const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(activity.textContent).toContain("2 steps");
+    activity.click();
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    activity.click();
+    const shell = host.querySelector<HTMLElement>('[data-message-id="shell"]')!;
+    shell.querySelector<HTMLButtonElement>(".transcript-context-trigger")!.click();
+    const output = shell.querySelector<HTMLElement>(".transcript-tool-output")!;
+    output.focus();
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(output);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    setMessages(1, {
+      type: "shell",
+      status: "exited",
+      exit: 0,
+      time: { ...base, completed: 2 },
+    });
+
+    expect(host.querySelector('[data-message-id="shell"]')).toBe(shell);
+    expect(shell.querySelector(".transcript-tool-output")).toBe(output);
+    expect(document.activeElement).toBe(output);
+    expect(selection.toString()).toBe("Live output");
+    expect(host.querySelector(".transcript-activity-trigger")).toBe(activity);
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    setSessionStatus("idle");
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    selection.removeAllRanges();
+    document.dispatchEvent(new Event("selectionchange"));
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector('.transcript-document > [data-message-id="shell"]')).toBeNull();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a completed turn's failed shell visible in Activity until the reader closes it", () => {
+    stubResizeObserver();
+    const messages: readonly SessionMessageInfo[] = [
+      textAssistantMessage("assistant", "The check failed"),
+      {
+        id: "shell-failed",
+        type: "shell",
+        time: { ...base, completed: 2 },
+        shellID: "shell-failed",
+        command: "pnpm test",
+        status: "exited",
+        exit: 1,
+        output: { output: "Assertion failed", cursor: 16, size: 16, truncated: false },
+      },
+      { id: "idle", type: "idle", time: base, outcome: "failed" },
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(activity.textContent).toContain("Failed");
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(host.textContent).toContain("pnpm test");
+    expect(
+      host.querySelector('.transcript-document > [data-message-id="shell-failed"]'),
+    ).toBeNull();
+    activity.click();
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("reopens Activity for each newly failed live shell and keeps it open at turn end", () => {
+    stubResizeObserver();
+    const [sessionStatus, setSessionStatus] = createSignal<"running" | "idle">("running");
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      textAssistantMessage("assistant", "Checking"),
+      {
+        id: "shell",
+        type: "shell",
+        time: base,
+        shellID: "shell",
+        command: "pnpm test",
+        status: "running",
+      },
+      {
+        id: "shell-2",
+        type: "shell",
+        time: base,
+        shellID: "shell-2",
+        command: "pnpm check",
+        status: "running",
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus={sessionStatus()} />
+    ));
+    const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    activity.click();
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    setMessages(1, { type: "shell", status: "exited", exit: 1 });
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(activity.textContent).toContain("Failed");
+    const firstAlert = activity.querySelector('[role="alert"]');
+    activity.click();
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    setMessages(2, { type: "shell", status: "exited", exit: 1 });
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(activity.querySelector('[role="alert"]')).not.toBe(firstAlert);
+    expect(activity.querySelector('[role="alert"]')?.textContent).toContain("2 failed");
+    setSessionStatus("idle");
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
   it("collapses reasoning by default and reveals its text on demand", () => {
     stubResizeObserver();
     const messages: readonly SessionMessageInfo[] = [
@@ -480,6 +794,7 @@ describe("TranscriptView", () => {
     const { host, dispose } = mount(() => (
       <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
     ));
+    host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
     const trigger = host.querySelector<HTMLButtonElement>(
       ".transcript-reasoning .transcript-context-trigger",
     )!;
@@ -516,6 +831,7 @@ describe("TranscriptView", () => {
     const { host, dispose } = mount(() => (
       <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
     ));
+    host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
     const trigger = host.querySelector<HTMLButtonElement>(
       ".transcript-reasoning .transcript-context-trigger",
     )!;
@@ -551,8 +867,12 @@ describe("TranscriptView", () => {
       },
     ]);
     const { host, dispose } = mount(() => (
-      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
     ));
+    const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector(".transcript-tool-call")).toBeNull();
+    activity.click();
     const reasoning = host.querySelector<HTMLElement>(".transcript-reasoning")!;
     const tool = host.querySelector<HTMLElement>(".transcript-tool-call")!;
     expect(reasoning.querySelector('[data-slot="collapsible-content"]')).toBeNull();
@@ -575,6 +895,12 @@ describe("TranscriptView", () => {
     expect(tool.classList.contains("transcript-tool-error")).toBe(true);
     expect(toolContent.querySelector(".transcript-tool-details")).not.toBeNull();
     expect(tool.querySelector(".transcript-tool-header")).toBe(toolTrigger);
+
+    activity.click();
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    activity.click();
+    expect(tool.querySelector(".transcript-tool-header")).toBe(toolTrigger);
+    expect(toolTrigger.getAttribute("aria-expanded")).toBe("true");
 
     dispose();
     vi.unstubAllGlobals();
@@ -607,6 +933,7 @@ describe("TranscriptView", () => {
     ));
     const row = host.querySelector<HTMLElement>('[data-message-id="assistant"]')!;
     // Streamed input text is never inspected.
+    host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
     expect(row.querySelector(".transcript-tool-parameter")).toBeNull();
 
     setMessages(0, "content", 0, {
@@ -684,6 +1011,7 @@ describe("TranscriptView", () => {
         directory={directory}
       />
     ));
+    host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
     expect(host.querySelector(".transcript-tool-parameter")?.textContent).toBe("src/app.ts");
 
     dispose();
@@ -1133,6 +1461,7 @@ describe("TranscriptView", () => {
     ));
     try {
       const row = host.querySelector<HTMLElement>('[data-message-id="newest"]')!;
+      row.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
       const trigger = row.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
       trigger.click();
       expect(trigger.getAttribute("aria-expanded")).toBe("true");
@@ -2174,6 +2503,9 @@ describe("TranscriptView", () => {
     const { host, dispose } = mount(() => (
       <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
     ));
+    host
+      .querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger")
+      .forEach((button) => button.click());
     expect(
       [...host.querySelectorAll<HTMLButtonElement>(".transcript-tool-header")].map((button) =>
         button.getAttribute("aria-expanded"),

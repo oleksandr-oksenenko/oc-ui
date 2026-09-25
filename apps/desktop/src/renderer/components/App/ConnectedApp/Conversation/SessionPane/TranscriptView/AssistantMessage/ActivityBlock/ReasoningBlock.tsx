@@ -3,7 +3,7 @@ import { Collapsible } from "@opencode/ui/collapsible";
 import { Icon } from "@opencode/ui/icon";
 import { Show, type JSX } from "solid-js";
 
-import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMount.ts";
+import { createDeferredCollapsibleMount } from "../../createDeferredCollapsibleMount.ts";
 
 export type ReasoningBlockProps = {
   readonly annotationBlock?: string;

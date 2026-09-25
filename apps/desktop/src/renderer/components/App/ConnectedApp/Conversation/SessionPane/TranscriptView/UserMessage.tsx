@@ -79,7 +79,12 @@ export function UserMessage(props: UserMessageProps): JSX.Element {
               <For each={attachments()}>
                 {(attachment, index) => (
                   <li
-                    class={attachment.kind === "image" ? "transcript-user-attachment-image" : ""}
+                    class={
+                      attachment.kind === "image"
+                        ? "transcript-user-attachment-image"
+                        : "transcript-user-attachment-pill"
+                    }
+                    title={attachment.kind === "image" ? undefined : attachment.name}
                     data-annotation-block={annotationBlock("attachment", index())}
                   >
                     <Show

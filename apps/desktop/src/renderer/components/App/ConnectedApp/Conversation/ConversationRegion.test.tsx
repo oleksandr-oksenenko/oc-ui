@@ -676,6 +676,7 @@ describe("ConversationRegion transcript", () => {
       content: [tool],
     };
     const mounted = setup([], [], { transcript: () => [assistant] });
+    mounted.host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
     expect(mounted.host.querySelector(".transcript-tool-parameter")?.textContent).toBe(
       "src/app.ts",
     );

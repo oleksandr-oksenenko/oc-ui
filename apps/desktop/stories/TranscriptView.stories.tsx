@@ -28,6 +28,7 @@ import {
 import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 import { TranscriptPendingFixture } from "./transcript-catalog/TranscriptPendingFixture.tsx";
 import { TranscriptUpdatesFixture } from "./transcript-catalog/TranscriptUpdatesFixture.tsx";
+import { TranscriptActivityFixture } from "./transcript-catalog/TranscriptActivityFixture.tsx";
 
 const meta = {
   title: "Transcript/TranscriptView",
@@ -68,6 +69,31 @@ const readStoryFileImage = async (): Promise<Blob> =>
 export const Rich: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
   render: renderTranscript,
+};
+
+export const CollapsedActivity: Story = {
+  args: { messages: [assistant("activity-review")], sessionStatus: "idle" },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const activity = canvas.getByRole("button", { name: /^Activity · 2 steps/ });
+    await expect(activity).toHaveAttribute("aria-expanded", "false");
+    await expect(canvas.queryByRole("button", { name: "Reasoning" })).toBeNull();
+    activity.focus();
+    await userEvent.keyboard("{Enter}");
+    const tool = canvas.getByRole("button", { name: "release-check Completed" });
+    await userEvent.click(tool);
+    await expect(canvas.getByText(/migrations: ready/)).toBeVisible();
+    activity.focus();
+    await userEvent.keyboard(" ");
+    await expect(activity).toHaveAttribute("aria-expanded", "false");
+    await expect(tool).not.toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "release-check Completed" })).toBeNull();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("button", { name: "release-check Completed" })).toBe(tool);
+    await expect(tool).toHaveAttribute("aria-expanded", "true");
+    await expect(canvas.getByText(/migrations: ready/)).toBeVisible();
+  },
 };
 
 export const ImagePreviews: Story = {
@@ -178,6 +204,12 @@ export const ScrollPreservation: Story = {
     await settle();
     canvas.getByRole("button", { name: "Finish turn" }).click();
     await settle();
+    const activity = tool.closest(".transcript-activity")!;
+    const activityHeader = activity.querySelector<HTMLButtonElement>(
+      ".transcript-activity-trigger",
+    )!;
+    await expect(activityHeader).toHaveAttribute("aria-expanded", "false");
+    activityHeader.click();
     await expect(canvas.getByRole("button", { name: "read README.md Completed" })).toBe(tool);
     await expect(tool).toHaveAttribute("aria-expanded", "true");
     await expect(
@@ -294,6 +326,116 @@ export const Streaming: Story = {
   },
   render: renderTranscript,
 };
+export const ActivityStreaming: Story = {
+  args: { messages: [], sessionStatus: "running" },
+  render: () => <TranscriptActivityFixture />,
+};
+export const ActivityStreamingNarrow: Story = {
+  ...ActivityStreaming,
+  render: () => <TranscriptActivityFixture width="320px" />,
+  play: async ({ canvasElement }) => {
+    const panel = canvasElement.querySelector<HTMLElement>(".transcript-activity")!;
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+    await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
+  },
+};
+export const ActivityStreamingBehavior: Story = {
+  ...ActivityStreaming,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    const activity = canvasElement.querySelector<HTMLElement>(".transcript-activity")!;
+    const panel = activity.querySelector<HTMLElement>(".transcript-activity-content")!;
+    const header = activity.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    await expect(header).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(panel.scrollHeight).toBeGreaterThan(panel.clientHeight + 10));
+    await expect(panel.clientHeight).toBeLessThanOrEqual(viewport.clientHeight * 0.4);
+
+    panel.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -120 }));
+    panel.scrollTop = 0;
+    panel.dispatchEvent(new Event("scroll"));
+    canvas.getByRole("button", { name: "Add activity step" }).click();
+    await settle();
+    await expect(panel.scrollTop).toBe(0);
+
+    panel.scrollTop = panel.scrollHeight;
+    panel.dispatchEvent(new Event("scroll"));
+    canvas.getByRole("button", { name: "Add activity step" }).click();
+    await waitFor(() =>
+      expect(panel.scrollHeight - panel.clientHeight - panel.scrollTop).toBeLessThan(2),
+    );
+
+    canvas.getByRole("button", { name: "Complete model cycle" }).click();
+    const headers = canvasElement.querySelectorAll<HTMLButtonElement>(
+      ".transcript-activity-trigger",
+    );
+    await expect(headers).toHaveLength(2);
+    await expect(header).toHaveAttribute("aria-expanded", "true");
+    await expect(headers[1]).toHaveAttribute("aria-expanded", "true");
+    headers[1]!.click();
+    canvas.getByRole("button", { name: "Add activity step" }).click();
+    await expect(headers[1]).toHaveAttribute("aria-expanded", "false");
+
+    canvas.getByRole("button", { name: "Finish turn" }).click();
+    await waitFor(() => expect(header).toHaveAttribute("aria-expanded", "false"));
+    await expect(headers[1]).toHaveAttribute("aria-expanded", "false");
+    await expect(header).toHaveTextContent("Activity · 17 steps");
+    await expect(
+      canvas.getByText("I checked the changed modules and found no blocking issue."),
+    ).toBeVisible();
+    header.click();
+    await expect(header).toHaveAttribute("aria-expanded", "true");
+  },
+};
+export const ActivitySelectionBehavior: Story = {
+  ...ActivityStreaming,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const panel = canvasElement.querySelector<HTMLElement>(".transcript-activity-content")!;
+    const header = canvasElement.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    const tools = panel.querySelectorAll<HTMLButtonElement>(".transcript-tool-header");
+    tools[tools.length - 1]!.click();
+    const output = await waitFor(() => {
+      const element = panel.querySelector<HTMLElement>(".transcript-tool-output");
+      if (!element) throw new Error("Tool output did not open");
+      return element;
+    });
+    panel.scrollTop = panel.scrollHeight;
+    panel.dispatchEvent(new Event("scroll"));
+    await settle();
+
+    const selection = canvasElement.ownerDocument.getSelection()!;
+    const range = canvasElement.ownerDocument.createRange();
+    range.selectNodeContents(output);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    canvasElement.ownerDocument.dispatchEvent(new Event("selectionchange"));
+    const readingPosition = panel.scrollTop;
+    canvas.getByRole("button", { name: "Add activity step" }).click();
+    await settle();
+    await expect(panel.scrollTop).toBe(readingPosition);
+
+    canvas.getByRole("button", { name: "Finish turn" }).click();
+    await expect(header).toHaveAttribute("aria-expanded", "true");
+    selection.removeAllRanges();
+    canvasElement.ownerDocument.dispatchEvent(new Event("selectionchange"));
+    await expect(header).toHaveAttribute("aria-expanded", "false");
+  },
+};
+export const ActivityWithPendingRequest: Story = {
+  args: { messages: [], sessionStatus: "running" },
+  render: () => <TranscriptActivityFixture pending />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("button", { name: /^Working/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(canvasElement.querySelector(".transcript-pending-interaction")).not.toBeNull();
+    await expect(canvasElement.querySelector("[data-permission-request-id]")).not.toBeNull();
+  },
+};
 export const FailedStates: Story = {
   args: {
     messages: [assistant("assistant-failed", "error")],
@@ -335,6 +477,9 @@ export const ToolImageLongMetadata: Story = {
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
     await step("Keeps long tool parameters on one line inside the column", async () => {
+      for (const activity of canvas.getAllByRole("button", { name: /^Activity/ })) {
+        if (activity.getAttribute("aria-expanded") !== "true") await userEvent.click(activity);
+      }
       const parameters = [
         ...canvasElement.querySelectorAll<HTMLElement>(".transcript-tool-parameter"),
       ];
@@ -521,6 +666,11 @@ export const CatalogInteractions: Story = {
   ...AllElements,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    for (const activity of canvasElement.querySelectorAll<HTMLButtonElement>(
+      ".transcript-activity-trigger",
+    )) {
+      if (activity.getAttribute("aria-expanded") === "false") await userEvent.click(activity);
+    }
     for (const name of [
       "read Streaming",
       "grep TranscriptView Running",
@@ -566,6 +716,7 @@ export const LongTranscriptMaterialization: Story = {
     await expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(2);
     const oldest = canvasElement.querySelector<HTMLElement>('[data-message-id="long-oldest"]');
     if (!oldest) throw new Error("The oldest materialized row is missing");
+    await userEvent.click(within(oldest).getByRole("button", { name: /^Activity/ }));
     const trigger = within(oldest).getByRole("button", {
       name: /release-check Completed/,
     });

@@ -20,14 +20,15 @@ import {
 
 import type { ServerFileImageReader } from "../../../../../opencode/file-images.ts";
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
-import { CompactionMessage } from "./TranscriptView/CompactionMessage.tsx";
-import { ContextMessage } from "./TranscriptView/ContextMessage.tsx";
-import { ShellMessage } from "./TranscriptView/ShellMessage.tsx";
-import { SkillMessage } from "./TranscriptView/SkillMessage.tsx";
-import { TimelineRow } from "./TranscriptView/TimelineRow.tsx";
+import { ActivityBlock } from "./TranscriptView/AssistantMessage/ActivityBlock.tsx";
 import type { UserMessageProps } from "./TranscriptView/UserMessage.tsx";
 import { UserMessage } from "./TranscriptView/UserMessage.tsx";
 import { createTranscriptMaterialization } from "./TranscriptView/transcriptMaterialization.ts";
+import {
+  projectTranscriptRows,
+  type TranscriptRow,
+} from "./TranscriptView/workDetailProjection.ts";
+import { WorkDetailMessage } from "./TranscriptView/WorkDetailMessage.tsx";
 
 import "./SessionPane.css";
 
@@ -72,6 +73,8 @@ export type TranscriptViewProps = {
   readonly annotationRootRef?: (element: HTMLDivElement) => (() => void) | void;
   readonly onOpenAnnotation?: UserMessageProps["onOpenAnnotation"];
   readonly messages: readonly SessionMessageInfo[];
+  /** Reader disclosure choices survive transcript remounts during navigation. */
+  readonly activityOpen?: Map<string, boolean>;
   readonly sessionStatus: DataSessionStatus;
   readonly loading?: boolean;
   readonly error?: string;
@@ -86,6 +89,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   let detachWheel: (() => void) | undefined;
   let viewport: HTMLDivElement | undefined;
   let resumeFrame: number | undefined;
+  let activityHeightFrame: number | undefined;
   let scrollIntentBaseline: number | undefined;
   let scrollIntentTimer: number | undefined;
   type Positioning = {
@@ -128,6 +132,15 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     if (resumeFrame === undefined) return;
     cancelAnimationFrame(resumeFrame);
     resumeFrame = undefined;
+  };
+
+  const updateActivityHeight = () => {
+    if (!viewport || viewport.clientHeight <= 0) return;
+    const height = Math.min(340, Math.max(120, viewport.clientHeight * 0.3));
+    const value = `${height}px`;
+    if (viewport.style.getPropertyValue("--oc-activity-max-height") !== value) {
+      viewport.style.setProperty("--oc-activity-max-height", value);
+    }
   };
 
   const cancelScrollIntent = () => {
@@ -288,7 +301,17 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
   // Created before the upstream hook's observer so a paused view can latch the
   // follow state before the hook's resize callback runs.
-  const pauseObserver = new ResizeObserver(() => {
+  const pauseObserver = new ResizeObserver((entries) => {
+    if (
+      viewport &&
+      entries.some((entry) => entry.target === viewport) &&
+      activityHeightFrame === undefined
+    ) {
+      activityHeightFrame = requestAnimationFrame(() => {
+        activityHeightFrame = undefined;
+        updateActivityHeight();
+      });
+    }
     readGeometry(true);
     if (!readerPaused()) return;
     untrack(() => {
@@ -335,6 +358,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
   onCleanup(() => {
     cancelResumeFrame();
+    if (activityHeightFrame !== undefined) cancelAnimationFrame(activityHeightFrame);
     cancelAwayTimer();
     cancelScrollIntent();
     pauseObserver.disconnect();
@@ -409,12 +433,40 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     resumeFrame = frame;
   });
 
-  const visibleMessages = createMemo(() => {
+  const visibleProjection = createMemo(() => {
     const start = materialization.startIndex();
     const messages = props.messages;
     const visible = start === 0 ? messages : messages.slice(start);
-    return visible.filter(isRenderableMessage);
+    return projectTranscriptRows(visible);
   });
+  // Keep original SDK message objects as For keys; projection rows are rebuilt
+  // as new work events arrive and must not remount existing transcript content.
+  const visibleMessages = createMemo(() => visibleProjection().map((row) => row.message));
+  const rowsByID = createMemo(
+    () => new Map(visibleProjection().map((row) => [row.message.id, row])),
+  );
+  // A message can finish while its turn keeps running. The last user/idle
+  // marker, rather than message completion, owns the live activity boundary.
+  const activeTurnMessages = createMemo(() => {
+    if (!working()) return new Set<string>();
+    const active = new Set<string>();
+    for (let index = props.messages.length - 1; index >= 0; index--) {
+      const message = props.messages[index]!;
+      if (message.type === "idle" || message.type === "user") break;
+      active.add(message.id);
+    }
+    return active;
+  });
+  const hasLiveActivity = createMemo(() =>
+    visibleProjection().some(
+      (row) =>
+        activeTurnMessages().has(row.message.id) &&
+        (row.activityGroup === true ||
+          (row.message.type === "assistant" &&
+            (row.message.content.some((part) => part.type !== "text") ||
+              row.workDetails.length > 0))),
+    ),
+  );
   // Rendered rows are real content; materializing reports that history is
   // still arriving without replacing the rows already on screen.
   const busy = () => props.loading === true || materialization.materializing();
@@ -423,6 +475,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     <div
       ref={(element) => {
         viewport = element;
+        updateActivityHeight();
         // A window resize can move the newest content out of view without
         // resizing the document or firing a scroll.
         pauseObserver.observe(element);
@@ -484,11 +537,15 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
           }}
           class="transcript-document"
         >
-          <For each={visibleMessages()}>{(message) => renderMessage(message, props)}</For>
+          <For each={visibleMessages()}>
+            {(message) =>
+              renderMessage(message, props, activeTurnMessages, () => rowsByID().get(message.id))
+            }
+          </For>
 
           {props.pendingInteraction}
 
-          <Show when={working()}>
+          <Show when={working() && !hasLiveActivity()}>
             <output class="transcript-working" aria-live="polite">
               <Loader class="transcript-working-loader" width={14} height={14} aria-hidden="true" />
               <span>{props.workingLabel ?? "Working"}</span>
@@ -513,20 +570,19 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   );
 }
 
-// Idle markers close a turn; the message list keeps them for turn boundaries,
-// but the transcript renders no row for them.
-type RenderableMessage = Exclude<SessionMessageInfo, { readonly type: "idle" }>;
-
-function isRenderableMessage(message: SessionMessageInfo): message is RenderableMessage {
-  return message.type !== "idle";
-}
-
 function renderMessage(
-  message: RenderableMessage,
+  message: Exclude<SessionMessageInfo, { readonly type: "idle" }>,
   props: Pick<
     TranscriptViewProps,
-    "sessionStatus" | "onOpenAnnotation" | "readFileImage" | "directory"
+    | "sessionID"
+    | "sessionStatus"
+    | "onOpenAnnotation"
+    | "readFileImage"
+    | "directory"
+    | "activityOpen"
   >,
+  activeTurnMessages: () => ReadonlySet<string>,
+  row: () => TranscriptRow | undefined,
 ): JSX.Element {
   switch (message.type) {
     case "user":
@@ -535,62 +591,33 @@ function renderMessage(
       return (
         <AssistantMessage
           message={message}
+          workDetails={row()?.workDetails}
+          sessionID={props.sessionID}
           sessionStatus={props.sessionStatus}
+          turnActive={activeTurnMessages().has(message.id)}
+          activityOpen={props.activityOpen}
           readFileImage={props.readFileImage}
           directory={props.directory}
         />
       );
-    case "shell":
-      return <ShellMessage message={message} />;
-    case "skill":
-      return <SkillMessage message={message} />;
-    case "agent-switched":
+    default:
       return (
-        <TimelineRow
-          id={message.id}
-          icon="subagent"
-          label="Agent switched"
-          detail={`${message.previous ? `${message.previous} → ` : ""}${message.agent}`}
-        />
+        <Show
+          when={row()?.activityGroup ? row()?.workDetails : undefined}
+          fallback={<WorkDetailMessage message={message} />}
+        >
+          {(details) => (
+            <ActivityBlock
+              content={[]}
+              start={0}
+              workDetails={details()}
+              active={activeTurnMessages().has(message.id)}
+              disclosureKey={JSON.stringify([props.sessionID, message.id, "work-details"])}
+              activityOpen={props.activityOpen}
+              directory={props.directory}
+            />
+          )}
+        </Show>
       );
-    case "model-switched":
-      return (
-        <TimelineRow
-          id={message.id}
-          icon="models"
-          label="Model switched"
-          detail={`${message.previous ? `${modelName(message.previous)} → ` : ""}${modelName(message.model)}`}
-        />
-      );
-    case "location-switched":
-      return (
-        <TimelineRow
-          id={message.id}
-          icon="folder"
-          label="Location switched"
-          detail={message.location.directory}
-        />
-      );
-    case "compaction":
-      return <CompactionMessage message={message} />;
-    case "system":
-    case "synthetic":
-      return (
-        <ContextMessage
-          id={message.id}
-          icon={message.type === "system" ? "settings-gear" : "align-right"}
-          label={message.type === "system" ? "System context" : "Context"}
-          text={message.text}
-          description={message.description}
-        />
-      );
-    default: {
-      const unreachable: never = message;
-      return unreachable;
-    }
   }
-}
-
-function modelName(model: { readonly providerID: string; readonly id: string }): string {
-  return `${model.providerID}/${model.id}`;
 }

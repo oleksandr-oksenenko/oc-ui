@@ -1,0 +1,94 @@
+import type { SessionMessageInfo, SessionMessageAssistant } from "@opencode/client";
+import { describe, expect, it } from "vite-plus/test";
+
+import { projectTranscriptRows } from "./workDetailProjection.ts";
+
+const time = { created: 1 };
+const assistant = (id: string): SessionMessageAssistant => ({
+  id,
+  type: "assistant",
+  time,
+  agent: "build",
+  model: { providerID: "p", id: "m" },
+  content: [{ type: "text", text: id }],
+});
+const shell = (id: string, exit: number): SessionMessageInfo => ({
+  id,
+  type: "shell",
+  time,
+  shellID: id,
+  command: id,
+  status: "exited",
+  exit,
+});
+
+const ids = (rows: ReturnType<typeof projectTranscriptRows>) =>
+  rows.map((row) => [row.message.id, row.workDetails.map((item) => item.id)]);
+
+describe("projectTranscriptRows", () => {
+  it("groups completed details in source order and keeps turn boundaries outside Activity", () => {
+    const rows = projectTranscriptRows([
+      { id: "user-1", type: "user", time, text: "Start" },
+      assistant("assistant-1"),
+      shell("shell-ok", 0),
+      { id: "skill", type: "skill", time, skill: "review", name: "Review", text: "Done" },
+      { id: "context", type: "synthetic", time, text: "Inserted context" },
+      { id: "idle", type: "idle", time, outcome: "succeeded" },
+      shell("outside", 0),
+      { id: "user-2", type: "user", time, text: "Next" },
+    ]);
+    expect(ids(rows)).toEqual([
+      ["user-1", []],
+      ["assistant-1", ["shell-ok", "skill", "context"]],
+      ["outside", []],
+      ["user-2", []],
+    ]);
+  });
+
+  it("groups live and failed work in source order while keeping system context outside", () => {
+    const rows = projectTranscriptRows([
+      assistant("assistant"),
+      shell("shell-ok", 0),
+      shell("shell-failed", 1),
+      { id: "context", type: "synthetic", time, text: "After failure" },
+      {
+        id: "compaction-running",
+        type: "compaction",
+        time,
+        status: "running",
+        reason: "auto",
+        summary: "",
+        recent: "",
+      },
+      { id: "location", type: "location-switched", time, location: { directory: "/tmp" } },
+      { id: "system", type: "system", time, text: "User-facing context" },
+    ]);
+    expect(ids(rows)).toEqual([
+      ["assistant", ["shell-ok", "shell-failed", "context", "compaction-running", "location"]],
+      ["system", []],
+    ]);
+    expect(rows.filter((row) => row.activityGroup)).toHaveLength(0);
+  });
+
+  it("keeps assistant errors exposed and groups subsequent details until the next boundary", () => {
+    const failed: SessionMessageAssistant = { ...assistant("failed"), finish: "error" };
+    const rows = projectTranscriptRows([
+      failed,
+      shell("first", 0),
+      shell("second", 1),
+      { id: "user", type: "user", time, text: "Try again" },
+      shell("outside", 0),
+      assistant("recovered"),
+      shell("last", 0),
+    ]);
+    expect(ids(rows)).toEqual([
+      ["failed", []],
+      ["first", ["first", "second"]],
+      ["user", []],
+      ["outside", []],
+      ["recovered", ["last"]],
+    ]);
+    expect(rows.filter((row) => row.activityGroup).map((row) => row.message.id)).toEqual(["first"]);
+    expect(rows[0]?.message).toBe(failed);
+  });
+});

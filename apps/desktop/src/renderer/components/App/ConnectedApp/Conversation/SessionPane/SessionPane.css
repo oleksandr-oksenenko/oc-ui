@@ -51,7 +51,7 @@
   width: min(100%, 820px);
   min-height: 100%;
   margin: 0 auto;
-  padding: 12px 16px;
+  padding: 12px 16px 24px;
 }
 
 /* Keeps the return-to-latest control at the transcript's bottom edge, directly
@@ -298,6 +298,18 @@
   border: 0;
 }
 
+.transcript-user-attachments li.transcript-user-attachment-pill {
+  box-sizing: border-box;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 8px;
+  overflow: hidden;
+  border-radius: var(--oc-radius-full);
+  background: var(--oc-surface-control);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .transcript-user-image {
   width: 160px;
   height: 110px;
@@ -435,11 +447,17 @@
 
 .transcript-markdown pre {
   max-width: 100%;
-  padding: 11px 40px 11px 12px;
+  padding: 6px 26px 6px 6px;
   overflow-x: auto;
   border: 1px solid var(--oc-border-muted);
   border-radius: var(--oc-radius-card);
   background: var(--oc-surface-raised);
+  font-size: var(--oc-type-code-size);
+  line-height: var(--oc-type-code-line-height);
+}
+
+.transcript-markdown pre code {
+  font-size: inherit;
 }
 
 .transcript-markdown blockquote {
@@ -457,12 +475,12 @@
 .transcript-markdown table {
   border: 1px solid var(--oc-border-muted);
   border-radius: var(--oc-radius-card);
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
 }
 
-/* The block-level table paints the outer outline; cells draw only the inner
-   separators. Collapsing cannot merge the two, and both together read as a
-   2px edge beside the 1px corner arc. */
+/* The table owns the rounded outer outline; cells draw only inner separators. */
 .transcript-markdown :is(th, td) {
   padding: 5px 8px;
   border: 0;
@@ -496,12 +514,8 @@
   font-size: var(--oc-type-body-size);
 }
 
-/* Tool calls read as one work log: a quiet rail binds the rows together
-   without turning every call into its own card. */
 .transcript-tool-call {
-  margin-left: 6px;
-  padding-left: 10px;
-  border-left: 1px solid var(--oc-border-muted);
+  border: 0;
 }
 
 .transcript-tool-header {
@@ -799,12 +813,14 @@
  * with the row's last rendered size after its first render. Values are rounded
  * per-class estimates from a rendered-height census: header-only rows 22px,
  * user rows mean ~44px, assistant rows mean ~73px (medians 48px with long
- * tails). Shell, skill, and compaction rows share the header shape but were not
- * in the measured sessions, and the total scroll extent can drift on a first
- * narrow-layout visit (~10% at 420px) until those rows render. Kept at the end
+ * tails). Pending cards stay visible because paint containment clips their
+ * shadows at the article edge. Shell, skill, and compaction rows share the
+ * header shape but were not in the measured sessions, and the total scroll
+ * extent can drift on a first narrow-layout visit (~10% at 420px) until those
+ * rows render. Kept at the end
  * of the file because these child selectors outrank the plain row rules above.
  */
-.transcript-document > .transcript-message {
+.transcript-document > .transcript-message:not(.transcript-pending-interaction) {
   content-visibility: auto;
 }
 

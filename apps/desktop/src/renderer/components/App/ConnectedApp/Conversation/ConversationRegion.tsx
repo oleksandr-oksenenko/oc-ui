@@ -52,6 +52,9 @@ const sameKeyList = (previous: readonly string[], next: readonly string[]): bool
 
 export function ConversationRegion(props: ConversationRegionProps): JSX.Element {
   const runtime = useServerRuntimeOptional();
+  // Disclosure is presentation state. Keep manual choices while the reader
+  // switches sessions; transcript rows themselves can unmount and remount.
+  const activityOpen = new Map<string, boolean>();
   const visibleTranscript = createMemo(() => {
     const pending = new Set(props.inbox.messages().map((item) => item.id));
     return props.workspace.transcript().filter((message) => !pending.has(message.id));
@@ -353,6 +356,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               annotationRootRef={annotationUI.attach}
               onOpenAnnotation={annotationUI.openSent}
               messages={visibleTranscript()}
+              activityOpen={activityOpen}
               sessionStatus={props.workspace.transcriptStatus()}
               loading={props.workspace.transcriptLoading()}
               error={props.workspace.transcriptError()}
