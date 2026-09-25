@@ -2,7 +2,7 @@
 
 import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
-import { Show, createSignal, onCleanup } from "solid-js";
+import { Show, createSignal, onCleanup, type Accessor } from "solid-js";
 import { expect, screen, userEvent, within } from "storybook/test";
 import type { Meta } from "storybook-solidjs-vite";
 
@@ -64,19 +64,21 @@ function BeaconStory(props: BeaconStoryProps) {
     );
   };
 
+  const sidebarControls = (visible: Accessor<boolean>) => (
+    <GlobalFormsRegion
+      controller={fixture.controller}
+      visible={visible()}
+      onOpenExternal={openExternal}
+    />
+  );
+
   return (
     <ServerFlowDialogProvider>
       <div class="global-forms-beacon-story">
         <GlobalFormsShell
           selectedTitle="Review requests"
           initialLeftSidebarOpen={props.initialLeftSidebarOpen}
-          sidebarControls={(visible) => (
-            <GlobalFormsRegion
-              controller={fixture.controller}
-              visible={visible()}
-              onOpenExternal={openExternal}
-            />
-          )}
+          sidebarControls={sidebarControls}
         >
           <div class="global-forms-beacon-home">
             <div class="global-forms-beacon-home-icon" aria-hidden="true">
@@ -104,8 +106,8 @@ function BeaconStory(props: BeaconStoryProps) {
                   Start live demo
                 </Button>
                 <span class="global-forms-beacon-controls-note">
-                  Start this before opening the beacon. It adds a request, then removes one
-                  while the dialog is open.
+                  Start this before opening the beacon. It adds a request, then removes one while
+                  the dialog is open.
                 </span>
               </div>
             </Show>

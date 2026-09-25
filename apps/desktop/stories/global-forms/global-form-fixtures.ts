@@ -4,7 +4,7 @@ import { createSignal, type Accessor } from "solid-js";
 
 import type { GlobalFormsController } from "../../src/renderer/components/App/ConnectedApp/GlobalForms/createGlobalForms.ts";
 
-export const GLOBAL_FORM_LOCATION: LocationRef = {
+const GLOBAL_FORM_LOCATION: LocationRef = {
   directory: "/srv/workspaces/oc-ui",
   workspaceID: "workspace-demo",
 };

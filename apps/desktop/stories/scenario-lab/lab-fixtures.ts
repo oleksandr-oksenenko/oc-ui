@@ -1,6 +1,6 @@
 import type { PermissionRequest, SessionInfo } from "@opencode/client";
 
-import type { DiffFileData } from "../../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
+import type { DiffFileData } from "../../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView.tsx";
 import { sessionFixture } from "../../src/renderer/test/session-fixture.ts";
 
 /* Fixed story clock keeps the sidebar grouping deterministic. */

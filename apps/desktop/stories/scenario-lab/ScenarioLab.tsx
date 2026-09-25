@@ -9,7 +9,7 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 
 import { ChangesRegion } from "../../src/renderer/components/App/ConnectedApp/Changes/ChangesRegion.tsx";
 import { ContextPanel } from "../../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
-import type { DiffFileData } from "../../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView/DiffFile.tsx";
+import type { DiffFileData } from "../../src/renderer/components/App/ConnectedApp/Changes/ContextPanel/DiffView.tsx";
 import { Composer } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { SessionSidebar } from "../../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar.tsx";
 import { SessionHeader } from "../../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/SessionHeader.tsx";
@@ -197,6 +197,7 @@ function LabComposer(props: { readonly action: "send" | "running" }) {
       modelSelection={composerModelSelection()}
       agentSelection={composerAgentSelection()}
       onInput={noop}
+      onAttachText={noop}
       onSubmit={noop}
       onStop={noop}
     />
@@ -635,7 +636,8 @@ export function WorkbenchReview() {
                       <LabReviewTree selectedFile={selectedFile} />
                       <div class="lab-review-diff">
                         <ContextPanel
-                          diff={{ files: labDiffFiles, loading: false }}
+                          files={labDiffFiles}
+                          presentation={{ loading: false }}
                           showTabs={false}
                         />
                       </div>
@@ -647,7 +649,8 @@ export function WorkbenchReview() {
             context={
               <ChangesRegion
                 idBase="lab-workbench-context"
-                changes={{ files: labDiffFiles, loading: false }}
+                files={labDiffFiles}
+                presentation={{ loading: false }}
                 showTabs={false}
               />
             }
@@ -769,7 +772,11 @@ export function NotebookReview() {
                     </p>
                   </header>
                   <section class="lab-note">
-                    <ContextPanel diff={{ files: labDiffFiles, loading: false }} showTabs={false} />
+                    <ContextPanel
+                      files={labDiffFiles}
+                      presentation={{ loading: false }}
+                      showTabs={false}
+                    />
                   </section>
                 </div>
               </div>

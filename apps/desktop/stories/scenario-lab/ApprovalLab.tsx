@@ -221,6 +221,7 @@ export function WorkbenchApprovalUncertainty() {
                   modelSelection={composerModelSelection()}
                   agentSelection={composerAgentSelection()}
                   onInput={setDraft}
+                  onAttachText={noop}
                   onSubmit={noop}
                   onStop={noop}
                 />

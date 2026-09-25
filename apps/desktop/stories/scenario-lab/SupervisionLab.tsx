@@ -283,6 +283,7 @@ export function WorkbenchSupervision() {
                       modelSelection={composerModelSelection()}
                       agentSelection={composerAgentSelection()}
                       onInput={setDraft}
+                      onAttachText={noop}
                       onSubmit={noop}
                       onStop={noop}
                     />
