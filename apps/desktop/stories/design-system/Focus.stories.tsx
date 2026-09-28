@@ -22,12 +22,15 @@ const meta = {
 
 export default meta;
 
-async function ring(element: Element, offset = "1px") {
+async function ring(element: Element, offset = "0px") {
   await waitFor(async () => {
     const style = getComputedStyle(element);
-    await expect(style.outlineColor).toBe("rgba(9, 105, 218, 0.55)");
+    // Keep a literal neutral expectation: deriving this from the focus token
+    // would let a palette regression change both the result and the expectation.
+    const dark = document.documentElement.dataset.colorScheme === "dark";
+    await expect(style.outlineColor).toBe(dark ? "rgb(104, 104, 104)" : "rgb(119, 119, 119)");
     await expect(style.outlineStyle).toBe("solid");
-    await expect(style.outlineWidth).toBe("2px");
+    await expect(style.outlineWidth).toBe("1px");
     await expect(style.outlineOffset).toBe(offset);
   });
 }
@@ -36,7 +39,7 @@ export const SharedTreatment: StoryObj = {
   render: () => (
     <CatalogPage
       title="Focus"
-      intro="Accent focus is shared across controls. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
+      intro="Neutral focus is shared across controls. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
     >
       <CatalogCard
         title="Shared controls"
@@ -119,12 +122,16 @@ export const SharedTreatment: StoryObj = {
       getComputedStyle(canvas.getByRole("textbox", { name: "Focus compound editor" })).outlineStyle,
     ).toBe("none");
     await userEvent.tab();
-    await ring(canvas.getByRole("button", { name: "Focus edge action" }), "-2px");
+    await ring(canvas.getByRole("button", { name: "Focus edge action" }), "-1px");
     await userEvent.tab();
     const invalid = canvas.getByRole("textbox", { name: "Focus invalid field" });
     const invalidFrame = invalid.closest('[data-component="text-input-v2"]')!;
     await ring(invalidFrame);
-    await expect(getComputedStyle(invalidFrame).boxShadow).toContain("rgb(192, 37, 48)");
+    await expect(getComputedStyle(invalidFrame).boxShadow).toContain(
+      document.documentElement.dataset.colorScheme === "dark"
+        ? "rgb(255, 93, 102)"
+        : "rgb(192, 37, 48)",
+    );
     await expect(canvas.getByRole("textbox", { name: "Focus disabled field" })).toBeDisabled();
     await expect(canvas.getByRole("button", { name: "Focus disabled action" })).toBeDisabled();
 
@@ -133,4 +140,9 @@ export const SharedTreatment: StoryObj = {
     await ring(frame);
     await expect(getComputedStyle(filter).outlineStyle).toBe("none");
   },
+};
+
+export const SharedTreatmentDark: StoryObj = {
+  ...SharedTreatment,
+  globals: { theme: "dark" },
 };

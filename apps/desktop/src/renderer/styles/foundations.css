@@ -31,9 +31,12 @@
   --oc-icon-faint: #8f8f8f;
   --oc-icon-base: #5f5f5f;
   --oc-accent: #075ebd;
-  --oc-focus-ring: rgb(9 105 218 / 55%);
-  --oc-focus-ring-width: 2px;
-  --oc-focus-ring-offset: 1px;
+
+  /* Focus stays neutral and flush with controls in every theme. Accent-colored
+     rings look like lingering blue glows after editing or dismissing overlays. */
+  --oc-focus-ring: var(--oc-border-emphasis);
+  --oc-focus-ring-width: 1px;
+  --oc-focus-ring-offset: 0px;
   --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
   --oc-focus-ring-inset-offset: calc(-1 * var(--oc-focus-ring-width));
   --oc-status-info: #075ebd;
@@ -224,7 +227,6 @@
   --oc-icon-faint: #757575;
   --oc-icon-base: #a5a5a5;
   --oc-accent: #74a7ff;
-  --oc-focus-ring: rgb(116 167 255 / 60%);
   --oc-selection-tint: rgb(116 167 255 / 16%);
   --oc-selection-tint-strong: rgb(116 167 255 / 26%);
   --oc-status-info: #5598f6;
