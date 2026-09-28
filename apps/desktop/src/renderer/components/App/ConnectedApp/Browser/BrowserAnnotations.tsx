@@ -1,5 +1,5 @@
 import { Button } from "@opencode/ui/button";
-import { For, Show } from "solid-js";
+import { For, Show, createMemo, untrack } from "solid-js";
 import { RemoveButton } from "../../../../ui/RemoveButton.tsx";
 import { BrowserAnnotationThumbnail } from "./BrowserAnnotations/BrowserAnnotationThumbnail.tsx";
 import { MAX_ANNOTATIONS, type BrowserAnnotationDraft } from "./browser-annotations.ts";
@@ -63,47 +63,53 @@ export function BrowserAnnotations(props: BrowserAnnotationsProps) {
       </div>
       <Show when={items().length > 0}>
         <ul class="browser-annotation-list">
-          <For each={items()}>
-            {(item) => (
-              <li class="browser-annotation-card">
-                <div class="browser-annotation-card-head">
-                  <span class="browser-annotation-number">{item.number}</span>
-                  <BrowserAnnotationThumbnail image={item.image} />
-                  <div class="browser-annotation-meta">
-                    <span class="browser-annotation-target">
-                      {item.mode === "area"
-                        ? "Selected area"
-                        : item.selection.selector || item.selection.tag}
-                    </span>
-                    <Show when={!item.selection.topFrame}>
-                      <span class="browser-annotation-warning" role="status">
-                        Frame selection — comment here; the screenshot has no outline.
+          <For each={items().map((item) => item.id)}>
+            {(id) => {
+              const item = createMemo<BrowserAnnotationDraft>(
+                (previous) => items().find((entry) => entry.id === id) ?? previous,
+                untrack(() => items().find((entry) => entry.id === id)!),
+              );
+              return (
+                <li class="browser-annotation-card">
+                  <div class="browser-annotation-card-head">
+                    <span class="browser-annotation-number">{item().number}</span>
+                    <BrowserAnnotationThumbnail image={item().image} />
+                    <div class="browser-annotation-meta">
+                      <span class="browser-annotation-target">
+                        {item().mode === "area"
+                          ? "Selected area"
+                          : item().selection.selector || item().selection.tag}
                       </span>
-                    </Show>
-                    <Show when={stale(item)}>
-                      <span class="browser-annotation-warning" role="status">
-                        Captured before the latest navigation.
-                      </span>
-                    </Show>
+                      <Show when={!item().selection.topFrame}>
+                        <span class="browser-annotation-warning" role="status">
+                          Frame selection — comment here; the screenshot has no outline.
+                        </span>
+                      </Show>
+                      <Show when={stale(item())}>
+                        <span class="browser-annotation-warning" role="status">
+                          Captured before the latest navigation.
+                        </span>
+                      </Show>
+                    </div>
+                    <RemoveButton
+                      label={`Discard annotation ${item().number}`}
+                      onClick={() => props.controller.discardAnnotation(id)}
+                    />
                   </div>
-                  <RemoveButton
-                    label={`Discard annotation ${item.number}`}
-                    onClick={() => props.controller.discardAnnotation(item.id)}
+                  <textarea
+                    // A child-frame capture has no popover, so its newest empty
+                    // draft takes focus; the in-page popover keeps focus otherwise.
+                    autofocus={item().body.length === 0 && id === items().at(-1)?.id}
+                    aria-label={`Annotation ${item().number} comment`}
+                    placeholder="Describe the change…"
+                    value={item().body}
+                    onInput={(event) =>
+                      props.controller.annotationBody(id, event.currentTarget.value)
+                    }
                   />
-                </div>
-                <textarea
-                  // A child-frame capture has no popover, so its newest empty
-                  // draft takes focus; the in-page popover keeps focus otherwise.
-                  autofocus={item.body.length === 0 && item.id === items().at(-1)?.id}
-                  aria-label={`Annotation ${item.number} comment`}
-                  placeholder="Describe the change…"
-                  value={item.body}
-                  onInput={(event) =>
-                    props.controller.annotationBody(item.id, event.currentTarget.value)
-                  }
-                />
-              </li>
-            )}
+                </li>
+              );
+            }}
           </For>
         </ul>
       </Show>
