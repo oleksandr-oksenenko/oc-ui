@@ -1,0 +1,212 @@
+.attachment-study {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  color: var(--oc-text-strong);
+  background: var(--oc-surface-canvas);
+  font-size: var(--oc-type-body-relaxed-size);
+  line-height: 1.5;
+}
+
+.attachment-study-heading {
+  margin-bottom: 32px;
+}
+
+.attachment-study-heading h1 {
+  margin: 6px 0;
+  font-size: var(--oc-type-page-title-size);
+  font-weight: var(--oc-type-page-title-weight);
+}
+
+.attachment-study-heading p,
+.attachment-study-example h2 {
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-body-weight);
+}
+
+.attachment-study-example {
+  margin: 24px 0;
+}
+
+.attachment-study-example h2 {
+  margin-bottom: 12px;
+}
+
+.attachment-proposal-conversation {
+  display: grid;
+  gap: 28px;
+}
+
+.attachment-proposal-assistant {
+  max-width: 620px;
+  margin: 0;
+  color: var(--oc-text-base);
+}
+
+.attachment-proposal-message {
+  display: grid;
+  gap: 8px;
+  justify-self: end;
+  width: min(100%, 540px);
+  min-width: 0;
+}
+
+.attachment-proposal-instruction {
+  justify-self: end;
+  padding: 10px 14px;
+  border-radius: var(--oc-radius-panel);
+  background: var(--oc-surface-raised);
+}
+
+.attachment-proposal-stack {
+  min-width: 0;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius-card);
+  overflow: hidden;
+}
+
+.attachment-proposal-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  color: var(--oc-text-muted);
+  background: var(--oc-surface-subtle);
+  font-size: var(--oc-type-metadata-size);
+}
+
+.attachment-proposal-heading span {
+  color: var(--oc-text-faint);
+}
+
+.attachment-proposal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 14px;
+  border: 0;
+  border-top: 1px solid var(--oc-border-muted);
+  background: var(--oc-surface-canvas);
+  color: var(--oc-text-base);
+  text-align: left;
+  font: inherit;
+}
+
+.attachment-proposal-row > :is([data-component="icon"], [data-component="file-icon"]) {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--oc-text-muted);
+}
+
+button.attachment-proposal-row:hover {
+  background: var(--oc-surface-raised);
+}
+
+.attachment-proposal-disclosure[data-component="collapsible"] [data-slot="collapsible-arrow"] {
+  margin-left: auto;
+  opacity: 1;
+}
+
+.attachment-proposal-label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.attachment-proposal-label small,
+.attachment-proposal-extra-file small,
+.attachment-proposal-note {
+  font-size: var(--oc-type-metadata-size);
+  color: var(--oc-text-muted);
+}
+
+.attachment-proposal-detail {
+  padding: 2px 14px 14px 42px;
+  overflow-wrap: anywhere;
+}
+
+.attachment-proposal-detail p {
+  margin: 0 0 10px;
+}
+
+.attachment-proposal-comment + .attachment-proposal-comment {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--oc-border-muted);
+}
+
+.attachment-proposal-source {
+  display: grid;
+  gap: 2px;
+  margin: 10px 0 8px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-metadata-size);
+}
+
+.attachment-proposal-detail pre {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+  font-size: var(--oc-type-metadata-size);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.attachment-proposal-detail blockquote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--oc-border-strong);
+  color: var(--oc-text-muted);
+}
+
+.attachment-proposal-thumbnail {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--oc-radius);
+}
+
+.attachment-proposal-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-proposal-preview {
+  width: 160px;
+  max-width: 100%;
+  margin-bottom: 8px;
+}
+
+.attachment-proposal-extra-file {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 8px 0;
+}
+
+.attachment-proposal-caveat {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--oc-border-muted);
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-metadata-size);
+}
+
+@media (width <= 480px) {
+  .attachment-study {
+    padding: 20px 16px;
+  }
+
+  .attachment-proposal-detail {
+    padding-left: 14px;
+  }
+}

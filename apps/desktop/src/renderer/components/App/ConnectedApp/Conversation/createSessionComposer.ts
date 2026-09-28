@@ -385,7 +385,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     if (comments.length === 0) return undefined;
     const discard = (opener: HTMLButtonElement): void =>
       options.review.requestDiscard(key, comments.length, opener);
-    return { count: comments.length, onDiscard: discard };
+    return { comments, onDiscard: discard };
   });
 
   const command = createMemo(() => {

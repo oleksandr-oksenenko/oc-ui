@@ -273,7 +273,9 @@ function TranscriptAnnotationsContent(
               count()
                 ? {
                     count: count(),
-                    onOpen: ui.openDrafts,
+                    onOpen: ui.toggleDrafts,
+                    expanded: ui.draftsOpen(),
+                    controls: ui.popupID,
                     onDiscard: ui.discard,
                   }
                 : undefined

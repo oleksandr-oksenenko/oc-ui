@@ -61,8 +61,7 @@ function mountHighlights(
 }
 
 /** jsdom has no Range geometry; the hit test only iterates rects and anchors. */
-function stubRangeRects() {
-  const rect = new DOMRect(0, 0, 100, 100);
+function stubRangeRects(rect = new DOMRect(0, 0, 100, 100)) {
   const list: DOMRectList = Object.assign([rect], {
     item: (index: number) => (index === 0 ? rect : null),
   });
@@ -97,6 +96,35 @@ function clickAt(target: Element): void {
 }
 
 describe("createAnnotationHighlights", () => {
+  it("scrolls the restored text range within its transcript scroller and rejects a missing source", async () => {
+    const { registry } = stubHighlightRuntime();
+    const geometry = stubRangeRects(new DOMRect(20, 500, 90, 20));
+    const root = document.createElement("div");
+    root.innerHTML =
+      '<div style="overflow-y: auto"><article data-message-id="message"><p data-annotation-block="text">hello world</p></article></div>';
+    document.body.append(root);
+    const scroller = root.querySelector<HTMLElement>("div");
+    if (!scroller) throw new Error("Missing transcript scroller");
+    Object.defineProperties(scroller, {
+      clientHeight: { value: 200 },
+      scrollHeight: { value: 900 },
+    });
+    scroller.getBoundingClientRect = () => new DOMRect(0, 100, 300, 200);
+    const scrollBy = vi.fn<(options?: ScrollToOptions | number) => void>();
+    scroller.scrollBy = (optionsOrX?: ScrollToOptions | number) => scrollBy(optionsOrX);
+    const result = mountHighlights(root, [source()]);
+    try {
+      await vi.waitFor(() => expect(registry.size).toBe(1));
+      expect(result.controller.jumpTo("annotation-1")).toBe(root.querySelector("p"));
+      expect(scrollBy).toHaveBeenCalledWith({ top: 310 });
+      root.querySelector("p")!.remove();
+      expect(result.controller.jumpTo("annotation-1")).toBeUndefined();
+    } finally {
+      result.dispose();
+      root.remove();
+      geometry.restore();
+    }
+  });
   it("rebuilds only when source descriptors or transcript DOM change", async () => {
     const { digestCall, registry, registrySet } = stubHighlightRuntime();
 

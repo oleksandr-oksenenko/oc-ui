@@ -712,6 +712,32 @@ describe("Composer", () => {
     dispose();
   });
 
+  it("sends controlled extra attachments without text and disables sending when removed", () => {
+    const submit = vi.fn<() => void>();
+    const [count, setCount] = createSignal(1);
+    const { host, dispose } = mount(() => (
+      <Composer
+        {...inertPasteProps}
+        value=""
+        disabled={false}
+        action="send"
+        attachments={{ count: count(), content: <span>Browser note</span> }}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={submit}
+      />
+    ));
+    const send = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
+    expect(send?.disabled).toBe(false);
+    send?.click();
+    expect(submit).toHaveBeenCalledOnce();
+    setCount(0);
+    expect(send?.disabled).toBe(true);
+    expect(host.querySelector(".attachment-pills")).toBeNull();
+    dispose();
+  });
+
   it("renders a quiet review attachment and sends it without composer text", () => {
     const submit = vi.fn<() => void>();
     const discard = vi.fn<() => void>();
@@ -721,7 +747,15 @@ describe("Composer", () => {
         value=""
         disabled={false}
         action="send"
-        review={{ count: 3, onDiscard: discard }}
+        review={{
+          comments: Array.from({ length: 3 }, (_, index) => ({
+            path: "src/main.ts",
+            selection: { start: index + 4, end: index + 4 },
+            selectedCode: "oldValue",
+            body: "Use the new value",
+          })),
+          onDiscard: discard,
+        }}
         modelSelection={unavailableSelection}
         agentSelection={unavailableAgentSelection}
         onInput={() => undefined}
@@ -729,9 +763,10 @@ describe("Composer", () => {
       />
     ));
 
-    const row = host.querySelector<HTMLElement>(".composer-review-row");
-    expect(row?.textContent).toContain("Code review · 3 comments");
-    row?.querySelector<HTMLElement>(".composer-review-label")?.click();
+    const row = host.querySelector<HTMLElement>(".attachment-pill-review");
+    expect(row?.textContent).toContain("Review · 3");
+    row?.querySelector<HTMLButtonElement>(".attachment-pill-trigger")?.click();
+    expect(document.body.textContent).toContain("Use the new value");
     expect(discard).not.toHaveBeenCalled();
 
     const send = host.querySelector<HTMLButtonElement>('[aria-label="Send"]');
@@ -767,8 +802,10 @@ describe("Composer", () => {
       />
     ));
 
-    const countButton = host.querySelector<HTMLButtonElement>(".composer-annotation-count");
-    expect(countButton?.textContent).toContain("Annotations · 2 comments");
+    const countButton = host.querySelector<HTMLButtonElement>(
+      ".attachment-pill-annotations .attachment-pill-trigger",
+    );
+    expect(countButton?.textContent).toContain("Annotations · 2");
     countButton?.click();
     expect(open).toHaveBeenCalledWith(countButton);
     expect(submit).not.toHaveBeenCalled();
@@ -814,7 +851,7 @@ describe("Composer", () => {
     if (!send) throw new Error("Composer did not render its send button");
     expect(send.disabled).toBe(false);
     send.click();
-    expect(host.querySelector(".composer-annotation-row")).toBeNull();
+    expect(host.querySelector(".attachment-pill-annotations")).toBeNull();
     expect(send.disabled).toBe(true);
 
     dispose();

@@ -1,0 +1,82 @@
+.attachment-detail-popover {
+  z-index: 50;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 24px));
+  /* stylelint-disable-next-line custom-property-pattern -- Kobalte provides measured popup space. */
+  max-height: min(420px, var(--kb-popper-content-available-height, calc(100vh - 24px)));
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius-card);
+  background: var(--oc-surface-canvas);
+  box-shadow: var(--oc-shadow-floating);
+  color: var(--oc-text-base);
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-body-weight);
+  line-height: var(--oc-type-body-line-height);
+}
+
+.attachment-detail-body {
+  padding: 12px;
+}
+
+.attachment-detail-row + .attachment-detail-row {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--oc-border-muted);
+}
+
+.attachment-pill-source {
+  margin: 8px 0;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
+  line-height: var(--oc-type-metadata-line-height);
+}
+
+.attachment-detail-popover
+  [data-component="line-comment-v2"][data-variant="display"]
+  [data-slot="line-comment-v2-shell"] {
+  align-items: flex-start;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.attachment-detail-popover
+  [data-component="line-comment-v2"][data-variant="display"]
+  [data-slot="line-comment-v2-column"] {
+  min-width: 0;
+  gap: 8px;
+}
+
+.attachment-detail-popover
+  [data-component="line-comment-v2"][data-variant="display"]
+  [data-slot="line-comment-v2-tools"] {
+  align-items: center;
+  gap: 2px;
+  padding-top: 0;
+}
+
+.attachment-detail-popover
+  [data-component="line-comment-v2"][data-variant="display"]
+  [data-slot="line-comment-v2-text"] {
+  color: var(--oc-text-base);
+  font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-body-weight);
+  line-height: var(--oc-type-body-line-height);
+  letter-spacing: normal;
+}
+
+.attachment-detail-popover
+  [data-component="line-comment-v2"][data-variant="display"]
+  [data-slot="line-comment-v2-meta"] {
+  margin-top: 0;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
+  line-height: var(--oc-type-metadata-line-height);
+  letter-spacing: normal;
+}

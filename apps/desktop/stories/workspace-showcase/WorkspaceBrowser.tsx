@@ -5,15 +5,11 @@ import {
   BrowserAnnotations,
   type BrowserAnnotationsController,
 } from "../../src/renderer/components/App/ConnectedApp/Browser/BrowserAnnotations.tsx";
-import {
-  annotationFiles,
-  formatBrowserAnnotations,
-  type BrowserAnnotationDraft,
-} from "../../src/renderer/components/App/ConnectedApp/Browser/browser-annotations.ts";
+import { type BrowserAnnotationDraft } from "../../src/renderer/components/App/ConnectedApp/Browser/browser-annotations.ts";
 import { previewImageBase64 } from "../image-fixtures.ts";
 
 export function WorkspaceBrowser(props: {
-  readonly onAddAnnotations: (text: string, files: readonly File[]) => void;
+  readonly onAddAnnotations: (annotations: readonly BrowserAnnotationDraft[]) => void;
 }) {
   const first = {
     id: Browser.TabID.make("tab_00000000-0000-4000-8000-000000000001"),
@@ -67,7 +63,7 @@ export function WorkspaceBrowser(props: {
     discardAnnotation: (id) => setDrafts((items) => items.filter((item) => item.id !== id)),
     clearAnnotations: () => setDrafts([]),
     addAnnotations: () => {
-      props.onAddAnnotations(formatBrowserAnnotations(drafts()), annotationFiles(drafts()));
+      props.onAddAnnotations(drafts());
       setDrafts([]);
     },
   };

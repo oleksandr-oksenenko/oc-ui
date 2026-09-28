@@ -59,6 +59,14 @@ import {
   composerPasteProps,
 } from "./composer-fixtures.ts";
 import { previewImageBase64 } from "./image-fixtures.ts";
+import { attachmentFiles, browserAnnotation } from "./attachment-fixtures.ts";
+import { AttachmentDetailPill } from "../src/renderer/ui/AttachmentPills.tsx";
+import { ImagePreview } from "../src/renderer/ui/ImagePreview.tsx";
+import {
+  annotationFiles,
+  formatBrowserAnnotations,
+  type BrowserAnnotationDraft,
+} from "../src/renderer/components/App/ConnectedApp/Browser/browser-annotations.ts";
 import { workspaceQuestionForm } from "./question-form-fixtures.ts";
 import { FoundationPreview } from "./workspace-showcase/FoundationPreview.tsx";
 import { WorkspaceConnection } from "./workspace-showcase/WorkspaceConnection.tsx";
@@ -267,7 +275,17 @@ function WorkspaceShowcaseContent(
       "unit-tests",
       "integrate-stripe",
     ].includes(id) && !stopped().includes(id);
-  const [files, setFiles] = createSignal<readonly File[]>([]);
+  const initialAttachments =
+    selectedID() === "compact-ledger"
+      ? { files: attachmentFiles().slice(0, 2), browser: [browserAnnotation] }
+      : { files: [], browser: [] };
+  const [files, setFiles] = createSignal<readonly File[]>(initialAttachments.files);
+  const [browserAttachments, setBrowserAttachments] = createSignal<
+    readonly BrowserAnnotationDraft[]
+  >(initialAttachments.browser);
+  const attachedFiles = () => [...files(), ...annotationFiles(browserAttachments())];
+  const instruction = () =>
+    [draft(), formatBrowserAnnotations(browserAttachments())].filter(Boolean).join("\n\n");
   const [skills, setSkills] = createSignal<readonly PromptSkillAttachment[]>([]);
   const annotations = createAnnotationDraftStore(props.effects);
   const review = createReviewDraftStore(props.effects);
@@ -301,6 +319,7 @@ function WorkspaceShowcaseContent(
     setSelectedID(id);
     setDraft("");
     setFiles([]);
+    setBrowserAttachments([]);
     setSkills([]);
     setViewState("ready");
     dialog.close();
@@ -466,7 +485,7 @@ function WorkspaceShowcaseContent(
   const queuePrompt = (delivery: SessionInboxUser["delivery"]) => {
     if (runPreviewCommand()) return;
     const prompt = createSessionPrompt({
-      instruction: draft(),
+      instruction: instruction(),
       skills: skills(),
       annotations: annotations.get(selectedID()),
       reviewComments: review.get(reviewKey()).comments,
@@ -481,7 +500,7 @@ function WorkspaceShowcaseContent(
         delivery,
         payload: {
           ...prompt,
-          files: files().map((file) => ({
+          files: attachedFiles().map((file) => ({
             name: file.name,
             mime: file.type || "text/plain",
             data: previewImageBase64,
@@ -492,6 +511,7 @@ function WorkspaceShowcaseContent(
     ]);
     setDraft("");
     setFiles([]);
+    setBrowserAttachments([]);
     setSkills([]);
     review.clear(reviewKey());
     annotations.clear(selectedID());
@@ -585,6 +605,7 @@ function WorkspaceShowcaseContent(
                     setSelectedID(id);
                     setDraft("");
                     setFiles([]);
+                    setBrowserAttachments([]);
                     setSkills([]);
                     if (id === "extract-hooks") setReadCompleted(true);
                     if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
@@ -710,6 +731,39 @@ function WorkspaceShowcaseContent(
                             : undefined
                         }
                         action={running(selectedID()) ? "running" : "send"}
+                        attachments={{
+                          count: browserAttachments().length,
+                          content: (
+                            <Show when={browserAttachments().length > 0}>
+                              <AttachmentDetailPill
+                                kind="browser"
+                                label={`Browser · ${browserAttachments().length}`}
+                                title="Browser annotation"
+                                removeLabel="Discard browser annotations"
+                                disabled={viewState() !== "ready"}
+                                onRemove={() => setBrowserAttachments([])}
+                              >
+                                <For each={browserAttachments()}>
+                                  {(item) => (
+                                    <div class="attachment-pill-comment">
+                                      <p>{item.body}</p>
+                                      <div class="attachment-pill-source">
+                                        {item.tab.title} · {item.tab.url}
+                                        <br />
+                                        {item.selection.label}
+                                      </div>
+                                      <ImagePreview
+                                        file={annotationFiles([item])[0]!}
+                                        alt={item.image.name}
+                                        class="attachment-pill-browser-image"
+                                      />
+                                    </div>
+                                  )}
+                                </For>
+                              </AttachmentDetailPill>
+                            </Show>
+                          ),
+                        }}
                         files={files()}
                         onAttachFiles={(added) => setFiles((items) => [...items, ...added])}
                         onAttachText={(text) =>
@@ -724,7 +778,7 @@ function WorkspaceShowcaseContent(
                         review={
                           review.get(reviewKey()).comments.length
                             ? {
-                                count: review.get(reviewKey()).comments.length,
+                                comments: review.get(reviewKey()).comments,
                                 onDiscard: () => discardReview(),
                               }
                             : undefined
@@ -733,7 +787,9 @@ function WorkspaceShowcaseContent(
                           annotations.get(selectedID()).length
                             ? {
                                 count: annotations.get(selectedID()).length,
-                                onOpen: annotationUI.openDrafts,
+                                onOpen: annotationUI.toggleDrafts,
+                                expanded: annotationUI.draftsOpen(),
+                                controls: annotationUI.popupID,
                                 onDiscard: () => annotations.clear(selectedID()),
                               }
                             : undefined
@@ -763,7 +819,7 @@ function WorkspaceShowcaseContent(
                           }
                           const id = `message-${++nextID}`;
                           const prompt = createSessionPrompt({
-                            instruction: draft(),
+                            instruction: instruction(),
                             skills: skills(),
                             annotations: annotations.get(selectedID()),
                             reviewComments: review.get(reviewKey()).comments,
@@ -775,7 +831,7 @@ function WorkspaceShowcaseContent(
                             text: prompt.text,
                             metadata: prompt.metadata,
 
-                            files: files().map((file) => ({
+                            files: attachedFiles().map((file) => ({
                               name: file.name,
                               mime: file.type || "application/octet-stream",
                               data: previewImageBase64,
@@ -805,6 +861,7 @@ function WorkspaceShowcaseContent(
                           }));
                           setDraft("");
                           setFiles([]);
+                          setBrowserAttachments([]);
                           setSkills([]);
                           review.clear(reviewKey());
                           annotations.clear(selectedID());
@@ -872,10 +929,9 @@ function WorkspaceShowcaseContent(
                     }
                   >
                     <WorkspaceBrowser
-                      onAddAnnotations={(text, added) => {
-                        setDraft((value) => [value, text].filter(Boolean).join("\n\n"));
-                        setFiles((items) => [...items, ...added]);
-                      }}
+                      onAddAnnotations={(added) =>
+                        setBrowserAttachments((items) => [...items, ...added])
+                      }
                     />
                   </Show>
                 </div>
@@ -995,11 +1051,17 @@ export const InteractiveReview = {
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("img", { name: /Context 33% used/ })).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "Annotations · 1 comment" }));
-    const popover = await screen.findByRole("dialog", { name: "Annotation comments" });
-    await userEvent.click(
-      within(popover).getByRole("button", { name: "Keep the summary focused on what changed." }),
-    );
+    await userEvent.click(canvas.getByRole("button", { name: "Review · 2" }));
+    const reviewDetails = await screen.findByRole("dialog", { name: "Review comments" });
+    await expect(
+      within(reviewDetails).getByText(
+        "Check that the renamed option is supported by the pinned version.",
+      ),
+    ).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(canvas.getByRole("button", { name: "Annotations · 1" }));
+    const popover = await screen.findByRole("dialog", { name: "Transcript annotations" });
+    await userEvent.click(within(popover).getByRole("button", { name: "Edit comment" }));
     await userEvent.type(
       within(popover).getByRole("textbox", { name: "Annotation comment" }),
       " Include the result.",
@@ -1007,7 +1069,7 @@ export const InteractiveReview = {
     await userEvent.keyboard("{Escape}");
     await userEvent.click(canvas.getByRole("button", { name: "Discard 2 code review comments" }));
     await userEvent.click(await screen.findByRole("button", { name: "Keep" }));
-    await expect(canvas.getByText("Code review · 2 comments")).toBeVisible();
+    await expect(canvas.getByText("Review · 2")).toBeVisible();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const comment = await canvas.findByRole("button", {
       name: "Check that the renamed option is supported by the pinned version.",
@@ -1026,7 +1088,7 @@ export const InteractiveReview = {
     await expect(
       canvas.getByRole("button", { name: /Confirm this lockfile change/ }),
     ).toBeVisible();
-    await expect(canvas.getByText("Code review · 1 comment")).toBeVisible();
+    await expect(canvas.getByText("Review · 1")).toBeVisible();
     await expect(screen.queryByRole("dialog")).toBeNull();
     await userEvent.type(canvas.getByRole("textbox", { name: "Prompt" }), "Check this using /rev");
     await expect(canvas.getByText("/review", { exact: true })).toBeVisible();
@@ -1068,7 +1130,16 @@ export const InteractiveWorkspace = {
       "Keep the title readable.",
     );
     await userEvent.click(canvas.getByRole("button", { name: "Add to composer" }));
-    await expect(canvas.getByRole("button", { name: "Remove annotation-1.png" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Browser · 2" }));
+    const browserNotes = await screen.findByRole("dialog", { name: "Browser annotation" });
+    await expect(within(browserNotes).getByText("Keep the title readable.")).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect(prompt).toHaveTextContent("Keep this draft while comparing");
+    await userEvent.click(canvas.getByRole("button", { name: "Discard browser annotations" }));
+    await expect(canvas.queryByRole("button", { name: "Browser · 2" })).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Remove release-notes.md" }));
+    await expect(canvas.queryByText("release-notes.md")).toBeNull();
+    await expect(prompt).toHaveTextContent("Keep this draft while comparing");
     await userEvent.click(canvas.getByRole("button", { name: "Diff" }));
     await userEvent.click(
       canvas.getByRole("button", { name: "Rename Helpers, Permission required" }),

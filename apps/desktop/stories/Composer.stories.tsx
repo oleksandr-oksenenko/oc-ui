@@ -548,7 +548,12 @@ export const ReviewAttachment: Story = {
   render: () => {
     const [value, setValue] = createSignal("");
     const [review, setReview] = createSignal<ComposerReview | undefined>({
-      count: 3,
+      comments: Array.from({ length: 3 }, (_, index) => ({
+        path: "src/composer.ts",
+        selection: { start: index + 1, end: index + 1 },
+        selectedCode: "const attachment = draft;",
+        body: `Review comment ${index + 1}`,
+      })),
       onDiscard: () => setReview(undefined),
     });
     return (

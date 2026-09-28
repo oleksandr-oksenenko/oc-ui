@@ -865,11 +865,11 @@ describe.sequential("production browser app", () => {
     await editor.fill(deletedReview);
     await page.keyboard.press("Escape");
     await expect
-      .poll(() => page.locator(".composer-review-label").textContent())
-      .toBe("Code review · 1 comment");
+      .poll(() => page.locator(".attachment-pill-review .attachment-pill-trigger").textContent())
+      .toContain("Review · 1");
     await page.getByRole("button", { name: "Delete review comment" }).click();
     await page.locator(".diff-review-annotation").waitFor({ state: "hidden" });
-    expect(await page.locator(".composer-review-label").count()).toBe(0);
+    expect(await page.locator(".attachment-pill-review").count()).toBe(0);
     expect(await page.getByRole("dialog").count()).toBe(0);
   });
 
@@ -1067,7 +1067,9 @@ describe.sequential("production browser app", () => {
       )
       .toBeGreaterThan(0);
     await selectSession(other.title);
-    expect(await page.getByRole("list", { name: "Images and files", exact: true }).count()).toBe(0);
+    expect(
+      await page.getByRole("button", { name: "Remove screenshot.png", exact: true }).count(),
+    ).toBe(0);
     await selectSession(session.title);
     await page.getByRole("button", { name: "Remove screenshot.png", exact: true }).waitFor();
     const admitted = page.waitForResponse(

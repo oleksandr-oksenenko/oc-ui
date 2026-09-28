@@ -108,6 +108,30 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
         block.closest<HTMLElement>("[data-message-id]")?.dataset.messageId === source.messageID,
     );
 
+  const jumpTo = (key: string): HTMLElement | undefined => {
+    const range = ranges.get(key);
+    const block = range && input.sources().find((item) => item.key === key);
+    const source = block && findSource(block.source);
+    if (!range || !source || !source.contains(range.startContainer)) return undefined;
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return undefined;
+    suppressPendingScroll();
+    let ancestor = source.parentElement;
+    while (ancestor) {
+      const overflow = getComputedStyle(ancestor).overflowY;
+      if (/(auto|scroll|hidden)/.test(overflow) && ancestor.scrollHeight > ancestor.clientHeight) {
+        const viewport = ancestor.getBoundingClientRect();
+        ancestor.scrollBy({
+          top: rect.top + rect.height / 2 - viewport.top - ancestor.clientHeight / 2,
+        });
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    if (!ancestor) window.scrollBy({ top: rect.top + rect.height / 2 - window.innerHeight / 2 });
+    return source;
+  };
+
   const validSelection = (value: AnnotationSelection): boolean => {
     const root = mountedRoot;
     return (
@@ -428,6 +452,7 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     attach,
     validSelection,
     findSource,
+    jumpTo,
     root: () => mountedRoot,
     suppressPendingScroll,
   };

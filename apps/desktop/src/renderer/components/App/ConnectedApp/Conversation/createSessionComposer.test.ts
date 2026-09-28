@@ -563,7 +563,7 @@ describe("createSessionComposer", () => {
     const root = setup(prompt);
     const { key } = seedReview(root);
 
-    expect(root.composer.review()).toMatchObject({ count: 1 });
+    expect(root.composer.review()?.comments).toHaveLength(1);
     await root.composer.submit();
 
     expect(prompt).toHaveBeenCalledTimes(1);

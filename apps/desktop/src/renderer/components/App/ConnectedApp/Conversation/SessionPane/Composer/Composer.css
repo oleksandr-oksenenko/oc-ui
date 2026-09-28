@@ -21,95 +21,6 @@
   min-height: 30px;
 }
 
-.composer-files {
-  max-height: 168px;
-  overflow-y: auto;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.composer-file {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  min-height: 22px;
-  padding: 2px 0;
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-caption-size);
-  line-height: var(--oc-type-caption-line-height);
-}
-
-.composer-file-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.composer-file-preview {
-  flex: 0 0 auto;
-  width: 96px;
-  height: 64px;
-}
-
-.composer-file-remove[data-component="icon-button-v2"] {
-  flex: 0 0 20px;
-  margin-left: auto;
-}
-
-.composer-context-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-  min-width: 0;
-  padding-bottom: 2px;
-}
-
-.composer-review-row,
-.composer-annotation-row {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  max-width: 100%;
-  min-height: 24px;
-  padding: 0 2px 0 8px;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius-full);
-  background: var(--oc-surface-raised);
-  gap: 4px;
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-caption-size);
-  line-height: var(--oc-type-caption-line-height);
-}
-
-.composer-review-label,
-.composer-annotation-count {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.composer-annotation-count[data-component="button-v2"] {
-  justify-content: flex-start;
-  max-width: 100%;
-  padding: 0;
-  color: var(--oc-text-muted);
-  font: inherit;
-  font-size: var(--oc-type-caption-size);
-  font-weight: inherit;
-  line-height: var(--oc-type-caption-line-height);
-  text-align: left;
-}
-
-.composer-review-discard[data-component="icon-button-v2"],
-.composer-annotation-discard[data-component="icon-button-v2"] {
-  flex: 0 0 20px;
-  margin-left: auto;
-}
-
 .composer-input {
   box-sizing: border-box;
   flex: 1 1 auto;
@@ -601,4 +512,9 @@
     align-items: flex-end;
     gap: 4px;
   }
+}
+
+.composer > .attachment-pills {
+  max-height: 168px;
+  overflow-y: auto;
 }

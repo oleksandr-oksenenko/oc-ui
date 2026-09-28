@@ -1,6 +1,6 @@
 /* Opt in app-owned scroll regions; upstream components retain their behavior.
  * Markdown creates scrollable code blocks from rendered content. */
-:where(.oc-scrollable, .transcript-markdown pre) {
+:where(.oc-scrollable, .transcript-markdown pre, .attachment-pill-popover-body pre) {
   scrollbar-color: var(--oc-scrollbar-thumb) var(--oc-scrollbar-track);
   scrollbar-width: var(--oc-scrollbar-width);
 

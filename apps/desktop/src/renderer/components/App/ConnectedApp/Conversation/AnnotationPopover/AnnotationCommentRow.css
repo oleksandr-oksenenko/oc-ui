@@ -1,0 +1,85 @@
+[data-component="line-comment-v2"].attachment-detail-row {
+  width: 100%;
+  max-width: none;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+}
+
+.annotation-comment-quote {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.annotation-source-unavailable {
+  display: block;
+  color: var(--oc-status-warning);
+}
+
+.annotation-comment-link {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--oc-text-strong);
+  font: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.annotation-comment-link:hover {
+  text-decoration: underline;
+}
+
+.annotation-edit-comment[data-component="icon-button-v2"],
+.annotation-remove-comment[data-component="icon-button-v2"] {
+  flex: 0 0 20px;
+}
+
+/* These upstream paths fill very different fractions of their view boxes. */
+.annotation-edit-comment [data-slot="icon-svg"] {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.annotation-remove-comment [data-slot="icon-svg"] {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+.annotation-inline-editor[data-component="textarea-v2"] {
+  width: 100%;
+  min-height: 0;
+  padding: 2px 4px;
+  background: transparent;
+}
+
+/* Editing uses the popup border as one stable focus frame, like diff review comments. */
+.attachment-detail-popover:has(.annotation-inline-editor:focus-within) {
+  border-color: var(--oc-status-info);
+}
+
+.attachment-detail-popover .annotation-inline-editor[data-component="textarea-v2"] {
+  /* stylelint-disable-next-line property-disallowed-list, declaration-no-important -- The popup owns this field's focus frame. */
+  outline: none !important;
+  box-shadow: none;
+}
+
+.annotation-inline-editor [data-slot="textarea-v2-textarea"] {
+  field-sizing: content;
+  height: auto;
+  min-height: 1lh;
+  padding: 0;
+  resize: none;
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: inherit;
+}

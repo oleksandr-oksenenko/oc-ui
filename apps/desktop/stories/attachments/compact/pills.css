@@ -1,0 +1,9 @@
+.att-pills-story {
+  width: 620px;
+  max-width: calc(100vw - 32px);
+}
+
+.att-pills-narrow {
+  width: 390px;
+  max-width: calc(100vw - 32px);
+}

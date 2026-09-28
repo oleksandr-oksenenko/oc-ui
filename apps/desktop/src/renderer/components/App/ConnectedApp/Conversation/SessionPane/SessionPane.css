@@ -445,17 +445,6 @@
   }
 }
 
-.transcript-markdown pre {
-  max-width: 100%;
-  padding: 6px 26px 6px 6px;
-  overflow-x: auto;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius-card);
-  background: var(--oc-surface-raised);
-  font-size: var(--oc-type-code-size);
-  line-height: var(--oc-type-code-line-height);
-}
-
 .transcript-markdown pre code {
   font-size: inherit;
 }

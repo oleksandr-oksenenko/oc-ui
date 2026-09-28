@@ -1,5 +1,5 @@
 import { Button } from "@opencode/ui/button";
-import { Popover } from "@opencode/ui/popover";
+import { Popover } from "@kobalte/core/popover";
 import { For, Show, createEffect, createMemo, onCleanup, untrack, type JSX } from "solid-js";
 
 import { AnnotationCommentRow } from "./AnnotationPopover/AnnotationCommentRow.tsx";
@@ -92,53 +92,82 @@ export function AnnotationPopover(props: AnnotationPopoverProps): JSX.Element {
           return current.kind === "closed" ? new DOMRect() : current.anchor;
         }}
         placement="bottom-start"
-        title="Annotation comments"
-        class="annotation-popover"
-        triggerAs="span"
-        triggerProps={{
-          tabindex: -1,
-          "aria-hidden": true,
-          class: "annotation-popover-anchor",
-          onFocus: () => {
-            // OpenCode focuses this hidden trigger when a close does not come
-            // from an outside click, including controller-driven dismissals
-            // (transcript update, resize, scroll, navigation). Forward that
-            // focus to a real target so it never rests on the anchor.
-            if (state().kind !== "closed") return;
-            const target = props.controller.focusTarget();
-            if (!target) return;
-            if (target.tabIndex < 0) target.tabIndex = -1;
-            target.focus({ preventScroll: true });
-          },
-        }}
+        gutter={5}
+        fitViewport
       >
-        <div class="annotation-popup-comments">
-          <For each={comments().map((item) => item.key)}>
-            {(key) => {
-              // Keep the last value available to blur handlers while the row is unmounting.
-              const item = createMemo<ReturnType<typeof comments>[number]>(
-                (previous) => comments().find((entry) => entry.key === key) ?? previous,
-                untrack(() => comments().find((entry) => entry.key === key)!),
-              );
-              return (
-                <AnnotationCommentRow
-                  annotation={item().annotation}
-                  readonly={item().readonly}
-                  disabled={props.controller.disabled()}
-                  editing={editingID() === key}
-                  onEdit={() => props.controller.edit(key)}
-                  onFinish={() => props.controller.finishEditing(key)}
-                  onSubmit={() => {
-                    // Enter finishes the edit and dismisses the popup like Escape.
-                    props.controller.close();
-                  }}
-                  onInput={(body) => props.controller.updateBody(item().annotation.id, body)}
-                  onRemove={() => props.controller.remove(item().annotation.id)}
-                />
-              );
+        <Popover.Trigger
+          as="span"
+          class="annotation-popover-anchor"
+          tabindex={-1}
+          aria-hidden="true"
+        />
+        <Popover.Portal>
+          <Popover.Content
+            id={props.controller.popupID}
+            class="annotation-popover attachment-detail-popover"
+            onOpenAutoFocus={(event) => {
+              // Kobalte calls this inside a reactive effect; tracking editor state
+              // here would reset its focus whenever the annotation body changes.
+              if (untrack(editingID) !== undefined) event.preventDefault();
             }}
-          </For>
-        </div>
+            onPointerDownOutside={(event) => {
+              const target = event.detail.originalEvent.target;
+              if (target instanceof Node && props.controller.isOpener(target))
+                event.preventDefault();
+            }}
+            onFocusOutside={(event) => {
+              const target = event.detail.originalEvent.target;
+              if (target instanceof Node && props.controller.isOpener(target))
+                event.preventDefault();
+            }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              if (untrack(() => open() || props.controller.selection())) return;
+              const target = props.controller.focusTarget();
+              if (!target) return;
+              const active = document.activeElement;
+              if (
+                active !== document.body &&
+                active !== null &&
+                !active.matches(".annotation-popover-anchor") &&
+                !active.closest(".annotation-popover")
+              )
+                return;
+              if (target.tabIndex < 0) target.tabIndex = -1;
+              target.focus({ preventScroll: true });
+            }}
+          >
+            <Popover.Title class="sr-only">Transcript annotations</Popover.Title>
+            <div class="annotation-popup-comments attachment-detail-body">
+              <For each={comments().map((item) => item.key)}>
+                {(key) => {
+                  // Keep the last value available to blur handlers while the row is unmounting.
+                  const item = createMemo<ReturnType<typeof comments>[number]>(
+                    (previous) => comments().find((entry) => entry.key === key) ?? previous,
+                    untrack(() => comments().find((entry) => entry.key === key)!),
+                  );
+                  return (
+                    <AnnotationCommentRow
+                      annotation={item().annotation}
+                      readonly={item().readonly}
+                      disabled={props.controller.disabled()}
+                      editing={editingID() === key}
+                      onNavigate={() => props.controller.jumpTo(key)}
+                      onEdit={() => props.controller.edit(key)}
+                      onFinish={() => props.controller.finishEditing(key)}
+                      onSubmit={() => {
+                        // Enter finishes the edit and dismisses the popup like Escape.
+                        props.controller.close();
+                      }}
+                      onInput={(body) => props.controller.updateBody(item().annotation.id, body)}
+                      onRemove={() => props.controller.remove(item().annotation.id)}
+                    />
+                  );
+                }}
+              </For>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
       </Popover>
     </>
   );

@@ -1,7 +1,6 @@
 import type { CommandInfo, PromptSkillAttachment, SkillInfo } from "@opencode/client";
 import { PromptEditor } from "./Composer/PromptEditor.tsx";
 import type { PromptEditorControl } from "./Composer/PromptEditor.tsx";
-import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
 import { Loader } from "@opencode/ui/loader";
@@ -9,8 +8,15 @@ import { Tooltip } from "@opencode/ui/tooltip";
 import { For, Show, createEffect, createSignal, on, onCleanup, onMount, type JSX } from "solid-js";
 
 import { collectTransferFiles, isFileTransfer } from "../../../../../opencode/attachments.ts";
-import { ImagePreview, isImageFile } from "../../../../../ui/ImagePreview.tsx";
-import { RemoveButton } from "../../../../../ui/RemoveButton.tsx";
+import type { SentReviewComment } from "../../../../../opencode/code-review.ts";
+import { isImageFile } from "../../../../../ui/ImagePreview.tsx";
+import {
+  AttachmentDetailPill,
+  AttachmentFilePill,
+  AttachmentImagePill,
+  AttachmentPills,
+} from "../../../../../ui/AttachmentPills.tsx";
+import { ReviewAttachmentDetails } from "../../../../../ui/ReviewAttachmentDetails.tsx";
 import "./Composer/Composer.css";
 import { AgentPicker } from "./Composer/AgentPicker.tsx";
 import type { AgentPickerOption } from "./Composer/AgentPicker.tsx";
@@ -24,7 +30,7 @@ import { readPastedFiles, readPastedText } from "./Composer/pasteClipboard.ts";
 import { classifyPaste } from "./Composer/pasteRoute.ts";
 
 export type ComposerReview = {
-  readonly count: number;
+  readonly comments: readonly SentReviewComment[];
   readonly onDiscard: (opener: HTMLButtonElement) => void;
 };
 
@@ -32,6 +38,8 @@ type ComposerAnnotations = {
   readonly ref?: (button: HTMLButtonElement) => void;
   readonly count: number;
   readonly onOpen: (opener: HTMLButtonElement) => void;
+  readonly expanded?: boolean;
+  readonly controls?: string;
   readonly onDiscard: (opener: HTMLButtonElement) => void;
 };
 
@@ -73,6 +81,8 @@ export type ComposerProps = {
   readonly review?: ComposerReview;
   /** Omitted annotations state is equivalent to an empty annotation attachment. */
   readonly annotations?: ComposerAnnotations;
+  /** Controlled attachment pills for integrations whose state is owned elsewhere. */
+  readonly attachments?: { readonly count: number; readonly content: JSX.Element };
   /** Omitted context usage hides the context meter. */
   readonly contextUsage?: ContextUsage;
   readonly modelSelection: {
@@ -238,10 +248,12 @@ export function Composer(props: ComposerProps) {
   const [dropping, setDropping] = createSignal(false);
   const canAttach = () => props.onAttachFiles !== undefined;
   const review = () => props.review;
+  const attachments = () => ((props.attachments?.count ?? 0) > 0 ? props.attachments : undefined);
   const annotations = () => ((props.annotations?.count ?? 0) > 0 ? props.annotations : undefined);
   const sendable = () =>
     review() !== undefined ||
     annotations() !== undefined ||
+    attachments() !== undefined ||
     props.value.trim() !== "" ||
     (props.files?.length ?? 0) > 0;
 
@@ -461,52 +473,70 @@ export function Composer(props: ComposerProps) {
           hidden
           onChange={onPickerChange}
         />
-        <Show when={review() || annotations()}>
-          <div class="composer-context-chips">
-            {review() ? (
-              <div class="composer-review-row">
-                <span class="composer-review-label">
-                  Code review · {review()!.count} {review()!.count === 1 ? "comment" : "comments"}
-                </span>
-                <RemoveButton
-                  class="composer-review-discard"
-                  label={`Discard ${review()!.count} code review comments`}
-                  title={`Discard ${review()!.count} code review comments`}
-                  onClick={(event) => {
-                    review()?.onDiscard(event.currentTarget);
-                  }}
-                />
-              </div>
-            ) : null}
-            <Show when={annotations()}>
-              {(annotation) => (
-                <div class="composer-annotation-row">
-                  <Button
-                    class="composer-annotation-count"
-                    ref={annotation().ref}
-                    type="button"
-                    size="small"
-                    variant="ghost-muted"
-                    onClick={(event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
-                      annotation().onOpen(event.currentTarget);
-                    }}
-                  >
-                    Annotations · {annotation().count}{" "}
-                    {annotation().count === 1 ? "comment" : "comments"}
-                  </Button>
-                  <RemoveButton
-                    class="composer-annotation-discard"
-                    disabled={props.disabled || props.action === "sending"}
-                    label={`Discard ${annotation().count} annotations`}
-                    title={`Discard ${annotation().count} annotations`}
-                    onClick={(event) => {
-                      annotation().onDiscard(event.currentTarget);
-                    }}
-                  />
-                </div>
+        <Show
+          when={
+            review() ||
+            annotations() ||
+            (props.files?.length ?? 0) > 0 ||
+            attachments() !== undefined
+          }
+        >
+          <AttachmentPills>
+            <Show when={review()}>
+              {(item) => (
+                <AttachmentDetailPill
+                  kind="review"
+                  label={`Review · ${item().comments.length}`}
+                  title="Review comments"
+                  onRemove={(button) => item().onDiscard(button)}
+                  removeLabel={`Discard ${item().comments.length} code review comments`}
+                >
+                  <ReviewAttachmentDetails comments={item().comments} />
+                </AttachmentDetailPill>
               )}
             </Show>
-          </div>
+            <Show when={annotations()}>
+              {(annotation) => (
+                <AttachmentDetailPill
+                  kind="annotations"
+                  label={`Annotations · ${annotation().count}`}
+                  title="Transcript annotations"
+                  triggerRef={annotation().ref}
+                  onOpen={annotation().onOpen}
+                  expanded={annotation().expanded}
+                  controls={annotation().controls}
+                  onRemove={annotation().onDiscard}
+                  removeLabel={`Discard ${annotation().count} annotations`}
+                  disabled={props.disabled || props.action === "sending"}
+                />
+              )}
+            </Show>
+            <For each={props.files ?? []}>
+              {(file) =>
+                isImageFile(file) ? (
+                  <AttachmentImagePill
+                    file={file}
+                    alt={file.name || "Pasted image"}
+                    name={file.name || "Pasted image"}
+                    class="composer-file-preview"
+                    onRemove={() => {
+                      props.onRemoveFile?.(file);
+                      editor?.focus();
+                    }}
+                  />
+                ) : (
+                  <AttachmentFilePill
+                    name={file.name || "Pasted file"}
+                    onRemove={() => {
+                      props.onRemoveFile?.(file);
+                      editor?.focus();
+                    }}
+                  />
+                )
+              }
+            </For>
+            <Show when={(props.attachments?.count ?? 0) > 0}>{props.attachments?.content}</Show>
+          </AttachmentPills>
         </Show>
         <Show
           when={
@@ -516,38 +546,6 @@ export function Composer(props: ComposerProps) {
           <p class="composer-status composer-kept-notice" role="status">
             Review comments and annotations stay attached for your next message.
           </p>
-        </Show>
-        <Show when={(props.files?.length ?? 0) > 0}>
-          <ul class="composer-files" aria-label="Images and files">
-            <For each={props.files ?? []}>
-              {(file) => (
-                <li class="composer-file">
-                  <Show
-                    when={isImageFile(file)}
-                    fallback={
-                      <span class="composer-file-name" title={file.name || "Pasted file"}>
-                        {file.name || "Pasted file"}
-                      </span>
-                    }
-                  >
-                    <ImagePreview
-                      file={file}
-                      alt={file.name || "Pasted image"}
-                      class="composer-file-preview"
-                    />
-                  </Show>
-                  <RemoveButton
-                    class="composer-file-remove"
-                    label={`Remove ${file.name || "Pasted file"}`}
-                    onClick={() => {
-                      props.onRemoveFile?.(file);
-                      editor?.focus();
-                    }}
-                  />
-                </li>
-              )}
-            </For>
-          </ul>
         </Show>
         <div class="composer-editor-row">
           <PromptEditor

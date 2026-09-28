@@ -1,0 +1,20 @@
+.transcript-markdown pre,
+.attachment-pill-popover-body pre {
+  max-width: 100%;
+  padding: 6px;
+  overflow-x: auto;
+  border: 1px solid var(--oc-border-muted);
+  border-radius: var(--oc-radius-card);
+  background: var(--oc-content-code-surface);
+  color: var(--oc-text-base);
+  font-family: var(--oc-font-mono);
+  font-size: var(--oc-type-code-size);
+  font-weight: var(--oc-type-code-weight);
+  line-height: var(--oc-type-code-line-height);
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.transcript-markdown pre {
+  padding-right: 26px;
+}

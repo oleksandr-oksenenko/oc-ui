@@ -405,7 +405,9 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
                       ref: (button) => {
                         annotationButton = button;
                       },
-                      onOpen: annotationUI.openDrafts,
+                      onOpen: annotationUI.toggleDrafts,
+                      expanded: annotationUI.draftsOpen(),
+                      controls: annotationUI.popupID,
                       onDiscard: annotationUI.discard,
                     }
                   : undefined

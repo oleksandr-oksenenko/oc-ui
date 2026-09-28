@@ -82,7 +82,27 @@ function ComposerSuggestionsFixture(props: {
         value={value()}
         skills={selected()}
         command={props.command}
-        review={props.comments ? { count: 2, onDiscard: () => undefined } : undefined}
+        review={
+          props.comments
+            ? {
+                comments: [
+                  {
+                    path: "src/skills.ts",
+                    selection: { start: 1, end: 1 },
+                    selectedCode: "addSkill()",
+                    body: "Check this skill",
+                  },
+                  {
+                    path: "src/skills.ts",
+                    selection: { start: 2, end: 2 },
+                    selectedCode: "runSkill()",
+                    body: "Check this command",
+                  },
+                ],
+                onDiscard: () => undefined,
+              }
+            : undefined
+        }
         annotations={
           props.comments
             ? { count: 1, onOpen: () => undefined, onDiscard: () => undefined }
@@ -196,7 +216,7 @@ export const CommandKeepsComments: Story = {
     await expect(
       canvas.getByText("Review comments and annotations stay attached for your next message."),
     ).toBeVisible();
-    await expect(canvas.getByText("Code review · 2 comments")).toBeVisible();
+    await expect(canvas.getByText("Review · 2")).toBeVisible();
   },
 };
 

@@ -22,7 +22,7 @@ export function promptFileImageSource(file: PromptFileAttachment): string | unde
   return `data:${file.mime};base64,${file.data}`;
 }
 
-type ImagePreviewSource =
+export type ImagePreviewSource =
   | { readonly src: string; readonly file?: never }
   | { readonly file: File; readonly src?: never };
 
@@ -32,6 +32,8 @@ export type ImagePreviewProps = ImagePreviewSource & {
   readonly class?: string;
   /** Extra class for the thumbnail image, for callers that target it directly. */
   readonly imageClass?: string;
+  /** Optional label content inside the same preview trigger as the image. */
+  readonly children?: JSX.Element;
 };
 
 /**
@@ -54,7 +56,13 @@ export function ImagePreview(props: ImagePreviewProps): JSX.Element {
         class={`image-preview-thumbnail${props.class ? ` ${props.class}` : ""}`}
         aria-label={`Enlarge ${props.alt}`}
       >
-        <img class={props.imageClass} src={source()} alt={props.alt} loading="lazy" />
+        <img
+          class={props.imageClass}
+          src={source()}
+          alt={props.children === undefined ? props.alt : ""}
+          loading="lazy"
+        />
+        {props.children}
       </Trigger>
       <Portal>
         <Overlay class="image-preview-overlay" />

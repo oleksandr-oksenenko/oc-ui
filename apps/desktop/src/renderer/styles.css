@@ -1,6 +1,7 @@
 @import url("./styles/foundations.css");
 @import url("./styles/reset.css");
 @import url("./styles/scrollbars.css");
+@import url("./styles/code-blocks.css");
 @import url("./styles/motion.css");
 @import url("./styles/opencode-overrides.css");
 @import url("./styles/focus.css");

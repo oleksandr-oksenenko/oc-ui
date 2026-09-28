@@ -1,5 +1,13 @@
 import type { SessionMessageInfo } from "@opencode/client";
-import { batch, createEffect, createMemo, createSignal, untrack, type Accessor } from "solid-js";
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  untrack,
+  type Accessor,
+} from "solid-js";
 import { unwrap } from "solid-js/store";
 
 import type {
@@ -45,6 +53,8 @@ export function createTranscriptAnnotations(input: {
   const [interaction, setInteraction] = createSignal<Interaction>({ kind: "closed" });
   let sessionID = input.sessionID();
   let opener: HTMLElement | undefined;
+  let draftTrigger: HTMLButtonElement | undefined;
+  const popupID = createUniqueId();
   let focusSource: Pick<TranscriptAnnotation["source"], "messageID" | "block"> | undefined;
 
   // Editing a draft does not decode the sent-message history again.
@@ -222,7 +232,9 @@ export function createTranscriptAnnotations(input: {
   });
 
   return {
+    popupID,
     state,
+    draftsOpen: () => interaction().kind === "comments" && opener === draftTrigger,
     selection: () => {
       const current = interaction();
       return current.kind === "selected" || current.kind === "opening"
@@ -234,6 +246,7 @@ export function createTranscriptAnnotations(input: {
         : undefined;
     },
     disabled: () => !input.enabled(),
+    isOpener: (target: Node) => opener === target || opener?.contains(target) === true,
     focusTarget: () =>
       [
         opener,
@@ -250,13 +263,29 @@ export function createTranscriptAnnotations(input: {
     close,
     attach: highlights.attach,
     openCandidate,
+    jumpTo: (key: string) => {
+      const current = interaction();
+      if (current.kind !== "comments" || !current.keys.includes(key)) return false;
+      const source = highlights.jumpTo(key);
+      if (!source) return false;
+      opener = source;
+      focusSource = comments().find((item) => item.key === key)?.annotation.source;
+      close();
+      if (source.tabIndex < 0) source.tabIndex = -1;
+      source.focus({ preventScroll: true });
+      return true;
+    },
     edit,
     finishEditing,
     updateBody: (id: string, body: string) => {
       if (sessionID && input.enabled()) input.drafts.updateBody(sessionID, id, body);
     },
     remove: (id: string) => {
-      if (sessionID && input.enabled()) input.drafts.remove(sessionID, id);
+      if (!sessionID || !input.enabled()) return;
+      input.drafts.remove(sessionID, id);
+      const current = interaction();
+      if (current.kind === "comments" && current.keys.length === 1 && current.keys[0] === id)
+        close();
     },
     discard: () => {
       const id = sessionID;
@@ -266,14 +295,21 @@ export function createTranscriptAnnotations(input: {
         input.drafts.clear(id);
       });
     },
-    openDrafts: (target: HTMLButtonElement) =>
+    toggleDrafts: (target: HTMLButtonElement) => {
+      draftTrigger = target;
+      const current = interaction();
+      if (current.kind === "comments" && opener === target) {
+        close();
+        return;
+      }
       openComments(
         comments()
           .filter((item) => !item.readonly)
           .map((item) => item.key),
         target,
         target.getBoundingClientRect(),
-      ),
+      );
+    },
     openSent: (messageID: string, annotationID: string, target: HTMLElement) =>
       openComments(
         comments()
