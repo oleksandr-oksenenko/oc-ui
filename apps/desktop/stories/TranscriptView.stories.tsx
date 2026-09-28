@@ -71,6 +71,58 @@ export const Rich: Story = {
   render: renderTranscript,
 };
 
+/** Muted activity disclosures keep the emphasis on model messages. */
+export const MutedActivity: Story = {
+  args: {
+    sessionStatus: "idle",
+    messages: [
+      {
+        id: "timeline-prompt",
+        type: "user",
+        time: { created: 1 },
+        text: "Review the release checks and summarize the result.",
+      },
+      assistant("timeline-first"),
+      assistant("timeline-second"),
+      {
+        id: "timeline-answer",
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "test", id: "test" },
+        time: { created: 4, completed: 5 },
+        finish: "stop",
+        content: [
+          {
+            type: "text",
+            text: "The release checks passed. The migrations are ready and the background job completed successfully.",
+          },
+        ],
+      },
+      { id: "timeline-idle", type: "idle", time: { created: 6 }, outcome: "succeeded" },
+    ],
+  },
+  render: (args) =>
+    renderTranscript({
+      ...args,
+      activityOpen: new Map([[JSON.stringify(["transcript-story", "timeline-first", 1]), true]]),
+    }),
+  play: async ({ canvasElement }) => {
+    const headings = canvasElement.querySelectorAll<HTMLButtonElement>(
+      ".transcript-activity-trigger",
+    );
+    await expect(headings).toHaveLength(2);
+    await expect(headings[0]).toHaveAttribute("aria-expanded", "true");
+    await expect(headings[1]).toHaveAttribute("aria-expanded", "false");
+    const answer = within(canvasElement).getByText(/The release checks passed/);
+    headings[1]!.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(headings[1]).toHaveAttribute("aria-expanded", "true");
+    await userEvent.keyboard(" ");
+    await expect(headings[1]).toHaveAttribute("aria-expanded", "false");
+    await expect(answer).toBeVisible();
+  },
+};
+
 export const CollapsedActivity: Story = {
   args: { messages: [assistant("activity-review")], sessionStatus: "idle" },
   render: renderTranscript,

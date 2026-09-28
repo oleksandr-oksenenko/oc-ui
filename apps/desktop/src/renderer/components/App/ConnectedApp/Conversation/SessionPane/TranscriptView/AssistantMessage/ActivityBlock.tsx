@@ -1,6 +1,7 @@
 /* oxlint-disable react/refs -- Solid refs are assigned after render and read in effects or event handlers. */
 import type { SessionMessageAssistant } from "@opencode/client";
 import { Collapsible } from "@opencode/ui/collapsible";
+import { Icon } from "@opencode/ui/icon";
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from "solid-js";
 
 import { annotationBlock } from "../../../annotation-source.ts";
@@ -178,11 +179,16 @@ export function ActivityBlock(props: {
         }}
         class="transcript-activity-trigger"
       >
-        <Collapsible.Arrow aria-hidden="true" />
         <Show when={props.active}>
           <span class="transcript-activity-pulse" aria-hidden="true" />
         </Show>
         <span class="transcript-activity-title">{props.active ? "Working" : "Activity"}</span>
+        <Icon
+          name={open() ? "chevron-down" : "chevron-right"}
+          class="transcript-activity-chevron"
+          size="small"
+          aria-hidden="true"
+        />
         <span class="transcript-activity-count">
           {` · ${stepCount()} ${stepCount() === 1 ? "step" : "steps"}`}
         </span>

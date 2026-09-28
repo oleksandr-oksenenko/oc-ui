@@ -1,32 +1,29 @@
 [data-component="collapsible"].transcript-activity[data-variant="ghost"] {
   min-width: 0;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius-panel);
-  background-color: var(--oc-surface-raised);
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
 }
 
 .transcript-activity > .transcript-activity-trigger {
-  width: 100%;
+  width: fit-content;
   max-width: 100%;
+  align-self: flex-start;
   height: auto;
-  min-height: 36px;
+  min-height: 24px;
   gap: 6px;
-  padding: 5px 10px;
-  border-radius: var(--oc-radius-panel);
-  color: var(--oc-text-strong);
+  padding: 0;
+  border-radius: 0;
+  color: var(--oc-text-muted);
   font-size: var(--oc-type-body-relaxed-size);
-  font-weight: var(--oc-type-title-weight);
+  font-weight: normal;
   line-height: var(--oc-type-title-line-height);
   cursor: pointer;
 }
 
-.transcript-activity > .transcript-activity-trigger [data-slot="collapsible-arrow"] {
-  width: 18px;
-  opacity: 1;
-}
-
-.transcript-activity > .transcript-activity-trigger:hover {
-  background: var(--oc-surface-control);
+.transcript-activity-chevron {
+  width: 14px;
+  flex: none;
 }
 
 .transcript-activity-title {
@@ -42,7 +39,7 @@
 
 .transcript-activity-summary {
   min-width: 0;
-  margin-left: auto;
+  margin-left: 2px;
   overflow: hidden;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-metadata-size);
@@ -73,7 +70,7 @@
 
 .transcript-activity > .transcript-activity-content[data-expanded] {
   max-height: var(--oc-activity-max-height, 240px);
-  padding: 0 12px 8px 28px;
+  padding: 4px 0 0 24px;
   overflow: hidden auto;
   overscroll-behavior: contain;
 }
@@ -85,4 +82,12 @@
 /* Retain inner disclosure state while removing closed activity from layout and Tab order. */
 .transcript-activity > .transcript-activity-content[data-closed] {
   display: none;
+}
+
+.transcript-activity-steps > * {
+  margin-bottom: 4px;
+}
+
+.transcript-activity-steps > :last-child {
+  margin-bottom: 0;
 }
