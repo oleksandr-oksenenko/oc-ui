@@ -93,7 +93,10 @@ const makeDesktop = (options: {
     connect:
       options.connectLocal ??
       vi.fn<() => Promise<LocalOpenCodeConnectResult>>(() =>
-        Promise.reject(new Error("not configured")),
+        Promise.resolve({
+          status: "connected",
+          connection: { serverUrl: "http://127.0.0.1:4096", password: "local-secret" },
+        }),
       ),
     onUnavailable: options.onUnavailable ?? (() => () => undefined),
   },
@@ -212,195 +215,149 @@ describe("browser connections", () => {
 });
 
 describe("App target startup", () => {
-  it("waits for a first-run choice instead of starting the built-in server", async () => {
-    const localConnect = vi.fn<() => Promise<LocalOpenCodeConnectResult>>();
+  it.each([
+    undefined,
+    { kind: "local" } as const,
+    { kind: "remote", serverUrl: "http://remote.test:4096", password: "saved-secret" } as const,
+  ])("starts built-in without a chooser for saved target %j", async (target) => {
+    const started = deferred<LocalOpenCodeConnectResult>();
+    const localConnect = vi.fn<() => Promise<LocalOpenCodeConnectResult>>(() => started.promise);
     const desktop = makeDesktop({
-      load: () => Promise.resolve(undefined),
+      load: vi.fn<() => Promise<OpenCodeTarget | undefined>>(() => Promise.resolve(target)),
       connectLocal: localConnect,
     });
+    verifyServer.mockResolvedValue({ serverUrl: "http://127.0.0.1:4096" });
     const { host, dispose } = mount(desktop);
+    expect(host.textContent).toContain("Starting OpenCode");
+    expect(host.querySelector("form")).toBeNull();
+    expect(host.querySelector('[role="radiogroup"]')).toBeNull();
     await flush();
-
-    expect(localConnect).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Start built-in server");
-    expect(host.textContent).not.toContain("Saved choice");
-    dispose();
-  });
-
-  it("preselects a saved local choice without starting and saves only after explicit startup", async () => {
-    const localConnect = vi.fn<() => Promise<LocalOpenCodeConnectResult>>().mockResolvedValue({
+    expect(localConnect).toHaveBeenCalledOnce();
+    expect(desktop.target.load).not.toHaveBeenCalled();
+    started.resolve({
       status: "connected",
       connection: { serverUrl: "http://127.0.0.1:4096", password: "local-secret" },
     });
-    const desktop = makeDesktop({
-      load: () => Promise.resolve({ kind: "local" }),
-      connectLocal: localConnect,
-    });
-    verifyServer.mockResolvedValue({
-      serverUrl: "http://127.0.0.1:4096",
-    });
-    const { host, dispose } = mount(desktop);
     await flush();
-    expect(localConnect).not.toHaveBeenCalled();
-    expect(verifyServer).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Saved choice");
-    host.querySelector<HTMLButtonElement>(".connection-form-submit")?.click();
+    expect(desktop.target.saveLocal).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Starting OpenCode");
+    handshake.connect();
     await flush();
-
-    host.querySelector<HTMLButtonElement>('[data-testid="connected"]')?.click();
-    await flush();
+    expect(host.querySelector('[data-testid="connected"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="OpenCode startup"]')).toBeNull();
     expect(desktop.target.saveLocal).toHaveBeenCalledOnce();
     expect(desktop.target.saveRemote).not.toHaveBeenCalled();
     dispose();
   });
 
-  it("saves a passwordless remote endpoint without inventing a credential", async () => {
-    const desktop = makeDesktop({
-      load: () => Promise.resolve({ kind: "remote", serverUrl: "http://remote.test:4096" }),
-    });
-    verifyServer.mockResolvedValue({
-      serverUrl: "http://remote.test:4096",
-    });
-    const { host, dispose } = mount(desktop);
-    await flush();
-
-    expect(verifyServer).not.toHaveBeenCalled();
-    expect(host.querySelector<HTMLInputElement>('input[autocomplete="url"]')?.value).toBe(
-      "http://remote.test:4096",
+  it("retries a failed automatic start without opening the chooser", async () => {
+    const localConnect = vi
+      .fn<() => Promise<LocalOpenCodeConnectResult>>()
+      .mockResolvedValueOnce({ status: "failed", message: "Startup timed out." })
+      .mockResolvedValue({
+        status: "connected",
+        connection: { serverUrl: "http://127.0.0.1:4096", password: "local-secret" },
+      });
+    verifyServer.mockResolvedValue({ serverUrl: "http://127.0.0.1:4096" });
+    const { host, dispose } = mount(
+      makeDesktop({ load: () => Promise.resolve(undefined), connectLocal: localConnect }),
     );
-    host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     await flush();
-    host.querySelector<HTMLButtonElement>('[data-testid="connected"]')?.click();
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Startup timed out.");
+    expect(host.querySelector("form")).toBeNull();
+    expect(host.querySelector("button")?.textContent).toBe("Retry");
+    host.querySelector<HTMLButtonElement>("button")?.click();
     await flush();
-
-    expect(desktop.target.saveRemote).toHaveBeenCalledWith({
-      serverUrl: "http://remote.test:4096",
-    });
+    handshake.connect();
+    await flush();
+    expect(localConnect).toHaveBeenCalledTimes(2);
+    expect(host.querySelector('[data-testid="connected"]')).not.toBeNull();
     dispose();
   });
 
-  it("keeps the saved remote endpoint visible when changing servers", async () => {
-    const desktop = makeDesktop({
-      load: () =>
-        Promise.resolve({
-          kind: "remote",
-          serverUrl: "http://remote.test:4096",
-          password: "saved-secret",
-        }),
-    });
-    verifyServer.mockResolvedValue({
-      serverUrl: "http://remote.test:4096",
-    });
-    const { host, dispose } = mount(desktop);
+  it("allows manual remote connection, retry, and forgetting through Change server", async () => {
+    const desktop = makeDesktop({ load: () => Promise.resolve(undefined) });
+    verifyServer.mockResolvedValue({ serverUrl: "http://127.0.0.1:4096" });
+    const { host, renderer, dispose } = mount(desktop);
     await flush();
+    handshake.connect();
     await flush();
-
     host.querySelector<HTMLButtonElement>('[data-testid="change-server"]')?.click();
     await flush();
-    expect(host.textContent).toContain("Saved choice");
-    expect(host.querySelector<HTMLInputElement>('input[autocomplete="url"]')?.value).toBe(
-      "http://remote.test:4096",
-    );
-    dispose();
-  });
-
-  it("does not let a late saved target replace a manual connection", async () => {
-    const loaded = deferred<OpenCodeTarget | undefined>();
-    const localConnect = vi.fn<() => Promise<LocalOpenCodeConnectResult>>();
-    verifyServer.mockImplementation(() => new Promise(() => undefined));
-    const desktop = makeDesktop({ load: () => loaded.promise, connectLocal: localConnect });
-    const { host, dispose } = mount(desktop);
-
     host.querySelector<HTMLInputElement>('input[type="radio"][value="remote"]')?.click();
-    const urlInput = host.querySelector<HTMLInputElement>('input[autocomplete="url"]')!;
-    const passwordInput = host.querySelector<HTMLInputElement>('input[type="password"]')!;
-    urlInput.value = "http://remote.test:4096";
-    urlInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    passwordInput.value = "remote-secret";
-    passwordInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const url = host.querySelector<HTMLInputElement>('input[autocomplete="url"]')!;
+    url.value = "http://remote.test:4096";
+    url.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const password = host.querySelector<HTMLInputElement>('input[type="password"]')!;
+    password.value = "remote-secret";
+    password.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    verifyServer.mockRejectedValueOnce(new Error("offline"));
     host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     await flush();
-
-    loaded.resolve({ kind: "local" });
-    await flush();
-    expect(verifyServer).toHaveBeenCalledWith(
-      { serverUrl: "http://remote.test:4096", password: "remote-secret" },
-      expect.any(AbortSignal),
-    );
-    expect(localConnect).not.toHaveBeenCalled();
-    dispose();
-  });
-
-  it("retries a saved remote password without rendering it into the form", async () => {
-    let verification = 0;
-    verifyServer.mockImplementation(() => {
-      verification += 1;
-      return verification === 1
-        ? Promise.reject(new Error("temporarily unavailable"))
-        : new Promise(() => undefined);
-    });
-    const desktop = makeDesktop({
-      load: () =>
-        Promise.resolve({
-          kind: "remote",
-          serverUrl: "http://remote.test:4096",
-          password: "saved-secret",
-        }),
-    });
-    const { host, dispose } = mount(desktop);
-    await flush();
-    await flush();
-
-    expect(verifyServer).toHaveBeenCalledWith(
-      { serverUrl: "http://remote.test:4096", password: "saved-secret" },
-      expect.any(AbortSignal),
-    );
-    expect(host.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe("");
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    verifyServer.mockResolvedValue({ serverUrl: "http://remote.test:4096" });
     host.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true }));
     await flush();
     expect(verifyServer).toHaveBeenLastCalledWith(
-      { serverUrl: "http://remote.test:4096", password: "saved-secret" },
+      { serverUrl: "http://remote.test:4096", password: "remote-secret" },
       expect.any(AbortSignal),
     );
-    expect(verifyServer).toHaveBeenCalledTimes(2);
+    handshake.connect();
+    await flush();
+    expect(desktop.target.saveRemote).toHaveBeenCalledWith({
+      serverUrl: "http://remote.test:4096",
+      password: "remote-secret",
+    });
+    renderer.connection.changeServer();
+    await flush();
+    expect(host.querySelector<HTMLInputElement>('input[autocomplete="url"]')?.value).toBe(
+      "http://remote.test:4096",
+    );
+    expect(host.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe("");
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent === "Forget saved choice")
+      ?.click();
+    await flush();
+    expect(desktop.target.clear).toHaveBeenCalledOnce();
+    expect(host.textContent).not.toContain("Saved choice");
     dispose();
   });
 
-  it("reports a saved-target clear failure", async () => {
+  it("saves a passwordless remote endpoint without inventing a credential", async () => {
+    const desktop = makeDesktop({ load: () => Promise.resolve(undefined) });
+    verifyServer.mockResolvedValue({ serverUrl: "http://127.0.0.1:4096" });
+    const { renderer, dispose } = mount(desktop);
+    await flush();
+    handshake.connect();
+    await flush();
+    renderer.connection.changeServer();
+    verifyServer.mockResolvedValue({ serverUrl: "http://remote.test" });
+    renderer.connection.connect("remote", { serverUrl: "http://remote.test", password: "" });
+    await flush();
+    handshake.connect();
+    await flush();
+    expect(desktop.target.saveRemote).toHaveBeenCalledWith({ serverUrl: "http://remote.test" });
+    dispose();
+  });
+
+  it("keeps a failed Forget in the server chooser instead of showing startup recovery", async () => {
     const desktop = makeDesktop({
-      load: () => Promise.resolve({ kind: "remote", serverUrl: "http://remote.test:4096" }),
+      load: () => Promise.resolve(undefined),
       clear: () => Promise.reject(new Error("write failed")),
     });
-    const { host, dispose } = mount(desktop);
+    verifyServer.mockResolvedValue({ serverUrl: "http://127.0.0.1:4096" });
+    const { host, renderer, dispose } = mount(desktop);
     await flush();
-
-    const forget = [...host.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Forget saved choice",
-    );
-    forget?.click();
+    handshake.connect();
     await flush();
+    renderer.connection.changeServer();
+    await flush();
+    renderer.connection.forget();
+    await flush();
+    expect(host.querySelector("form")).not.toBeNull();
+    expect(host.querySelector('[aria-label="OpenCode startup"]')).toBeNull();
     expect(host.textContent).toContain("The saved connection could not be forgotten");
-    dispose();
-  });
-
-  it("keeps a saved local target forgettable when startup fails", async () => {
-    const desktop = makeDesktop({
-      load: () => Promise.resolve({ kind: "local" }),
-      connectLocal: () =>
-        Promise.resolve({
-          status: "failed",
-          message: "The built-in OpenCode server did not start before the startup timeout.",
-        }),
-    });
-    const { host, dispose } = mount(desktop);
-    await flush();
-    host.querySelector<HTMLButtonElement>(".connection-form-submit")?.click();
-    await flush();
-
     expect(host.textContent).toContain("Forget saved choice");
-    expect(host.textContent).toContain(
-      "The built-in OpenCode server did not start before the startup timeout.",
-    );
     dispose();
   });
 
@@ -414,8 +371,6 @@ describe("App target startup", () => {
         }),
     });
     const { host, dispose } = mount(desktop);
-    await flush();
-    host.querySelector<HTMLButtonElement>(".connection-form-submit")?.click();
     await flush();
 
     expect(host.textContent).toContain("The built-in OpenCode server failed to start.");
@@ -445,17 +400,15 @@ describe("App target startup", () => {
     );
     const { host, dispose } = mount(desktop);
     await flush();
-    host.querySelector<HTMLButtonElement>(".connection-form-submit")?.click();
-    await flush();
     const signal = verifyServer.mock.calls[0]?.[1];
 
     unavailable?.();
     await flush();
     expect(signal?.aborted).toBe(true);
     expect(host.textContent).toContain("The built-in OpenCode server stopped");
-    expect(host.querySelector(".connection-form-submit")?.textContent).toBe("Restart");
+    expect(host.querySelector("button")?.textContent).toBe("Restart");
     expect(localConnect).toHaveBeenCalledOnce();
-    host.querySelector<HTMLButtonElement>(".connection-form-submit")?.click();
+    host.querySelector<HTMLButtonElement>("button")?.click();
     await flush();
     expect(localConnect).toHaveBeenCalledTimes(2);
     dispose();
@@ -472,14 +425,20 @@ describe("App target startup", () => {
       },
     });
     verifyServer.mockResolvedValue({ serverUrl: "http://remote.test" });
-    const { host, dispose } = mount(desktop);
+    const { host, renderer, dispose } = mount(desktop);
     await flush();
     host.querySelector<HTMLButtonElement>('[data-testid="connected"]')?.click();
+    await flush();
+    renderer.connection.changeServer();
+    renderer.connection.connect("remote", { serverUrl: "http://remote.test", password: "secret" });
+    await flush();
+    handshake.connect();
+    await flush();
     unavailable?.();
     await flush();
     expect(host.querySelector('[data-testid="connected"]')).not.toBeNull();
     expect(host.querySelector('[role="alert"]')).toBeNull();
-    expect(verifyServer.mock.calls[0]?.[1]?.aborted).toBe(false);
+    expect(verifyServer.mock.calls[1]?.[1]?.aborted).toBe(false);
     host.querySelector<HTMLButtonElement>('[data-testid="change-server"]')?.click();
     host.querySelector<HTMLInputElement>('input[type="radio"][value="local"]')?.click();
     expect(host.querySelector(".connection-form-submit")?.textContent).toBe("Restart");
@@ -498,9 +457,8 @@ describe("App target startup", () => {
     verifyServer.mockResolvedValue({ serverUrl: "http://127.0.0.1:4096" });
     const { host, dispose } = mount(desktop);
     await flush();
-    host.querySelector<HTMLButtonElement>(".connection-form-submit")?.click();
-    await flush();
     host.querySelector<HTMLButtonElement>('[data-testid="connected"]')?.click();
+    await flush();
     host.querySelector<HTMLButtonElement>('[data-testid="change-server"]')?.click();
     await flush();
     expect(host.textContent).toContain("Start built-in server");
@@ -528,7 +486,7 @@ describe("App target startup", () => {
     expect(signal?.aborted).toBe(true);
     verification.resolve({ serverUrl: "http://remote.test" });
     await flush();
-    expect(desktop.target.saveRemote).not.toHaveBeenCalled();
+    expect(desktop.target.saveLocal).not.toHaveBeenCalled();
   });
 
   it("ignores a late built-in start result after renderer unmount", async () => {
@@ -537,9 +495,8 @@ describe("App target startup", () => {
       load: () => Promise.resolve(undefined),
       connectLocal: () => started.promise,
     });
-    const { host, dispose } = mount(desktop);
+    const { dispose } = mount(desktop);
     await flush();
-    host.querySelector<HTMLButtonElement>(".connection-form-submit")?.click();
     dispose();
     started.resolve({
       status: "connected",
@@ -565,7 +522,7 @@ describe("App target startup", () => {
     expect(handshake.disposed).not.toHaveBeenCalled();
     handshake.connect();
     await flush();
-    expect(desktop.target.saveRemote).toHaveBeenCalledOnce();
+    expect(desktop.target.saveLocal).toHaveBeenCalledOnce();
     const disposeRemount = render(
       () => (
         <RegistryContext.Provider value={renderer.registry}>
@@ -581,7 +538,7 @@ describe("App target startup", () => {
     expect(handshake.disposed).toHaveBeenCalledOnce();
   });
 
-  it("returns to selection after initial stream or location readiness fails", async () => {
+  it("shows startup recovery after initial stream or location readiness fails", async () => {
     const desktop = makeDesktop({
       load: () =>
         Promise.resolve({
@@ -596,8 +553,8 @@ describe("App target startup", () => {
     handshake.fail(new Error("readiness failed"));
     await flush();
     expect(host.querySelector('[data-testid="connected"]')).toBeNull();
-    expect(host.textContent).toContain("The OpenCode server connection could not be set up");
-    expect(desktop.target.saveRemote).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("The built-in OpenCode server is unavailable");
+    expect(desktop.target.saveLocal).not.toHaveBeenCalled();
     expect(handshake.disposed).toHaveBeenCalledOnce();
     dispose();
   });
@@ -610,7 +567,6 @@ describe("App target startup", () => {
     });
     const { renderer, disposeView } = mount(desktop);
     await flush();
-    renderer.connection.connect("local");
     disposeView();
     let closed = false;
     const closing = renderer.dispose().then(() => {

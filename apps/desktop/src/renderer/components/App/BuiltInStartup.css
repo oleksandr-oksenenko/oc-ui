@@ -1,0 +1,49 @@
+.built-in-startup {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 100%;
+  padding: 24px;
+  background: var(--oc-surface-canvas);
+  text-align: center;
+}
+
+.built-in-startup-content {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  width: min(320px, 100%);
+}
+
+.built-in-startup-status {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+}
+
+.built-in-startup-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.built-in-startup-title {
+  color: var(--oc-text-strong);
+  font-size: var(--oc-type-title-size);
+  font-weight: var(--oc-type-title-weight);
+  line-height: var(--oc-type-title-line-height);
+}
+
+.built-in-startup-description,
+.built-in-startup-error {
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
+}
+
+.built-in-startup-description {
+  color: var(--oc-text-muted);
+}
+
+.built-in-startup-error {
+  color: var(--oc-status-danger);
+  overflow-wrap: anywhere;
+}

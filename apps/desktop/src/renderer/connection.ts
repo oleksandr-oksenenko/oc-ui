@@ -25,6 +25,7 @@ type SavedTarget =
   | { readonly kind: "remote"; readonly serverUrl: string };
 type ConnectionState = {
   readonly mode: Mode;
+  readonly selectingServer: boolean;
   readonly serverUrl: string;
   readonly password: string;
   readonly savedTarget?: SavedTarget;
@@ -49,6 +50,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
   const defaultMode = desktop ? "local" : "remote";
   const state = Atom.make<ConnectionState>({
     mode: defaultMode,
+    selectingServer: !desktop,
     serverUrl: "",
     password: "",
     status: "disconnected",
@@ -58,7 +60,6 @@ const makeConnection = Effect.fn("Connection.make")(function* (
   const get = () => registry.get(state);
   const update = (patch: Partial<ConnectionState>) =>
     registry.update(state, (value) => ({ ...value, ...patch }));
-  let savedPassword = "";
   let operation: Fiber.Fiber<void> | undefined;
   const workspace = effects.runSync(
     ScopedRef.make<ConnectionState["workspace"] | void>(() => undefined),
@@ -81,18 +82,19 @@ const makeConnection = Effect.fn("Connection.make")(function* (
       cause instanceof OpenCodeConnectionError
         ? cause.message
         : local
-          ? "The built-in OpenCode server is unavailable. Retry to start it again, or connect to a remote server."
+          ? "The built-in OpenCode server is unavailable. Retry to start it again."
           : "The OpenCode server connection could not be set up. Check the address and try again.";
     update({ owner: undefined, status: "failed", error });
   };
 
   const connect = (
     mode: Mode,
-    remote = { serverUrl: get().serverUrl, password: get().password || savedPassword },
+    remote = { serverUrl: get().serverUrl, password: get().password },
   ) => {
     if (mode === "local" && !desktop) return;
     update({
       mode,
+      selectingServer: mode === "remote",
       owner: mode,
       status: "connecting",
       error: undefined,
@@ -196,19 +198,18 @@ const makeConnection = Effect.fn("Connection.make")(function* (
   };
   const changeServer = () => {
     const old = get();
-    savedPassword = "";
     update({
       owner: undefined,
       status: "disconnected",
       password: "",
       error: undefined,
+      selectingServer: true,
       mode: old.owner ?? old.savedTarget?.kind ?? defaultMode,
       serverUrl: old.owner === "local" ? "" : old.serverUrl,
     });
     replace(leave());
   };
   const forget = () => {
-    savedPassword = "";
     update({
       owner: undefined,
       password: "",
@@ -238,6 +239,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
     const old = get();
     update({
       mode,
+      selectingServer: true,
       owner: undefined,
       status: "disconnected",
       error: undefined,
@@ -250,44 +252,49 @@ const makeConnection = Effect.fn("Connection.make")(function* (
   };
   const unsubscribe = desktop?.localOpenCode.onUnavailable(() => {
     update({ localUnavailable: true });
-    if (get().owner === "local") changeServer();
+    if (get().owner === "local") {
+      update({
+        owner: undefined,
+        status: "failed",
+        error: "The built-in OpenCode server stopped. Restart it to continue.",
+      });
+      replace(leave());
+    }
   });
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
       unsubscribe?.();
-      savedPassword = "";
     }),
   );
-  replace(
-    effects
-      .request<OpenCodeTarget | undefined>(() => host.target.load())
-      .pipe(
-        Effect.flatMap((loaded: OpenCodeTarget | undefined) =>
-          Effect.sync(() => {
-            if (!loaded) return;
-            if (loaded.kind === "local" && !desktop) return;
-            update({
-              savedTarget:
-                loaded.kind === "local" ? loaded : { kind: "remote", serverUrl: loaded.serverUrl },
-              mode: loaded.kind,
-            });
-            if (loaded.kind !== "remote") return;
-            update({ serverUrl: loaded.serverUrl });
-            if (!desktop || loaded.password === undefined) return;
-            savedPassword = loaded.password;
-            connect("remote", { serverUrl: loaded.serverUrl, password: loaded.password });
-          }),
-        ),
-        Effect.catch(() =>
-          Effect.sync(() =>
-            update({
-              notice:
-                "Saved connection settings could not be loaded. You can still connect manually.",
+  // Desktop launches always use the app-owned server, independently of saved targets.
+  if (desktop) {
+    connect("local");
+  } else {
+    replace(
+      effects
+        .request<OpenCodeTarget | undefined>(() => host.target.load())
+        .pipe(
+          Effect.tap((loaded) =>
+            Effect.sync(() => {
+              if (loaded?.kind !== "remote") return;
+              update({
+                savedTarget: { kind: "remote", serverUrl: loaded.serverUrl },
+                serverUrl: loaded.serverUrl,
+              });
             }),
           ),
+          Effect.asVoid,
+          Effect.catch(() =>
+            Effect.sync(() =>
+              update({
+                notice:
+                  "Saved connection settings could not be loaded. You can still connect manually.",
+              }),
+            ),
+          ),
         ),
-      ),
-  );
+    );
+  }
   return {
     state,
     builtInAvailable: desktop !== undefined,
@@ -296,7 +303,6 @@ const makeConnection = Effect.fn("Connection.make")(function* (
     forget,
     setMode,
     setServerUrl: (serverUrl: string) => {
-      savedPassword = "";
       update({ serverUrl });
     },
     setPassword: (password: string) => update({ password }),

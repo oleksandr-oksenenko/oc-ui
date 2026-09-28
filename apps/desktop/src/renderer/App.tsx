@@ -3,6 +3,7 @@ import { useAtomValue } from "@effect/atom-solid";
 import { showToast, Toast, toaster } from "@opencode/ui/toast";
 
 import type { Renderer } from "./connection.ts";
+import { BuiltInStartup } from "./components/App/BuiltInStartup.tsx";
 import { ConnectionForm } from "./components/App/ConnectionForm.tsx";
 import { ConnectedApp } from "./components/App/ConnectedApp.tsx";
 import { ServerProvider } from "./opencode/index.ts";
@@ -41,7 +42,7 @@ export function App(props: { readonly renderer: Renderer }) {
   const error = () =>
     state().error ??
     (state().mode === "local" && state().localUnavailable
-      ? "The built-in OpenCode server stopped. Restart it, or connect to a remote server."
+      ? "The built-in OpenCode server stopped. Restart it to continue."
       : undefined);
   const openExternal = (url: string) => {
     void props.renderer.openExternal(url).catch(() => {
@@ -76,22 +77,33 @@ export function App(props: { readonly renderer: Renderer }) {
                 )}
               </Show>
               <Show when={!visibleWorkspace() || connecting()}>
-                <ConnectionForm
-                  builtInAvailable={connection.builtInAvailable}
-                  serverUrl={state().serverUrl}
-                  password={state().password}
-                  mode={state().mode}
-                  busy={connecting()}
-                  error={error()}
-                  restartBuiltIn={state().localUnavailable}
-                  savedTarget={state().savedTarget}
-                  onModeChange={connection.setMode}
-                  onServerUrlInput={connection.setServerUrl}
-                  onPasswordInput={connection.setPassword}
-                  onConnect={() => connection.connect("remote")}
-                  onUseBuiltInServer={() => connection.connect("local")}
-                  onForget={connection.forget}
-                />
+                <Show
+                  when={!state().selectingServer}
+                  fallback={
+                    <ConnectionForm
+                      builtInAvailable={connection.builtInAvailable}
+                      serverUrl={state().serverUrl}
+                      password={state().password}
+                      mode={state().mode}
+                      busy={connecting()}
+                      error={error()}
+                      restartBuiltIn={state().localUnavailable}
+                      savedTarget={state().savedTarget}
+                      onModeChange={connection.setMode}
+                      onServerUrlInput={connection.setServerUrl}
+                      onPasswordInput={connection.setPassword}
+                      onConnect={() => connection.connect("remote")}
+                      onUseBuiltInServer={() => connection.connect("local")}
+                      onForget={connection.forget}
+                    />
+                  }
+                >
+                  <BuiltInStartup
+                    error={error()}
+                    restart={state().localUnavailable}
+                    onRetry={() => connection.connect("local")}
+                  />
+                </Show>
               </Show>
             </ServerFlowDialogProvider>
           </DiffHighlightProvider>

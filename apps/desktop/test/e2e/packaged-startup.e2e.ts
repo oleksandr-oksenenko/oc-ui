@@ -12,7 +12,6 @@ import { OPENCODE_VERSION } from "../../src/shared/desktop-api.ts";
 import { verifyBrowserFlows } from "./browser-flows.ts";
 import { verifyConnectionSettings } from "./connection-flows.ts";
 import { verifyProjectFlows } from "./project-flows.ts";
-import { prepareProjectFixture } from "./project-fixture.ts";
 import { verifyProviderFlows } from "./provider-flows.ts";
 import { verifySessionTools } from "./session-tools-flows.ts";
 
@@ -36,7 +35,7 @@ const artifactDirectory = fileURLToPath(new URL("../../dist/wdio-artifacts/", im
 const projectDirectory = join(userDataPath, "acceptance-project");
 
 describe("packaged owned OpenCode", () => {
-  it("starts lazily and creates sessions in the bundled worker default directory", async () => {
+  it("starts automatically without a chooser and creates sessions in the bundled worker default directory", async () => {
     await mkdir(artifactDirectory, { recursive: true });
     const runtime = await browser.electron.execute((electron) => ({
       isPackaged: electron.app.isPackaged,
@@ -48,25 +47,15 @@ describe("packaged owned OpenCode", () => {
     assert.equal(runtime.userData, userDataPath);
     assert.equal(runtime.mockKeychain, true);
     assert.equal(runtime.databasePath, globalThis.process.env.OPENCODE_DB);
-    await prepareProjectFixture(projectDirectory);
-    // The server's default location is its working directory; keep UI-created sessions isolated.
-    await browser.electron.execute(
-      (_electron, directory) => process.chdir(directory),
-      projectDirectory,
-    );
-
-    await $("#connection-form-title").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
-    assert.deepEqual(await ownedWorkerPids(), []);
+    await waitForLocalConnection();
+    assert.equal(await $("#connection-form-title").isExisting(), false);
     await resizeWindow(430, 600);
-    assert.equal(await $("button*=Start built-in server").isClickable(), true);
     assert.equal(
       await browser.execute(() => document.documentElement.scrollWidth <= window.innerWidth),
       true,
     );
     await browser.saveScreenshot(join(artifactDirectory, "owned-runtime-narrow.png"));
     await resizeWindow(1280, 860);
-    await $("button*=Start built-in server").click();
-    await waitForLocalConnection();
     const firstPid = await recordWorker();
     await verifyHealth(firstPid);
     assert.deepEqual(JSON.parse(await readFile(settingsPath, "utf8")), { kind: "local" });
@@ -108,11 +97,8 @@ describe("packaged owned OpenCode", () => {
     const firstPid = workerPids[0];
     assert.ok(firstPid !== undefined);
 
-    // Renderer teardown does not own the server. A saved local choice remains lazy.
+    // Renderer reload reconnects automatically to the same app-owned server.
     await browser.refresh();
-    await $("#connection-form-title").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
-    assert.deepEqual(await ownedWorkerPids(), [firstPid]);
-    await $("button*=Start built-in server").click();
     await waitForLocalConnection();
     assert.deepEqual(await ownedWorkerPids(), [firstPid]);
 
@@ -178,7 +164,7 @@ async function createBundledSessions(): Promise<void> {
   await $(opener).click();
   await $("button=Add project").click();
   await $(submit).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
-  // The main process sets cwd before starting its worker; browsing must receive that location.
+  // The runner launches the app from its isolated project; browsing must receive that location.
   assert.equal(
     await $(".server-directory-browser-path").getText(),
     await realpath(projectDirectory),

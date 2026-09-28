@@ -210,9 +210,7 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
   await $('[aria-label="New browser tab"]').click();
   await browser.waitUntil(async () => (await nativePages()).length === 1);
   await browser.refresh();
-  await $("#connection-form-title").waitForDisplayed({ timeout: TIMEOUT });
   await browser.waitUntil(async () => (await nativePages()).length === 0);
-  await $("button*=Start built-in server").click();
   await $('[aria-label="Select server, Local server, Connected"]').waitForDisplayed({
     timeout: TIMEOUT,
   });

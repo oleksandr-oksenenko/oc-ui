@@ -44,11 +44,15 @@ export async function verifyConnectionSettings(settingsPath: string): Promise<vo
     true,
   );
 
-  // Saved remote credentials reconnect through the real preload, storage, and SDK boundaries.
+  // Reload always returns to built-in, even after saving a remote connection.
   await browser.refresh();
-  await $('.shell-server-selector[aria-label$=", Connected"]').waitForDisplayed({
+  await $('[aria-label="Select server, Local server, Connected"]').waitForDisplayed({
     timeout: 45_000,
   });
+  await browser.waitUntil(
+    async () => JSON.parse(await readFile(settingsPath, "utf8")).kind === "local",
+  );
+  assert.equal(await $("#connection-form-title").isExisting(), false);
   await $(".shell-server-selector").click();
   await $("button=Forget saved choice").waitForClickable();
   await $("button=Forget saved choice").click();

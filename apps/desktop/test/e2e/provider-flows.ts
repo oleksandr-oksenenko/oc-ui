@@ -26,8 +26,6 @@ export async function verifyProviderFlows(): Promise<void> {
   );
   assert.ok(workerBeforeReload);
   await browser.refresh();
-  await $("#connection-form-title").waitForDisplayed({ timeout: TIMEOUT });
-  await $("button*=Start built-in server").click();
   await $('[aria-label="Select server, Local server, Connected"]').waitForDisplayed({
     timeout: TIMEOUT,
   });

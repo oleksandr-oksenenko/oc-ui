@@ -14,16 +14,7 @@ export async function startBuiltInServer(
   fixtureDirectory: string,
   timeoutMs: number,
 ): Promise<void> {
-  await browser.electron.execute(
-    (_electron, directory) => process.chdir(directory),
-    fixtureDirectory,
-  );
-  const heading = $("#connection-form-title");
-  await heading.waitForDisplayed({ timeout: timeoutMs });
-  assert.equal(await heading.getText(), "Connect to OpenCode");
-  const start = $("button*=Start built-in server");
-  await start.waitForClickable({ timeout: timeoutMs });
-  await start.click();
+  assert.equal(await browser.electron.execute(() => process.cwd()), fixtureDirectory);
   await browser.waitUntil(async () => (await recordOwnedWorkers(userDataPath)).length === 1, {
     timeout: timeoutMs,
     interval: POLL_INTERVAL_MS,

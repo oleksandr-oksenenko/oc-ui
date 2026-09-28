@@ -62,7 +62,7 @@ export function ConnectionForm(props: ConnectionFormProps) {
           <p>
             {props.builtInAvailable === false
               ? "Connect to your OpenCode server. This browser remembers the address; passwords stay on this page."
-              : "Choose where this app should run and remember that choice for next time."}
+              : "Choose a server for this window. The app starts with built-in OpenCode on each launch."}
           </p>
         </header>
 

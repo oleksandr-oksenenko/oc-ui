@@ -21,7 +21,7 @@ Feature Effects replace manual Promise/liveness coordination for sessions, recov
 
 ## Preserved launcher behavior
 
-1. **The process is app-owned and lazy.** Main forks an Electron utility process on demand. It sends a fresh password and user-data path after spawn. There is no detached CLI daemon to discover or adopt. A saved local choice only preselects the form; startup still requires an explicit action.
+1. **The process is app-owned.** Main forks an Electron utility process on demand. It sends a fresh password and user-data path after spawn. There is no detached CLI daemon to discover or adopt. The desktop renderer requests the built-in server automatically at startup, regardless of the saved target. A failed startup or crash offers explicit retry/restart; changing servers remains a manual action.
 2. **Listening is earlier than readiness.** The worker prepares the environment before importing the server, creates a scope, and invokes upstream `ServerProcess.start`. Its `onListen` callback reports the loopback address before application boot completes. Main then checks authenticated health, the exact version and this child's PID. The listener message alone is insufficient. The callback receives a shutdown signal; the shutdown effect returned by `start` only waits. The worker must close its retained scope to release resources.
 3. **Main owns failed boot and termination.** Upstream can expose failed health without rejecting the worker's startup Promise. Main retains its startup deadline and health checks. Startup failure waits for child cleanup before rejecting. Stop requests allow 10 seconds for graceful exit, then two 2-second escalation waits. A missed deadline never releases the child record: only Electron's exit notification does.
 4. **Quit has a retryable preparation step.** Main stops the child before disposing main services. If stopping fails, retain the service for another Quit attempt. Current code closes admission to new local connects once shutdown starts, even if that stop fails. A runtime finalizer alone cannot express this behavior.
@@ -37,7 +37,7 @@ The original launch investigation checked graph generation `2026-09-04T10:30:39Z
 
 The pinned [SDK data implementation](../apps/desktop/node_modules/@opencode/client/dist/solid/data.js) owns optimistic admission, ordered sends, acknowledgement, rollback and event reconciliation. The [SDK connection helper](../apps/desktop/node_modules/@opencode/client/dist/solid/connection.js) owns its stream and transport retries. Both retain their Solid lifecycle hooks.
 
-[Worker build configuration](../apps/desktop/electron.vite.config.ts), [dependency staging](../tools/stage-opencode.mjs) and the [packaged acceptance scenario](../apps/desktop/test/e2e/packaged-startup.e2e.ts) remain the evidence locations for bundling and real-process behavior, including lazy launch, reload/reuse, crash restart, Quit and PTY cleanup.
+[Worker build configuration](../apps/desktop/electron.vite.config.ts), [dependency staging](../tools/stage-opencode.mjs) and the [packaged acceptance scenario](../apps/desktop/test/e2e/packaged-startup.e2e.ts) remain the evidence locations for bundling and real-process behavior, including automatic launch, reload/reuse, crash restart, Quit and PTY cleanup.
 
 Current migration verification passed:
 

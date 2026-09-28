@@ -1,3 +1,4 @@
+import { prepareProjectFixture } from "./project-fixture.ts";
 import { createProfile } from "./profile.mjs";
 import { constants } from "node:fs";
 import { access, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
@@ -44,13 +45,13 @@ const main = async () => {
       const provider = await startScriptedProvider();
       try {
         const project = join(paths.app, "acceptance-project");
-        await mkdir(project, { recursive: true });
+        await prepareProjectFixture(project);
         await writeFile(join(project, "opencode.json"), JSON.stringify(provider.config));
         const ownedConfig = join(paths.app, "opencode", "config");
         await mkdir(ownedConfig, { recursive: true });
         await writeFile(join(ownedConfig, "opencode.json"), JSON.stringify(provider.config));
         await runWdio(
-          { ...env, OCUI_E2E_PROVIDER_URL: provider.url },
+          { ...env, OCUI_E2E_PROVIDER_URL: provider.url, OCUI_E2E_FIXTURE_DIRECTORY: project },
           "startup",
           interruption.signal,
         );
@@ -204,10 +205,16 @@ const isAlive = (pid) => {
 const runWdio = async (env, phase, signal) => {
   signal.throwIfAborted();
   const child = spawn(
-    "pnpm",
-    ["run", "test:acceptance:mac:wdio", "--spec", `test/e2e/packaged-${phase}.e2e.ts`],
+    process.execPath,
+    [
+      join(desktopRoot, "node_modules/@wdio/cli/bin/wdio.js"),
+      "run",
+      join(desktopRoot, "wdio.conf.ts"),
+      "--spec",
+      join(desktopRoot, `test/e2e/packaged-${phase}.e2e.ts`),
+    ],
     {
-      cwd: desktopRoot,
+      cwd: env.OCUI_E2E_FIXTURE_DIRECTORY,
       detached: true,
       env: {
         ...env,

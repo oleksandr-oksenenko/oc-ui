@@ -227,8 +227,6 @@ async function verifyReviewReload(): Promise<void> {
     "The reviewed session must have a unique title before testing persistence",
   );
   await browser.refresh();
-  await $("button*=Start built-in server").waitForClickable({ timeout: TIMEOUT });
-  await $("button*=Start built-in server").click();
   await $('[aria-label="Select server, Local server, Connected"]').waitForDisplayed({
     timeout: TIMEOUT,
   });
