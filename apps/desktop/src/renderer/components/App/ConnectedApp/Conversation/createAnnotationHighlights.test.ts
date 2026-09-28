@@ -61,10 +61,7 @@ function mountHighlights(
 }
 
 /** jsdom has no Range geometry; the hit test only iterates rects and anchors. */
-function stubRangeRects(rect = new DOMRect(0, 0, 100, 100)) {
-  const list: DOMRectList = Object.assign([rect], {
-    item: (index: number) => (index === 0 ? rect : null),
-  });
+function stubRangeRects(readRect: () => DOMRect = () => new DOMRect(0, 0, 100, 100)) {
   const restores: Array<() => void> = [];
   const define = (
     name: "getClientRects" | "getBoundingClientRect",
@@ -80,9 +77,14 @@ function stubRangeRects(rect = new DOMRect(0, 0, 100, 100)) {
       Reflect.deleteProperty(Range.prototype, name);
     });
   };
-  const rects = vi.fn<() => DOMRectList>(() => list);
+  const rects = vi.fn<() => DOMRectList>(() => {
+    const current = readRect();
+    return Object.assign([current], {
+      item: (index: number) => (index === 0 ? current : null),
+    });
+  });
   define("getClientRects", rects);
-  define("getBoundingClientRect", () => rect);
+  define("getBoundingClientRect", readRect);
   return {
     rects,
     restore: () => {
@@ -98,7 +100,7 @@ function clickAt(target: Element): void {
 describe("createAnnotationHighlights", () => {
   it("scrolls the restored text range within its transcript scroller and rejects a missing source", async () => {
     const { registry } = stubHighlightRuntime();
-    const geometry = stubRangeRects(new DOMRect(20, 500, 90, 20));
+    const geometry = stubRangeRects(() => new DOMRect(20, 500, 90, 20));
     const root = document.createElement("div");
     root.innerHTML =
       '<div style="overflow-y: auto"><article data-message-id="message"><p data-annotation-block="text">hello world</p></article></div>';
@@ -116,7 +118,7 @@ describe("createAnnotationHighlights", () => {
     try {
       await vi.waitFor(() => expect(registry.size).toBe(1));
       expect(result.controller.jumpTo("annotation-1")).toBe(root.querySelector("p"));
-      expect(scrollBy).toHaveBeenCalledWith({ top: 310 });
+      expect(scrollBy).toHaveBeenCalledWith({ top: 310, left: 0, behavior: "instant" });
       root.querySelector("p")!.remove();
       expect(result.controller.jumpTo("annotation-1")).toBeUndefined();
     } finally {
@@ -125,6 +127,72 @@ describe("createAnnotationHighlights", () => {
       geometry.restore();
     }
   });
+  it.each([
+    [
+      "source itself",
+      '<pre id="inner" data-annotation-block="text" style="overflow-x: auto; overflow-y: auto">hello world</pre>',
+    ],
+    [
+      "nested code block",
+      '<div data-annotation-block="text"><pre id="inner" style="overflow-x: auto; overflow-y: auto">hello world</pre></div>',
+    ],
+  ])(
+    "reveals a range inside a scrollable %s before the outer transcript",
+    async (_label, markup) => {
+      const { registry } = stubHighlightRuntime();
+      let innerTop = 0;
+      let innerLeft = 0;
+      let outerTop = 0;
+      const geometry = stubRangeRects(
+        () => new DOMRect(150 - innerLeft, 700 - innerTop - outerTop, 50, 20),
+      );
+      const root = document.createElement("div");
+      root.innerHTML = `<div id="outer" style="overflow-y: auto"><article data-message-id="message">${markup}</article></div>`;
+      document.body.append(root);
+      const inner = root.querySelector<HTMLElement>("#inner")!;
+      const outer = root.querySelector<HTMLElement>("#outer")!;
+      Object.defineProperties(inner, {
+        clientHeight: { value: 200 },
+        scrollHeight: { value: 800 },
+        clientWidth: { value: 100 },
+        scrollWidth: { value: 500 },
+      });
+      Object.defineProperties(outer, {
+        clientHeight: { value: 250 },
+        scrollHeight: { value: 900 },
+        clientWidth: { value: 300 },
+        scrollWidth: { value: 300 },
+      });
+      inner.getBoundingClientRect = () => new DOMRect(0, 400 - outerTop, 100, 200);
+      outer.getBoundingClientRect = () => new DOMRect(0, 100, 300, 250);
+      const order: string[] = [];
+      const innerScroll = vi.fn<(options: ScrollToOptions) => void>((options) => {
+        order.push("inner");
+        innerTop += options.top ?? 0;
+        innerLeft += options.left ?? 0;
+      });
+      const outerScroll = vi.fn<(options: ScrollToOptions) => void>((options) => {
+        order.push("outer");
+        outerTop += options.top ?? 0;
+      });
+      Object.defineProperty(inner, "scrollBy", { value: innerScroll });
+      Object.defineProperty(outer, "scrollBy", { value: outerScroll });
+      const result = mountHighlights(root, [source()]);
+      try {
+        await vi.waitFor(() => expect(registry.size).toBe(1));
+        expect(result.controller.jumpTo("annotation-1")).toBe(
+          root.querySelector("[data-annotation-block]"),
+        );
+        expect(order).toEqual(["inner", "outer"]);
+        expect(innerScroll).toHaveBeenCalledWith({ top: 210, left: 125, behavior: "instant" });
+        expect(outerScroll).toHaveBeenCalledWith({ top: 275, left: 0, behavior: "instant" });
+      } finally {
+        result.dispose();
+        root.remove();
+        geometry.restore();
+      }
+    },
+  );
   it("rebuilds only when source descriptors or transcript DOM change", async () => {
     const { digestCall, registry, registrySet } = stubHighlightRuntime();
 

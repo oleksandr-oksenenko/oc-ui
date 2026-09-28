@@ -2,7 +2,10 @@
 
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect, screen, userEvent, waitFor, within } from "storybook/test";
-import { TranscriptAnnotations } from "./transcript-annotations/TranscriptAnnotations.tsx";
+import {
+  TranscriptAnnotations,
+  longToolTarget,
+} from "./transcript-annotations/TranscriptAnnotations.tsx";
 
 const meta = {
   title: "Transcript/Annotations",
@@ -241,3 +244,60 @@ export const RunningTurn: Story = {
   },
 };
 export const NarrowMode: Story = { args: { narrow: true } };
+
+export const NestedToolOutput: Story = {
+  args: { longToolOutput: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const transcript = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    await userEvent.click(canvas.getByRole("button", { name: /Activity · 2 steps/ }));
+    await userEvent.click(canvasElement.querySelector<HTMLElement>(".transcript-tool-header")!);
+    const output = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>(
+        '.transcript-tool-output[data-annotation-block*="output"]',
+      );
+      if (!element) throw new Error("Missing annotated tool output");
+      return element;
+    });
+    const text = output.firstChild;
+    if (!(text instanceof Text)) throw new Error("Missing tool output text");
+    const start = text.data.indexOf(longToolTarget);
+    if (start < 0) throw new Error("Missing target passage");
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, start + longToolTarget.length);
+
+    output.scrollTop = output.scrollHeight;
+    output.scrollLeft = output.scrollWidth;
+    transcript.scrollTop = transcript.scrollHeight;
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    await userEvent.click(canvas.getByRole("button", { name: "Add note" }));
+    const editor = await screen.findByRole("textbox", { name: "Annotation comment" });
+    await userEvent.type(editor, "Keep the nested output visible{Enter}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    output.scrollTop = 0;
+    output.scrollLeft = 0;
+    transcript.scrollTop = 0;
+    await userEvent.click(canvas.getByRole("button", { name: "Annotations · 3" }));
+    const dialog = await screen.findByRole("dialog", { name: "Transcript annotations" });
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Keep the nested output visible" }),
+    );
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    await expect(output).toHaveFocus();
+    await expect(output.scrollTop).toBeGreaterThan(0);
+    await expect(transcript.scrollTop).toBeGreaterThan(0);
+    const target = range.getBoundingClientRect();
+    const inner = output.getBoundingClientRect();
+    const outer = transcript.getBoundingClientRect();
+    await expect(target.top).toBeGreaterThanOrEqual(inner.top);
+    await expect(target.bottom).toBeLessThanOrEqual(inner.bottom);
+    await expect(target.left).toBeGreaterThanOrEqual(inner.left);
+    await expect(target.right).toBeLessThanOrEqual(inner.right);
+    await expect(target.top).toBeGreaterThanOrEqual(outer.top);
+    await expect(target.bottom).toBeLessThanOrEqual(outer.bottom);
+  },
+};

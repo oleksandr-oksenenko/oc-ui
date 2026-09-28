@@ -47,6 +47,45 @@ function mountedBlocks(root: HTMLElement): Map<string, HTMLElement> {
   return blocks;
 }
 
+/** Reveal a restored text range through its nested scroll containers. */
+function revealRange(range: Range): void {
+  const common = range.commonAncestorContainer;
+  let ancestor = common instanceof Element ? common : common.parentElement;
+  let hasScroller = false;
+  while (ancestor) {
+    const style = getComputedStyle(ancestor);
+    const vertical =
+      /^(auto|scroll|hidden)$/.test(style.overflowY) &&
+      ancestor.scrollHeight > ancestor.clientHeight;
+    const horizontal =
+      /^(auto|scroll|hidden)$/.test(style.overflowX) && ancestor.scrollWidth > ancestor.clientWidth;
+    if (vertical || horizontal) {
+      hasScroller = true;
+      // Inner scrolling changes the range's viewport position. Measure again
+      // before revealing it in the next outer container.
+      const rect = range.getBoundingClientRect();
+      const viewport = ancestor.getBoundingClientRect();
+      const top = viewport.top + ancestor.clientTop;
+      const left = viewport.left + ancestor.clientLeft;
+      const deltaY =
+        vertical && (rect.top < top || rect.bottom > top + ancestor.clientHeight)
+          ? rect.top + rect.height / 2 - top - ancestor.clientHeight / 2
+          : 0;
+      const deltaX =
+        horizontal && (rect.left < left || rect.right > left + ancestor.clientWidth)
+          ? rect.left + rect.width / 2 - left - ancestor.clientWidth / 2
+          : 0;
+      if (deltaY !== 0 || deltaX !== 0)
+        ancestor.scrollBy({ top: deltaY, left: deltaX, behavior: "instant" });
+    }
+    ancestor = ancestor.parentElement;
+  }
+  if (!hasScroller) {
+    const rect = range.getBoundingClientRect();
+    window.scrollBy({ top: rect.top + rect.height / 2 - window.innerHeight / 2 });
+  }
+}
+
 /** Computes the stable source hash used when restoring an annotation highlight. */
 export async function digestAnnotationText(text: string): Promise<string> {
   const result = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -113,22 +152,10 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
     const block = range && input.sources().find((item) => item.key === key);
     const source = block && findSource(block.source);
     if (!range || !source || !source.contains(range.startContainer)) return undefined;
-    const rect = range.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) return undefined;
+    const initialRect = range.getBoundingClientRect();
+    if (initialRect.width === 0 && initialRect.height === 0) return undefined;
     suppressPendingScroll();
-    let ancestor = source.parentElement;
-    while (ancestor) {
-      const overflow = getComputedStyle(ancestor).overflowY;
-      if (/(auto|scroll|hidden)/.test(overflow) && ancestor.scrollHeight > ancestor.clientHeight) {
-        const viewport = ancestor.getBoundingClientRect();
-        ancestor.scrollBy({
-          top: rect.top + rect.height / 2 - viewport.top - ancestor.clientHeight / 2,
-        });
-        break;
-      }
-      ancestor = ancestor.parentElement;
-    }
-    if (!ancestor) window.scrollBy({ top: rect.top + rect.height / 2 - window.innerHeight / 2 });
+    revealRange(range);
     return source;
   };
 

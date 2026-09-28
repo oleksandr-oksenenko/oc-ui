@@ -24,9 +24,11 @@ import "./transcript-annotations.css";
 
 const sourceText =
   "We can keep this review focused: the transcript stays readable when annotation drafts remain above the composer, and source jumps return to the original assistant message.";
+export const longToolTarget = "TARGET_HIGHLIGHT";
+const longToolOutput = `${Array.from({ length: 48 }, (_, index) => `Output line ${index + 1}`).join("\n")}\n${"x".repeat(180)}${longToolTarget}`;
 const sessionID = "annotations-story";
 const sourceID = "assistant-annotations";
-const transcript: readonly SessionMessageInfo[] = [
+const transcript = (longOutput: boolean): readonly SessionMessageInfo[] => [
   {
     id: sourceID,
     type: "assistant",
@@ -38,7 +40,7 @@ const transcript: readonly SessionMessageInfo[] = [
       { type: "text", text: sourceText },
       {
         type: "text",
-        text: "You can also select **formatted text**, `inline code`, and repeated words: ready, ready.\n\n| Check | Result |\n| --- | --- |\n| Types | Passed |\n| Tests | Passed |",
+        text: `You can also select **formatted text**, \`inline code\`, and repeated words: ready, ready.\n\n| Check | Result |\n| --- | --- |\n| Types | Passed |\n| Tests | Passed |${longOutput ? `\n\n${Array(12).fill("Earlier transcript context keeps the activity below the fold.").join("\n\n")}` : ""}`,
       },
       {
         type: "reasoning",
@@ -53,7 +55,12 @@ const transcript: readonly SessionMessageInfo[] = [
         state: {
           status: "completed",
           input: { command: "pnpm check" },
-          content: [{ type: "text", text: "Type checks passed.\nTests passed." }],
+          content: [
+            {
+              type: "text",
+              text: longOutput ? longToolOutput : "Type checks passed.\nTests passed.",
+            },
+          ],
         },
       },
     ],
@@ -64,6 +71,7 @@ export type TranscriptAnnotationsProps = {
   readonly initialSent?: boolean;
   readonly initialRunning?: boolean;
   readonly narrow?: boolean;
+  readonly longToolOutput?: boolean;
 };
 
 /** Real annotation components and submission controller, with a simulated SDK transport. */
@@ -110,7 +118,7 @@ function TranscriptAnnotationsContent(
       body,
     });
   }
-  const initialMessages = [...transcript];
+  const initialMessages = [...transcript(props.longToolOutput ?? false)];
   if (props.initialSent) {
     const snapshot = drafts.take(sessionID);
     const prompt = createSessionPrompt({
