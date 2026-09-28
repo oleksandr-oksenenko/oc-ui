@@ -6,6 +6,7 @@ import type { WorkerPoolManager } from "@pierre/diffs/worker";
 
 import type { OpenCodeTarget } from "../shared/desktop-api.ts";
 import type { AppHost } from "../shared/app-host.ts";
+import { SyntaxHighlight, type HighlightSnippet } from "./syntax-highlight.ts";
 import { Appearance, makeAppearance, type Theme } from "./appearance.ts";
 import { createDiffHighlight, createDiffHighlightPool } from "./diff-highlighter.ts";
 import { OpenCodeConnectionError, verifyServer } from "./opencode/index.ts";
@@ -311,9 +312,10 @@ class Connection extends Context.Service<
 export function createRenderer(host: AppHost) {
   const registry = AtomRegistry.make();
   const runtime = ManagedRuntime.make(
-    Layer.merge(
+    Layer.mergeAll(
       Layer.effect(Connection, makeConnection(host, registry)),
       Layer.effect(Appearance, makeAppearance(registry)),
+      SyntaxHighlight.layer,
     ),
   );
   const connection = runtime.runSync(Connection);
@@ -329,6 +331,20 @@ export function createRenderer(host: AppHost) {
   return {
     registry,
     connection,
+    highlightCode: (input: HighlightSnippet, signal: AbortSignal) =>
+      runtime.runPromise(
+        Effect.gen(function* () {
+          const service = yield* SyntaxHighlight;
+          return yield* service.highlight(input);
+        }).pipe(
+          Effect.catchTag("SyntaxHighlightError", () =>
+            Effect.logWarning("Syntax highlighting could not load; keeping plain code").pipe(
+              Effect.as(undefined),
+            ),
+          ),
+        ),
+        { signal },
+      ),
     /* The host owns how a web link leaves the window; the caller reports failure. */
     openExternal: (url: string) => host.openExternal(url),
     appearance: {

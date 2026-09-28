@@ -10,15 +10,9 @@ import type { Theme } from "./appearance.ts";
  */
 export const DIFF_HIGHLIGHT_INIT_TIMEOUT_MS = 10_000;
 
-export type DiffThemeName = "github-light-high-contrast" | "github-dark-high-contrast";
-
-const LIGHT: DiffThemeName = "github-light-high-contrast";
-const DARK: DiffThemeName = "github-dark-high-contrast";
-
-/** Tokenize a single theme: the active one. Pierre tokenizes once per theme entry. */
-export function activeDiffTheme(theme: Theme): DiffThemeName {
-  return theme === "light" ? LIGHT : DARK;
-}
+export { activeSyntaxTheme as activeDiffTheme } from "./syntax-theme.ts";
+import { activeSyntaxTheme as activeDiffTheme } from "./syntax-theme.ts";
+export type DiffThemeName = ReturnType<typeof activeDiffTheme>;
 
 /** The subset of Pierre's pool that the renderer owns and drives. */
 export interface DiffHighlightPool {

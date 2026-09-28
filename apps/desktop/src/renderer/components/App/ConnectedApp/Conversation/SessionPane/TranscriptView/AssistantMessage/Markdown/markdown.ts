@@ -48,6 +48,11 @@ const purifier = createDOMPurify(window);
  * allowed tag, and allowed attribute stays in force for everything else.
  */
 purifier.addHook("uponSanitizeElement", (node, data) => {
+  if (data.tagName === "code" && node instanceof Element) {
+    node.removeAttribute("data-code-language");
+    const language = node.getAttribute("class")?.match(/^language-([\w+#.-]+)$/)?.[1];
+    if (language) node.setAttribute("data-code-language", language);
+  }
   if (data.tagName !== "img" || !(node instanceof Element)) return;
   // Messages must not supply the carrier; only the accepted file source below adds it.
   node.removeAttribute(FILE_IMAGE_SOURCE_ATTRIBUTE);

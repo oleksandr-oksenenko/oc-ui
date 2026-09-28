@@ -275,7 +275,7 @@ for (const filePath of componentFiles) {
       continue;
     }
     const specifier = statement.moduleSpecifier.text;
-    if (!specifier.startsWith(".")) continue;
+    if (!specifier.startsWith(".") && !specifier.startsWith("#renderer/")) continue;
     const importedFile = resolveImport(specifier, filePath);
     if (!importedFile || !isProductionComponent(importedFile)) continue;
 

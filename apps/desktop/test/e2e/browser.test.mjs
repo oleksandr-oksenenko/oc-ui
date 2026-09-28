@@ -1592,6 +1592,24 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
+  it("highlights streamed code and restores highlighting after session navigation", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const session = await api.session.create({ title: "Highlighted snippets", location });
+    await selectSession(session.title);
+    await send("E2E_SYNTAX");
+    await idle();
+    const code = page.locator(".transcript-markdown pre code").last();
+    await expect.poll(() => code.locator("span[style]").count()).toBeGreaterThan(1);
+    expect(await code.textContent()).toBe("const answer = 42;\n\nconsole.log(answer);\n");
+    const other = await api.session.create({ title: "Away from snippets", location });
+    await selectSession(other.title);
+    await selectSession(session.title);
+    await expect.poll(() => code.locator("span[style]").count()).toBeGreaterThan(1);
+    expect(await code.textContent()).toBe("const answer = 42;\n\nconsole.log(answer);\n");
+    expect(errors).toEqual([]);
+  });
+
   it("renders assistant Markdown images that name a file on the connected server", async () => {
     await ensureConnected();
     const directory = await realpath(project);

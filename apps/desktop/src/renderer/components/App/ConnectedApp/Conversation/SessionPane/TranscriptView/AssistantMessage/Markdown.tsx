@@ -1,8 +1,8 @@
-import { createEffect, createSignal, For, onCleanup, type JSX } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, untrack, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 
 import type { ServerFileImageReader } from "../../../../../../../opencode/file-images.ts";
-import { CopyCode } from "./Markdown/CopyCode.tsx";
+import { TranscriptCodeBlock } from "./Markdown/TranscriptCodeBlock.tsx";
 import { renderMarkdownCached } from "./Markdown/markdown.ts";
 
 export type MarkdownProps = {
@@ -21,7 +21,9 @@ export type MarkdownProps = {
  */
 export function Markdown(props: MarkdownProps): JSX.Element {
   let root!: HTMLDivElement;
-  const [blocks, setBlocks] = createSignal<{ host: HTMLDivElement; text: string }[]>([]);
+  const [blocks, setBlocks] = createSignal<
+    { host: HTMLDivElement; text: string; language: string }[]
+  >([]);
   const objectUrls = new Map<string, string>();
   let activeReader: ServerFileImageReader | undefined;
   let generation = 0;
@@ -46,10 +48,6 @@ export function Markdown(props: MarkdownProps): JSX.Element {
     }
     const currentGeneration = ++generation;
     root.innerHTML = renderMarkdownCached(props.text);
-    // Only scrollable regions take a tab stop; tables wrap instead of scrolling.
-    for (const codeBlock of root.querySelectorAll<HTMLElement>("pre")) {
-      codeBlock.tabIndex = 0;
-    }
     const renderedFileUrls = new Set<string>();
     for (const image of root.querySelectorAll<HTMLImageElement>("img[data-file-src]")) {
       const fileUrl = image.getAttribute("data-file-src");
@@ -81,13 +79,24 @@ export function Markdown(props: MarkdownProps): JSX.Element {
       URL.revokeObjectURL(url);
       objectUrls.delete(fileUrl);
     }
+    const previous = untrack(blocks);
     setBlocks(
-      [...root.querySelectorAll("pre")].map((pre) => {
+      [...root.querySelectorAll("pre")].map((pre, index) => {
+        const text = pre.textContent ?? "";
+        const language = pre.querySelector("code")?.getAttribute("data-code-language") ?? "";
+        const existing = previous[index];
+        if (existing?.text === text && existing.language === language) {
+          pre.replaceWith(existing.host);
+          return existing;
+        }
         const host = document.createElement("div");
         host.className = "transcript-code-block";
         pre.replaceWith(host);
-        host.append(pre);
-        return { host, text: pre.textContent ?? "" };
+        return {
+          host,
+          text,
+          language,
+        };
       }),
     );
   });
@@ -104,7 +113,7 @@ export function Markdown(props: MarkdownProps): JSX.Element {
       <For each={blocks()}>
         {(block) => (
           <Portal mount={block.host}>
-            <CopyCode text={block.text} />
+            <TranscriptCodeBlock code={block.text} language={block.language} />
           </Portal>
         )}
       </For>

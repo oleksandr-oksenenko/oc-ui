@@ -9,6 +9,7 @@ export default defineConfig({
     format: "es",
   },
   optimizeDeps: {
-    include: ["@opencode/ui > fuzzysort"],
+    // Prebundle the worker imports too, avoiding a reload when its first request arrives.
+    include: ["@opencode/ui > fuzzysort", "shiki/langs", "shiki"],
   },
 });

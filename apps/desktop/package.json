@@ -6,6 +6,9 @@
   "author": "Oleksandr Oksenenko",
   "type": "module",
   "main": "out/main/index.js",
+  "imports": {
+    "#renderer/*": "./src/renderer/*"
+  },
   "scripts": {
     "build": "tsc -b && electron-vite build",
     "build-storybook": "storybook build --output-dir storybook-static --disable-telemetry",
@@ -49,6 +52,7 @@
     "prosemirror-model": "catalog:",
     "prosemirror-state": "catalog:",
     "prosemirror-view": "catalog:",
+    "shiki": "catalog:",
     "solid-js": "catalog:"
   },
   "devDependencies": {

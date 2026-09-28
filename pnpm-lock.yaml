@@ -162,6 +162,9 @@ catalogs:
     prosemirror-view:
       specifier: 1.42.3
       version: 1.42.3
+    shiki:
+      specifier: 4.2.0
+      version: 4.2.0
     solid-js:
       specifier: ^1.9.15
       version: 1.9.15
@@ -287,6 +290,9 @@ importers:
       prosemirror-view:
         specifier: 'catalog:'
         version: 1.42.3
+      shiki:
+        specifier: 'catalog:'
+        version: 4.2.0
       solid-js:
         specifier: 'catalog:'
         version: 1.9.15

@@ -168,6 +168,12 @@ function respondScriptedPrompt({ modelName, prompt, response, send, finish, onCa
     });
     return true;
   }
+  if (prompt.includes("E2E_SYNTAX")) {
+    send({ content: "```ts\nconst answer = " });
+    send({ content: "42;\n\nconsole.log(answer);\n```" });
+    finish();
+    return true;
+  }
   if (prompt.includes("E2E_FILE_IMAGE")) {
     const fileUrl = prompt.match(/file:\/\/[^\s"\\]+/u)?.[0];
     if (!fileUrl) throw new Error("File image URL missing from prompt");
