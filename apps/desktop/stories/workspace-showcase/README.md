@@ -19,9 +19,9 @@ submissions in these stories are local fixtures.
 | Composer model, agent and variant menus, context meter and tooltip                                              | Default composer; open each picker or hover/focus the context ring                               |
 | Command and skill suggestions, inline skill chips                                                               | Type `/`; choose a skill, or `/compact` to see command feedback                                  |
 | File/image previews, remove controls, paste attachment                                                          | Use the composer attachment button or paste; browser captures also add an image                  |
-| Transcript highlights, annotation popover/editor, annotation count/discard                                      | Open **Annotations · 1 comment**, or select transcript text and choose **Add note**              |
+| Transcript highlights, annotation popover/editor, annotation count/discard                                      | Open **Annotations · 1**, or select transcript text and choose **Add note**                      |
 | Inline diff comments, line selection, comment editor/removal                                                    | Default Diff panel; click a comment to edit, or select a line and add a comment                  |
-| Review discard confirmation                                                                                     | Use the × beside **Code review · 2 comments**                                                    |
+| Review discard confirmation                                                                                     | Use the × beside **Review · 2**                                                                  |
 | Diff comparison menu, collapse/expand                                                                           | Default Diff panel; review drafts are separate for Working changes and Changes vs main           |
 | Pending-message cards, Queue, Steer now, cancel, Stop                                                           | **Queued Workspace**, or select Refactor Utils; type a follow-up and use ⌘ Enter to queue        |
 | Failed tool output and assistant error                                                                          | **Failed Tool Workspace**, or select Error Handling under Prototype API → Implement Endpoints    |
@@ -49,3 +49,14 @@ failure, unavailable model catalog, browser reconnect, and project validation).
 
 The showcase is a set of reachable states, not a page that displays mutually
 exclusive loading, failure, and success states at the same time.
+
+The composer now uses the shared `AttachmentPills`, `AttachmentDetailPill`,
+`AttachmentImagePill`, and `AttachmentFilePill` components from `renderer/ui`.
+They depend only on display data and optional callbacks, so a transcript can use
+the same components without removal controls. The default showcase includes an
+image, a short file name, review comments, transcript notes, and a browser note.
+
+Browser attachment grouping in this showcase is controlled fixture state. At
+simulated send/queue time it uses the existing browser text/image format. The
+production browser capture-to-composer workflow still uses that existing format;
+this change does not introduce a new server metadata contract.
