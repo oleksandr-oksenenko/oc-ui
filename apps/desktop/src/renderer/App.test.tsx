@@ -51,7 +51,7 @@ vi.mock("./opencode/runtime.ts", () => ({
 }));
 
 vi.mock("./components/App/ConnectedApp/createWorkspace.ts", () => ({
-  createWorkspaceModel: () => ({}),
+  createWorkspaceModel: () => ({ drafts: { flushSelected: () => undefined } }),
 }));
 
 vi.mock("./components/App/ConnectedApp.tsx", () => ({

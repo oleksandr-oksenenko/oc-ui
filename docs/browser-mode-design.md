@@ -96,9 +96,17 @@ The password field clears after successful connection. The authenticated client
 retains the credential for that connection's lifetime. Desktop retains its
 existing secure persistence and saved-credential reconnect behavior.
 
-Unsent drafts retain their existing workspace-memory lifetime. Reload, closing,
-or changing the workspace can discard them. Server-admitted work stays owned by
-the server. A lost acknowledgement must not trigger automatic mutation replay.
+New-session drafts use the renderer-owned `ocui` IndexedDB database, version 1,
+with separate draft, attachment, and preference stores. Text, skills, files, and
+choices are saved together where consistency matters and partitioned by the
+normalized server origin. Draft saving continues across workspace switches.
+Each tab has its own editor state; transactional revision checks protect shared
+records and BroadcastChannel notifications refresh clean views. Conflicting edits
+remain available for an explicit copy or replacement. Credentials never enter
+these records. Existing conversation drafts retain their workspace-memory lifetime.
+
+Server-admitted work stays owned by the server. A lost acknowledgement must not
+trigger automatic mutation replay.
 Page-exit events cannot guarantee awaited asynchronous cleanup, so important
 mutations must not depend on unload handlers.
 

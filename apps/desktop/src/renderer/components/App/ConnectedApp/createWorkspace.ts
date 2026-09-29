@@ -1,3 +1,5 @@
+import { createNewSessionDrafts } from "./Conversation/createNewSessionDrafts.ts";
+import type { NewSessionDrafts } from "../../../new-session/drafts.ts";
 import { createComposerCatalog } from "./Conversation/createComposerCatalog.ts";
 import type { BrowserApi } from "../../../../shared/browser-api.ts";
 import { createSessionBrowser } from "./Browser/createSessionBrowser.ts";
@@ -26,6 +28,7 @@ import { createConnectedLifecycle } from "./createConnectedLifecycle.ts";
 /** Construct once in the workspace's retained Solid root, independently of views. */
 export function createWorkspaceModel(
   runtime: ConnectedRuntime,
+  draftConnection: { service: NewSessionDrafts["Service"]; serverKey: string },
   browserConnection?: { api: BrowserApi; serverUrl: string; password: string },
 ) {
   const connected = () => runtime.stream.status() === "connected";
@@ -48,6 +51,12 @@ export function createWorkspaceModel(
     connected,
     bootstrapped,
   });
+  const drafts = createNewSessionDrafts(
+    runtime,
+    sessions,
+    draftConnection.service,
+    draftConnection.serverKey,
+  );
   const layouts = createSessionPanelLayouts({ effects: runtime.effects });
   const panels = createShellPanelState({
     leftSidebarOpen: true,
@@ -179,13 +188,10 @@ export function createWorkspaceModel(
     connected,
     workspace: sessions,
     clearDraft: composer.clear,
-    onSessionCreated: (sessionID) => {
-      sessions.markCreated(sessionID);
-      if (panels.mobile()) panels.setLeftSidebarOpen(false);
-    },
   });
 
   return {
+    drafts,
     attentionForSession,
     browser,
     panels,

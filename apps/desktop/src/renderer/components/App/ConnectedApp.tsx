@@ -1,3 +1,5 @@
+import { AddProjectRegion } from "./ConnectedApp/Sessions/AddProjectRegion.tsx";
+import { NewSessionDraftRegion } from "./ConnectedApp/Conversation/NewSessionDraftRegion.tsx";
 import { Show } from "solid-js";
 
 import { useServerRuntime, type VerifiedServer } from "../../opencode/index.ts";
@@ -23,6 +25,7 @@ export type ConnectedAppProps = {
 export function ConnectedApp(props: ConnectedAppProps) {
   const runtime = useServerRuntime();
   const {
+    drafts,
     browser,
     panels,
     connected,
@@ -51,16 +54,16 @@ export function ConnectedApp(props: ConnectedAppProps) {
     <>
       <ShellRegion
         panels={panels}
+        rightPanelAvailable={sessions.selectedDraftID() === undefined}
         selectedTitle={() =>
-          sessions.selectedID()
-            ? sessions.selectedSession()?.title?.trim() || "Untitled session"
-            : undefined
+          sessions.selectedDraftID()
+            ? "New session"
+            : sessions.selectedID()
+              ? sessions.selectedSession()?.title?.trim() || "Untitled session"
+              : undefined
         }
         sidebarActions={
-          <SessionActionsRegion
-            canCreate={connected() && runtime.sessions.state() === "ready"}
-            onCreate={flows.openNewSession}
-          />
+          <SessionActionsRegion canCreate={drafts.canCreate()} onCreate={drafts.create} />
         }
         rightControls={
           <ContextTitlebarRegion
@@ -76,6 +79,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
             runtime={runtime}
             workspace={sessions}
             flows={flows}
+            drafts={drafts}
             globalControls={
               <GlobalFormsRegion controller={globalForms} visible={panels.leftSidebarOpen()} />
             }
@@ -88,18 +92,25 @@ export function ConnectedApp(props: ConnectedAppProps) {
           />
         }
         main={
-          <ConversationRegion
-            workspace={sessions}
-            composer={composer}
-            inbox={inbox}
-            annotationDrafts={annotationDrafts}
-            modelSelection={modelSelection}
-            agentSelection={agentSelection}
-            catalog={catalog}
-            forms={forms}
-            permissions={permissions}
-            connected={connected}
-          />
+          <Show
+            when={sessions.selectedDraftID()}
+            fallback={
+              <ConversationRegion
+                workspace={sessions}
+                composer={composer}
+                inbox={inbox}
+                annotationDrafts={annotationDrafts}
+                modelSelection={modelSelection}
+                agentSelection={agentSelection}
+                catalog={catalog}
+                forms={forms}
+                permissions={permissions}
+                connected={connected}
+              />
+            }
+          >
+            <NewSessionDraftRegion controller={drafts} />
+          </Show>
         }
         context={
           <div class="workspace-context-body">
@@ -133,6 +144,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
           </div>
         }
       />
+      <AddProjectRegion controller={drafts} runtime={runtime} />
       <SessionFlowsRegion flows={flows} />
       <Show when={reviewFlow.removal()}>
         <ReviewRegion flow={reviewFlow} />

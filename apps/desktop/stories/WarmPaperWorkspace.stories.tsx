@@ -52,7 +52,6 @@ import {
   type NewSessionDraft,
 } from "./workspace-showcase/WorkspaceNewSession.tsx";
 import { WorkspaceAddProject } from "./workspace-showcase/WorkspaceAddProject.tsx";
-import { DraftList } from "../src/renderer/components/App/ConnectedApp/Sessions/DraftList.tsx";
 import { WorkspaceBrowser } from "./workspace-showcase/WorkspaceBrowser.tsx";
 import { createWorkspacePermissions } from "./workspace-showcase/permission-fixture.ts";
 import { storySession } from "./session-fixtures.ts";
@@ -594,18 +593,16 @@ function WorkspaceShowcaseContent(
                   showHeader={panelState.mobile()}
                   sidebarVisible={panelState.leftSidebarOpen()}
                   sessions={visibleSessions()}
-                  drafts={
-                    <DraftList
-                      drafts={draftItems()}
-                      selectedID={selectedDraftID()}
-                      onSelect={() => newSession()}
-                      onDelete={(id) => {
-                        setDraftItems((items) => items.filter((item) => item.id !== id));
-                        setNewSessionDraft((current) => ({ ...current, value: "", files: [] }));
-                        setShowNewSession(false);
-                      }}
-                    />
-                  }
+                  drafts={{
+                    drafts: draftItems(),
+                    selectedID: selectedDraftID(),
+                    onSelect: () => newSession(),
+                    onDelete: (id) => {
+                      setDraftItems((items) => items.filter((item) => item.id !== id));
+                      setNewSessionDraft((current) => ({ ...current, value: "", files: [] }));
+                      setShowNewSession(false);
+                    },
+                  }}
 
                   attentionForSession={(id) =>
                     id === "extract-hooks" && !readCompleted()

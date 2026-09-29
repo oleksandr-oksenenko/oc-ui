@@ -215,7 +215,7 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
   };
 }
 
-function modelChoiceID(model: Pick<ModelInfo, "id" | "providerID">): string {
+export function modelChoiceID(model: Pick<ModelInfo, "id" | "providerID">): string {
   return JSON.stringify([model.providerID, model.id]);
 }
 

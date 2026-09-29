@@ -18,7 +18,10 @@ import type {
 } from "../../../../domain/index.ts";
 import { createSessionPrompt } from "../../../../opencode/session-prompt.ts";
 import { leadingCommandName, parseSessionCommand } from "../../../../opencode/session-command.ts";
-import { readPromptFile } from "../../../../opencode/read-prompt-file.ts";
+import {
+  submitSessionInput,
+  SessionAttachmentError,
+} from "../../../../opencode/submit-session-input.ts";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_DRAFT_ATTACHMENT_BYTES,
@@ -68,16 +71,6 @@ const attachmentBudgetMessage = (rejected: number): string =>
     ? `One file was not attached: the draft can hold ${DRAFT_ATTACHMENT_BUDGET_LABEL} in total. Remove an attachment before adding more.`
     : `${rejected} files were not attached: the draft can hold ${DRAFT_ATTACHMENT_BUDGET_LABEL} in total. Remove an attachment before adding more.`;
 
-class CommandAttachmentError extends Schema.TaggedError<CommandAttachmentError>()(
-  "CommandAttachmentError",
-  { name: Schema.String },
-) {}
-
-class PromptAttachmentError extends Schema.TaggedError<PromptAttachmentError>()(
-  "PromptAttachmentError",
-  { name: Schema.String },
-) {}
-
 type SessionPrompt = ReturnType<typeof createSessionPrompt>;
 
 type SubmissionBase = {
@@ -123,7 +116,7 @@ type AttachmentNotice = {
 };
 
 type AdmissionState = {
-  active: SubmissionRequest | undefined;
+  active: Readonly<Record<string, SubmissionRequest | undefined>>;
   error: PromptSubmission | undefined;
   commandNotice: CommandNotice | undefined;
   attachmentNotice: AttachmentNotice | undefined;
@@ -320,7 +313,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     }
   };
   const admission = Atom.make<AdmissionState>({
-    active: undefined,
+    active: {},
     error: undefined,
     commandNotice: undefined,
     attachmentNotice: undefined,
@@ -328,9 +321,17 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   });
   effects.mount(admission);
   const state = useAtomValue(() => admission);
-  const activeRequest = () => effects.registry.get(admission).active;
-  const setActiveRequest = (active: SubmissionRequest | undefined): void => {
-    effects.registry.set(admission, { ...effects.registry.get(admission), active });
+  const activeRequest = (sessionID = options.selectedID() ?? "") =>
+    effects.registry.get(admission).active[sessionID];
+  const setActiveRequest = (
+    active: SubmissionRequest | undefined,
+    sessionID = active?.sessionID ?? options.selectedID() ?? "",
+  ): void => {
+    const current = effects.registry.get(admission);
+    effects.registry.set(admission, {
+      ...current,
+      active: { ...current.active, [sessionID]: active },
+    });
   };
   const setErrorRequest = (error: PromptSubmission | undefined): void => {
     effects.registry.set(admission, { ...effects.registry.get(admission), error });
@@ -419,13 +420,13 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       !options.connected() ||
       options.transcriptLoading() ||
       options.transcriptError() !== undefined ||
-      state().active !== undefined ||
+      state().active[options.selectedID() ?? ""] !== undefined ||
       options.selectionSwitching(),
   );
 
   const submitting = createMemo(() => {
     const sessionID = options.selectedID();
-    return sessionID !== undefined && state().active?.sessionID === sessionID;
+    return sessionID !== undefined && state().active[sessionID] !== undefined;
   });
 
   const activeReviewKey = (): ReviewDraftKey | undefined => {
@@ -524,7 +525,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     clearAttachmentNotice(sessionID);
     setErrorRequest(undefined);
     setActiveRequest(request);
-    return admit(request, runCommand(request));
+    return admit(request, submitSessionInput(effects, options.runtime, request));
   };
 
   const submitPrompt = (
@@ -602,46 +603,8 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     setErrorRequest(undefined);
     setFailedRequest(sessionID, undefined);
     setActiveRequest(request);
-    return admit(request, runPrompt(request));
+    return admit(request, submitSessionInput(effects, options.runtime, request));
   };
-
-  const runPrompt = (request: PromptSubmission) =>
-    Effect.forEach(request.files, readPromptFile).pipe(
-      Effect.mapError((cause) => new PromptAttachmentError({ name: cause.name })),
-      Effect.flatMap((encodedFiles) =>
-        effects.request(() =>
-          options.runtime.data.session.prompt({
-            sessionID: request.sessionID,
-            id: request.id,
-            delivery: request.delivery,
-            ...request.prompt,
-            files: encodedFiles.length > 0 ? encodedFiles : undefined,
-          }),
-        ),
-      ),
-    );
-
-  const runCommand = (request: CommandSubmission) =>
-    Effect.forEach(request.files, readPromptFile).pipe(
-      Effect.mapError((cause) => new CommandAttachmentError({ name: cause.name })),
-      Effect.flatMap((encodedFiles) =>
-        effects.request((signal) =>
-          options.runtime.api.session.command(
-            {
-              sessionID: request.sessionID,
-              command: request.name,
-              text: request.arguments,
-              // The server expands the template into new text, so the draft's
-              // mention offsets no longer describe it.
-              skills: request.skills.length ? request.skills.map(({ id }) => ({ id })) : undefined,
-              delivery: request.delivery,
-              files: encodedFiles.length > 0 ? encodedFiles : undefined,
-            },
-            { signal },
-          ),
-        ),
-      ),
-    );
 
   const admit = <A, E>(request: SubmissionRequest, work: Effect.Effect<A, E>) =>
     effects.runPromise(
@@ -653,7 +616,8 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
         Effect.onInterrupt(() => Effect.sync(() => failSubmission(request))),
         Effect.ensuring(
           Effect.sync(() => {
-            if (activeRequest() === request) setActiveRequest(undefined);
+            if (activeRequest(request.sessionID) === request)
+              setActiveRequest(undefined, request.sessionID);
           }),
         ),
       ),
@@ -665,7 +629,12 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   createEffect(() => {
     const { active, failed } = state();
     for (const request of Object.values(failed)) {
-      if (request === undefined || request === active || !matchingMessage(request)) continue;
+      if (
+        request === undefined ||
+        request === active[request.sessionID] ||
+        !matchingMessage(request)
+      )
+        continue;
       completeSubmission(request);
     }
   });
@@ -677,8 +646,8 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     options.review.drafts.clearSession(sessionID);
     const failed = failedRequest(sessionID);
     if (failed !== undefined) forgetFailedRequest(failed);
-    if (activeRequest()?.sessionID === sessionID) {
-      setActiveRequest(undefined);
+    if (activeRequest(sessionID)) {
+      setActiveRequest(undefined, sessionID);
     }
     if (effects.registry.get(admission).commandNotice?.sessionID === sessionID) {
       setCommandNotice(sessionID, undefined);
@@ -731,7 +700,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
   function completeSubmission(request: SubmissionRequest): void {
     if (
-      activeRequest() !== request &&
+      activeRequest(request.sessionID) !== request &&
       (request.kind === "command" || failedRequest(request.sessionID) !== request)
     ) {
       return;
@@ -766,19 +735,19 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     ) {
       setCommandNotice(request.sessionID, undefined);
     }
-    if (activeRequest() === request) {
-      setActiveRequest(undefined);
+    if (activeRequest(request.sessionID) === request) {
+      setActiveRequest(undefined, request.sessionID);
     }
   }
 
   function failSubmission(request: SubmissionRequest, cause?: unknown): void {
-    if (activeRequest() !== request) return;
+    if (activeRequest(request.sessionID) !== request) return;
     if (request.kind === "prompt" && matchingMessage(request)) {
       completeSubmission(request);
       return;
     }
     if (request.kind === "prompt") {
-      if (Schema.is(PromptAttachmentError)(cause)) {
+      if (Schema.is(SessionAttachmentError)(cause)) {
         restoreAttachmentFailure(request, cause.name);
         return;
       }
@@ -787,13 +756,13 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     }
     if (options.selectedID() === request.sessionID) {
       setErrorRequest(undefined);
-      if (Schema.is(CommandAttachmentError)(cause)) {
+      if (Schema.is(SessionAttachmentError)(cause)) {
         setCommandNotice(request.sessionID, "attachment", cause.name);
       } else {
         setCommandNotice(request.sessionID, "dispatch");
       }
     }
-    setActiveRequest(undefined);
+    setActiveRequest(undefined, request.sessionID);
   }
 
   function matchingMessage(request: PromptSubmission): boolean {
@@ -819,7 +788,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     options.annotations.restore(request.annotations);
     setFailedRequest(request.sessionID, request);
     if (options.selectedID() === request.sessionID) setErrorRequest(request);
-    setActiveRequest(undefined);
+    setActiveRequest(undefined, request.sessionID);
   }
 
   function restoreAttachmentFailure(request: PromptSubmission, name: string): void {
@@ -834,7 +803,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
         request,
       );
     }
-    setActiveRequest(undefined);
+    setActiveRequest(undefined, request.sessionID);
   }
 }
 

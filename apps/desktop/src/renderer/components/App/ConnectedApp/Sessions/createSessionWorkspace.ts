@@ -44,6 +44,8 @@ export type SessionWorkspaceRuntime = {
 export type SessionWorkspace = {
   readonly sessions: Accessor<readonly SessionInfo[]>;
   readonly selectedID: Accessor<string | undefined>;
+  readonly selectedDraftID: Accessor<string | undefined>;
+  readonly selectDraft: (id: string | undefined) => void;
   readonly selectedSession: Accessor<SessionInfo | undefined>;
   /** Descendants of the selection in tree order, excluding the selection itself. */
   readonly subagentIDs: Accessor<readonly string[]>;
@@ -61,7 +63,6 @@ export type SessionWorkspace = {
   readonly beginRecovery: () => void;
   readonly refreshAfterReconnect: () => Promise<void>;
   readonly failRecovery: () => void;
-  readonly markCreated: (sessionID: string) => void;
   readonly remove: (sessionIDs: readonly string[]) => void;
 };
 
@@ -75,7 +76,11 @@ export type CreateSessionWorkspaceInput = {
 /** Owns the selected session and its server-backed transcript lifecycle. */
 export function createSessionWorkspace(input: CreateSessionWorkspaceInput): SessionWorkspace {
   const { effects } = input;
-  const selectionAtom = Atom.make<{ id?: string; ancestors: readonly string[] }>({ ancestors: [] });
+  const selectionAtom = Atom.make<{
+    kind: "session" | "draft";
+    id?: string;
+    ancestors: readonly string[];
+  }>({ kind: "session", ancestors: [] });
   const transcriptAtom = Atom.make<TranscriptState>({ status: "idle" });
   const stopErrorAtom = Atom.make<string | undefined>(undefined);
   const recoveryAtom = Atom.make<string | undefined>(undefined);
@@ -84,7 +89,17 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   effects.mount(stopErrorAtom);
   effects.mount(recoveryAtom);
   const selection = useAtomValue(() => selectionAtom);
-  const selectedID = createMemo(() => selection().id);
+  const selectedID = createMemo(() =>
+    selection().kind === "session" ? selection().id : undefined,
+  );
+  const selectedDraftID = createMemo(() =>
+    selection().kind === "draft" ? selection().id : undefined,
+  );
+  const selectDraft = (id: string | undefined) => {
+    hydration.cancel();
+    effects.registry.set(selectionAtom, { kind: id ? "draft" : "session", id, ancestors: [] });
+    setTranscriptState({ status: "idle" });
+  };
   const transcriptState = useAtomValue(() => transcriptAtom);
   const stopError = useAtomValue(() => stopErrorAtom);
   const setTranscriptState = (state: TranscriptState) =>
@@ -185,6 +200,7 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   const selectSession = (sessionID: string): void => {
     if (selectedID() === sessionID) return;
     effects.registry.set(selectionAtom, {
+      kind: "session",
       id: sessionID,
       ancestors: sessionAncestorIDs(sessionID, sessions()),
     });
@@ -256,15 +272,6 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     });
   };
 
-  const markCreated = (sessionID: string): void => {
-    hydration.cancel();
-    effects.registry.set(selectionAtom, {
-      id: sessionID,
-      ancestors: sessionAncestorIDs(sessionID, sessions()),
-    });
-    setTranscriptState({ sessionID, status: "ready" });
-  };
-
   const remove = (sessionIDs: readonly string[]): void => {
     for (const sessionID of sessionIDs) input.runtime.sessions.remove(sessionID);
   };
@@ -274,7 +281,7 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     effects.registry.set(stopErrorAtom, undefined);
   });
 
-  // One observer covers every selection writer: direct selection, creation,
+  // One observer covers every selection writer: direct selection,
   // catalog fallback, and clearing. Keep policy reads out of the dependency graph.
   createEffect(
     on(selectedID, (id) => {
@@ -283,12 +290,13 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   );
 
   createEffect(() => {
-    if (input.runtime.sessions.state() !== "ready") return;
+    if (selectedDraftID() !== undefined || input.runtime.sessions.state() !== "ready") return;
     const current = selectedID();
     if (current && input.runtime.sessions.ids().includes(current)) {
       const currentSessions = sessions();
       if (currentSessions.some((session) => session.id === current)) {
         effects.registry.set(selectionAtom, {
+          kind: "session",
           id: current,
           ancestors: sessionAncestorIDs(current, currentSessions),
         });
@@ -298,7 +306,7 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     const next = chooseSessionFallback(effects.registry.get(selectionAtom).ancestors, sessions());
     if (next === undefined) {
       hydration.cancel();
-      effects.registry.set(selectionAtom, { ancestors: [] });
+      effects.registry.set(selectionAtom, { kind: "session", ancestors: [] });
       setTranscriptState({ status: "idle" });
       return;
     }
@@ -404,6 +412,8 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
   return {
     sessions,
     selectedID,
+    selectedDraftID,
+    selectDraft,
     selectedSession,
     subagentIDs,
     running,
@@ -420,7 +430,6 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     beginRecovery,
     refreshAfterReconnect,
     failRecovery,
-    markCreated,
     remove,
   };
 }

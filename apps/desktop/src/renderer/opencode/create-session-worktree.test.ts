@@ -11,7 +11,6 @@ import {
 const root = "/srv/project";
 const destination = "/server-owned/worktrees/generated";
 const fixture = (branch = "main", directory = root) => {
-  let current = true;
   const resolved = {
     directory,
     project: { id: "project", directory, canonical: directory },
@@ -41,14 +40,10 @@ const fixture = (branch = "main", directory = root) => {
   const input: SessionWorktreeInput = {
     api,
     effects: withTestWorkspace((effects) => effects),
-    isCurrent: () => current,
   };
   return {
     api,
     input,
-    cancel: () => {
-      current = false;
-    },
     run: () => input.effects.runPromise(createEffect(input, { directory })),
   };
 };
@@ -74,6 +69,18 @@ describe("createSessionWorktree", () => {
       );
     },
   );
+
+  it("passes the selected resolved commit to native detached worktree creation", async () => {
+    const fake = fixture();
+    await fake.input.effects.runPromise(
+      createEffect(fake.input, { directory: root }, "selected-commit"),
+    );
+    expect(fake.api.vcs.get).not.toHaveBeenCalled();
+    expect(fake.api.worktree.create).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: "selected-commit" }),
+      { signal: expect.any(AbortSignal) },
+    );
+  });
 
   it.each(["C:\\project", "\\\\server\\share\\project"])(
     "delegates server path handling for %s",
@@ -104,19 +111,6 @@ describe("createSessionWorktree", () => {
     expect(fake.api.worktree.create).not.toHaveBeenCalled();
   });
 
-  it("checks cancellation after discovery", async () => {
-    const fake = fixture();
-    fake.api.vcs.get.mockImplementationOnce(async () => {
-      fake.cancel();
-      return {
-        location: { directory: root, project: { id: "project", directory: root, canonical: root } },
-        data: { branch: { default: "main" } },
-      };
-    });
-    await expect(fake.run()).rejects.toThrow("cancelled");
-    expect(fake.api.worktree.create).not.toHaveBeenCalled();
-  });
-
   it("keeps an interrupted native request owned until it settles", async () => {
     const fake = fixture();
     const pending = deferred<Awaited<ReturnType<OpenCodeClient["worktree"]["create"]>>>();
@@ -137,16 +131,7 @@ describe("createSessionWorktree", () => {
     pending.resolve({ directory: destination });
     await closing;
     await outcome;
-    expect(fake.api.worktree.remove).not.toHaveBeenCalled();
-  });
-
-  it("retains the created path if cancellation follows creation", async () => {
-    const fake = fixture();
-    fake.api.worktree.create.mockImplementationOnce(async () => {
-      fake.cancel();
-      return { directory: destination };
-    });
-    await expect(fake.run()).rejects.toMatchObject({ location: { directory: destination } });
+    expect(fake.api.location.get).toHaveBeenCalledOnce();
     expect(fake.api.worktree.remove).not.toHaveBeenCalled();
   });
 

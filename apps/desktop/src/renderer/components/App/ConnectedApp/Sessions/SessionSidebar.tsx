@@ -8,6 +8,7 @@ import type { SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
 import { Show, createSignal, type JSX } from "solid-js";
 
+import { DraftList, type DraftListProps } from "./SessionSidebar/DraftList.tsx";
 import { SessionHeader } from "./SessionSidebar/SessionHeader.tsx";
 import { SessionTree } from "./SessionSidebar/SessionTree.tsx";
 import type { SessionDeletionStatus } from "./createSessionFlows.ts";
@@ -32,7 +33,7 @@ export type SessionSidebarProps = {
   readonly autoFocusClose?: boolean;
   readonly serverName: string;
   readonly globalControls?: JSX.Element;
-  readonly drafts?: JSX.Element;
+  readonly drafts?: DraftListProps;
   readonly sidebarVisible?: boolean;
   readonly serverStatus: SessionSidebarStatus;
   readonly onSelect: (sessionID: string) => void;
@@ -51,7 +52,6 @@ const statusLabel = {
 } satisfies Record<SessionSidebarStatus, string>;
 
 export function SessionSidebar(props: SessionSidebarProps) {
-  const drafts = props.drafts;
   const [filter, setFilter] = createSignal("");
 
   return (
@@ -80,7 +80,16 @@ export function SessionSidebar(props: SessionSidebarProps) {
       </div>
 
       <ScrollView class="shell-session-tree" thumbVisibility="scroll">
-        {drafts}
+        <Show when={props.drafts}>
+          {(drafts) => (
+            <DraftList
+              {...drafts()}
+              drafts={drafts().drafts.filter((draft) =>
+                draft.title.toLowerCase().includes(filter().toLowerCase()),
+              )}
+            />
+          )}
+        </Show>
 
         <Show when={props.error}>
           {(error) => (

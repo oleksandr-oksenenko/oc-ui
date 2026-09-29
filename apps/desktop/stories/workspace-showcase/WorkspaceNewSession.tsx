@@ -60,7 +60,7 @@ export function WorkspaceNewSession(options: WorkspaceNewSessionProps) {
           }
         },
         onModeChange: (mode) => {
-          if (mode === "worktree" && options.draft.branch.kind === "new") {
+          if (mode === "worktree" && options.draft.branch?.kind === "new") {
             options.onDraftChange({ mode, branch: { kind: "existing", name: "main" } });
           } else {
             options.onDraftChange({ mode });

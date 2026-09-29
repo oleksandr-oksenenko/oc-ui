@@ -1,5 +1,4 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook interaction tests use Promise APIs. */
-import { DraftList } from "../src/renderer/components/App/ConnectedApp/Sessions/DraftList.tsx";
 import { createSignal } from "solid-js";
 import type { SessionInfo } from "@opencode/client";
 import { expect, userEvent, within } from "storybook/test";
@@ -362,16 +361,14 @@ export const MobileCloseFocused = {
 export const ManyDrafts = {
   render: () =>
     interactiveSidebar(flatSessions, {
-      drafts: (
-        <DraftList
-          drafts={Array.from({ length: 30 }, (_, index) => ({
-            id: `draft-${index}`,
-            title: `Draft ${index + 1}`,
-          }))}
-          onSelect={() => undefined}
-          onDelete={() => undefined}
-        />
-      ),
+      drafts: {
+        drafts: Array.from({ length: 30 }, (_, index) => ({
+          id: `draft-${index}`,
+          title: `Draft ${index + 1}`,
+        })),
+        onSelect: () => undefined,
+        onDelete: () => undefined,
+      },
     }),
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);

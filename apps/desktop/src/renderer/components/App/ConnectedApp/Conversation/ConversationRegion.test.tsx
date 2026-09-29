@@ -99,6 +99,8 @@ function setup(
     reply: vi.fn<SessionPermissionsController["reply"]>(async () => undefined),
   };
   const workspace: SessionWorkspace = {
+    selectedDraftID: () => undefined,
+    selectDraft: () => undefined,
     sessions: () => options.sessions ?? [session],
     selectedSession: () => session,
     selectedID,
@@ -117,7 +119,6 @@ function setup(
     beginRecovery: () => undefined,
     refreshAfterReconnect: vi.fn<SessionWorkspace["refreshAfterReconnect"]>(async () => undefined),
     failRecovery: () => undefined,
-    markCreated: () => undefined,
     remove: () => undefined,
   };
   const composer: SessionComposerController = {

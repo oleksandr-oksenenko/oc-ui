@@ -29,6 +29,7 @@ export default mergeConfig(
             name: "unit",
             environment: "jsdom",
             include: ["src/**/*.test.{ts,tsx}", "test/*.test.mjs"],
+            exclude: ["src/**/*.browser.test.ts"],
             setupFiles: ["./test/setup-dom.ts"],
           },
         },
@@ -40,6 +41,19 @@ export default mergeConfig(
             hookTimeout: 60_000,
             testTimeout: 180_000,
             expect: { poll: { timeout: 30_000 } },
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: "storage",
+            include: ["src/renderer/new-session/*.browser.test.ts"],
+            browser: {
+              enabled: true,
+              headless: true,
+              provider: playwright(),
+              instances: [{ browser: "chromium" }],
+            },
           },
         },
         {

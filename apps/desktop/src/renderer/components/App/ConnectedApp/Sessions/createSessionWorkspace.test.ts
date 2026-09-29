@@ -145,7 +145,25 @@ function mountWithPanels(fixture: ReturnType<typeof setup>) {
 }
 
 describe("createSessionWorkspace", () => {
-  it("records every selection path in the eviction policy", async () => {
+  it("retains draft selection across catalog refresh and clears session context", async () => {
+    const fixture = setup([session("older", 1), session("newer", 2)]);
+    const { workspace, dispose } = mount(fixture);
+    workspace.selectDraft("draft-one");
+    expect(workspace.selectedID()).toBeUndefined();
+    expect(workspace.selectedSession()).toBeUndefined();
+    expect(workspace.selectedDraftID()).toBe("draft-one");
+    fixture.setIDs(["older", "newer", "external"]);
+    fixture.setCatalogState("loading");
+    fixture.setCatalogState("ready");
+    await flush();
+    expect(workspace.selectedDraftID()).toBe("draft-one");
+    expect(workspace.transcript()).toEqual([]);
+    workspace.select("older");
+    expect(workspace.selectedID()).toBe("older");
+    expect(workspace.selectedDraftID()).toBeUndefined();
+    dispose();
+  });
+  it("records initial and direct session selections in the eviction policy", async () => {
     const fixture = setup([session("one", 1), session("two", 2)]);
     const { workspace, dispose } = mount(fixture);
 
@@ -155,10 +173,6 @@ describe("createSessionWorkspace", () => {
     workspace.select("one");
     await vi.waitFor(() =>
       expect(fixture.runtime.memory.touchSelection).toHaveBeenCalledWith("one"),
-    );
-    workspace.markCreated("fresh");
-    await vi.waitFor(() =>
-      expect(fixture.runtime.memory.touchSelection).toHaveBeenCalledWith("fresh"),
     );
     dispose();
   });

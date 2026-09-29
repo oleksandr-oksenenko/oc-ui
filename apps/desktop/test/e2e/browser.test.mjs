@@ -112,6 +112,31 @@ beforeAll(async () => {
       writeFile(join(directory, "opencode.json"), acceptanceConfig),
     ),
   );
+  await git(project, "add", "-f", "opencode.json");
+  await git(project, "commit", "-m", "Track branch configuration fixture");
+  await git(project, "checkout", "-b", "config-hidden-build");
+  await writeFile(
+    join(project, "opencode.json"),
+    JSON.stringify({
+      ...JSON.parse(acceptanceConfig),
+      agents: { ...JSON.parse(acceptanceConfig).agents, build: { hidden: true } },
+    }),
+  );
+  await git(project, "add", "opencode.json");
+  await git(project, "commit", "-m", "Hide build on alternate branch");
+  await git(project, "checkout", "acceptance");
+  for (const directory of ["agent", "agents", "mode", "modes"]) {
+    await git(project, "checkout", "-b", "markdown-hidden-build-" + directory);
+    const source = join(project, ".opencode", directory);
+    await mkdir(source, { recursive: true });
+    await writeFile(
+      join(source, "build.md"),
+      "---\nhidden: true\nmode: primary\n---\nHidden branch agent.\n",
+    );
+    await git(project, "add", "-f", ".opencode");
+    await git(project, "commit", "-m", "Hide build through " + directory + " Markdown");
+    await git(project, "checkout", "acceptance");
+  }
   await Promise.all(
     Array.from({ length: 24 }, (_, index) =>
       mkdir(join(project, `folder-${String(index).padStart(2, "0")}`)),
@@ -431,14 +456,14 @@ describe.sequential("production browser app", () => {
     await connect();
   });
 
-  it("keeps the shared session, directory, keyboard, and narrow-layout flows working", async () => {
+  it("uses the centered composer, directory dialog and independent persistent drafts", async () => {
     const opener = page.getByRole("button", { name: "Create session", exact: true });
     await opener.click();
-    await page.getByLabel("Close new session dialog").waitFor();
-    await page.keyboard.press("Escape");
-    await expect.poll(() => opener.evaluate((node) => node === document.activeElement)).toBe(true);
-    await opener.click();
-    await page.getByRole("button", { name: "Add project", exact: true }).click();
+    await page.getByRole("region", { name: "New session", exact: true }).waitFor();
+    expect(await page.getByLabel("Close new session dialog").count()).toBe(0);
+    const projectPicker = page.getByRole("button", { name: /^Project:/u });
+    await projectPicker.click();
+    await page.getByRole("button", { name: "Add project…", exact: true }).click();
     const directory = page.locator(".server-directory-browser-path");
     await expect.poll(() => directory.textContent()).toBe(await realpath(project));
     await page.getByRole("button", { name: "Browse directory folder-00/", exact: true }).click();
@@ -458,41 +483,100 @@ describe.sequential("production browser app", () => {
     await page.screenshot({ path: join(artifacts, "browser-directory-narrow.png") });
     await page.keyboard.press("Escape");
     await expect
-      .poll(() =>
-        page
-          .getByRole("button", { name: "Add project", exact: true })
-          .evaluate((node) => node === document.activeElement),
-      )
-      .toBe(true);
-    await page.getByRole("button", { name: "Add project", exact: true }).click();
-    await expect.poll(() => directory.textContent()).toBe(await realpath(project));
-    await page.locator('.server-flow-dialog button[type="submit"]').click();
-    const projectPicker = page.locator(".new-session-project-trigger");
-    await projectPicker.click();
-    await page.getByPlaceholder("Search projects").waitFor();
-    await page.keyboard.press("Escape");
-    await expect
       .poll(() => projectPicker.evaluate((node) => node === document.activeElement))
       .toBe(true);
-    await page.locator('.server-flow-dialog button[type="submit"]').click();
-    await page.getByLabel("Prompt", { exact: true }).waitFor();
-    await page.locator(".transcript-empty-state").waitFor();
-    expect(await page.getByRole("button", { name: "Send", exact: true }).isDisabled()).toBe(true);
-    expect(await page.locator(".titlebar-session-title").textContent()).toBe("Untitled session");
-    await page.getByLabel("Prompt", { exact: true }).fill("Independent draft");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
     await page.setViewportSize({ width: 1280, height: 860 });
-    await page.getByRole("button", { name: "Hide sessions", exact: true }).waitFor();
+    const prompt = page.getByLabel("Prompt", { exact: true });
+    await prompt.fill("Persistent first draft");
+    await prompt.press("End");
+    await prompt.pressSequentially(" /rev");
+    await page.getByRole("button", { name: /\/review Acceptance review/ }).waitFor();
+    await prompt.press("Enter");
+    const firstText = await prompt.textContent();
+    await prompt.evaluate((input) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.items.add(
+        new File(["Durable document contents"], "durable.txt", { type: "text/plain" }),
+      );
+      input.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+    });
+    await page.getByRole("button", { name: "Remove durable.txt", exact: true }).waitFor();
+    await page
+      .locator(".session-drafts .shell-session-title")
+      .filter({ hasText: "Persistent first draft" })
+      .waitFor();
     await opener.click();
-    await page.locator('.server-flow-dialog button[type="submit"]').click();
     await expect.poll(() => page.getByLabel("Prompt", { exact: true }).textContent()).toBe("");
-    expect(await page.locator(".shell-session-main").count()).toBe(2);
-    await page.locator('.shell-session-main:not([aria-current="page"])').click();
+    await page.getByLabel("Prompt", { exact: true }).fill("Persistent second draft");
+    await page
+      .locator(".session-drafts .shell-session-title")
+      .filter({ hasText: "Persistent first draft" })
+      .click();
     await expect
       .poll(() => page.getByLabel("Prompt", { exact: true }).textContent())
-      .toBe("Independent draft");
+      .toBe(firstText);
+    await expect
+      .poll(() => page.getByRole("button", { name: "Send", exact: true }).isEnabled())
+      .toBe(true);
+    await page.reload();
+    await connect();
+    await page
+      .locator(".session-drafts .shell-session-title")
+      .filter({ hasText: "Persistent first draft" })
+      .click();
+    await expect
+      .poll(() => page.getByLabel("Prompt", { exact: true }).textContent())
+      .toBe(firstText);
+    await page.getByRole("button", { name: "Remove review skill" }).waitFor();
+    await page.getByRole("button", { name: "Remove durable.txt", exact: true }).waitFor();
+    // Read durable bytes through the native database after the UI reload.
+    expect(
+      await page.evaluate(async () => {
+        const database = await new Promise((resolve, reject) => {
+          const request = indexedDB.open("ocui");
+          request.addEventListener("success", () => resolve(request.result));
+          request.addEventListener("error", () => reject(request.error));
+        });
+        const rows = await new Promise((resolve, reject) => {
+          const request = database.transaction("attachments").objectStore("attachments").getAll();
+          request.addEventListener("success", () => resolve(request.result));
+          request.addEventListener("error", () => reject(request.error));
+        });
+        database.close();
+        return rows.find((row) => row.name === "durable.txt").blob.text();
+      }),
+    ).toBe("Durable document contents");
+    const secondWindow = await context.newPage();
+    await secondWindow.goto(uiUrl);
+    await connect(secondWindow);
+    await secondWindow
+      .locator(".session-drafts .shell-session-title")
+      .filter({ hasText: "Persistent first draft" })
+      .click();
+    await secondWindow.getByRole("button", { name: "Remove durable.txt", exact: true }).waitFor();
+    await prompt.fill("Persistent first draft edited elsewhere");
+    await expect
+      .poll(() => secondWindow.getByLabel("Prompt", { exact: true }).textContent())
+      .toBe("Persistent first draft edited elsewhere");
+    await secondWindow.close();
+    expect(await page.locator(".session-drafts .shell-session-main").count()).toBe(2);
+    await page.getByLabel("Filter sessions", { exact: true }).fill("second draft");
+    expect(await page.locator(".session-drafts .shell-session-main").count()).toBe(1);
+    await page.getByLabel("Filter sessions", { exact: true }).fill("");
+    await page.screenshot({ path: join(artifacts, "browser-new-session-drafts.png") });
+    for (const title of ["Persistent first draft", "Persistent second draft"]) {
+      const row = page.locator(".session-drafts .shell-session-row").filter({ hasText: title });
+      await row.hover();
+      await row.getByRole("button", { name: /^Delete draft:/u }).click();
+      await row.waitFor({ state: "hidden" });
+    }
+    // Seed named conversations for the independent transcript scenarios below.
+    await api.session.create({ title: "Browser fixture one" });
+    await api.session.create({ title: "Browser fixture two" });
+    await selectSession("Browser fixture one");
+    await page.getByLabel("Prompt", { exact: true }).fill("Independent draft");
     expect(await page.evaluate(() => document.documentElement.dataset.host)).toBe("browser");
   });
 
@@ -1287,107 +1371,34 @@ describe.sequential("production browser app", () => {
     );
   });
 
-  it("creates an isolated server worktree and keeps it after session deletion", async () => {
-    await git(project, "commit", "--allow-empty", "-m", "local worktree base");
-    await git(project, "branch", "-f", "main", "HEAD");
-    const localMain = await git(project, "rev-parse", "refs/heads/main");
-    expect(localMain).not.toBe(await git(project, "rev-parse", "origin/main"));
-    await page.screenshot({ path: join(artifacts, "browser-connected.png") });
-    const before = await git(project, "worktree", "list", "--porcelain");
-    const priorSessions = (await api.session.list({ limit: 100 })).data;
-    await page.getByLabel("Create session", { exact: true }).click();
-    await page.getByRole("button", { name: "Start in worktree", exact: true }).click();
-    // A newly created session starts with the context panel closed.
-    if (await page.getByLabel("Show context", { exact: true }).count())
-      await page.getByLabel("Show context", { exact: true }).click();
-    await page.getByText("No working tree changes", { exact: true }).waitFor();
-    const after = await git(project, "worktree", "list", "--porcelain");
-    const worktree = after
-      .split("\n")
-      .find((line) => line.startsWith("worktree ") && !before.includes(line))
-      .slice(9);
-    const resolvedProject = await api.location.get({ location: { directory: project } });
-    expect(
-      worktree.startsWith(
-        `${await realpath(profile.paths.data)}/opencode/worktree/${resolvedProject.project.id.slice(0, 6)}/`,
-      ),
-    ).toBe(true);
-    expect(await git(worktree, "rev-parse", "HEAD")).toBe(localMain);
-    expect(await git(worktree, "branch", "--show-current")).toBe("");
-    const created = (await api.session.list({ limit: 100 })).data.find(
-      (session) => !priorSessions.some((previous) => previous.id === session.id),
-    );
-    expect(created).toBeDefined();
-    expect(created.location.directory).toBe(worktree);
-    const row = page.locator(".shell-session-row.selected");
-    await row.hover();
-    await row.locator(".shell-session-delete").click();
-    await page.locator(".delete-session-dialog").waitFor();
-    await page.keyboard.press("Escape");
-    await access(worktree);
-    await row.hover();
-    await row.locator(".shell-session-delete").click();
-    await page.locator('.delete-session-dialog button[type="submit"]').click();
-    await page.locator(".delete-session-dialog").waitFor({ state: "hidden" });
-    // The session is gone from the server, and the worktree stays registered
-    // with both the server inventory and Git while its files remain on disk.
-    await expect
-      .poll(async () =>
-        (await api.session.list({ limit: 100 })).data.some((session) => session.id === created.id),
-      )
-      .toBe(false);
-    expect(await api.worktree.list({ location: { directory: worktree } })).toContainEqual(
-      expect.objectContaining({ directory: worktree }),
-    );
-    expect(await git(project, "worktree", "list", "--porcelain")).toContain(worktree);
-    await access(worktree);
-    await access(join(project, "working.txt"));
-  });
-
-  it("inherits the latest session's agent, model, and variant after viewing an older session", async () => {
-    const opener = page.getByLabel("Create session", { exact: true });
-    await opener.click();
-    await page.locator('.server-flow-dialog button[type="submit"]').click();
-    await page.locator(".transcript-empty-state").waitFor();
-    await expect.poll(() => opener.evaluate((node) => node === document.activeElement)).toBe(true);
-    await page.getByRole("button", { name: /^Agent:/u }).click();
-    await page.getByRole("option", { name: "acceptance-agent", exact: true }).click();
-    await page.getByLabel("Agent: acceptance-agent", { exact: true }).waitFor();
-    await page.getByRole("button", { name: /^Model:/u }).click();
-    await page.getByPlaceholder("Search models").fill("Acceptance Alternate");
-    await page
-      .locator(".composer-model-option")
-      .filter({ hasText: "Acceptance Alternate" })
-      .click();
-    await page.getByLabel("Model: Acceptance Alternate", { exact: true }).waitFor();
-    await page.getByRole("button", { name: /^Variant:/u }).click();
-    await page.getByRole("option", { name: "high", exact: true }).click();
-    await page.getByLabel("Variant: high", { exact: true }).waitFor();
-    await send("E2E_ALTERNATE inherited choices");
-    await transcript("Acceptance completed with alternate.");
-    await idle();
-    await page.locator('.shell-session-main:not([aria-current="page"])').first().click();
-    await page.getByLabel("Create session", { exact: true }).click();
-    await page.locator('.server-flow-dialog button[type="submit"]').click();
-    await page.locator(".transcript-empty-state").waitFor();
-    for (const label of [
-      "Agent: acceptance-agent",
-      "Model: Acceptance Alternate",
-      "Variant: high",
-    ]) {
-      await page.getByLabel(label, { exact: true }).waitFor();
-    }
-    const latest = (await api.session.list({ order: "desc", limit: 100 })).data
-      .filter((session) => !session.parentID)
-      .toSorted((left, right) => right.time.created - left.time.created)[0];
-    expect(latest).toMatchObject({
+  it("inherits the newest conversation's choices into a draft without mutating that conversation", async () => {
+    const created = await api.session.create({
+      title: "Draft selection source",
       agent: "acceptance-agent",
       model: { providerID: "acceptance", id: "alternate", variant: "high" },
     });
-    await page.locator('.shell-session-main:not([aria-current="page"])').first().click();
-    await page.getByRole("button", { name: /^Create session$/u }).waitFor();
-    await page.locator(".shell-session-main").first().click();
-    await page.getByLabel("Variant: high", { exact: true }).waitFor();
+    await selectSession("Browser fixture one");
+    await page.getByLabel("Create session", { exact: true }).click();
+    for (const label of ["Agent: acceptance-agent", "Model: Acceptance Alternate", "Variant: high"])
+      await page.getByLabel(label, { exact: true }).waitFor();
+    await page.getByLabel("Prompt", { exact: true }).fill("Inherited draft choices");
+    await expect
+      .poll(() => page.getByRole("button", { name: "Send", exact: true }).isEnabled())
+      .toBe(true);
+    await page.getByRole("button", { name: /^Model:/u }).click();
+    await page.getByPlaceholder("Search models").fill("Acceptance Stream");
+    await page.locator(".composer-model-option").filter({ hasText: "Acceptance Stream" }).click();
+    expect((await api.session.get({ sessionID: created.id })).model).toMatchObject({
+      providerID: "acceptance",
+      id: "alternate",
+      variant: "high",
+    });
+    const row = page
+      .locator(".session-drafts .shell-session-row")
+      .filter({ hasText: "Inherited draft choices" });
+    await row.hover();
+    await row.getByRole("button", { name: "Delete draft: Inherited draft choices" }).click();
+    await selectSession("Draft selection source");
     await send("E2E_ALTERNATE copied choices");
     await transcript("Acceptance completed with alternate.");
     await idle();
@@ -1812,66 +1823,208 @@ describe.sequential("production browser app", () => {
     }
   });
 
-  it("adds a previously unseen server directory as a selectable project", async () => {
+  it("adds a previously unseen server directory to the draft without creating a session", async () => {
     const addedDirectory = await realpath(addedProject);
-    const existing = await api.project.list();
-    expect(existing.some((candidate) => candidate.canonical === addedDirectory)).toBe(false);
-
+    expect(
+      (await api.project.list()).some((candidate) => candidate.canonical === addedDirectory),
+    ).toBe(false);
     await ensureConnected();
-    const selectedRow = page.locator('.shell-session-main[aria-current="page"]');
-    const previousTitle =
-      (await selectedRow.count()) === 1
-        ? await selectedRow.locator(".shell-session-title").textContent()
-        : undefined;
-    let created;
-    try {
-      await page.getByRole("button", { name: "Create session", exact: true }).click();
-      await page.getByRole("button", { name: "Add project", exact: true }).click();
-      const directory = page.locator(".server-directory-browser-path");
-      await expect.poll(() => directory.textContent()).toBe(await realpath(project));
-      await page.getByLabel("Go to parent directory").click();
-      await expect.poll(() => directory.textContent()).toBe(dirname(await realpath(project)));
-      // The context itself is returned as `./` by the pinned server.
-      await page
-        .getByRole("button", { name: "Browse directory acceptance-project/", exact: true })
-        .waitFor();
-      await page
-        .getByRole("button", { name: "Browse directory added-project/", exact: true })
-        .click();
-      await expect.poll(() => directory.textContent()).toBe(addedDirectory);
-      // Inspecting markerless directories must not register projects implicitly.
-      expect((await api.project.list()).map((candidate) => candidate.id).toSorted()).toEqual(
-        existing.map((candidate) => candidate.id).toSorted(),
-      );
-      await page.locator('.server-flow-dialog button[type="submit"]').click();
-
-      // The refreshed server-backed list must publish the resolved project, not
-      // fall back to the picker's empty selection.
-      const projectPicker = page.locator(".new-session-project-trigger");
-      await expect
-        .poll(() => projectPicker.getAttribute("aria-label"))
-        .toBe("Project: added-project");
-      await expect.poll(() => projectPicker.textContent()).toContain(addedDirectory);
-
-      await page.locator('.server-flow-dialog button[type="submit"]').click();
-      await page.getByLabel("Prompt", { exact: true }).waitFor();
-      const added = await api.project.current({ location: { directory: addedDirectory } });
-      await expect
-        .poll(async () =>
-          (await api.session.list({ limit: 100, directory: addedDirectory })).data.some(
-            (session) =>
-              session.projectID === added.id && session.location.directory === addedDirectory,
-          ),
-        )
-        .toBe(true);
-      created = (await api.session.list({ limit: 100, directory: addedDirectory })).data.find(
+    const existing = await api.project.list();
+    await page.getByRole("button", { name: "Create session", exact: true }).click();
+    const picker = page.getByRole("button", { name: /^Project:/u });
+    await picker.click();
+    await page.getByRole("button", { name: "Add project…", exact: true }).click();
+    const directory = page.locator(".server-directory-browser-path");
+    await expect.poll(() => directory.textContent()).toBe(await realpath(project));
+    await page.getByLabel("Go to parent directory").click();
+    await expect.poll(() => directory.textContent()).toBe(dirname(await realpath(project)));
+    await page
+      .getByRole("button", { name: "Browse directory acceptance-project/", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Browse directory added-project/", exact: true })
+      .click();
+    await expect.poll(() => directory.textContent()).toBe(addedDirectory);
+    expect((await api.project.list()).map((candidate) => candidate.id).toSorted()).toEqual(
+      existing.map((candidate) => candidate.id).toSorted(),
+    );
+    await page.locator('.server-flow-dialog button[type="submit"]').click();
+    await expect.poll(() => picker.getAttribute("aria-label")).toBe("Project: added-project");
+    await picker.click();
+    await page.getByText(addedDirectory, { exact: true }).waitFor();
+    await page.keyboard.press("Escape");
+    const added = await api.project.current({ location: { directory: addedDirectory } });
+    expect(
+      (await api.session.list({ limit: 100, directory: addedDirectory })).data.some(
         (session) => session.projectID === added.id,
-      );
-    } finally {
-      if (created) {
-        await api.session.remove({ sessionID: created.id });
-        if (previousTitle) await selectSession(previousTitle);
+      ),
+    ).toBe(false);
+    await selectSession("Permission acceptance");
+  });
+
+  it("submits new drafts through local branch creation and detached worktree preparation", async () => {
+    const canonical = await realpath(project);
+    const previousBranch = await git(project, "branch", "--show-current");
+    const start = async (mode, branch) => {
+      await page.getByRole("button", { name: "Create session", exact: true }).click();
+      await page.getByRole("button", { name: /^Project:/u }).click();
+      await page.locator(".selection-option-detail").filter({ hasText: canonical }).click();
+      await page.getByRole("button", { name: /^Location:/u }).click();
+      await page
+        .locator(".selection-option > span:first-child")
+        .getByText(mode === "local" ? "Local" : "New worktree", { exact: true })
+        .click();
+      await page.getByRole("button", { name: /^Branch:/u }).click();
+      if (branch === "new-session-local") {
+        await page.getByRole("button", { name: "Create new branch…", exact: true }).click();
+        await page.getByLabel("New branch name", { exact: true }).fill(branch);
+      } else {
+        await page
+          .locator(".selection-option > span:first-child")
+          .getByText(branch, { exact: true })
+          .click();
       }
+      await page.getByLabel(/^Model:/u).click();
+      await page.getByPlaceholder("Search models").fill("Acceptance Stream");
+      await page.locator(".composer-model-option").filter({ hasText: "Acceptance Stream" }).click();
+      await page.getByLabel(/^Agent:/u).click();
+      await page.getByRole("option", { name: "Build", exact: true }).click();
+    };
+    const submit = async (text, background) => {
+      const admitted = page.waitForResponse(
+        (response) =>
+          /\/session\/[^/]+\/prompt$/u.test(new URL(response.url()).pathname) &&
+          response.request().method() === "POST",
+      );
+      await page.getByLabel("Prompt", { exact: true }).fill(text);
+      await page.getByRole("button", { name: "Send", exact: true }).click();
+      if (background) await background();
+      const response = await admitted;
+      expect(response.ok(), await response.text()).toBe(true);
+      const id = decodeURIComponent(new URL(response.url()).pathname.split("/").at(-2));
+      if (background) {
+        await page
+          .locator(".session-drafts .shell-session-row")
+          .filter({ hasText: text })
+          .waitFor({ state: "hidden" });
+        expect(
+          await page
+            .getByRole("button", { name: /^Browser fixture one,/u })
+            .getAttribute("aria-current"),
+        ).toBe("page");
+        await api.session.rename({ sessionID: id, title: "Background worktree admission" });
+        await selectSession("Background worktree admission");
+      }
+      await page.locator(".new-session-screen").waitFor({ state: "hidden" });
+      await transcript(text);
+      await idle();
+      return api.session.get({ sessionID: id });
+    };
+    try {
+      await start("local", "new-session-local");
+      const local = await submit("New session local branch admission");
+      expect(local.location.directory).toBe(canonical);
+      expect(await git(project, "branch", "--show-current")).toBe("new-session-local");
+      expect(await git(project, "rev-parse", "HEAD")).toBe(await git(project, "rev-parse", "main"));
+      expect(await readFile(join(project, "working.txt"), "utf8")).toBe(
+        "Uncommitted working content\n",
+      );
+      await git(project, "switch", previousBranch);
+      await expect
+        .poll(
+          async () =>
+            (await api.agent.get({ agentID: "build", location: { directory: canonical } })).data
+              .hidden,
+        )
+        .toBe(false);
+      await start("worktree", "acceptance");
+      let release;
+      const held = new Promise((resolve) => {
+        release = resolve;
+      });
+      const route = async (request) => {
+        if (request.request().method() === "POST") await held;
+        await request.continue();
+      };
+      await page.route("**/api/worktree**", route);
+      let worktree;
+      try {
+        worktree = await submit("New session detached worktree admission", async () => {
+          await page.getByText("Preparing worktree…", { exact: true }).waitFor();
+          expect(
+            await page.getByLabel("Prompt", { exact: true }).getAttribute("contenteditable"),
+          ).toBe("false");
+          await page.screenshot({ path: join(artifacts, "browser-new-session-preparing.png") });
+          await selectSession("Browser fixture one");
+          release();
+        });
+      } finally {
+        release();
+        await page.unroute("**/api/worktree**", route);
+      }
+      expect(worktree.location.directory).not.toBe(canonical);
+      expect(await git(worktree.location.directory, "branch", "--show-current")).toBe("");
+      expect(await git(worktree.location.directory, "rev-parse", "HEAD")).toBe(
+        await git(project, "rev-parse", "acceptance"),
+      );
+      expect(await readFile(join(worktree.location.directory, "branch.txt"), "utf8")).toBe(
+        "Committed branch content\n",
+      );
+      await api.session.remove({ sessionID: worktree.id });
+      await api.worktree.remove({
+        directory: worktree.location.directory,
+        force: true,
+        location: { directory: canonical },
+      });
+      for (const branch of [
+        "config-hidden-build",
+        ...["agent", "agents", "mode", "modes"].map(
+          (directory) => "markdown-hidden-build-" + directory,
+        ),
+      ]) {
+        await git(project, "switch", previousBranch);
+        await expect
+          .poll(
+            async () =>
+              (await api.agent.get({ agentID: "build", location: { directory: canonical } })).data
+                .hidden,
+          )
+          .toBe(false);
+        await start("local", branch);
+        const count = (await api.session.list({ limit: 1000 })).data.length;
+        await page
+          .getByLabel("Prompt", { exact: true })
+          .fill("Branch config must be fresh before Send: " + branch);
+        await page.getByRole("button", { name: "Send", exact: true }).click();
+        await page
+          .getByText("The saved agent is unavailable at this location.", { exact: true })
+          .waitFor();
+        expect((await api.session.list({ limit: 1000 })).data.length).toBe(count);
+        expect(await git(project, "branch", "--show-current")).toBe(branch);
+        await page.getByRole("button", { name: "Copy to edit", exact: true }).waitFor();
+        expect(await page.getByRole("alert").count()).toBe(1);
+        expect(
+          await page
+            .locator(".composer")
+            .getByRole("button", { name: "Copy to edit", exact: true })
+            .count(),
+        ).toBe(1);
+        if (branch === "config-hidden-build")
+          await page.screenshot({ path: join(artifacts, "browser-new-session-failed.png") });
+        await page.getByRole("button", { name: "Edit draft", exact: true }).click();
+        await expect
+          .poll(() => page.getByLabel("Prompt", { exact: true }).getAttribute("contenteditable"))
+          .toBe("true");
+        expect((await api.session.list({ limit: 1000 })).data.length).toBe(count);
+        const row = page
+          .locator(".session-drafts .shell-session-row")
+          .filter({ hasText: "Branch config must be fresh before Send" });
+        await row.hover();
+        await row.getByRole("button", { name: /^Delete draft:/u }).click();
+      }
+      await api.session.remove({ sessionID: local.id });
+    } finally {
+      await git(project, "switch", previousBranch);
     }
   });
 

@@ -6,6 +6,8 @@ import type { WorkerPoolManager } from "@pierre/diffs/worker";
 
 import type { OpenCodeTarget } from "../shared/desktop-api.ts";
 import type { AppHost } from "../shared/app-host.ts";
+import { Storage, makeStorage } from "./storage.ts";
+import { NewSessionDrafts, makeNewSessionDrafts, draftDatabase } from "./new-session/drafts.ts";
 import { SyntaxHighlight, type HighlightSnippet } from "./syntax-highlight.ts";
 import { Appearance, makeAppearance, type Theme } from "./appearance.ts";
 import { createDiffHighlight, createDiffHighlightPool } from "./diff-highlighter.ts";
@@ -45,6 +47,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
   host: AppHost,
   registry: AtomRegistry.AtomRegistry,
 ) {
+  const drafts = yield* NewSessionDrafts;
   const effects = yield* makeWorkspaceOwner(registry);
   const desktop = host.kind === "desktop" ? host : undefined;
   const defaultMode = desktop ? "local" : "remote";
@@ -66,6 +69,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
   );
 
   const leave = Effect.fn("Connection.leave")(function* () {
+    get().workspace?.model.drafts.flushSelected();
     update({ workspace: undefined });
     yield* ScopedRef.set(workspace, Effect.void);
   });
@@ -140,6 +144,10 @@ const makeConnection = Effect.fn("Connection.make")(function* (
                     });
                     model = createWorkspaceModel(
                       runtime,
+                      {
+                        service: drafts,
+                        serverKey: mode === "local" ? "built-in" : server.serverUrl,
+                      },
                       desktop?.browser
                         ? {
                             api: desktop.browser,
@@ -319,7 +327,13 @@ export function createRenderer(host: AppHost) {
   const registry = AtomRegistry.make();
   const runtime = ManagedRuntime.make(
     Layer.mergeAll(
-      Layer.effect(Connection, makeConnection(host, registry)),
+      Layer.effect(Connection, makeConnection(host, registry)).pipe(
+        Layer.provideMerge(
+          Layer.effect(NewSessionDrafts, makeNewSessionDrafts(registry)).pipe(
+            Layer.provideMerge(Layer.effect(Storage, makeStorage(draftDatabase))),
+          ),
+        ),
+      ),
       Layer.effect(Appearance, makeAppearance(registry)),
       SyntaxHighlight.layer,
     ),

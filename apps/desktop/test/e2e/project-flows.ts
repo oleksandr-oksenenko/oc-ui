@@ -1,5 +1,6 @@
 /// <reference types="node" />
 
+import { OpenCode } from "@opencode/client";
 import assert from "node:assert/strict";
 import { access, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -41,18 +42,43 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   assert.ok(serverFiles.includes("watcher.txt"));
   await changeBranchAndObserveEvent(projectDirectory);
   await expectFiles(["watcher.txt", "working.txt"]);
-  await $('[aria-label="Create session"]').click();
-  await $(".new-session-project-trigger").waitForClickable({ timeout: TIMEOUT });
-  await $("button=Start in worktree").click();
-  await browser.waitUntil(async () => (await sessions()).length === 3, {
-    timeout: TIMEOUT,
-    timeoutMsg: "The UI did not create a real worktree session",
+  // Exercise the packaged renderer draft, native locks, preparation and first Send.
+  const connection = await browser.execute(() => window.desktop.localOpenCode.connect());
+  if (connection.status !== "connected") throw new Error(connection.message);
+  const api = OpenCode.make({
+    baseUrl: connection.connection.serverUrl,
+    headers: {
+      Authorization: `Basic ${Buffer.from(`opencode:${connection.connection.password}`).toString("base64")}`,
+    },
   });
-  await $(".server-flow-dialog").waitForExist({ reverse: true, timeout: TIMEOUT });
-  const created = (await sessions()).find(
-    (session) => !initialSessions.some((previous) => previous.id === session.id),
+  await $('[aria-label="Create session"]').click();
+  await $(".new-session-screen").waitForDisplayed({ timeout: TIMEOUT });
+  await $('[aria-label^="Project:"]').click();
+  await $(".selection-option-detail=" + canonicalProject).click();
+  await $('[aria-label^="Location:"]').click();
+  await $(".selection-option*=New worktree").click();
+  await $('[aria-label^="Branch:"]').click();
+  await $(".selection-option=main").click();
+  await $('[aria-label^="Model:"]').click();
+  await $(".composer-model-option=Acceptance Stream").click();
+  await $('[aria-label^="Agent:"]').click();
+  await $('[role="option"]=Build').click();
+  await $('[aria-label="Prompt"]').setValue("Native new-session worktree admission");
+  await $('[aria-label="Send"]').waitForClickable({ timeout: TIMEOUT });
+  await $('[aria-label="Send"]').click();
+  await $(".new-session-screen").waitForExist({ reverse: true, timeout: TIMEOUT });
+  const created = (await api.session.list({ limit: 100 })).data.find(
+    (session) => !initialSessions.some((initial) => initial.id === session.id),
   );
-  assert.ok(created);
+  assert.ok(created, "First Send must create the worktree session");
+  const admitted = (await api.message.list({ sessionID: created.id })).data.find(
+    (message) => message.type === "user",
+  );
+  assert.equal(
+    admitted?.type === "user" ? admitted.text : undefined,
+    "Native new-session worktree admission",
+  );
+  await api.session.rename({ sessionID: created.id, title: "Worktree diff fixture" });
   const worktree = created.location.directory;
   assert.notEqual(worktree, canonicalProject);
   const dataHome = process.env.XDG_DATA_HOME;
@@ -87,13 +113,18 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
     "-m",
     "Worktree commit",
   );
-  await browser.waitUntil(
-    async () => {
-      const select = $(".diff-comparison-select");
-      return (await select.isExisting()) && (await select.getText()).includes("Working changes");
-    },
-    { timeout: TIMEOUT, timeoutMsg: "The detached worktree did not offer a diff comparison" },
-  );
+  try {
+    await browser.waitUntil(() => $(".diff-comparison-select").isExisting(), {
+      timeout: TIMEOUT,
+      timeoutMsg: "The detached worktree did not offer a diff comparison",
+    });
+  } catch (cause) {
+    const vcs = await api.vcs.get({ location: { directory: worktree } });
+    throw new Error(
+      `Missing worktree comparison: ${JSON.stringify(vcs.data)}; ${(await $("body").getText()).slice(-1800)}`,
+      { cause },
+    );
+  }
   await $(".diff-comparison-select").click();
   const branchOption = '[data-slot="menu-v2-item-content"]=Changes vs main';
   await $(branchOption).waitForClickable({ timeout: TIMEOUT });
@@ -166,13 +197,27 @@ async function expectFiles(files: readonly string[]): Promise<void> {
 
 async function verifyReviewReload(): Promise<void> {
   const renderedDiff = $(".diff-code-view diffs-container");
-  const gutter = renderedDiff.shadow$('[data-column-number="1"][data-line-type="change-addition"]');
-  await gutter.waitForDisplayed({ timeout: TIMEOUT });
-  await gutter.moveTo();
-  await renderedDiff.shadow$("[data-utility-button]").waitForClickable();
-  await renderedDiff.shadow$("[data-utility-button]").click();
   const editor = '[aria-label="Comment on working.txt"]';
-  await $(editor).waitForDisplayed();
+  // As in browser acceptance, worker highlighting can detach the hovered button.
+  await browser.waitUntil(
+    async () => {
+      if (await $(editor).isExisting()) return true;
+      try {
+        const gutter = renderedDiff.shadow$(
+          '[data-column-number="1"][data-line-type="change-addition"]',
+        );
+        if (!(await gutter.isDisplayed())) return false;
+        await gutter.moveTo();
+        const utility = renderedDiff.shadow$("[data-utility-button]");
+        if (!(await utility.isExisting())) return false;
+        await utility.click();
+      } catch {
+        return false;
+      }
+      return $(editor).isExisting();
+    },
+    { timeout: TIMEOUT, timeoutMsg: "The diff review editor did not open" },
+  );
   const comment = "Keep this review through panel remount.";
   await $(editor).setValue(comment);
   await browser.keys("Escape");

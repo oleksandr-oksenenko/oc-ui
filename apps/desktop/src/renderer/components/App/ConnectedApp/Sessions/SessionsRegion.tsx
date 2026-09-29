@@ -1,3 +1,4 @@
+import type { WorkspaceModel } from "../createWorkspace.ts";
 import type { SessionAttention } from "./createSessionAttention.ts";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import type { JSX } from "solid-js";
@@ -11,6 +12,7 @@ export type SessionsRegionProps = {
   readonly runtime: ConnectedRuntime;
   readonly workspace: SessionWorkspace;
   readonly flows: SessionFlows;
+  readonly drafts: WorkspaceModel["drafts"];
   readonly globalControls?: JSX.Element;
   readonly serverUrl: string;
   readonly mobile: boolean;
@@ -26,6 +28,15 @@ export function SessionsRegion(props: SessionsRegionProps) {
 
   return (
     <SessionSidebar
+      drafts={{
+        drafts: props.drafts.list(),
+        selectedID: props.drafts.selectedID(),
+        onSelect: (id) => {
+          props.drafts.select(id);
+          props.onSessionOpened(id);
+        },
+        onDelete: props.drafts.delete,
+      }}
       attentionForSession={props.attentionForSession}
       sessions={props.workspace.sessions()}
       statusForSession={(sessionID) => props.runtime.data.session.status(sessionID)}
@@ -33,7 +44,7 @@ export function SessionsRegion(props: SessionsRegionProps) {
       expandedIDs={props.flows.expandedIDs()}
       loading={props.runtime.sessions.state() === "loading"}
       error={props.runtime.sessions.error()}
-      canCreate={connected() && props.runtime.sessions.state() === "ready"}
+      canCreate={props.drafts.canCreate()}
       canDelete={connected() && props.runtime.sessions.state() === "ready"}
       deletionStatusForSession={props.flows.deletionStatusForSession}
       showHeader={props.mobile}
@@ -51,7 +62,7 @@ export function SessionsRegion(props: SessionsRegionProps) {
       onDelete={(sessionID, opener) =>
         props.flows.openSessionDeletion(sessionID, opener, resolveDeletionFocusFallback)
       }
-      onCreate={props.flows.openNewSession}
+      onCreate={props.drafts.create}
       onRetry={() => void props.workspace.retryCatalog().catch(() => undefined)}
       onHide={props.onHide}
       onSelectServer={props.onChangeServer}

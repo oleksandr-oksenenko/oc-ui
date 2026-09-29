@@ -2,6 +2,7 @@
 /// <reference types="mocha" />
 /// <reference types="@wdio/electron-service" />
 
+import { OpenCode } from "@opencode/client";
 import assert from "node:assert/strict";
 import { access, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -97,6 +98,53 @@ describe("packaged owned OpenCode", () => {
     const firstPid = workerPids[0];
     assert.ok(firstPid !== undefined);
 
+    await $('[aria-label="Create session"]').click();
+    await $(".new-session-screen").waitForDisplayed();
+    await $('[aria-label="Prompt"]').setValue("Native persistent draft");
+    await browser.execute(() => {
+      const clipboardData = new DataTransfer();
+      clipboardData.items.add(
+        new File(["Native durable bytes"], "native.txt", { type: "text/plain" }),
+      );
+      document
+        .querySelector('[aria-label="Prompt"]')!
+        .dispatchEvent(
+          new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+        );
+    });
+    await $('[aria-label="Remove native.txt"]').waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
+    await browser.waitUntil(
+      async () =>
+        browser.execute(
+          () =>
+            new Promise<boolean>((resolve, reject) => {
+              const request = indexedDB.open("ocui");
+              request.addEventListener("error", () => reject(request.error));
+              request.addEventListener("success", () => {
+                const db = request.result;
+                const transaction = db.transaction("drafts", "readonly");
+                const records = transaction.objectStore("drafts").getAll();
+                transaction.addEventListener("complete", () => {
+                  db.close();
+                  resolve(
+                    records.result.some(
+                      (record) =>
+                        record.text === "Native persistent draft" &&
+                        record.serverKey === "built-in" &&
+                        record.attachments.length === 1,
+                    ),
+                  );
+                });
+                transaction.addEventListener("abort", () => {
+                  db.close();
+                  reject(transaction.error);
+                });
+              });
+            }),
+        ),
+      { timeout: STARTUP_TIMEOUT_MS },
+    );
+
     // Renderer reload reconnects automatically to the same app-owned server.
     await browser.refresh();
     await waitForLocalConnection();
@@ -114,6 +162,41 @@ describe("packaged owned OpenCode", () => {
     assert.deepEqual(await ownedWorkerPids(), []);
     await $("button=Restart").click();
     await waitForLocalConnection();
+    await $(".session-drafts").$(".shell-session-title=Native persistent draft").waitForClickable();
+    await $(".session-drafts").$(".shell-session-title=Native persistent draft").click();
+    await browser.waitUntil(
+      async () => (await $('[aria-label="Prompt"]').getText()) === "Native persistent draft",
+    );
+    assert.equal(await $('[aria-label="Send"]').isEnabled(), false);
+    await $('[aria-label="Remove native.txt"]').waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
+    assert.equal(
+      await browser.execute(
+        () =>
+          new Promise<string>((resolve, reject) => {
+            const opening = indexedDB.open("ocui");
+            opening.addEventListener("error", () => reject(opening.error));
+            opening.addEventListener("success", () => {
+              const db = opening.result;
+              const request = db.transaction("attachments").objectStore("attachments").getAll();
+              request.addEventListener("success", () => {
+                db.close();
+                const file = request.result.find((row) => row.name === "native.txt");
+                if (!file) {
+                  reject(new Error("Native draft bytes were not restored"));
+                  return;
+                }
+                void file.blob.text().then(resolve, reject);
+              });
+              request.addEventListener("error", () => {
+                db.close();
+                reject(request.error);
+              });
+            });
+          }),
+      ),
+      "Native durable bytes",
+    );
+
     const secondPid = await recordWorker();
     assert.notEqual(secondPid, firstPid);
     await verifyHealth(secondPid);
@@ -158,31 +241,32 @@ describe("packaged owned OpenCode", () => {
 
 /** Supply the two sessions needed by later native-boundary checks. */
 async function createBundledSessions(): Promise<void> {
-  const opener = '[aria-label="Create session"]';
-  const submit = '.server-flow-dialog button[type="submit"]';
-  await $(opener).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
-  await $(opener).click();
-  await $("button=Add project").click();
-  await $(submit).waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
-  // The runner launches the app from its isolated project; browsing must receive that location.
+  await $('[aria-label="Create session"]').waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
+  await $('[aria-label="Create session"]').click();
+  await $(".new-session-screen").waitForDisplayed();
+  await $('button[aria-label^="Project:"]').click();
+  await $("button=Add project…").click();
   assert.equal(
     await $(".server-directory-browser-path").getText(),
     await realpath(projectDirectory),
   );
-  await $(submit).click();
-  await $(".new-session-project-trigger").waitForClickable();
-  await $(submit).click();
-  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
-  await $(".transcript-empty-state").waitForDisplayed({ timeout: STARTUP_TIMEOUT_MS });
-  await $(opener).click();
-  await $(submit).waitForClickable();
-  await $(submit).click();
-  await $('[aria-label="Close new session dialog"]').waitForExist({ reverse: true });
-  await browser.waitUntil(
-    async () =>
-      (await browser.execute(() => document.querySelectorAll(".shell-session-main").length)) === 2,
-  );
-  await $('.shell-session-main:not([aria-current="page"])').click();
+  await $('.server-flow-dialog button[type="submit"]').waitForClickable();
+  await $('.server-flow-dialog button[type="submit"]').click();
+  await $(".server-flow-dialog").waitForExist({ reverse: true });
+  // Submission is the next slice. Seed existing sessions for the native flows.
+  const result = await browser.execute(() => window.desktop.localOpenCode.connect());
+  if (result.status !== "connected") throw new Error(result.message);
+  const api = OpenCode.make({
+    baseUrl: result.connection.serverUrl,
+    headers: {
+      Authorization: `Basic ${Buffer.from(`opencode:${result.connection.password}`).toString("base64")}`,
+    },
+  });
+  await api.session.create({ title: "Native fixture one" });
+  await api.session.create({ title: "Native fixture two" });
+  await $(".shell-session-title=Native fixture one").waitForClickable();
+  await $(".shell-session-title=Native fixture one").click();
+  await $(".transcript-empty-state").waitForDisplayed();
 }
 
 async function ownedWorkerPids(): Promise<number[]> {

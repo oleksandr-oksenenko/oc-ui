@@ -12,7 +12,7 @@ export type NewSessionSetupProps = {
   readonly projectID?: string;
   readonly mode: "local" | "worktree";
   readonly branches: readonly string[];
-  readonly branch:
+  readonly branch?:
     | { readonly kind: "existing"; readonly name: string }
     | { readonly kind: "new"; readonly name: string };
   readonly defaultBranch: string;
@@ -27,6 +27,21 @@ export type NewSessionSetupProps = {
 
 export function NewSessionSetup(props: NewSessionSetupProps) {
   const disabled = () => props.disabled || props.loading;
+  const projectDisabled = () => disabled() || !props.projectID;
+  const branchKind = () => props.branch?.kind;
+  const branchName = () => props.branch?.name;
+  const branchLabel = () =>
+    branchName() ||
+    (branchKind() === "new"
+      ? "New branch"
+      : props.mode === "local"
+        ? "Detached checkout"
+        : "Choose branch");
+  const projectLabel = () =>
+    props.loading
+      ? "Loading projects…"
+      : (props.projects.find((project) => project.id === props.projectID)?.label ??
+        (props.projectID ? "Unavailable project" : "Choose project"));
   return (
     <div class="new-session-setup">
       <div class="new-session-setup-controls" role="group" aria-label="Session location">
@@ -35,12 +50,7 @@ export function NewSessionSetup(props: NewSessionSetupProps) {
           icon="folder"
           options={props.projects}
           selectedID={props.projectID}
-          value={
-            props.loading
-              ? "Loading projects…"
-              : (props.projects.find((project) => project.id === props.projectID)?.label ??
-                "Choose project")
-          }
+          value={projectLabel()}
           disabled={disabled()}
           onSelect={props.onProjectChange}
           action={{ label: "Add project…", onClick: props.onAddProject }}
@@ -59,20 +69,16 @@ export function NewSessionSetup(props: NewSessionSetupProps) {
                 detail: "Start in a separate, detached checkout",
               },
             ]}
-            disabled={disabled() || !props.projectID}
+            disabled={projectDisabled()}
             onSelect={(id) => props.onModeChange(id === "local" ? "local" : "worktree")}
           />
           <NewSessionPicker
             label="Branch"
             icon="branch"
             options={props.branches.map((name) => ({ id: name, label: name }))}
-            selectedID={props.branch.kind === "existing" ? props.branch.name : undefined}
-            value={
-              props.branch.kind === "new"
-                ? props.branch.name || "New branch"
-                : props.branch.name || "Choose branch"
-            }
-            disabled={disabled() || !props.projectID}
+            selectedID={branchKind() === "existing" ? branchName() : undefined}
+            value={branchLabel()}
+            disabled={projectDisabled()}
             onSelect={(name) => props.onBranchChange({ kind: "existing", name })}
             action={
               props.mode === "local"
@@ -85,13 +91,13 @@ export function NewSessionSetup(props: NewSessionSetupProps) {
           />
         </Show>
       </div>
-      <Show when={props.git && props.mode === "local" && props.branch.kind === "new"}>
+      <Show when={props.git && props.mode === "local" && branchKind() === "new"}>
         <div class="new-session-branch-name">
           <TextInput
             aria-label="New branch name"
             placeholder="Branch name"
-            value={props.branch.name}
-            disabled={disabled() || !props.projectID}
+            value={branchName()}
+            disabled={projectDisabled()}
             onInput={(event) =>
               props.onBranchChange({ kind: "new", name: event.currentTarget.value })
             }
@@ -100,7 +106,7 @@ export function NewSessionSetup(props: NewSessionSetupProps) {
           <Button
             variant="ghost-muted"
             size="small"
-            disabled={disabled() || !props.projectID}
+            disabled={projectDisabled()}
             onClick={() => props.onBranchChange({ kind: "existing", name: props.defaultBranch })}
           >
             Cancel

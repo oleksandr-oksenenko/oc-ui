@@ -77,6 +77,8 @@ export type ComposerProps = {
   /** Disables submission. Omit onStop when stopping is unavailable. */
   readonly disabled: boolean;
   readonly error?: string;
+  /** Optional actions related to a locked draft or submission notice. */
+  readonly actions?: JSX.Element;
   /** A recognized command invocation that leaves comments for the next message. */
   readonly command?: string;
   /** Omitted review state is equivalent to an empty review attachment. */
@@ -232,6 +234,10 @@ export function Composer(props: ComposerProps) {
   let fileInput: HTMLInputElement | undefined;
   let editorControl: PromptEditorControl | undefined;
   let pickerSessionID: string | undefined;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   let dragDepth = 0;
   /**
    * Holding a paste chord repeats the event. A repeated identical payload is
@@ -299,7 +305,7 @@ export function Composer(props: ComposerProps) {
   };
 
   const attach = (incoming: readonly File[]) => {
-    if (!canAttach() || incoming.length === 0) return;
+    if (disposed || !canAttach() || incoming.length === 0) return;
     props.onAttachFiles?.(incoming);
   };
 
@@ -606,6 +612,7 @@ export function Composer(props: ComposerProps) {
         </div>
 
         {selectionStatus(props)}
+        {props.actions}
 
         <Show when={dropping()}>
           <div class="composer-drop-overlay" aria-hidden="true">

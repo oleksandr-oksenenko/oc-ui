@@ -10,7 +10,6 @@ type SessionWorktreeClient = Pick<OpenCodeClient, "location" | "worktree"> & {
 export type SessionWorktreeInput = {
   readonly effects: WorkspaceOwner;
   readonly api: SessionWorktreeClient;
-  readonly isCurrent: () => boolean;
 };
 
 export class SessionWorktreeError extends Schema.TaggedError<SessionWorktreeError>()(
@@ -31,44 +30,39 @@ export type CreatedSessionWorktree = {
 export const createSessionWorktree = Effect.fn("createSessionWorktree")(function* (
   input: SessionWorktreeInput,
   location: LocationRef,
+  revision?: string,
 ): Effect.fn.Return<CreatedSessionWorktree, SessionWorktreeError> {
   if (location.workspaceID) {
     return yield* new SessionWorktreeError({
       message: "Automatic worktrees are unavailable for logical workspaces.",
     });
   }
-  yield* ensureCurrent(input);
   const directory = yield* resolveProject(input, location);
-  yield* ensureCurrent(input);
-  const vcs = yield* input.effects
-    .request((signal) => input.api.vcs.get({ location: { directory: directory } }, { signal }))
-    .pipe(
-      Effect.mapError(
-        () =>
-          new SessionWorktreeError({
-            message: "The default branch could not be resolved.",
-          }),
-      ),
-    );
-  const branch = vcs.data.branch.default;
+  const vcs = revision
+    ? undefined
+    : yield* input.effects
+        .request((signal) => input.api.vcs.get({ location: { directory: directory } }, { signal }))
+        .pipe(
+          Effect.mapError(
+            () =>
+              new SessionWorktreeError({
+                message: "The default branch could not be resolved.",
+              }),
+          ),
+        );
+  const branch = revision ?? vcs?.data.branch.default;
   if (!branch)
     return yield* new SessionWorktreeError({
       message: "The server could not identify a default branch for this project.",
     });
-  yield* ensureCurrent(input);
-  const retained = yield* createNativeWorktree(input, directory, "refs/heads/" + branch);
-  yield* ensureCurrent(input, retained);
+  const retained = yield* createNativeWorktree(
+    input,
+    directory,
+    revision ?? "refs/heads/" + branch,
+  );
   const finalLocation = yield* resolveCreatedLocation(input, retained);
   return { location: finalLocation };
 });
-
-const ensureCurrent = (input: SessionWorktreeInput, location?: LocationRef) =>
-  input.isCurrent()
-    ? Effect.void
-    : new SessionWorktreeError({
-        message: "Worktree creation was cancelled.",
-        ...(location ? { location } : undefined),
-      });
 
 const resolveProject = Effect.fn("createSessionWorktree.resolveProject")(function* (
   input: SessionWorktreeInput,

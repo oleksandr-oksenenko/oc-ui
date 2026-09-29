@@ -15,6 +15,7 @@ export type ShellRegionProps = {
   readonly sidebar?: JSX.Element;
   readonly main: JSX.Element;
   readonly context?: JSX.Element;
+  readonly rightPanelAvailable?: boolean;
 };
 
 export function ShellRegion(props: ShellRegionProps): JSX.Element {
@@ -25,7 +26,8 @@ export function ShellRegion(props: ShellRegionProps): JSX.Element {
   const main = props.main;
   const context = props.context;
   const leftSidebarOpen = () => props.panels.leftSidebarOpen() && sidebar != null;
-  const rightPanelOpen = () => props.panels.rightPanelOpen() && context != null;
+  const rightPanelOpen = () =>
+    props.rightPanelAvailable !== false && props.panels.rightPanelOpen() && context != null;
 
   return (
     <AppShell
@@ -35,7 +37,7 @@ export function ShellRegion(props: ShellRegionProps): JSX.Element {
           sidebarActions={props.sidebarActions}
           leftSidebarOpen={leftSidebarOpen()}
           rightPanelOpen={rightPanelOpen()}
-          rightPanelAvailable
+          rightPanelAvailable={props.rightPanelAvailable !== false}
           rightControls={<Show when={!props.panels.mobile()}>{props.rightControls}</Show>}
           mobile={props.panels.mobile()}
           onToggleLeftSidebar={props.panels.toggleLeftSidebar}

@@ -72,10 +72,14 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
   await $('[aria-label="Show context"]').click();
   await browser.waitUntil(async () => (await nativePages()).some((item) => item.visible));
   assert.equal((await nativePages())[0]?.id, page.id);
+  const previousSession = await $('.shell-session-main[aria-current="page"]').getAttribute(
+    "aria-label",
+  );
   await $('[aria-label="Create session"]').click();
-  await $('[aria-label="Close new session dialog"]').waitForDisplayed();
+  await $(".new-session-screen").waitForDisplayed();
   await browser.waitUntil(async () => (await nativePages()).every((item) => !item.visible));
-  await browser.keys("Escape");
+  assert.ok(previousSession);
+  await $(`.shell-session-main[aria-label=${JSON.stringify(previousSession)}]`).click();
   await browser.waitUntil(async () => (await nativePages()).some((item) => item.visible));
 
   // This fixture is text-only: OpenCode appends an image-input notice after the JSON result.
@@ -107,13 +111,20 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
   const audit = JSON.parse(await readFile(report.path, "utf8"));
   assert.ok(Number.isFinite(audit.categories.accessibility.score));
   await copyFile(report.path, join(artifacts, "browser-lighthouse.json"));
+  await $(".transcript-view").waitForDisplayed({ timeout: TIMEOUT });
+  const activity = $('.transcript-activity-trigger[aria-expanded="false"]');
+  if (await activity.isExisting()) await activity.click();
+  await $("button*=execute").waitForClickable({ timeout: TIMEOUT });
   await $("button*=execute").click();
   await $(".transcript-tool-image").waitForDisplayed({ timeout: TIMEOUT });
-  await browser.waitUntil(() =>
-    browser.execute(() => {
-      const image = document.querySelector<HTMLImageElement>(".transcript-tool-image");
-      return image?.complete === true && image.naturalWidth > 0;
-    }),
+  await $(".transcript-tool-image").scrollIntoView();
+  await browser.waitUntil(
+    () =>
+      browser.execute(() => {
+        const image = document.querySelector<HTMLImageElement>(".transcript-tool-image");
+        return image?.complete === true && image.naturalWidth > 0;
+      }),
+    { timeout: TIMEOUT, timeoutMsg: "The restored tool image did not load" },
   );
   await browser.saveScreenshot(join(artifacts, "browser-agent-roundtrip.png"));
 
@@ -163,25 +174,32 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
     async () => {
       const state = await (await fetch(`${provider}/_state`)).json();
       return state.requests.some((request: { prompt: string }) =>
-        request.prompt.includes("E2E_ANNOTATION"),
+        request.prompt.includes("E2E_ANNOTATION: make this heading bolder"),
       );
     },
     { timeout: TIMEOUT, timeoutMsg: "Annotated message did not reach the provider" },
   );
-  // The composited screenshot travels as an ordinary attachment and renders in the transcript.
-  // The thumbnail is lazy-loaded, so scroll it into view before waiting for decoded pixels.
-  const userImage = $(".transcript-user-image img");
+  // Structured browser metadata groups the screenshot into the Browser pill.
+  const browserPill = $(
+    ".transcript-user-message .attachment-pill-browser .attachment-pill-trigger",
+  );
+  await browserPill.waitForClickable({ timeout: TIMEOUT });
+  await browserPill.click();
+  const userImage = $('.attachment-detail-popover [aria-label="Enlarge Browser annotation 1"] img');
   await userImage.waitForExist({ timeout: TIMEOUT });
   await userImage.scrollIntoView();
   await browser.waitUntil(
     () =>
       browser.execute(() => {
-        const image = document.querySelector<HTMLImageElement>(".transcript-user-image img");
+        const image = document.querySelector<HTMLImageElement>(
+          '.attachment-detail-popover [aria-label="Enlarge Browser annotation 1"] img',
+        );
         return image?.complete === true && image.naturalWidth > 0;
       }),
     { timeout: TIMEOUT, timeoutMsg: "Annotated screenshot did not render in the transcript" },
   );
   await browser.saveScreenshot(join(artifacts, "browser-annotation-sent.png"));
+  await browser.keys("Escape");
 
   await $('.shell-session-main:not([aria-current="page"])').click();
   // The context panel is remembered per session: a session that has never

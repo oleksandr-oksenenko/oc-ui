@@ -5,10 +5,6 @@ import { createSignal, type Accessor } from "solid-js";
 import { restoreDialogFocusAfterClose } from "../../../../ui/restoreDialogFocusAfterClose.ts";
 import { sessionSubtreeIDs } from "./session-selection.ts";
 import {
-  createNewSessionFlow,
-  type NewSessionFlowController,
-} from "./SessionSidebar/NewSessionFlow.tsx";
-import {
   createDeleteSessionFlow,
   type DeleteSessionFlowController,
 } from "./SessionSidebar/DeleteSessionFlow.tsx";
@@ -33,11 +29,8 @@ export type SessionFlowsWorkspace = Pick<SessionWorkspace, "sessions" | "syncCat
 
 export type SessionFlows = {
   readonly expandedIDs: Accessor<readonly string[]>;
-  readonly newSession: Accessor<NewSessionFlowController | undefined>;
   readonly deletion: Accessor<SessionDeletion | undefined>;
   readonly deletionStatusForSession: (sessionID: string) => SessionDeletionStatus;
-  readonly openNewSession: () => void;
-  readonly dismissNewSession: () => void;
   readonly openSessionDeletion: (
     sessionID: string,
     opener: HTMLButtonElement,
@@ -52,44 +45,12 @@ export type CreateSessionFlowsInput = {
   readonly connected: Accessor<boolean>;
   readonly workspace: SessionFlowsWorkspace;
   readonly clearDraft: (sessionID: string) => void;
-  readonly onSessionCreated: (sessionID: string) => void;
 };
 
 /** Owns session sidebar expansion and the modal flows opened from it. */
 export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows {
   const [expandedIDs, setExpandedIDs] = createSignal<readonly string[]>([]);
-  const [newSession, setNewSession] = createSignal<NewSessionFlowController>();
   const [deletion, setDeletion] = createSignal<SessionDeletion>();
-  let newSessionOpener: HTMLElement | undefined;
-
-  const openNewSession = (): void => {
-    if (newSession()) return;
-    newSessionOpener =
-      document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
-    const previous = input.workspace
-      .sessions()
-      .filter((session) => !session.parentID)
-      .toSorted(
-        (left, right) => right.time.created - left.time.created || right.id.localeCompare(left.id),
-      )[0];
-    setNewSession(
-      createNewSessionFlow({
-        runtime: input.runtime,
-        selection: { agent: previous?.agent, model: previous?.model },
-        onSessionCreated: input.onSessionCreated,
-        onDismiss: dismissNewSession,
-      }),
-    );
-  };
-
-  const dismissNewSession = (): void => {
-    const flow = newSession();
-    if (flow?.pending() && !flow.current().closed) return;
-    flow?.dispose();
-    setNewSession(undefined);
-    restoreDialogFocusAfterClose(() => newSessionOpener);
-  };
-
   const inspectDeletion = (
     sessionID: string,
   ):
@@ -170,11 +131,8 @@ export function createSessionFlows(input: CreateSessionFlowsInput): SessionFlows
 
   return {
     expandedIDs,
-    newSession,
     deletion,
     deletionStatusForSession,
-    openNewSession,
-    dismissNewSession,
     openSessionDeletion,
     dismissDeletion,
     toggleExpanded,

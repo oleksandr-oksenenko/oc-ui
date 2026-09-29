@@ -1281,6 +1281,34 @@ describe("Composer", () => {
     dispose();
   });
 
+  it("ignores a file picker result after its composer is disposed", () => {
+    const attach = vi.fn<(files: readonly File[]) => void>();
+    const { host, dispose } = mount(() => (
+      <Composer
+        {...inertPasteProps}
+        value=""
+        disabled={true}
+        action="send"
+        onAttachFiles={attach}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    ));
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Add images and files"]')!;
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+    vi.spyOn(input, "click");
+    button.click();
+    dispose();
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["notes"], "notes.txt")],
+    });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(attach).not.toHaveBeenCalled();
+  });
+
   it("attaches a file dropped on the editor without inserting its text", () => {
     const attach = vi.fn<(files: readonly File[]) => void>();
     const onInput = vi.fn<(value: string) => void>();

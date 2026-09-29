@@ -85,79 +85,13 @@ function mount(fixture: ReturnType<typeof setup>, clearDraft: (sessionID: string
       connected: fixture.connected,
       workspace: fixture.workspace,
       clearDraft,
-      onSessionCreated: () => undefined,
     }),
     dispose,
   }));
 }
 
 describe("createSessionFlows", () => {
-  it("creates with the newest root session's options and retains them across a failed attempt", async () => {
-    const fixture = setup();
-    const model = { providerID: "provider", id: "model", variant: "high" };
-    fixture.records.splice(
-      0,
-      fixture.records.length,
-      { ...session("older"), agent: "old-agent", time: { created: 1, updated: 100 } },
-      { ...session("newest"), agent: "chosen-agent", model, time: { created: 2, updated: 2 } },
-      { ...session("child", "newest"), agent: "child-agent", time: { created: 3, updated: 3 } },
-    );
-    vi.spyOn(fixture.runtime.data.project, "list").mockReturnValue([
-      {
-        id: "project",
-        canonical: "/srv/worktree",
-        time: { created: 1, updated: 1 },
-        sandboxes: [],
-      },
-    ]);
-    const create = vi.spyOn(fixture.runtime.api.session, "create");
-    create.mockRejectedValueOnce(new Error("failed")).mockResolvedValueOnce(session("created"));
-    vi.spyOn(fixture.runtime.data.session, "sync").mockResolvedValue(undefined);
-    const { flows, dispose } = mount(fixture, vi.fn());
-    flows.openNewSession();
-    await vi.waitFor(() => expect(flows.newSession()?.state().projectsLoading).toBe(false));
-    const flow = flows.newSession()!;
-    flow.useProject("project");
-    await vi.waitFor(() => expect(flow.state().error?.kind).toBe("session"));
-    fixture.records.push({
-      ...session("later"),
-      agent: "later-agent",
-      time: { created: 4, updated: 4 },
-    });
-    flow.retry();
-    await vi.waitFor(() => expect(flows.newSession()).toBeUndefined());
-    expect(create).toHaveBeenCalledTimes(2);
-    for (const [input] of create.mock.calls) {
-      expect(input).toMatchObject({
-        agent: "chosen-agent",
-        model,
-        location: { directory: "/srv/worktree" },
-      });
-    }
-    dispose();
-  });
-
-  it("hides the global project from the picker and its default selection", async () => {
-    const fixture = setup();
-    vi.spyOn(fixture.runtime.data.project, "list").mockReturnValue([
-      { id: "global", canonical: "/", time: { created: 3, updated: 3 }, sandboxes: [] },
-      {
-        id: "project",
-        canonical: "/srv/worktree",
-        time: { created: 1, updated: 1 },
-        sandboxes: [],
-      },
-    ]);
-    const { flows, dispose } = mount(fixture, vi.fn());
-    flows.openNewSession();
-    await vi.waitFor(() => expect(flows.newSession()?.state().projectsLoading).toBe(false));
-    const state = flows.newSession()?.state();
-    expect(state?.projects.map((project) => project.id)).toEqual(["project"]);
-    expect(state?.selectedProjectID).toBe("project");
-    dispose();
-  });
-
-  it("releases status mounts whenever creation and deletion flows are dismissed", async () => {
+  it("releases status mounts whenever deletion flows are dismissed", async () => {
     const fixture = setup();
     const registry = fixture.runtime.effects.registry;
     const mountAtom = registry.mount.bind(registry);
@@ -172,10 +106,6 @@ describe("createSessionFlows", () => {
     });
     const { flows, dispose } = mount(fixture, vi.fn());
     for (let index = 0; index < 5; index += 1) {
-      flows.openNewSession();
-      expect(mountedAtoms).toBe(1);
-      flows.dismissNewSession();
-      await vi.waitFor(() => expect(mountedAtoms).toBe(0));
       flows.openSessionDeletion("root", document.createElement("button"));
       expect(mountedAtoms).toBe(1);
       flows.dismissDeletion();
@@ -223,27 +153,6 @@ describe("createSessionFlows", () => {
 
     opener.remove();
     dispose();
-  });
-
-  it("restores focus to the new-session opener after dismissal", () => {
-    vi.useFakeTimers();
-    try {
-      const fixture = setup();
-      const { flows, dispose } = mount(fixture, vi.fn<(sessionID: string) => void>());
-      const opener = document.createElement("button");
-      document.body.append(opener);
-      opener.focus();
-
-      flows.openNewSession();
-      flows.dismissNewSession();
-      vi.advanceTimersByTime(111);
-      expect(document.activeElement).toBe(opener);
-
-      opener.remove();
-      dispose();
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it.each([

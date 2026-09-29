@@ -1,8 +1,8 @@
 import { For, Show } from "solid-js";
 import { Icon } from "@opencode/ui/icon";
-import { SessionRow } from "../../../../ui/SessionRow.tsx";
-import { RemoveButton } from "../../../../ui/RemoveButton.tsx";
-import "./SessionSidebar/SessionTree.css";
+import { SessionRow } from "../../../../../ui/SessionRow.tsx";
+import { RemoveButton } from "../../../../../ui/RemoveButton.tsx";
+import "./SessionTree.css";
 import { Loader } from "@opencode/ui/loader";
 import "./DraftList.css";
 
@@ -11,6 +11,8 @@ export type DraftListProps = {
     readonly id: string;
     readonly title: string;
     readonly status?: "preparing" | "error" | "interrupted";
+    readonly statusMessage?: string;
+    readonly deleting?: boolean;
   }[];
   readonly selectedID?: string;
   readonly onSelect: (id: string) => void;
@@ -39,11 +41,12 @@ export function DraftList(props: DraftListProps) {
                       class="shell-session-status"
                       data-status={draft.status === "preparing" ? "running" : undefined}
                       title={
-                        draft.status === "preparing"
+                        draft.statusMessage ??
+                        (draft.status === "preparing"
                           ? "Preparing worktree…"
                           : draft.status === "error"
                             ? "Setup failed"
-                            : "Interrupted"
+                            : "Interrupted")
                       }
                     >
                       <Show
@@ -58,6 +61,7 @@ export function DraftList(props: DraftListProps) {
                     <RemoveButton
                       class="shell-session-delete"
                       label={`Delete draft: ${draft.title}`}
+                      disabled={draft.deleting}
                       onClick={() => props.onDelete(draft.id)}
                     />
                   </Show>
