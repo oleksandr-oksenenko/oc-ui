@@ -26,7 +26,7 @@ export type SessionDeletionStatus = "ready" | "running" | "removed";
 
 export type SessionFlowsRuntime = Pick<
   ConnectedRuntime,
-  "effects" | "api" | "data" | "sessions" | "onShellExited" | "defaultLocation"
+  "effects" | "api" | "data" | "sessions" | "defaultLocation"
 >;
 
 export type SessionFlowsWorkspace = Pick<SessionWorkspace, "sessions" | "syncCatalog" | "remove">;

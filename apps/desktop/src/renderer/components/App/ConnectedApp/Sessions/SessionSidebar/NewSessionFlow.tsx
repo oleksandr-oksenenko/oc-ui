@@ -37,7 +37,6 @@ type NewSessionFlowApi = SessionWorktreeInput["api"] & {
 export type NewSessionFlowRuntime = {
   readonly effects: WorkspaceOwner;
   readonly api: NewSessionFlowApi;
-  readonly onShellExited: SessionWorktreeInput["onShellExited"];
   readonly data: {
     readonly project: Pick<Data["project"], "list" | "sync" | "invalidate">;
     readonly session: Pick<Data["session"], "create" | "sync"> & {
@@ -257,7 +256,6 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
       {
         effects,
         api: props.runtime.api,
-        onShellExited: props.runtime.onShellExited,
         isCurrent: () => !current().closed,
       },
       project.location,
@@ -276,12 +274,6 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
       return;
     }
     const created = result.success;
-    if (created.fetchError)
-      showToast({
-        title: "Could not update from origin.",
-        description: "Using local main.",
-        persistent: true,
-      });
     yield* createSessionAt(project, created.location, "worktree", created.location);
   }, Effect.scoped);
 

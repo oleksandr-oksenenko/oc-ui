@@ -129,14 +129,7 @@ function fakeRuntime(
       file: { list: fileList },
       project: { current: projectCurrent },
       location: { get: vi.fn<NewSessionFlowRuntime["api"]["location"]["get"]>() },
-      shell: {
-        create: vi.fn<NewSessionFlowRuntime["api"]["shell"]["create"]>(),
-        output: vi.fn<NewSessionFlowRuntime["api"]["shell"]["output"]>(),
-        remove: vi.fn<NewSessionFlowRuntime["api"]["shell"]["remove"]>(),
-        list: vi.fn<NewSessionFlowRuntime["api"]["shell"]["list"]>(),
-        get: vi.fn<NewSessionFlowRuntime["api"]["shell"]["get"]>(),
-        timeout: vi.fn<NewSessionFlowRuntime["api"]["shell"]["timeout"]>(),
-      },
+      vcs: { get: vi.fn<NewSessionFlowRuntime["api"]["vcs"]["get"]>() },
       worktree: {
         create: vi.fn<NewSessionFlowRuntime["api"]["worktree"]["create"]>(),
         list: vi.fn<NewSessionFlowRuntime["api"]["worktree"]["list"]>(),
@@ -144,7 +137,6 @@ function fakeRuntime(
         refresh: vi.fn<NewSessionFlowRuntime["api"]["worktree"]["refresh"]>(),
       },
     },
-    onShellExited: vi.fn<NewSessionFlowRuntime["onShellExited"]>(() => () => undefined),
     data: {
       project: {
         list: () => [...(options.projects ?? [project])],

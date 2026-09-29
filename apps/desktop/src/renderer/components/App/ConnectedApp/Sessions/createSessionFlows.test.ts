@@ -49,7 +49,6 @@ function setup() {
     effects: workspaceEffects,
     api,
     data,
-    onShellExited: () => () => undefined,
     defaultLocation: { directory: "/srv/worktree" },
     sessions: {
       ids: () => records.map((item) => item.id),

@@ -1,6 +1,6 @@
 import { createClientConnection, createData } from "@opencode/client/solid";
 import type { Data, ClientConnectionStatus } from "@opencode/client/solid";
-import type { LocationRef, OpenCodeClient, OpenCodeEvent } from "@opencode/client";
+import type { LocationRef, OpenCodeClient } from "@opencode/client";
 import { Deferred, Effect } from "effect";
 import type { WorkspaceOwner } from "../workspace-owner.ts";
 import { createEffect, getOwner, onCleanup } from "solid-js";
@@ -42,9 +42,6 @@ export type ConnectedRuntime = {
   readonly fileImages: ServerFileImages;
   /** Resolves after the initial stream handshake and default location synchronization. */
   readonly ready: Promise<void>;
-  readonly onShellExited: (
-    handler: (event: Extract<OpenCodeEvent, { type: "shell.exited" }>) => void,
-  ) => () => void;
   readonly loader: TranscriptLoader;
 };
 
@@ -124,10 +121,6 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     sessions,
     reads,
   });
-  const onShellExited = (
-    handler: (event: Extract<OpenCodeEvent, { type: "shell.exited" }>) => void,
-  ): (() => void) => events.on("shell.exited", handler);
-
   return {
     effects: input.effects,
     api: input.api,
@@ -140,7 +133,6 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     diffs,
     fileImages,
     ready,
-    onShellExited,
     loader,
   };
 }

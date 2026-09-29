@@ -1220,10 +1220,14 @@ describe.sequential("production browser app", () => {
       .split("\n")
       .find((line) => line.startsWith("worktree ") && !before.includes(line))
       .slice(9);
-    expect(worktree.startsWith(`${await realpath(profile.paths.data)}/opencode/worktree/`)).toBe(
-      true,
-    );
+    const resolvedProject = await api.location.get({ location: { directory: project } });
+    expect(
+      worktree.startsWith(
+        `${await realpath(profile.paths.data)}/opencode/worktree/${resolvedProject.project.id.slice(0, 6)}/`,
+      ),
+    ).toBe(true);
     expect(await git(worktree, "rev-parse", "HEAD")).toBe(localMain);
+    expect(await git(worktree, "branch", "--show-current")).toBe("");
     const created = (await api.session.list({ limit: 100 })).data.find(
       (session) => !priorSessions.some((previous) => previous.id === session.id),
     );

@@ -46,20 +46,19 @@ session directly in its canonical directory. A Git project offers:
 - **Create a worktree**: prepare an isolated detached Git worktree automatically.
   There are no directory or name fields.
 
-`createSessionWorktree` reads the connected server's XDG data location and local
-`refs/heads/main` commit through the shell API, then discovers and fetches origin's
-default branch. After fetching, it captures the latest local `main` commit as the
-worktree base. A confirmed fetch failure or timeout shows a persistent error and
-uses the pre-fetch local `main` snapshot. A missing local `main` stops creation.
-Fetching updates remote-tracking refs; it does not pull or move local `main`.
+`createSessionWorktree` asks OpenCode's `vcs.get` for the default branch and passes
+its fully qualified local ref (`refs/heads/<branch>`) to `worktree.create`, with
+strategy `git` and the registered project root as `from`. OpenCode owns default-
+branch detection; oc-ui does not run shell commands, fetch, or maintain fallback
+snapshots. If no default is reported, creation stops with an error. If the local
+branch is missing, OpenCode reports the creation failure.
 
-The helper calls `worktree.create` with strategy `git`, the registered source
-root as `from`, the automatic XDG parent, and the captured commit ID as `branch`.
-OpenCode generates the name and creates a detached checkout; this parameter does
-not create a Git branch. Session creation waits for native creation and any
-configured startup command, then uses the resolved server-returned location.
-Logical workspace routing and unsupported shells produce an error before creation;
-the direct-directory option remains available.
+The helper omits `directory` and `name`: OpenCode owns placement under its configured
+worktree parent (by default, `<data>/worktree/<project-id-prefix>`), generates the
+name, and creates a detached checkout. Session creation waits for native creation
+and any configured startup command, then uses the resolved server-returned location.
+Logical workspace routing produces an error before creation; the direct-directory
+option remains available. No POSIX path or shell requirement is imposed by oc-ui.
 
 Mutation phases are `creating-worktree` and `creating-session`. During either
 phase, dismissal and repeat submission are blocked. If worktree creation fails,
