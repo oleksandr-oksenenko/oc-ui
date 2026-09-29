@@ -189,6 +189,12 @@
   padding-left: 76px;
 }
 
+[data-host="desktop"][data-platform="macos"]
+  .titlebar-left-region
+  > :is(.titlebar-icon-button, .shell-session-header) {
+  transform: translateY(-2px);
+}
+
 .shell-titlebar .context-tabs,
 .shell-titlebar .context-tabs > :is([data-slot="tabs-list"], [data-slot="tabs-v2-list"]) {
   height: var(--oc-titlebar-height);

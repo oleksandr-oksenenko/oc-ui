@@ -19,7 +19,7 @@ export function SessionHeader(props: SessionHeaderProps) {
           class="shell-create-session"
           type="button"
           size="normal"
-          variant="contrast"
+          variant="ghost-muted"
           aria-label="Create session"
           title="Create session"
           disabled={!props.canCreate}
