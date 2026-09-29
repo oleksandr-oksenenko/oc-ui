@@ -68,7 +68,7 @@ import {
   type BrowserAnnotationDraft,
 } from "../src/renderer/components/App/ConnectedApp/Browser/browser-annotations.ts";
 import { workspaceQuestionForm } from "./question-form-fixtures.ts";
-import { FoundationPreview } from "./workspace-showcase/FoundationPreview.tsx";
+import "./workspace-showcase/workspace-showcase.css";
 import { WorkspaceConnection } from "./workspace-showcase/WorkspaceConnection.tsx";
 import { showcaseActivityAssistant } from "./workspace-showcase/activity-fixture.ts";
 
@@ -200,9 +200,8 @@ const diff: readonly DiffFileData[] = [
 ];
 
 const meta = {
-  title: "Showcase/AMOLED Workspace",
+  title: "Showcase/Warm Paper Workspace",
   component: AppShell,
-  decorators: [(Story) => <FoundationPreview>{Story()}</FoundationPreview>],
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof AppShell>;
 
@@ -1103,21 +1102,7 @@ export const InteractiveWorkspace = {
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
-    await userEvent.type(prompt, "Keep this draft while comparing");
-    await userEvent.click(canvas.getByRole("button", { name: "Current" }));
-    await expect(canvas.getByRole("button", { name: "Current" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await expect(canvas.getByRole("textbox", { name: "Prompt" })).toBe(prompt);
-    await expect(prompt).toHaveTextContent("Keep this draft while comparing");
-    await userEvent.click(canvas.getByRole("button", { name: "Proposed" }));
-    await expect(canvas.getByRole("button", { name: "Proposed" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await expect(canvas.getByRole("textbox", { name: "Prompt" })).toBe(prompt);
-    await expect(prompt).toHaveTextContent("Keep this draft while comparing");
+    await userEvent.type(prompt, "Keep this draft while browsing");
     await userEvent.click(canvas.getByRole("button", { name: "Browser" }));
     await expect(canvas.getByRole("textbox", { name: "Browser address" })).toHaveValue(
       "http://localhost:3000",
@@ -1134,12 +1119,12 @@ export const InteractiveWorkspace = {
     const browserNotes = await screen.findByRole("dialog", { name: "Browser annotation" });
     await expect(within(browserNotes).getByText("Keep the title readable.")).toBeVisible();
     await userEvent.keyboard("{Escape}");
-    await expect(prompt).toHaveTextContent("Keep this draft while comparing");
+    await expect(prompt).toHaveTextContent("Keep this draft while browsing");
     await userEvent.click(canvas.getByRole("button", { name: "Discard browser annotations" }));
     await expect(canvas.queryByRole("button", { name: "Browser · 2" })).toBeNull();
     await userEvent.click(canvas.getByRole("button", { name: "Remove release-notes.md" }));
     await expect(canvas.queryByText("release-notes.md")).toBeNull();
-    await expect(prompt).toHaveTextContent("Keep this draft while comparing");
+    await expect(prompt).toHaveTextContent("Keep this draft while browsing");
     await userEvent.click(canvas.getByRole("button", { name: "Diff" }));
     await userEvent.click(
       canvas.getByRole("button", { name: "Rename Helpers, Permission required" }),

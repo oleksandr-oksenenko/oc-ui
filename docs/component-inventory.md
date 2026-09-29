@@ -148,7 +148,7 @@ older first-slice requirements still describe an updated-time row. The runtime m
 
 Stories are grouped under `apps/desktop/stories/`:
 
-- `Showcase/AMOLEDWorkspace`: complete target fixture, with left/right panel toggles, Diff/Files
+- `Showcase/Warm Paper Workspace`: complete target fixture, with left/right panel toggles, Diff/Files
   switch, session expansion, composer selectors, and submit interaction. This is the visual target
   showcase; `Shell/AppShell` focuses on shell composition states using the same real child
   components.

@@ -1,11 +1,11 @@
 # Full workspace review
 
-Open **Showcase / AMOLED Workspace / Workspace Showcase**. The Current / Proposed /
-Warm paper switch compares the foundation treatment. Warm paper keeps Proposed's
-layout and typography with a restrained palette inspired by
-[Flexoki](https://stephango.com/flexoki): a near-white canvas, nearly neutral gray
-supporting surfaces, and charcoal ink. The theme control switches Light and Dark. All data and
-submissions in these stories are local fixtures.
+Open **Showcase / Warm Paper Workspace / Workspace Showcase**. Warm Paper is the
+current application design and is shared by every Storybook story. The theme
+control switches its Light and Dark palettes. Colors live in
+`src/renderer/styles/foundations.css`; component styles consume those roles.
+The palette has a near-white canvas, nearly neutral gray supporting surfaces,
+and charcoal ink. All data and submissions in these stories are local fixtures.
 
 ## Component coverage
 

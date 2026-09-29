@@ -12,3 +12,10 @@
   background: var(--oc-surface-canvas);
   font-family: var(--oc-font-sans);
 }
+
+@media (720px <= width <= 1100px) {
+  .app-shell-v2 {
+    --shell-left-sidebar-width: clamp(172px, 24vw, 208px);
+    --shell-right-panel-width: clamp(240px, 34vw, 280px);
+  }
+}

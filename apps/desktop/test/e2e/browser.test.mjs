@@ -501,7 +501,7 @@ describe.sequential("production browser app", () => {
     await expect.poll(() => page.locator("html").getAttribute("data-color-scheme")).toBe("dark");
     expect(
       await page.locator("html").evaluate((node) => getComputedStyle(node).backgroundColor),
-    ).toBe("rgb(0, 0, 0)");
+    ).toBe("rgb(16, 15, 15)");
     expect(await prompt.evaluate((node) => node.isConnected)).toBe(true);
     expect(await page.getByLabel("Prompt", { exact: true }).textContent()).toBe(
       "Independent draft",
@@ -515,6 +515,9 @@ describe.sequential("production browser app", () => {
       await second.reload();
       await second.getByRole("button", { name: "Switch to dark theme" }).waitFor();
       expect(await second.locator("html").getAttribute("data-color-scheme")).toBe("light");
+      expect(
+        await second.locator("html").evaluate((node) => getComputedStyle(node).backgroundColor),
+      ).toBe("rgb(255, 254, 253)");
     } finally {
       await second.close();
     }

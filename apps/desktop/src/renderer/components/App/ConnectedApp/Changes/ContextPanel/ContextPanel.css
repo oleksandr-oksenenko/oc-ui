@@ -161,6 +161,8 @@
   width: 100%;
   min-width: 0;
   border-radius: var(--oc-radius);
+  color: var(--oc-text-strong);
+  background-color: var(--oc-surface-canvas);
 }
 
 .diff-file-header {

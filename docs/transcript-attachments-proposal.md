@@ -300,7 +300,7 @@ attachment-only submission, without interpreting their rendered content. Removal
 separate from preview activation, and the composer bounds large attachment batches
 to a scrollable 168px area. The former file rows and context-chip styles are removed.
 
-The AMOLED Workspace showcase includes all approved attachment types. Browser
+The Warm Paper Workspace showcase includes all approved attachment types. Browser
 notes there are controlled fixture data and serialize through the existing
 text/image helpers when a simulated message is sent or queued. Production browser
 capture serialization is unchanged. Transcript rendering is not migrated in this

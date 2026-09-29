@@ -107,7 +107,7 @@ export default defineConfig({
           "apps/desktop/src/renderer/test/workspace.ts",
           "apps/desktop/stories/transcript-annotations/TranscriptAnnotations.tsx",
           "apps/desktop/stories/AddProjectDialog.stories.tsx",
-          "apps/desktop/stories/AMOLEDWorkspace.stories.tsx",
+          "apps/desktop/stories/WarmPaperWorkspace.stories.tsx",
         ],
         rules: { "anti-slop-effect/no-service-constructor-imports": "off" },
       },

@@ -104,3 +104,49 @@
 :root [data-component="select-v2"][data-appearance] [data-slot="select-v2-value-text"] {
   padding: 0;
 }
+
+:root
+  [data-slot="radio-v2-item"]:not([data-disabled], [data-checked])
+  [data-slot="radio-v2-item-control"] {
+  border-color: var(--oc-border-emphasis);
+}
+
+:root
+  :is(
+    [data-component="dialog-v2"] [data-slot="dialog-container"],
+    [data-component="popover-content"]
+  ) {
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius-panel);
+  background: var(--oc-surface-raised);
+  box-shadow: var(--oc-shadow-floating);
+}
+
+:root
+  [data-component="dialog-v2"]
+  [data-slot="dialog-header"]
+  :is([data-slot="dialog-header-title"], [data-slot="dialog-title"]) {
+  color: var(--oc-text-strong);
+  font-size: var(--oc-type-title-size);
+  font-weight: var(--oc-type-title-weight);
+  line-height: var(--oc-type-title-line-height);
+}
+
+:root :is([data-component="button-v2"], [data-component="icon-button-v2"]):disabled {
+  color: var(--oc-text-faint);
+  background: var(--oc-surface-control);
+  background-image: none;
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+:root[data-color-scheme="dark"] [data-component="menu-v2-content"][data-slot="select-v2-content"] {
+  border: 1px solid var(--oc-border-base);
+}
+
+/* Pierre writes syntax-theme neutrals on its shadow host. */
+:root .diff-code-view diffs-container {
+  --diffs-bg: var(--oc-surface-canvas);
+  --diffs-fg: var(--oc-text-strong);
+}

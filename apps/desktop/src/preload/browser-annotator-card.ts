@@ -1,3 +1,4 @@
+import foundations from "../renderer/styles/foundations.css?raw";
 import type { BrowserAnnotatorReply } from "../shared/browser-annotator.ts";
 
 /**
@@ -17,6 +18,7 @@ const MAX_BODY_LENGTH = 4_096;
 
 const STYLES = `
 :host { all: initial; }
+${foundations}
 .card {
   position: fixed;
   box-sizing: border-box;
@@ -24,13 +26,13 @@ const STYLES = `
   max-height: calc(100vh - 16px);
   overflow: auto;
   padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  background: rgba(24, 24, 27, 0.98);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  color: #f4f4f5;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 13px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius-card);
+  background: var(--oc-surface-raised);
+  box-shadow: var(--oc-shadow-floating);
+  color: var(--oc-text-strong);
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-body-size);
   line-height: 1.4;
   pointer-events: auto;
 }
@@ -41,14 +43,14 @@ textarea {
   min-height: 54px;
   resize: none;
   padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-control);
   color: inherit;
   font: inherit;
   outline: none;
 }
-textarea:focus { border-color: rgba(255, 255, 255, 0.42); }
+textarea:focus { border-color: var(--oc-focus-ring); }
 .row {
   display: flex;
   align-items: center;
@@ -58,22 +60,22 @@ textarea:focus { border-color: rgba(255, 255, 255, 0.42); }
 }
 .hint {
   margin-right: auto;
-  color: rgba(244, 244, 245, 0.55);
-  font-size: 11px;
+  color: var(--oc-text-faint);
+  font-size: var(--oc-type-caption-size);
 }
 button {
   padding: 3px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
 }
-button.primary { border-color: transparent; background: #e4e4e7; color: #18181b; }
+button.primary { border-color: transparent; background: var(--oc-selection); color: var(--oc-text-on-selection); }
 button:disabled { opacity: 0.45; cursor: default; }
-button:not(:disabled):hover { border-color: rgba(255, 255, 255, 0.36); }
-button.primary:not(:disabled):hover { background: #fff; }
+button:not(:disabled):hover { border-color: var(--oc-border-strong); }
+button.primary:not(:disabled):hover { background: var(--oc-selection-hover); }
 `;
 
 /** Places the card beside the anchor inside the current viewport. */
@@ -132,6 +134,8 @@ export function createAnnotatorCard(
     host?.remove();
     host = document.createElement("div");
     host.setAttribute("data-ocui-annotator", "");
+    // Embedded pages have no app theme context; retain a fixed dark card.
+    host.dataset.colorScheme = "dark";
     host.style.cssText =
       "position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:2147483647;";
     scope = host.attachShadow({ mode: options.shadowRootMode ?? "closed" });

@@ -1,6 +1,8 @@
+/* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
 /* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- The scrollable catalog needs keyboard focus. */
 
 import { For, createEffect, Show, createSignal } from "solid-js";
+import { expect } from "storybook/test";
 import type { Meta } from "storybook-solidjs-vite";
 
 import "./design-system.css";
@@ -181,8 +183,9 @@ function FoundationsPage() {
           <p class="design-system-kicker">Review catalog</p>
           <h1 class="design-system-title">Foundations</h1>
           <p class="design-system-intro">
-            The values below are read from the active theme at runtime. This page is a compact
-            reference for the tokens that shape oc-ui surfaces, hierarchy, feedback, and density.
+            Warm Paper is the current design. These values are read from its active light or dark
+            palette. This page is a compact reference for the tokens that shape oc-ui surfaces,
+            hierarchy, feedback, and density.
           </p>
         </header>
 
@@ -270,4 +273,21 @@ function FoundationsPage() {
 
 export const Catalog = {
   render: () => <FoundationsPage />,
+  play: async () => {
+    const root = document.documentElement;
+    const style = getComputedStyle(root);
+    const dark = root.dataset.colorScheme === "dark";
+    await expect(root.hasAttribute("data-workspace-foundations")).toBe(false);
+    await expect(style.backgroundColor).toBe(dark ? "rgb(16, 15, 15)" : "rgb(255, 254, 253)");
+    await expect(style.color).toBe(dark ? "rgb(232, 230, 223)" : "rgb(40, 40, 39)");
+    // Legacy popover arrows and tooltips must resolve through the app palette too.
+    await expect(style.getPropertyValue("--surface-raised-stronger-non-alpha").trim()).toBe(
+      dark ? "#1c1b1a" : "#f7f7f6",
+    );
+  },
+};
+
+export const DarkCatalog = {
+  ...Catalog,
+  globals: { theme: "dark" },
 };

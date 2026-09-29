@@ -40,7 +40,7 @@ export const SelectedPlacement: Story = {
     return (
       <SessionPane
         selected
-        title="AMOLED polish"
+        title="Warm Paper polish"
         transcript={
           <TranscriptView
             sessionID="selected-placement"

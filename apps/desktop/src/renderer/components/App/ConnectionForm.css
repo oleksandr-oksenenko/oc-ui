@@ -24,8 +24,8 @@
   color: var(--oc-text-muted);
   font-size: var(--oc-type-tab-size);
   font-weight: var(--oc-type-tab-weight);
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .connection-form-heading h1 {

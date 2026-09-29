@@ -83,7 +83,7 @@ export const Idle: Story = {
     await step("Submit a non-empty draft with Enter", async () => {
       await userEvent.type(prompt, "Send");
       const frame = canvas.getByRole("form", { name: "Message composer" });
-      await expect(getComputedStyle(frame).outlineColor).toBe("rgb(119, 119, 119)");
+      await expect(getComputedStyle(frame).outlineColor).toBe("rgb(7, 94, 189)");
       await expect(getComputedStyle(frame).outlineWidth).toBe("1px");
       await expect(getComputedStyle(prompt).outlineStyle).toBe("none");
       await userEvent.keyboard("{Enter}");

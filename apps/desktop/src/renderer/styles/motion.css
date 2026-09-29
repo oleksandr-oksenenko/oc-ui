@@ -46,3 +46,9 @@
     transition: none;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  :root [data-component="popover-content"] {
+    animation: none;
+  }
+}

@@ -274,7 +274,7 @@ export const longToolPath =
 
 /** A shell command wider than a row at the desktop preset. */
 export const longShellCommand =
-  "pnpm exec vp test run --project=storybook --reporter=verbose --coverage --runInBand --silent --watch=false --maxWorkers=2";
+  "pnpm exec vp test run --project=storybook --reporter=verbose --coverage --runInBand --silent --watch=false --maxWorkers=2 --exclude=**/node_modules/** --testNamePattern=wraps-long-shell-commands-without-clipping";
 
 export const toolStates: readonly SessionMessageInfo[] = [
   {

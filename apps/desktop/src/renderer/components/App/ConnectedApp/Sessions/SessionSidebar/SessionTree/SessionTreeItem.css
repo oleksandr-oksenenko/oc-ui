@@ -13,7 +13,7 @@
   min-width: 0;
   padding: 0 3px 0 1px;
   border-radius: var(--oc-radius);
-  color: var(--oc-text-muted);
+  color: var(--oc-text-base);
 }
 
 .shell-session-row:hover:not(.selected) {
@@ -69,6 +69,7 @@
 
 .shell-session-row.selected .shell-session-main {
   color: var(--oc-text-contrast);
+  font-weight: var(--oc-type-title-weight);
 }
 
 .shell-session-disclosure-slot {

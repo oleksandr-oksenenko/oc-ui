@@ -15,7 +15,7 @@ export function ThemeToggle() {
       disabled={!theme.onChange}
       onClick={() => theme.onChange?.(next())}
     >
-      {theme.theme() === "light" ? "Light theme" : "Dark (AMOLED)"}
+      {theme.theme() === "light" ? "Light theme" : "Dark theme"}
     </Button>
   );
 }

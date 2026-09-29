@@ -2,7 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2023", "DOM"],
-    "types": ["node", "electron"]
+    "types": ["node", "electron", "vite/client"]
   },
   "include": ["src/preload/**/*.ts", "src/shared/**/*.ts"]
 }

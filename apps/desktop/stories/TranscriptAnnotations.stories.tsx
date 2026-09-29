@@ -97,11 +97,11 @@ export const Comparison: Story = {
       select(source);
       const action = canvas.getByRole("button", { name: "Add note" });
       await expect(getComputedStyle(action.parentElement!).backgroundColor).toBe(
-        "rgb(245, 245, 245)",
+        "rgb(247, 247, 246)",
       );
       await userEvent.click(action);
       const dialog = await screen.findByRole("dialog", { name: "Transcript annotations" });
-      await expect(getComputedStyle(dialog).backgroundColor).toBe("rgb(255, 255, 255)");
+      await expect(getComputedStyle(dialog).backgroundColor).toBe("rgb(255, 254, 253)");
       await expect(dialog.querySelector('[data-variant="editor"]')).toBeNull();
       const editor = within(dialog).getByRole("textbox", { name: "Annotation comment" });
       await waitFor(() => expect(editor).toHaveFocus());

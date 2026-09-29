@@ -51,12 +51,12 @@ const preview: Preview = {
   ],
   globalTypes: {
     theme: {
-      description: "Application theme",
+      description: "Warm Paper appearance",
       toolbar: {
         dynamicTitle: true,
         items: [
           { value: "light", title: "Light" },
-          { value: "dark", title: "Dark (AMOLED)" },
+          { value: "dark", title: "Dark" },
         ],
       },
     },

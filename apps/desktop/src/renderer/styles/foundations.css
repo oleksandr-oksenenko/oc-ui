@@ -1,42 +1,42 @@
-:root {
+:root,
+:host {
   color-scheme: light;
 
-  /* Default light palette. The AMOLED override below shares all aliases,
+  /* Warm Paper light palette. The dark override below shares all aliases,
      component mappings, typography, and geometry with this theme. */
-  --oc-surface-canvas: #fff;
-  --oc-surface-subtle: #fafafa;
-  --oc-surface-raised: #f5f5f5;
-  --oc-surface-control: #eee;
-  --oc-surface-selected: #e8e8e8;
-  --oc-surface-hover: #e3e3e3;
-  --oc-surface-elevated: #e0e0e0;
-  --oc-overlay-hover: rgb(0 0 0 / 6%);
-  --oc-overlay-pressed: rgb(0 0 0 / 10%);
+  --oc-surface-canvas: #fffefd;
+  --oc-surface-subtle: #fcfcfb;
+  --oc-surface-raised: #f7f7f6;
+  --oc-surface-control: #f3f3f2;
+  --oc-surface-selected: #e9e9e8;
+  --oc-surface-hover: #e6e6e5;
+  --oc-surface-elevated: #dededc;
+  --oc-overlay-hover: rgb(40 40 39 / 6%);
+  --oc-overlay-pressed: rgb(40 40 39 / 10%);
   --oc-scrim: rgb(0 0 0 / 55%);
   --oc-content-code-surface: var(--oc-surface-raised);
-  --oc-border-muted: #e5e5e5;
-  --oc-border-base: #dbdbdb;
-  --oc-border-strong: #cbcbcb;
-  --oc-border-emphasis: #777;
+  --oc-border-muted: #e8e8e7;
+  --oc-border-base: #d8d8d7;
+  --oc-border-strong: #c6c6c4;
+  --oc-border-emphasis: #777775;
   --oc-content-divider: var(--oc-border-muted);
 
   /* One text ramp with visible steps: strong, base, muted, then a genuinely
      faint tone for incidental labels. Icons keep their own two steps. */
-  --oc-text-strong: #0d0d0d;
-  --oc-text-contrast: #0a0a0a;
+  --oc-text-strong: #282827;
+  --oc-text-contrast: #282827;
   --oc-text-on-selection: #f5f5f5;
-  --oc-text-base: #3a3a3a;
-  --oc-text-muted: #565656;
-  --oc-text-faint: #6b6b6b;
-  --oc-icon-faint: #8f8f8f;
-  --oc-icon-base: #5f5f5f;
+  --oc-text-base: #403f3e;
+  --oc-text-muted: #575756;
+  --oc-text-faint: #6b6b69;
+  --oc-icon-faint: #858583;
+  --oc-icon-base: #636361;
   --oc-accent: #075ebd;
 
-  /* Focus stays neutral and flush with controls in every theme. Accent-colored
-     rings look like lingering blue glows after editing or dismissing overlays. */
-  --oc-focus-ring: var(--oc-border-emphasis);
+  /* Warm Paper uses an accent outline with space around keyboard-focused controls. */
+  --oc-focus-ring: var(--oc-accent);
   --oc-focus-ring-width: 1px;
-  --oc-focus-ring-offset: 0px;
+  --oc-focus-ring-offset: 2px;
   --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
   --oc-focus-ring-inset-offset: calc(-1 * var(--oc-focus-ring-width));
   --oc-status-info: #075ebd;
@@ -50,9 +50,9 @@
   --oc-selection-hover: #075ebd;
   --oc-selection-pressed: #064f9d;
   --oc-selection-ring: rgb(9 105 218 / 14%);
-  --oc-selection-tint: rgb(9 105 218 / 10%);
-  --oc-selection-tint-strong: rgb(9 105 218 / 18%);
-  --oc-radio-outline: #222;
+  --oc-selection-tint: rgb(9 105 218 / 8%);
+  --oc-selection-tint-strong: rgb(9 105 218 / 14%);
+  --oc-radio-outline: var(--oc-border-emphasis);
   --oc-diff-addition: var(--oc-status-success);
   --oc-diff-deletion: #b42318;
 
@@ -60,9 +60,9 @@
      floating for overlapping surfaces such as menus, dialogs, and popovers.
      The light scale grows by distance and spread, never by darker edges;
      every surface keeps its own 1px border, and shadows never draw a ring. */
-  --oc-shadow-card: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 12px rgb(0 0 0 / 10%);
-  --oc-shadow-lift: 0 2px 4px rgb(0 0 0 / 8%), 0 8px 24px rgb(0 0 0 / 10%);
-  --oc-shadow-floating: 0 2px 4px rgb(0 0 0 / 8%), 0 12px 32px rgb(0 0 0 / 12%);
+  --oc-shadow-card: 0 1px 2px rgb(40 40 39 / 6%), 0 4px 12px rgb(40 40 39 / 8%);
+  --oc-shadow-lift: 0 2px 4px rgb(40 40 39 / 7%), 0 8px 24px rgb(40 40 39 / 9%);
+  --oc-shadow-floating: 0 2px 4px rgb(40 40 39 / 8%), 0 12px 32px rgb(40 40 39 / 12%);
 
   /* Ordinary controls share one compact radius; cards and panels step up so
      containment is legible. Reserve full rounding for circles and pills. */
@@ -73,8 +73,8 @@
   --oc-radius-panel: 12px;
   --oc-radius-full: 9999px;
   --oc-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --oc-motion-duration: 140ms;
-  --oc-motion-duration-fast: 100ms;
+  --oc-motion-duration: 120ms;
+  --oc-motion-duration-fast: 90ms;
 
   /* Transcript viewport measurements override this fallback locally. */
   --oc-activity-max-height: 240px;
@@ -104,7 +104,7 @@
   --oc-type-heading-line-height: 24px;
   --oc-type-heading-weight: 600;
   --oc-type-body-size: 13px;
-  --oc-type-body-line-height: 18px;
+  --oc-type-body-line-height: 20px;
   --oc-type-body-weight: 400;
   --oc-type-body-relaxed-size: 14px;
   --oc-type-body-relaxed-line-height: 21px;
@@ -118,24 +118,24 @@
   --oc-type-status-size: var(--oc-type-metadata-size);
   --oc-type-status-line-height: var(--oc-type-metadata-line-height);
   --oc-type-status-weight: var(--oc-type-metadata-weight);
-  --oc-type-caption-size: 11px;
+  --oc-type-caption-size: 12px;
   --oc-type-caption-line-height: 16px;
   --oc-type-caption-weight: 400;
-  --oc-type-tab-size: 11px;
-  --oc-type-tab-line-height: 14px;
+  --oc-type-tab-size: 12px;
+  --oc-type-tab-line-height: 16px;
   --oc-type-tab-weight: 600;
   --oc-type-label-size: 12px;
   --oc-type-label-line-height: 16px;
   --oc-type-label-weight: 500;
-  --oc-type-kicker-size: 10px;
-  --oc-type-kicker-line-height: 14px;
-  --oc-type-kicker-weight: 600;
-  --oc-type-kicker-letter-spacing: 0.08em;
+  --oc-type-kicker-size: var(--oc-type-label-size);
+  --oc-type-kicker-line-height: var(--oc-type-label-line-height);
+  --oc-type-kicker-weight: var(--oc-type-label-weight);
+  --oc-type-kicker-letter-spacing: normal;
   --oc-type-code-size: 12px;
   --oc-type-code-line-height: 18px;
   --oc-type-code-weight: 400;
-  --oc-type-diff-stat-size: 10px;
-  --oc-type-diff-stat-line-height: 14px;
+  --oc-type-diff-stat-size: 11px;
+  --oc-type-diff-stat-line-height: 16px;
   --oc-type-diff-stat-weight: 400;
 
   /* OpenCode integration: both published token families use the product roles
@@ -167,6 +167,11 @@
   --text-diff-add-base: var(--oc-diff-addition);
   --text-diff-delete-base: var(--oc-diff-deletion);
 
+  /* Pierre diff colors follow the same semantic roles. */
+  --diffs-addition-color-override: var(--oc-diff-addition);
+  --diffs-deletion-color-override: var(--oc-diff-deletion);
+  --diffs-modified-color-override: var(--oc-status-info);
+
   /* Newer OpenCode components use versioned names for the same app roles. */
   --v2-text-text-base: var(--oc-text-base);
   --v2-text-text-muted: var(--oc-text-muted);
@@ -197,6 +202,54 @@
   --v2-state-border-danger: var(--oc-status-danger-border);
   --v2-state-bg-danger: var(--oc-status-danger-surface);
 
+  /* Complete the pinned controls’ palette adapter, including legacy popover
+     arrows, tooltips, switch thumbs, and radio indicators. */
+  --border-disabled: var(--oc-border-muted);
+  --border-error: var(--oc-status-danger);
+  --border-focus: var(--oc-focus-ring);
+  --border-hover: var(--oc-border-strong);
+  --icon-disabled: var(--oc-icon-faint);
+  --icon-invert-base: var(--oc-text-on-selection);
+  --icon-strong-base: var(--oc-text-strong);
+  --surface-base: var(--oc-surface-canvas);
+  --surface-base-active: var(--oc-surface-selected);
+  --surface-base-hover: var(--oc-surface-hover);
+  --surface-disabled: var(--oc-surface-control);
+  --surface-float-base: var(--oc-surface-raised);
+  --surface-hover: var(--oc-surface-hover);
+  --surface-raised-base-hover: var(--oc-surface-hover);
+  --surface-raised-stronger-non-alpha: var(--oc-surface-raised);
+  --shadow-md: var(--oc-shadow-floating);
+  --text-error: var(--oc-status-danger);
+  --text-invert-strong: var(--oc-text-strong);
+  --v2-background-bg-icon-button-contrast: var(--oc-selection);
+  --v2-border-border-weak: var(--oc-border-muted);
+  --v2-icon-icon-inverse: var(--oc-text-on-selection);
+  --v2-text-text-inverse: var(--oc-text-on-selection);
+  --v2-elevation-raised: var(--oc-shadow-card);
+  --v2-elevation-overlay: var(--oc-shadow-floating);
+  --v2-elevation-button-neutral: var(--oc-shadow-card);
+  --v2-elevation-button-contrast: var(--oc-shadow-card);
+  --v2-elevation-elements: var(--oc-shadow-card);
+  --v2-overlay-simple-overlay-scrim: var(--oc-scrim);
+  --v2-grey-200: var(--oc-text-on-selection);
+  --v2-grey-300: var(--oc-text-on-selection);
+  --v2-elevation-switch-off: inset 0 0 0 1px var(--oc-border-base);
+  --v2-elevation-switch-on: inset 0 0 0 1px var(--oc-selection-hover);
+  --v2-overlay-gradient-depth-overlay-depth-top: transparent;
+  --v2-overlay-gradient-depth-overlay-depth-bot: transparent;
+  --v2-overlay-simple-overlay-contrast-hover: var(--oc-overlay-hover);
+  --v2-overlay-simple-overlay-contrast-pressed: var(--oc-overlay-pressed);
+  --v2-alpha-light-0: color-mix(in srgb, var(--oc-text-on-selection) 0%, transparent);
+  --v2-alpha-light-2: color-mix(in srgb, var(--oc-text-on-selection) 2%, transparent);
+  --v2-alpha-light-6: color-mix(in srgb, var(--oc-text-on-selection) 6%, transparent);
+  --v2-alpha-light-10: color-mix(in srgb, var(--oc-text-on-selection) 10%, transparent);
+  --v2-alpha-light-16: color-mix(in srgb, var(--oc-text-on-selection) 16%, transparent);
+  --v2-alpha-light-20: color-mix(in srgb, var(--oc-text-on-selection) 20%, transparent);
+  --v2-alpha-light-60: color-mix(in srgb, var(--oc-text-on-selection) 60%, transparent);
+  --v2-alpha-dark-8: color-mix(in srgb, var(--oc-text-strong) 8%, transparent);
+  --v2-alpha-dark-20: color-mix(in srgb, var(--oc-text-strong) 20%, transparent);
+
   /* Upstream's published radius family maps onto the product scale: compact
      controls keep the control radius, larger surfaces step up. */
   --radius-xs: var(--oc-radius);
@@ -212,23 +265,24 @@
   text-rendering: optimizelegibility;
 }
 
-/* Dark (AMOLED) palette. */
-:root[data-color-scheme="dark"] {
+/* Warm Paper dark palette. */
+:root[data-color-scheme="dark"],
+:host([data-color-scheme="dark"]) {
   color-scheme: dark;
 
-  --oc-overlay-hover: rgb(255 255 255 / 6%);
-  --oc-overlay-pressed: rgb(255 255 255 / 10%);
+  --oc-overlay-hover: rgb(242 240 229 / 6%);
+  --oc-overlay-pressed: rgb(242 240 229 / 10%);
   --oc-scrim: rgb(0 0 0 / 72%);
-  --oc-text-strong: #f2f2f2;
-  --oc-text-contrast: #f5f5f5;
-  --oc-text-base: #c9c9c9;
-  --oc-text-muted: #9b9b9b;
-  --oc-text-faint: #838383;
-  --oc-icon-faint: #757575;
-  --oc-icon-base: #a5a5a5;
+  --oc-text-strong: #e8e6df;
+  --oc-text-contrast: #f2f0e5;
+  --oc-text-base: #cecdc3;
+  --oc-text-muted: #aaa89f;
+  --oc-text-faint: #96948d;
+  --oc-icon-faint: #8f8d86;
+  --oc-icon-base: #b7b5ac;
   --oc-accent: #74a7ff;
-  --oc-selection-tint: rgb(116 167 255 / 16%);
-  --oc-selection-tint-strong: rgb(116 167 255 / 26%);
+  --oc-selection-tint: rgb(116 167 255 / 12%);
+  --oc-selection-tint-strong: rgb(116 167 255 / 20%);
   --oc-status-info: #5598f6;
   --oc-status-success: #7ee787;
   --oc-status-warning: #f5b942;
@@ -237,23 +291,23 @@
   --oc-status-danger-surface: rgb(255 93 102 / 10%);
   --oc-diff-deletion: #ff7b72;
 
-  /* Black cannot shade black: the dark theme keeps the border and surface steps
+  /* The dark theme uses border and surface steps
      for separation, and only `floating` keeps a shadow where an overlay
      crosses content. A light glow here would read as haze, not elevation. */
   --oc-shadow-card: none;
   --oc-shadow-lift: none;
   --oc-shadow-floating: 0 10px 28px rgb(0 0 0 / 55%);
-  --oc-surface-canvas: #000;
-  --oc-surface-subtle: #050505;
-  --oc-surface-raised: #0a0a0a;
-  --oc-surface-control: #111;
-  --oc-surface-selected: #171717;
-  --oc-surface-hover: #1c1c1c;
-  --oc-surface-elevated: #1f1f1f;
-  --oc-border-muted: #1a1a1a;
-  --oc-border-base: #242424;
-  --oc-border-strong: #343434;
-  --oc-border-emphasis: #686868;
+  --oc-surface-canvas: #100f0f;
+  --oc-surface-subtle: #191817;
+  --oc-surface-raised: #1c1b1a;
+  --oc-surface-control: #282726;
+  --oc-surface-selected: #343331;
+  --oc-surface-hover: #3a3936;
+  --oc-surface-elevated: #403e3c;
+  --oc-border-muted: #282726;
+  --oc-border-base: #403e3c;
+  --oc-border-strong: #575653;
+  --oc-border-emphasis: #878580;
 }
 
 /* Shared spacing for native and custom dropdown triggers. */

@@ -22,13 +22,13 @@ const meta = {
 
 export default meta;
 
-async function ring(element: Element, offset = "0px") {
+async function ring(element: Element, offset = "2px") {
   await waitFor(async () => {
     const style = getComputedStyle(element);
-    // Keep a literal neutral expectation: deriving this from the focus token
+    // Keep a literal Warm Paper expectation: deriving this from the focus token
     // would let a palette regression change both the result and the expectation.
     const dark = document.documentElement.dataset.colorScheme === "dark";
-    await expect(style.outlineColor).toBe(dark ? "rgb(104, 104, 104)" : "rgb(119, 119, 119)");
+    await expect(style.outlineColor).toBe(dark ? "rgb(116, 167, 255)" : "rgb(7, 94, 189)");
     await expect(style.outlineStyle).toBe("solid");
     await expect(style.outlineWidth).toBe("1px");
     await expect(style.outlineOffset).toBe(offset);
@@ -39,7 +39,7 @@ export const SharedTreatment: StoryObj = {
   render: () => (
     <CatalogPage
       title="Focus"
-      intro="Neutral focus is shared across controls. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
+      intro="Warm Paper focus is shared across controls. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
     >
       <CatalogCard
         title="Shared controls"
