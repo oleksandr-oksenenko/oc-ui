@@ -1,3 +1,5 @@
+import { Browser } from "@opencode/plugin-browser/rpc";
+import { readBrowserAnnotationMetadata } from "../../../../opencode/browser-annotation-metadata.ts";
 import { withTestWorkspace } from "../../../../test/workspace.ts";
 import type { SessionInboxUser, SessionMessageInfo } from "@opencode/client";
 import { createRoot, createSignal, onCleanup } from "solid-js";
@@ -1462,6 +1464,68 @@ describe("annotation batches", () => {
     );
     expect(root.composer.skills()).toHaveLength(1);
     expect(root.composer.files()).toEqual([screenshot]);
+    root.dispose();
+  });
+
+  it("retains browser metadata on retry and drops it when a screenshot is removed", async () => {
+    const browserAnnotation = {
+      id: "capture-1",
+      number: 1,
+      mode: "element" as const,
+      body: "More space",
+      capturedAt: "2026-09-29T10:00:00Z",
+      tab: {
+        id: Browser.TabID.make("tab_00000000-0000-4000-8000-000000000001"),
+        url: "https://example.com",
+        title: "Example",
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        generation: 1,
+      },
+      selection: {
+        frameUrl: "https://example.com",
+        selector: "h1",
+        tag: "h1",
+        text: "Heading",
+        role: "heading",
+        label: "Heading",
+        topFrame: true,
+        bounds: { x: 0, y: 0, width: 100, height: 30 },
+      },
+      image: { name: "annotation-1.png", mime: "image/png", data: new Uint8Array([1, 2, 3]) },
+    };
+    let fail = true;
+    const prompt = vi.fn<Prompt>((input) =>
+      fail ? Promise.reject(new Error("offline")) : Promise.resolve(promptResult(input)),
+    );
+    const root = setup(prompt);
+    root.setSelectedID("one");
+    root.composer.input("Please fix.");
+    root.composer.attachFiles([new File(["note"], "annotation-1.png", { type: "text/plain" })]);
+    const screenshot = new File([browserAnnotation.image.data], browserAnnotation.image.name, {
+      type: "image/png",
+    });
+    root.composer.appendBatch("one", "Captured browser context", [screenshot], [browserAnnotation]);
+    root.setSelectedID("two");
+    root.composer.input("Other conversation");
+    root.setSelectedID("one");
+    await root.composer.submit();
+    const first = prompt.mock.calls[0]![0];
+    expect(readBrowserAnnotationMetadata(first.metadata)).toMatchObject({
+      instruction: "Please fix.",
+      annotations: [{ body: browserAnnotation.body, fileIndex: 1 }],
+    });
+    await root.composer.submit();
+    expect(prompt.mock.calls[1]![0].metadata).toEqual(first.metadata);
+    root.composer.removeFile(screenshot);
+    fail = false;
+    await root.composer.submit();
+    expect(readBrowserAnnotationMetadata(prompt.mock.calls[2]![0].metadata)).toBeUndefined();
+    expect(prompt.mock.calls[2]![0].text).toContain("Captured browser context");
+    root.composer.input("Next message");
+    await root.composer.submit();
+    expect(readBrowserAnnotationMetadata(prompt.mock.calls[3]![0].metadata)).toBeUndefined();
     root.dispose();
   });
 

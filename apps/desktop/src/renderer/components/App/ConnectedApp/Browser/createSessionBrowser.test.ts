@@ -1,3 +1,4 @@
+import type { BrowserAnnotationDraft } from "./browser-annotations.ts";
 import { Effect, Exit, Scope } from "effect";
 import { Browser } from "@opencode/plugin-browser/rpc";
 import { createSignal } from "solid-js";
@@ -68,7 +69,14 @@ function setup(
     };
     const focus = vi.fn<(sessionID: string) => void>();
     const onAnnotationBatch =
-      vi.fn<(sessionID: string, text: string, files: readonly File[]) => void>();
+      vi.fn<
+        (
+          sessionID: string,
+          text: string,
+          files: readonly File[],
+          annotations: readonly BrowserAnnotationDraft[],
+        ) => void
+      >();
     const removed = new Set<(sessionID: string) => void>();
     const connection = { api, serverUrl: "http://server:1234", password: "fixture" };
     const controller = createSessionBrowser(
@@ -435,7 +443,8 @@ describe("browser annotations", () => {
     fixture.controller.annotationBody(item!.id, "Make this heading larger");
     fixture.controller.addAnnotations();
     expect(fixture.onAnnotationBatch).toHaveBeenCalledTimes(1);
-    const [sessionID, text, files] = fixture.onAnnotationBatch.mock.calls[0]!;
+    const [sessionID, text, files, annotations] = fixture.onAnnotationBatch.mock.calls[0]!;
+    expect(annotations[0]).toMatchObject({ body: "Make this heading larger", number: 1 });
     expect(sessionID).toBe("session-a");
     expect(text).toContain("Make this heading larger");
     expect(text).toContain('"selector": "h1"');

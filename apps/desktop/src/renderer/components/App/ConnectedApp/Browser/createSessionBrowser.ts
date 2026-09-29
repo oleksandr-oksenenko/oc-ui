@@ -15,6 +15,7 @@ import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
 import { WorkspaceRequestError } from "../../../../workspace-owner.ts";
 import {
   annotationBatchProblem,
+  type BrowserAnnotationDraft,
   annotationFiles,
   annotationNumber,
   captureDraft,
@@ -46,7 +47,12 @@ export function createSessionBrowser(
   open: Accessor<boolean>,
   onSessionRemoved: (handler: (sessionID: string) => void) => () => void,
   onFocus: (sessionID: string) => void,
-  onAnnotationBatch: (sessionID: string, text: string, files: readonly File[]) => void,
+  onAnnotationBatch: (
+    sessionID: string,
+    text: string,
+    files: readonly File[],
+    annotations: readonly BrowserAnnotationDraft[],
+  ) => void,
 ) {
   const { effects } = runtime;
   const all = Atom.make<ReadonlyMap<string, SessionBrowserState>>(new Map());
@@ -341,6 +347,7 @@ export function createSessionBrowser(
           id,
           formatBrowserAnnotations(current.items),
           annotationFiles(current.items),
+          current.items,
         );
         writeAnnotations(id, emptyAnnotations());
       } catch (cause) {
