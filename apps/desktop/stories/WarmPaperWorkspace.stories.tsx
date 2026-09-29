@@ -59,7 +59,11 @@ import {
   composerPasteProps,
 } from "./composer-fixtures.ts";
 import { previewImageBase64 } from "./image-fixtures.ts";
-import { attachmentFiles, browserAnnotation } from "./attachment-fixtures.ts";
+import {
+  attachmentFiles,
+  browserAnnotation,
+  mixedAttachmentMessage,
+} from "./attachment-fixtures.ts";
 import { AttachmentDetailPill } from "../src/renderer/ui/AttachmentPills.tsx";
 import { ImagePreview } from "../src/renderer/ui/ImagePreview.tsx";
 import {
@@ -456,6 +460,7 @@ function WorkspaceShowcaseContent(
                   item.id === "assistant-1" ? showcaseActivityAssistant : item,
                 ),
                 markdownAssistant,
+                mixedAttachmentMessage,
               ]
             : []),
           ...(selectedID() === "error-handling" ? [assistant("failed-check", "error")] : []),
@@ -1049,8 +1054,9 @@ export const InteractiveReview = {
   render: () => <WorkspaceShowcaseFixture />,
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);
+    const composer = within(canvas.getByRole("form", { name: "Message composer" }));
     await expect(canvas.getByRole("img", { name: /Context 33% used/ })).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "Review · 2" }));
+    await userEvent.click(composer.getByRole("button", { name: "Review · 2" }));
     const reviewDetails = await screen.findByRole("dialog", { name: "Review comments" });
     await expect(
       within(reviewDetails).getByText(
@@ -1058,7 +1064,7 @@ export const InteractiveReview = {
       ),
     ).toBeVisible();
     await userEvent.keyboard("{Escape}");
-    await userEvent.click(canvas.getByRole("button", { name: "Annotations · 1" }));
+    await userEvent.click(composer.getByRole("button", { name: "Annotations · 1" }));
     const popover = await screen.findByRole("dialog", { name: "Transcript annotations" });
     await userEvent.click(within(popover).getByRole("button", { name: "Edit comment" }));
     await userEvent.type(
@@ -1068,7 +1074,7 @@ export const InteractiveReview = {
     await userEvent.keyboard("{Escape}");
     await userEvent.click(canvas.getByRole("button", { name: "Discard 2 code review comments" }));
     await userEvent.click(await screen.findByRole("button", { name: "Keep" }));
-    await expect(canvas.getByText("Review · 2")).toBeVisible();
+    await expect(composer.getByText("Review · 2")).toBeVisible();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const comment = await canvas.findByRole("button", {
       name: "Check that the renamed option is supported by the pinned version.",
@@ -1101,6 +1107,7 @@ export const InteractiveWorkspace = {
   render: () => <WorkspaceShowcaseFixture />,
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);
+    const composer = within(canvas.getByRole("form", { name: "Message composer" }));
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
     await userEvent.type(prompt, "Keep this draft while browsing");
     await userEvent.click(canvas.getByRole("button", { name: "Browser" }));
@@ -1123,7 +1130,7 @@ export const InteractiveWorkspace = {
     await userEvent.click(canvas.getByRole("button", { name: "Discard browser annotations" }));
     await expect(canvas.queryByRole("button", { name: "Browser · 2" })).toBeNull();
     await userEvent.click(canvas.getByRole("button", { name: "Remove release-notes.md" }));
-    await expect(canvas.queryByText("release-notes.md")).toBeNull();
+    await expect(composer.queryByText("release-notes.md")).toBeNull();
     await expect(prompt).toHaveTextContent("Keep this draft while browsing");
     await userEvent.click(canvas.getByRole("button", { name: "Diff" }));
     await userEvent.click(

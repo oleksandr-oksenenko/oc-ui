@@ -21,6 +21,13 @@
   padding: 12px;
 }
 
+[data-component="line-comment-v2"].attachment-detail-row {
+  width: 100%;
+  max-width: none;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+}
+
 .attachment-detail-row + .attachment-detail-row {
   margin-top: 12px;
   padding-top: 12px;

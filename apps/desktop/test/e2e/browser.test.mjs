@@ -1,3 +1,4 @@
+import { browserAnnotationMetadata } from "../../src/renderer/opencode/browser-annotation-metadata.ts";
 import { createProfile } from "./profile.mjs";
 import { OpenCode } from "@opencode/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -784,8 +785,12 @@ describe.sequential("production browser app", () => {
     const annotation = "Browser annotation reaches the provider.";
     await addAnnotation(annotation);
     await sendCompleted("E2E_ANNOTATION browser");
-    await page.locator(".transcript-annotation-trigger").click();
-    await transcript(annotation);
+    await page
+      .locator(".transcript-user-message .attachment-pill-annotations .attachment-pill-trigger")
+      .click();
+    await expect
+      .poll(() => page.locator(".transcript-annotation-content").textContent())
+      .toContain(annotation);
     await page.locator(".transcript-annotation-quote").click();
     await page.locator(".annotation-popover").waitFor();
     expect(await page.getByLabel("Remove comment", { exact: true }).count()).toBe(0);
@@ -798,7 +803,9 @@ describe.sequential("production browser app", () => {
     await page.locator(".transcript-empty-state").waitFor();
     await page.getByRole("button", { name: selectedLabel, exact: true }).click();
     await transcript("E2E_STREAM browser");
-    await page.locator(".transcript-annotation-trigger").waitFor();
+    await page
+      .locator(".transcript-user-message .attachment-pill-annotations .attachment-pill-trigger")
+      .waitFor();
     if (await page.getByLabel("Show context", { exact: true }).count())
       await page.getByLabel("Show context", { exact: true }).click();
     const diff = page.locator(".diff-code-view diffs-container").first();
@@ -837,9 +844,11 @@ describe.sequential("production browser app", () => {
     await page.getByLabel("Show context").click();
     await expect.poll(() => page.locator(".diff-review-text").textContent()).toBe(review);
     await sendCompleted("E2E_REVIEW browser");
-    await page.locator(".transcript-code-review-trigger").click();
+    await page
+      .locator(".transcript-user-message .attachment-pill-review .attachment-pill-trigger")
+      .click();
     await expect
-      .poll(() => page.locator(".transcript-code-review-content").textContent())
+      .poll(() => page.locator(".attachment-detail-popover").textContent())
       .toContain(review);
     const requests = (await (await fetch(`${provider.url}/_state`)).json()).requests;
     expect(requests.some((request) => request.prompt.includes(annotation))).toBe(true);
@@ -868,11 +877,21 @@ describe.sequential("production browser app", () => {
     await editor.fill(deletedReview);
     await page.keyboard.press("Escape");
     await expect
-      .poll(() => page.locator(".attachment-pill-review .attachment-pill-trigger").textContent())
+      .poll(() =>
+        page
+          .getByRole("form", { name: "Message composer" })
+          .locator(".attachment-pill-review .attachment-pill-trigger")
+          .textContent(),
+      )
       .toContain("Review · 1");
     await page.getByRole("button", { name: "Delete review comment" }).click();
     await page.locator(".diff-review-annotation").waitFor({ state: "hidden" });
-    expect(await page.locator(".attachment-pill-review").count()).toBe(0);
+    expect(
+      await page
+        .getByRole("form", { name: "Message composer" })
+        .locator(".attachment-pill-review")
+        .count(),
+    ).toBe(0);
     expect(await page.getByRole("dialog").count()).toBe(0);
   });
 
@@ -1030,6 +1049,73 @@ describe.sequential("production browser app", () => {
   // the renderer. They prove the application's routing, admission, and byte
   // delivery; they do not prove integration with the native macOS/Chromium
   // clipboard, which packaged acceptance covers.
+  it("reloads structured browser annotations from the server as read-only pills", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Saved browser annotations",
+      location: { directory: await realpath(project) },
+    });
+    const text = "E2E_STREAM saved browser metadata\n\nCaptured browser context";
+    const metadata = browserAnnotationMetadata(text, [
+      {
+        text: "Captured browser context",
+        annotations: [
+          {
+            number: 1,
+            mode: "element",
+            body: "Give the heading more room",
+            url: "https://example.com",
+            title: "Example",
+            capturedAt: "2026-09-29T10:00:00Z",
+            fileIndex: 0,
+            selection: {
+              frameUrl: "https://example.com",
+              selector: "h1",
+              tag: "h1",
+              text: "Heading",
+              role: "heading",
+              label: "Heading",
+              topFrame: true,
+              bounds: { x: 0, y: 0, width: 100, height: 30 },
+            },
+          },
+        ],
+      },
+    ]);
+    const screenshot = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 8;
+      canvas.height = 8;
+      canvas.getContext("2d").fillRect(0, 0, 8, 8);
+      return canvas.toDataURL("image/png");
+    });
+    // Native capture is covered by its controller tests; this checks the real server's stored representation.
+    await api.session.prompt({
+      sessionID: session.id,
+      text,
+      metadata,
+      files: [{ uri: screenshot, name: "capture.png" }],
+    });
+    await selectSession(session.title);
+    await page.getByRole("button", { name: "Browser · 1", exact: true }).waitFor();
+    await idle();
+    await page.reload();
+    await ensureConnected();
+    await selectSession(session.title);
+    const pill = page.getByRole("button", { name: "Browser · 1", exact: true });
+    await pill.click();
+    await page.getByText("1. Give the heading more room", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Enlarge Browser annotation 1" }).click();
+    await page.getByRole("dialog", { name: "Preview of Browser annotation 1" }).waitFor();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    expect(await page.locator(".transcript-user-bubble").textContent()).not.toContain(
+      "Captured browser context",
+    );
+    const messages = await api.message.list({ sessionID: session.id });
+    expect(messages.data.find((item) => item.type === "user").metadata).toEqual(metadata);
+  });
+
   it("pastes screenshot and document attachments, preserves drafts across navigation, and sends their bytes", async () => {
     await ensureConnected();
     const session = await api.session.create({

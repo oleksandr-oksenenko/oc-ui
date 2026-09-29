@@ -73,6 +73,7 @@ function RemoveAttachment(props: {
 const detailIcon = { review: "code", annotations: "comment", browser: "globe" } as const;
 
 export function AttachmentDetailPill(props: DetailProps) {
+  let content: HTMLDivElement | undefined = undefined;
   return (
     <div class={`attachment-pill attachment-pill-${props.kind}`}>
       <Show
@@ -102,22 +103,16 @@ export function AttachmentDetailPill(props: DetailProps) {
             <span>{props.label}</span>
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content class="attachment-pill-popover attachment-detail-popover">
-              <Show
-                when={props.kind === "browser"}
-                fallback={<Popover.Title class="sr-only">{props.title}</Popover.Title>}
-              >
-                <div class="attachment-pill-popover-header">
-                  <Popover.Title>{props.title}</Popover.Title>
-                  <Popover.CloseButton
-                    type="button"
-                    class="attachment-pill-popover-close"
-                    aria-label={`Close ${props.title.toLowerCase()}`}
-                  >
-                    <Icon name="close" size="small" aria-hidden="true" />
-                  </Popover.CloseButton>
-                </div>
-              </Show>
+            <Popover.Content
+              ref={(element) => (content = element)}
+              class="attachment-pill-popover attachment-detail-popover"
+              onOpenAutoFocus={(event) => {
+                if (props.kind !== "review") return;
+                event.preventDefault();
+                content?.focus({ preventScroll: true });
+              }}
+            >
+              <Popover.Title class="sr-only">{props.title}</Popover.Title>
               <div class="attachment-pill-popover-body attachment-detail-body">
                 {props.children}
               </div>

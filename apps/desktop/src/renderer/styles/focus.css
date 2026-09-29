@@ -124,3 +124,32 @@
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Annotation navigation reads like a text link in both sent and draft popovers. */
+:root :is(.transcript-annotation-quote, .annotation-comment-link):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  text-decoration: underline;
+}
+
+/* Keyboard navigation inside attachment previews follows the same neutral palette. */
+.attachment-detail-popover {
+  --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-border-emphasis);
+}
+
+/* Review previews initially focus their reading container, not a code block. */
+:root .attachment-detail-popover:focus-visible {
+  outline: none !important;
+}
+
+/* Attachments use a neutral surface cue, including focus restored after dismissal. */
+:root .attachment-pill :focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  background: var(--oc-surface-subtle);
+  color: var(--oc-text-strong);
+}
+
+.attachment-pill:has(:focus-visible) {
+  border-color: var(--oc-border-emphasis);
+}

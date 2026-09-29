@@ -59,8 +59,8 @@ export const Comparison: Story = {
       await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
       await userEvent.keyboard("{Escape}");
       await waitFor(() => expect(opener).toHaveFocus());
-      // The reading-content exception never strips a control's indicator.
-      await expect(getComputedStyle(opener).outlineStyle).toBe("solid");
+      // Restored pill focus uses the neutral surface cue, without an outline.
+      await expect(getComputedStyle(opener).outlineStyle).toBe("none");
     });
 
     await step(

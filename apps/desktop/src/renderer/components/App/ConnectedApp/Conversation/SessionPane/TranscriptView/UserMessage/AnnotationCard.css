@@ -1,25 +1,4 @@
-.transcript-annotation-card {
-  margin-top: 12px;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius-card);
-  background: var(--oc-surface-raised);
-  overflow: hidden;
-}
-
-.transcript-annotation-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 12px;
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-metadata-size);
-}
-
 .transcript-annotation-content {
-  display: grid;
-  gap: 14px;
-  padding: 6px 8px 8px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -39,21 +18,4 @@
 
 .transcript-annotation-quote:hover {
   color: var(--oc-text-contrast);
-}
-
-.transcript-annotation-trigger [data-slot="collapsible-arrow"] {
-  margin-left: auto;
-}
-
-.transcript-annotation-content [data-component="line-comment-v2"] {
-  margin-top: 0;
-  max-width: none;
-}
-
-.transcript-user-message:has(.transcript-annotation-card) {
-  flex-direction: column;
-}
-
-.transcript-user-message:has(.transcript-annotation-card) > .transcript-user-bubble {
-  align-self: flex-end;
 }

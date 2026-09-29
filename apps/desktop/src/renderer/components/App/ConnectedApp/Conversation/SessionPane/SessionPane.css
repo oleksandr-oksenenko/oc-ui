@@ -175,15 +175,8 @@
   margin-bottom: 6px;
 }
 
-.transcript-code-review-card {
-  min-width: min(100%, 320px);
-  margin-top: 8px;
-  border: 0;
-}
-
 .transcript-tool-header,
-.transcript-context-trigger,
-.transcript-code-review-trigger {
+.transcript-context-trigger {
   /* stylelint-disable-next-line declaration-no-important -- Override the pinned Collapsible trigger height. */
   height: auto !important;
   min-height: 22px;
@@ -199,120 +192,13 @@
   flex: none;
 }
 
-.transcript-code-review-trigger {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  gap: 8px;
-  padding-inline: 0;
-  border: 0;
-  color: var(--oc-text-base);
-  background: transparent;
-  font: inherit;
-  font-size: var(--oc-type-metadata-size);
-  line-height: var(--oc-type-metadata-line-height);
-  text-align: left;
-  cursor: pointer;
-}
-
-.transcript-code-review-trigger:hover {
-  color: var(--oc-text-strong);
-}
-
-.transcript-code-review-content {
-  display: grid;
-  gap: 12px;
-  padding: 4px 0 2px;
-  color: var(--oc-text-base);
-  font-size: var(--oc-type-metadata-size);
-  line-height: var(--oc-type-metadata-line-height);
-}
-
-.transcript-code-review-comment {
-  min-width: 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--oc-border-muted);
-}
-
-.transcript-code-review-path {
-  margin: 0 0 4px;
-  color: var(--oc-text-strong);
-  font-family: var(--oc-font-mono);
-  font-size: var(--oc-type-metadata-size);
-  font-weight: var(--oc-type-heading-weight);
-  line-height: var(--oc-type-metadata-line-height);
-  overflow-wrap: anywhere;
-}
-
-.transcript-code-review-range {
-  margin: 0 0 8px;
-  color: var(--oc-text-muted);
-}
-
-.transcript-code-review-section {
-  margin-top: 8px;
-}
-
-.transcript-code-review-section strong {
-  color: var(--oc-text-strong);
-  font-size: var(--oc-type-caption-size);
-  font-weight: var(--oc-type-heading-weight);
-  line-height: var(--oc-type-caption-line-height);
-}
-
-.transcript-code-review-section pre {
-  max-width: 100%;
-  margin: 4px 0 0;
-  padding: 7px 8px;
-  overflow-x: auto;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius);
-  color: var(--oc-text-base);
-  background: var(--oc-surface-raised);
-  font-family: var(--oc-font-mono);
-  font-size: var(--oc-type-caption-size);
-  line-height: var(--oc-type-caption-line-height);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .transcript-user-attachments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
-  color: var(--oc-text-base);
-  font-size: var(--oc-type-metadata-size);
+  margin-top: 6px;
 }
 
-.transcript-user-attachments li {
-  padding: 2px 5px;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius);
-}
-
-.transcript-user-attachments li.transcript-user-attachment-image {
-  padding: 0;
-  border: 0;
-}
-
-.transcript-user-attachments li.transcript-user-attachment-pill {
-  box-sizing: border-box;
-  align-self: flex-start;
+.transcript-user-attachment {
+  min-width: 0;
   max-width: 100%;
-  padding: 2px 8px;
-  overflow: hidden;
-  border-radius: var(--oc-radius-full);
-  background: var(--oc-surface-control);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.transcript-user-image {
-  width: 160px;
-  height: 110px;
 }
 
 .transcript-assistant-message {

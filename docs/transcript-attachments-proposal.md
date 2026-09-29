@@ -3,6 +3,29 @@
 Research date: 2026-09-26. Scope: attachments sent with a user message, as they
 appear in the transcript. The proposal lives only in Storybook.
 
+## Implemented shared pills (2026-09-29)
+
+The production transcript now reuses the composer's `AttachmentPills`,
+`AttachmentDetailPill`, `AttachmentImagePill`, and `AttachmentFilePill`.
+Sent attachments omit removal controls. Reviews and transcript annotations open
+read-only popovers instead of expanding inline; annotation quotes retain their
+source-opening callback. Review details no longer expose transcript annotation
+markers. Agents and non-inline skills are not listed as attachments; inline skill mentions remain in the prompt text.
+
+New browser captures carry versioned `oc-ui/browser-annotations` message metadata,
+including capture context and explicit indices into the sent screenshot files.
+The composer owns this metadata alongside its admitted files and snapshots it
+with the prompt for retries. Removing a batch's screenshot drops its grouping;
+clearing or consuming files releases its draft metadata. Screenshot bytes remain
+in the SDK file attachments, not in metadata.
+
+The transcript folds only intact generated browser text into a pill. If that text
+was edited before sending, it stays visible. Old messages, invalid metadata, and
+missing screenshot references retain text and ordinary attachment rendering.
+The generated model prompt is unchanged. `Transcript/Attachments/Shared Pills`
+and `Shared Pills Narrow` exercise the production renderers. The inventory below
+records the pre-change baseline.
+
 ## Inventory
 
 The pinned OpenCode client and UI are **2.0.3**. `SessionMessageUser` carries

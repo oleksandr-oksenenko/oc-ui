@@ -731,8 +731,8 @@ export const CatalogInteractions: Story = {
       "skill release-checklist Completed",
       "pnpm watch Killed",
       "Compaction manual Failed",
-      "Code review · 2 comments",
-      "Annotations · 1 comment",
+      "Review · 2",
+      "Annotations · 1",
     ]) {
       await userEvent.click(canvas.getByRole("button", { name }));
     }
@@ -741,7 +741,7 @@ export const CatalogInteractions: Story = {
       canvas.getByText("The provider is unavailable. Try again.", { exact: true }),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByText("Which changes did you check?", { exact: true }),
+      screen.getByText("Which changes did you check?", { exact: true }),
     ).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Allow once" }));
     await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));

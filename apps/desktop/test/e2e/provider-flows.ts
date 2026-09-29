@@ -15,10 +15,18 @@ export async function verifyProviderFlows(): Promise<void> {
 
   await addAnnotation("Acceptance annotation reaches the provider.");
   await send("E2E_ANNOTATION: address my note.");
-  await $(".transcript-annotation-trigger").waitForDisplayed({ timeout: TIMEOUT });
+  await $(
+    ".transcript-user-message .attachment-pill-annotations .attachment-pill-trigger",
+  ).waitForDisplayed({ timeout: TIMEOUT });
   await idle();
-  await $(".transcript-annotation-trigger").click();
-  await waitForText("Acceptance annotation reaches the provider.");
+  await $(".transcript-user-message .attachment-pill-annotations .attachment-pill-trigger").click();
+  await browser.waitUntil(
+    async () =>
+      (await $(".transcript-annotation-content").getText()).includes(
+        "Acceptance annotation reaches the provider.",
+      ),
+    { timeout: TIMEOUT },
+  );
   const populatedTitle = await $(".titlebar-session-title").getText();
   const workerBeforeReload = await browser.electron.execute(
     (electron) =>
@@ -34,9 +42,17 @@ export async function verifyProviderFlows(): Promise<void> {
   await populatedSession.click();
   await waitForText("E2E_PACKAGED: complete a request through the bundled server.");
   await waitForText("Acceptance completed with stream.");
-  await $(".transcript-annotation-trigger").waitForDisplayed();
-  await $(".transcript-annotation-trigger").click();
-  await waitForText("Acceptance annotation reaches the provider.");
+  await $(
+    ".transcript-user-message .attachment-pill-annotations .attachment-pill-trigger",
+  ).waitForDisplayed();
+  await $(".transcript-user-message .attachment-pill-annotations .attachment-pill-trigger").click();
+  await browser.waitUntil(
+    async () =>
+      (await $(".transcript-annotation-content").getText()).includes(
+        "Acceptance annotation reaches the provider.",
+      ),
+    { timeout: TIMEOUT },
+  );
   assert.equal(
     await browser.electron.execute(
       (electron) =>

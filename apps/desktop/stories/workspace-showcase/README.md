@@ -56,7 +56,9 @@ They depend only on display data and optional callbacks, so a transcript can use
 the same components without removal controls. The default showcase includes an
 image, a short file name, review comments, transcript notes, and a browser note.
 
-Browser attachment grouping in this showcase is controlled fixture state. At
-simulated send/queue time it uses the existing browser text/image format. The
-production browser capture-to-composer workflow still uses that existing format;
-this change does not introduce a new server metadata contract.
+The default transcript includes a saved message with review, transcript annotation,
+browser annotation, image, and file pills. Browser grouping is reconstructed from
+versioned message metadata and screenshot indices. The production send workflow
+stores this metadata alongside the existing text and images; older messages retain
+their text/image fallback. Simulated showcase submissions still use the text/image
+format, while the saved fixture demonstrates metadata-backed grouping.

@@ -1,3 +1,4 @@
+import { browserAnnotationMetadata } from "../src/renderer/opencode/browser-annotation-metadata.ts";
 import type { SessionMessageUser } from "@opencode/client";
 import { Browser } from "@opencode/plugin-browser/rpc";
 import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts";
@@ -107,7 +108,54 @@ export const browserMessage: SessionMessageUser = {
   type: "user",
   time: { created: 0 },
   text: formatBrowserAnnotations([browserAnnotation]),
+  metadata: browserAnnotationMetadata(formatBrowserAnnotations([browserAnnotation]), [
+    {
+      text: formatBrowserAnnotations([browserAnnotation]),
+      annotations: [
+        {
+          number: browserAnnotation.number,
+          mode: browserAnnotation.mode,
+          body: browserAnnotation.body,
+          url: browserAnnotation.tab.url,
+          title: browserAnnotation.tab.title,
+          capturedAt: browserAnnotation.capturedAt,
+          selection: browserAnnotation.selection,
+          fileIndex: 0,
+        },
+      ],
+    },
+  ]),
   files: [{ ...files[0]!, name: browserAnnotation.image.name }],
+};
+
+/** One sent message with every supported attachment kind, including a browser capture. */
+export const mixedAttachmentMessage: SessionMessageUser = {
+  ...attachmentMessage,
+  text: `${attachmentMessage.text}\n\n${browserMessage.text}`,
+  files: [...files, ...browserMessage.files!],
+  metadata: {
+    ...attachmentMessage.metadata,
+    ...browserAnnotationMetadata(
+      `Please address this feedback and use the attached reference.\n\n${browserMessage.text}`,
+      [
+        {
+          text: browserMessage.text,
+          annotations: [
+            {
+              number: browserAnnotation.number,
+              mode: browserAnnotation.mode,
+              body: browserAnnotation.body,
+              url: browserAnnotation.tab.url,
+              title: browserAnnotation.tab.title,
+              capturedAt: browserAnnotation.capturedAt,
+              selection: browserAnnotation.selection,
+              fileIndex: files.length,
+            },
+          ],
+        },
+      ],
+    ),
+  },
 };
 
 export const inlineSkillMessage: SessionMessageUser = {

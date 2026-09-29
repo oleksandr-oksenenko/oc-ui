@@ -543,8 +543,12 @@ describe("TranscriptView", () => {
     ));
 
     expect(host.textContent).toContain("notes.txt");
-    expect(host.textContent).toContain("reviewer");
-    expect(host.textContent).toContain("Review skill");
+    expect(host.querySelector(".transcript-user-attachments")?.textContent).not.toContain(
+      "reviewer",
+    );
+    expect(host.querySelector(".transcript-user-attachments")?.textContent).not.toContain(
+      "Review skill",
+    );
     expect(host.textContent).toContain("Before");
     expect(host.textContent).toContain("After");
     expect(host.textContent).toContain("Activity · 6 steps");
@@ -2660,18 +2664,18 @@ describe("TranscriptView", () => {
     };
     const { host, dispose } = renderUserMessage(message);
 
-    const card = host.querySelector<HTMLElement>(".transcript-code-review-card")!;
-    const trigger = card.querySelector<HTMLButtonElement>(".transcript-code-review-trigger")!;
+    const card = host.querySelector<HTMLElement>(".attachment-pill-review")!;
+    const trigger = card.querySelector<HTMLButtonElement>(".attachment-pill-trigger")!;
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(host.textContent).toContain("Please fix this carefully.");
-    expect(host.textContent).toContain("Code review · 1 comment");
+    expect(host.textContent).toContain("Review · 1");
     trigger.click();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(card.querySelector(".transcript-code-review-content")).not.toBeNull();
-    expect(host.textContent).toContain("src/example.ts");
-    expect(host.textContent).toContain("old 4 to new 5");
-    expect(host.textContent).toContain("const oldValue = 1;");
-    expect(host.textContent).toContain("Keep this branch safe.");
+    expect(document.querySelector(".attachment-detail-popover")).not.toBeNull();
+    expect(document.body.textContent).toContain("src/example.ts");
+    expect(document.body.textContent).toContain("old 4 to new 5");
+    expect(document.body.textContent).toContain("const oldValue = 1;");
+    expect(document.body.textContent).toContain("Keep this branch safe.");
 
     dispose();
   });
@@ -2697,7 +2701,7 @@ describe("TranscriptView", () => {
     expect(labels).toEqual(["Enlarge preview.png", "Enlarge Attached image"]);
     expect(host.textContent).toContain("notes.txt");
     expect(host.textContent).toContain("Attached file");
-    expect(host.textContent).not.toContain("preview.png");
+    expect(host.textContent).toContain("preview.png");
 
     dispose();
   });
@@ -2726,12 +2730,12 @@ describe("TranscriptView", () => {
     const { host, dispose } = renderUserMessage(state.message);
 
     expect(host.textContent).toContain("Please fix all code review comments below.");
-    expect(host.querySelector(".transcript-code-review-card")).toBeNull();
+    expect(host.querySelector(".attachment-pill-review")).toBeNull();
 
     setState("message", "metadata", prompt.metadata);
 
     expect(host.textContent).not.toContain("Please fix all code review comments below.");
-    expect(host.textContent).toContain("Code review · 1 comment");
+    expect(host.textContent).toContain("Review · 1");
 
     dispose();
   });
@@ -2757,13 +2761,13 @@ describe("TranscriptView", () => {
       metadata: prompt.metadata,
     });
 
-    expect(host.textContent).toContain("Code review · 1 comment");
+    expect(host.textContent).toContain("Review · 1");
     expect(host.textContent).not.toContain("Please fix all code review comments below.");
     expect(host.textContent).not.toContain(" \n\t");
     dispose();
   });
 
-  it("renders annotation-only messages as a separate collapsed card and opens their quote", () => {
+  it("renders annotation-only messages in a read-only popover and opens their quote", () => {
     const onOpen = vi.fn<(messageID: string, annotationID: string, opener: HTMLElement) => void>();
     const prompt = createSessionPrompt({
       instruction: "",
@@ -2789,19 +2793,19 @@ describe("TranscriptView", () => {
         onOpenAnnotation={onOpen}
       />
     ));
-    const card = host.querySelector<HTMLElement>(".transcript-annotation-card")!;
-    const trigger = card.querySelector<HTMLButtonElement>(".transcript-annotation-trigger")!;
-    expect(host.querySelector(".transcript-user-bubble")).toBeNull();
+    const card = host.querySelector<HTMLElement>(".attachment-pill-annotations")!;
+    const trigger = card.querySelector<HTMLButtonElement>(".attachment-pill-trigger")!;
+    expect(host.querySelector(".transcript-user-bubble")).not.toBeNull();
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(host.textContent).not.toContain("Please explain this.");
     trigger.click();
-    expect(host.textContent).toContain("Please explain this.");
-    expect(card.querySelector(".transcript-annotation-content")).not.toBeNull();
-    const quote = card.querySelector<HTMLButtonElement>(".transcript-annotation-quote")!;
+    expect(document.body.textContent).toContain("Please explain this.");
+    expect(document.querySelector(".transcript-annotation-content")).not.toBeNull();
+    const quote = document.querySelector<HTMLButtonElement>(".transcript-annotation-quote")!;
     quote.click();
     expect(onOpen).toHaveBeenCalledWith("sent-1", "annotation-1", quote);
-    expect(host.textContent.indexOf("Please explain this.")).toBeLessThan(
-      host.textContent.indexOf("Source"),
+    expect(document.body.textContent.indexOf("Please explain this.")).toBeLessThan(
+      document.body.textContent.indexOf("Source"),
     );
     dispose();
   });
@@ -2948,7 +2952,7 @@ describe("TranscriptView", () => {
     expect(host.querySelector(".transcript-user-bubble")?.textContent).toContain(
       "Original prompt with malformed metadata",
     );
-    expect(host.querySelector(".transcript-code-review-card")).toBeNull();
+    expect(host.querySelector(".attachment-pill-review")).toBeNull();
     dispose();
   });
 });
