@@ -7,7 +7,7 @@ import type { ServerFileImageReader } from "../../../../../../opencode/file-imag
 
 import { Markdown } from "./AssistantMessage/Markdown.tsx";
 import { ActivityBlock } from "./AssistantMessage/ActivityBlock.tsx";
-import type { WorkDetailInfo } from "./AssistantMessage/ActivityBlock/WorkDetailMessage.tsx";
+import type { ActivityDetailInfo } from "./workDetailProjection.ts";
 
 export type AssistantMessageProps = {
   readonly message: SessionMessageAssistant;
@@ -15,7 +15,7 @@ export type AssistantMessageProps = {
   readonly sessionStatus: DataSessionStatus;
   readonly turnActive?: boolean;
   readonly activityOpen?: Map<string, boolean>;
-  readonly workDetails?: readonly WorkDetailInfo[];
+  readonly workDetails?: readonly ActivityDetailInfo[];
   /** Resolves `file:` images in Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
   readonly directory?: string;

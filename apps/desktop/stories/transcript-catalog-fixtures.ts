@@ -483,6 +483,66 @@ export const shellStates: readonly SessionMessageInfo[] = [
   },
 ];
 
+const toolCycle = (id: string, name: string, path: string): SessionMessageInfo => ({
+  id,
+  time: { created: 2, completed: 3 },
+  type: "assistant",
+  agent: "build",
+  model: { providerID: "openai", id: "gpt-5" },
+  content: [
+    {
+      type: "tool",
+      id,
+      name,
+      time: { created: 2, ran: 2, completed: 3 },
+      state: {
+        status: "completed",
+        input: { path },
+        content: [{ type: "text", text: `Checked ${path}.` }],
+      },
+    },
+  ],
+  finish: "tool-calls",
+});
+
+// A turn interrupted by model and agent switches, so each Activity run keeps
+// its own actions and the switches stay visible between them.
+export const interleavedActivity: readonly SessionMessageInfo[] = [
+  {
+    id: "interleaved-prompt",
+    time: { created: 1 },
+    type: "user",
+    text: "Check the release, then switch models and keep going.",
+  },
+  toolCycle("interleaved-first", "read", "docs/releases/current.md"),
+  {
+    id: "interleaved-model",
+    time: { created: 4 },
+    type: "model-switched",
+    model: { providerID: "openai", id: "gpt-5" },
+    previous: { providerID: "openai", id: "gpt-4" },
+  },
+  {
+    id: "interleaved-shell",
+    time: { created: 4, completed: 5 },
+    type: "shell",
+    shellID: "interleaved-shell",
+    command: "pnpm check",
+    status: "exited",
+    exit: 0,
+    output: { output: "All checks passed.", cursor: 18, size: 18, truncated: false },
+  },
+  toolCycle("interleaved-second", "grep", "release"),
+  {
+    id: "interleaved-agent",
+    time: { created: 5 },
+    type: "agent-switched",
+    agent: "plan",
+    previous: "build",
+  },
+  toolCycle("interleaved-third", "read", "docs/releases/next.md"),
+];
+
 export const compactionStates: readonly SessionMessageInfo[] = [
   {
     id: "compaction-running",

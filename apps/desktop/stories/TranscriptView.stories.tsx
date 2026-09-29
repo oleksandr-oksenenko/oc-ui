@@ -20,6 +20,7 @@ import {
   toolStates,
   shellStates,
   compactionStates,
+  interleavedActivity,
   midLengthToolPath,
   longToolCommand,
   longToolPath,
@@ -29,6 +30,7 @@ import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 import { TranscriptPendingFixture } from "./transcript-catalog/TranscriptPendingFixture.tsx";
 import { TranscriptUpdatesFixture } from "./transcript-catalog/TranscriptUpdatesFixture.tsx";
 import { TranscriptActivityFixture } from "./transcript-catalog/TranscriptActivityFixture.tsx";
+import { ActivityStatesFixture } from "./transcript-catalog/ActivityStatesFixture.tsx";
 
 const meta = {
   title: "Transcript/TranscriptView",
@@ -128,7 +130,9 @@ export const CollapsedActivity: Story = {
   render: renderTranscript,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const activity = canvas.getByRole("button", { name: /^Activity · 2 steps/ });
+    const activity = canvasElement.querySelector<HTMLButtonElement>(
+      ".transcript-activity-trigger",
+    )!;
     await expect(activity).toHaveAttribute("aria-expanded", "false");
     await expect(canvas.queryByRole("button", { name: "Reasoning" })).toBeNull();
     activity.focus();
@@ -386,8 +390,16 @@ export const ActivityStreamingNarrow: Story = {
   ...ActivityStreaming,
   render: () => <TranscriptActivityFixture width="320px" />,
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
     const panel = canvasElement.querySelector<HTMLElement>(".transcript-activity")!;
     const view = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
+    await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
+
+    canvas.getByRole("button", { name: "Finish turn" }).click();
+    const title = canvasElement.querySelector<HTMLElement>(".transcript-activity-title")!;
+    await waitFor(() => expect(title.textContent).toContain("Read 9 files"));
+    await expect(title.textContent).toContain("ran 5 searches");
     await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
     await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
   },
@@ -432,7 +444,7 @@ export const ActivityStreamingBehavior: Story = {
     canvas.getByRole("button", { name: "Finish turn" }).click();
     await waitFor(() => expect(header).toHaveAttribute("aria-expanded", "false"));
     await expect(headers[1]).toHaveAttribute("aria-expanded", "false");
-    await expect(header).toHaveTextContent("Activity · 17 steps");
+    await expect(header).toHaveTextContent("Read 10 files and ran 6 searches");
     await expect(
       canvas.getByText("I checked the changed modules and found no blocking issue."),
     ).toBeVisible();
@@ -529,7 +541,9 @@ export const ToolImageLongMetadata: Story = {
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
     await step("Keeps long tool parameters on one line inside the column", async () => {
-      for (const activity of canvas.getAllByRole("button", { name: /^Activity/ })) {
+      for (const activity of canvasElement.querySelectorAll<HTMLButtonElement>(
+        ".transcript-activity-trigger",
+      )) {
         if (activity.getAttribute("aria-expanded") !== "true") await userEvent.click(activity);
       }
       const parameters = [
@@ -646,9 +660,91 @@ export const ShellStates: Story = {
     });
   },
 };
+export const ActivityStates: Story = {
+  args: { messages: [], sessionStatus: "running" },
+  render: () => <ActivityStatesFixture />,
+  play: async ({ canvasElement }) => {
+    // The transcript mounts its newest rows first and materializes the rest.
+    await waitFor(() =>
+      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(25),
+    );
+    const headers = [
+      ...canvasElement.querySelectorAll<HTMLElement>(".transcript-activity-trigger"),
+    ].map((header) => header.textContent);
+    await expect(headers).toEqual([
+      "Read 1 file",
+      "Read 3 files",
+      "Wrote 1 file",
+      "Updated 2 files",
+      "Applied 1 patch",
+      "Ran 2 searches",
+      "Fetched 1 page",
+      "Ran 1 command",
+      "Delegated 1 task",
+      "Loaded 1 skill",
+      "Asked 1 question",
+      "Used 2 other tools",
+      "Read 2 files, updated 1 file and ran 3 searches",
+      "Used 1 other tool· Failed",
+      "Read 1 file and used 1 other tool· Failed",
+      "Used 2 other tools· 2 failed",
+      "Read 1 file· Failed",
+      "Started 1 command",
+      "Ran 1 command· Failed",
+      "Ran 1 command· Failed",
+      "Activity",
+      "Activity",
+      "Ran 2 commands",
+      "Read 1 file",
+      "WorkingShell · pnpm watch",
+    ]);
+  },
+};
+export const ActivityStatesNarrow: Story = {
+  args: { messages: [], sessionStatus: "running" },
+  render: () => <ActivityStatesFixture width="320px" />,
+  play: async ({ canvasElement }) => {
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    await waitFor(() =>
+      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(25),
+    );
+    await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
+    // The longest label wraps inside the column instead of clipping.
+    const label = [
+      ...canvasElement.querySelectorAll<HTMLElement>(".transcript-activity-title"),
+    ].find((title) => title.textContent?.startsWith("Read 2 files"));
+    if (!label) throw new Error("The long label is missing");
+    await expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth + 1);
+  },
+};
 export const CompactionStates: Story = {
   args: { messages: compactionStates, sessionStatus: "idle" },
   render: renderTranscript,
+};
+export const InterleavedActivity: Story = {
+  args: { messages: interleavedActivity, sessionStatus: "idle" },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    // The shell after the model switch is a continuation run: it renders as a
+    // top-level Activity wrapper rather than a row of its own.
+    await expect(
+      [...canvasElement.querySelectorAll<HTMLElement>(".transcript-document > *")].map(
+        (element) => element.dataset.messageId ?? "activity",
+      ),
+    ).toEqual([
+      "interleaved-prompt",
+      "interleaved-first",
+      "interleaved-model",
+      "activity",
+      "interleaved-second",
+      "interleaved-agent",
+      "interleaved-third",
+    ]);
+    const labels = [
+      ...canvasElement.querySelectorAll<HTMLElement>(".transcript-activity-title"),
+    ].map((title) => title.textContent);
+    await expect(labels).toEqual(["Read 1 file", "Ran 1 command", "Ran 1 search", "Read 1 file"]);
+  },
 };
 export const PendingRequests: Story = {
   args: { messages: [], sessionStatus: "idle" },
@@ -768,7 +864,7 @@ export const LongTranscriptMaterialization: Story = {
     await expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(2);
     const oldest = canvasElement.querySelector<HTMLElement>('[data-message-id="long-oldest"]');
     if (!oldest) throw new Error("The oldest materialized row is missing");
-    await userEvent.click(within(oldest).getByRole("button", { name: /^Activity/ }));
+    await userEvent.click(oldest.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!);
     const trigger = within(oldest).getByRole("button", {
       name: /release-check Completed/,
     });

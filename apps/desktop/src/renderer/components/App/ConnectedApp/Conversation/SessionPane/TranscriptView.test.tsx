@@ -2,6 +2,7 @@ import type {
   SessionMessageAssistant,
   SessionMessageAssistantTool,
   SessionMessageInfo,
+  SessionMessageShell,
   SessionMessageUser,
 } from "@opencode/client";
 import { batch, createSignal } from "solid-js";
@@ -177,7 +178,7 @@ function stubAnimationFrames() {
 }
 
 describe("TranscriptView", () => {
-  it("updates live activity counts and failures without moving prose or resetting expansion", () => {
+  it("updates live activity summaries and failures without moving prose or resetting expansion", () => {
     stubResizeObserver();
     const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
       {
@@ -193,10 +194,11 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    expect(activity.textContent).toContain("Working · 1 step");
+    expect(activity.textContent).toContain("Working");
+    expect(activity.textContent).toContain("check");
     expect(activity.getAttribute("aria-expanded")).toBe("true");
     setMessages(0, "content", 2, { type: "reasoning", text: "Check the result" });
-    expect(activity.textContent).toContain("Working · 2 steps");
+    expect(activity.textContent).toContain("Working");
     expect(host.querySelector(".transcript-tool-call")).not.toBeNull();
     setMessages(0, "content", 1, assistant("first", "error"));
     expect(activity.textContent).toContain("Failed");
@@ -252,7 +254,7 @@ describe("TranscriptView", () => {
     first.click();
     expect(first.getAttribute("aria-expanded")).toBe("false");
     setResponses(0, "content", 1, { type: "reasoning", text: "Checking another path" });
-    expect(first.textContent).toContain("2 steps");
+    expect(first.textContent).toContain("Working");
     expect(first.getAttribute("aria-expanded")).toBe("false");
 
     first.click();
@@ -270,7 +272,7 @@ describe("TranscriptView", () => {
     secondTool.focus();
     setEnded(true);
     setStatus("idle");
-    expect(first.textContent).toContain("Activity · 2 steps");
+    expect(first.textContent).toContain("Used 1 other tool");
     expect(first.getAttribute("aria-expanded")).toBe("false");
     expect(panels[1]!.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(panels[1]);
@@ -551,7 +553,8 @@ describe("TranscriptView", () => {
     );
     expect(host.textContent).toContain("Before");
     expect(host.textContent).toContain("After");
-    expect(host.textContent).toContain("Activity · 6 steps");
+    expect(host.textContent).toContain("Activity");
+    expect(host.textContent).toContain("Ran 1 command and loaded 1 skill");
     expect(host.textContent).not.toContain("echo hi");
     host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger")[1]!.click();
     expect(host.textContent).toContain("echo hi");
@@ -584,7 +587,16 @@ describe("TranscriptView", () => {
       [...host.querySelectorAll<HTMLElement>(".transcript-document > [data-message-id]")].map(
         (element) => element.dataset.messageId,
       ),
-    ).toEqual(["user", "assistant", "system", "synthetic"]);
+    ).toEqual([
+      "user",
+      "assistant",
+      "agent",
+      "model",
+      "location",
+      "compaction",
+      "system",
+      "synthetic",
+    ]);
     const assistantParts = [
       ...host.querySelectorAll<HTMLElement>(
         '[data-message-id="assistant"] .transcript-assistant-document > *',
@@ -617,6 +629,184 @@ describe("TranscriptView", () => {
       ].every((element) => element.dataset.component === "collapsible"),
     ).toBe(true);
     expect(host.querySelector(".transcript-reasoning svg")).not.toBeNull();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("labels each Activity run with its own completed actions", () => {
+    stubResizeObserver();
+    const read = (id: string): SessionMessageAssistantTool => ({
+      type: "tool",
+      id,
+      name: "read",
+      time: { ...base, completed: 2 },
+      state: {
+        status: "completed",
+        input: { path: `src/${id}.ts` },
+        content: [{ type: "text", text: "done" }],
+      },
+    });
+    const cycle = (id: string): SessionMessageAssistant => ({
+      id,
+      time: { ...base, completed: 2 },
+      type: "assistant",
+      agent: "build",
+      model: { providerID: "p", id: "m" },
+      content: [read(id)],
+    });
+    const messages: readonly SessionMessageInfo[] = [
+      cycle("first"),
+      { id: "model", time: base, type: "model-switched", model: { providerID: "p", id: "m" } },
+      cycle("second"),
+      { id: "agent", time: base, type: "agent-switched", agent: "plan" },
+      cycle("third"),
+    ];
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+
+    // Each exposed event keeps its own row and ends the run before it.
+    expect(
+      [...host.querySelectorAll<HTMLElement>(".transcript-document > [data-message-id]")].map(
+        (element) => element.dataset.messageId,
+      ),
+    ).toEqual(["first", "model", "second", "agent", "third"]);
+    const labels = [
+      ...host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger"),
+    ].map((trigger) => trigger.textContent);
+    expect(labels).toHaveLength(3);
+    for (const label of labels) expect(label).toContain("Read 1 file");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps an exposed event between two Activity runs and preserves the later run", () => {
+    stubResizeObserver();
+    const shellDetail = (id: string): SessionMessageShell => ({
+      id,
+      type: "shell",
+      time: { ...base, completed: 2 },
+      shellID: id,
+      command: `pnpm ${id}`,
+      status: "exited",
+      exit: 0,
+      output: { output: `${id} output`, cursor: 1, size: 1, truncated: false },
+    });
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      textAssistantMessage("assistant", "Checking"),
+      shellDetail("shell-before"),
+      { id: "model", time: base, type: "model-switched", model: { providerID: "p", id: "m" } },
+      shellDetail("shell-after"),
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const topLevel = () =>
+      [...host.querySelectorAll<HTMLElement>(".transcript-document > *")].map(
+        (element) => element.dataset.messageId ?? "activity",
+      );
+    // The event ends the first run and stays top-level; the later shell starts a
+    // new run anchored at itself.
+    expect(topLevel()).toEqual(["assistant", "model", "activity"]);
+    const continuation = host.querySelector<HTMLElement>(
+      ".transcript-document > .transcript-activity",
+    )!;
+    const trigger = continuation.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(trigger.textContent).toContain("Ran 1 command");
+    trigger.click();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(continuation.textContent).toContain("pnpm shell-after");
+
+    setMessages(4, shellDetail("shell-extra"));
+
+    expect(topLevel()).toEqual(["assistant", "model", "activity"]);
+    expect(host.querySelector(".transcript-document > .transcript-activity")).toBe(continuation);
+    expect(continuation.querySelector(".transcript-activity-trigger")).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(trigger.textContent).toContain("Ran 2 commands");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a compaction row mounted while it fails", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      {
+        id: "compaction",
+        time: base,
+        type: "compaction",
+        status: "running",
+        reason: "auto",
+        summary: "Summarizing",
+        recent: "Recent context",
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const row = host.querySelector('[data-message-id="compaction"]')!;
+    expect(row.classList.contains("transcript-compaction-running")).toBe(true);
+
+    setMessages(0, {
+      type: "compaction",
+      status: "failed",
+      time: base,
+      reason: "auto",
+      error: { type: "provider", message: "The provider is unavailable." },
+    });
+
+    expect(host.querySelector('[data-message-id="compaction"]')).toBe(row);
+    expect(row.classList.contains("transcript-compaction-failed")).toBe(true);
+    // The announcement is mounted with the row, not with its deferred details.
+    expect(row.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(row.querySelector('[role="alert"]')?.textContent).toContain(
+      "The provider is unavailable.",
+    );
+    row.querySelector<HTMLButtonElement>(".transcript-context-trigger")!.click();
+    // Expanding reveals the annotated body error without adding another alert.
+    expect(row.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(row.querySelector('[data-annotation-block*="error"]')?.textContent).toContain(
+      "The provider is unavailable.",
+    );
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("replaces an open compaction body when the row fails", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      {
+        id: "compaction",
+        time: base,
+        type: "compaction",
+        status: "running",
+        reason: "auto",
+        summary: "Summarizing",
+        recent: "Recent context",
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const row = host.querySelector('[data-message-id="compaction"]')!;
+    row.querySelector<HTMLButtonElement>(".transcript-context-trigger")!.click();
+    expect(row.textContent).toContain("Summarizing");
+
+    setMessages(0, {
+      type: "compaction",
+      status: "failed",
+      time: base,
+      reason: "auto",
+      error: { type: "provider", message: "The provider is unavailable." },
+    });
+
+    // The body swaps from summary to the failure without a remount.
+    expect(host.querySelector('[data-message-id="compaction"]')).toBe(row);
+    expect(row.textContent).not.toContain("Summarizing");
+    expect(row.querySelector('[data-annotation-block*="error"]')?.textContent).toContain(
+      "The provider is unavailable.",
+    );
+    expect(row.querySelectorAll('[role="alert"]')).toHaveLength(1);
     dispose();
     vi.unstubAllGlobals();
   });
@@ -665,7 +855,7 @@ describe("TranscriptView", () => {
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     expect(activity.getAttribute("aria-expanded")).toBe("true");
-    expect(activity.textContent).toContain("2 steps");
+    expect(activity.textContent).toContain("Shell · pnpm test");
     activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     activity.click();

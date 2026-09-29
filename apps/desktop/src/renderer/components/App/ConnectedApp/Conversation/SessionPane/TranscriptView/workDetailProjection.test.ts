@@ -64,8 +64,52 @@ describe("projectTranscriptRows", () => {
       { id: "system", type: "system", time, text: "User-facing context" },
     ]);
     expect(ids(rows)).toEqual([
-      ["assistant", ["shell-ok", "shell-failed", "context", "compaction-running", "location"]],
+      ["assistant", ["shell-ok", "shell-failed", "context"]],
+      ["compaction-running", []],
+      ["location", []],
       ["system", []],
+    ]);
+    expect(rows.filter((row) => row.activityGroup)).toHaveLength(0);
+  });
+
+  it("keeps an exposed event top-level and continues the turn in a new Activity run", () => {
+    const rows = projectTranscriptRows([
+      assistant("assistant"),
+      shell("before", 0),
+      { id: "model", type: "model-switched", time, model: { providerID: "p", id: "m" } },
+      { id: "skill", type: "skill", time, skill: "review", name: "Review", text: "Done" },
+      shell("after", 0),
+      { id: "agent", type: "agent-switched", time, agent: "plan" },
+      { id: "idle", type: "idle", time, outcome: "succeeded" },
+      shell("next-turn", 0),
+    ]);
+    expect(ids(rows)).toEqual([
+      ["assistant", ["before"]],
+      ["model", []],
+      ["skill", ["skill", "after"]],
+      ["agent", []],
+      ["next-turn", []],
+    ]);
+    expect(rows.filter((row) => row.activityGroup).map((row) => row.message.id)).toEqual(["skill"]);
+  });
+
+  it("does not let an exposed event start a turn outside one", () => {
+    const rows = projectTranscriptRows([
+      assistant("assistant"),
+      { id: "idle", type: "idle", time, outcome: "succeeded" },
+      { id: "model", type: "model-switched", time, model: { providerID: "p", id: "m" } },
+      shell("out-of-turn", 0),
+      { id: "system", type: "system", time, text: "Context" },
+      { id: "location", type: "location-switched", time, location: { directory: "/tmp" } },
+      { id: "skill", type: "skill", time, skill: "review", name: "Review", text: "Done" },
+    ]);
+    expect(ids(rows)).toEqual([
+      ["assistant", []],
+      ["model", []],
+      ["out-of-turn", []],
+      ["system", []],
+      ["location", []],
+      ["skill", []],
     ]);
     expect(rows.filter((row) => row.activityGroup)).toHaveLength(0);
   });

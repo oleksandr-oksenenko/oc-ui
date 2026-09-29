@@ -21,7 +21,7 @@ function tool(index: number): SessionMessageAssistantTool {
   return {
     id: `activity-tool-${index}`,
     type: "tool",
-    name: index % 3 === 0 ? "search" : "read",
+    name: index % 3 === 0 ? "grep" : "read",
     time: { created: index + 2, ran: index + 2, completed: index + 3 },
     state: {
       status: "completed",

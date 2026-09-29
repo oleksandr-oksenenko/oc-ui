@@ -8,8 +8,13 @@ import { annotationBlock } from "../../../annotation-source.ts";
 import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMount.ts";
 import { ReasoningBlock } from "./ActivityBlock/ReasoningBlock.tsx";
 import { ToolCall } from "./ActivityBlock/ToolCall.tsx";
-import { WorkDetailMessage, type WorkDetailInfo } from "./ActivityBlock/WorkDetailMessage.tsx";
-import { activitySummary } from "./ActivityBlock/activitySummary.ts";
+import { WorkDetailMessage } from "./ActivityBlock/WorkDetailMessage.tsx";
+import {
+  activityLabel,
+  activitySummary,
+  shellCommandOutcome,
+} from "./ActivityBlock/activitySummary.ts";
+import type { ActivityDetailInfo } from "../workDetailProjection.ts";
 import "./ActivityBlock.css";
 
 type Content = SessionMessageAssistant["content"][number];
@@ -22,7 +27,7 @@ export function ActivityBlock(props: {
   readonly disclosureKey?: string;
   readonly activityOpen?: Map<string, boolean>;
   readonly directory?: string;
-  readonly workDetails?: readonly WorkDetailInfo[];
+  readonly workDetails?: readonly ActivityDetailInfo[];
 }) {
   const savedOpen = () =>
     props.disclosureKey === undefined ? undefined : props.activityOpen?.get(props.disclosureKey);
@@ -39,18 +44,26 @@ export function ActivityBlock(props: {
   const summary = createMemo(() =>
     activitySummary(steps(), props.workDetails ?? [], props.active, props.directory),
   );
+  // What the run did, once it is no longer live. A run whose only work failed
+  // keeps the neutral title; its failure count carries the outcome.
+  const label = createMemo(() =>
+    props.active ? undefined : activityLabel(steps(), props.workDetails ?? []),
+  );
   const failureIDs = () => [
     ...steps().flatMap((step) =>
-      step.type === "tool" && step.state.status === "error" ? [`tool:${step.id}`] : [],
+      step.type !== "tool"
+        ? []
+        : shellCommandOutcome(step) === "failed" || step.state.status === "error"
+          ? [`tool:${step.id}`]
+          : [],
     ),
     ...(props.workDetails ?? [])
       .filter(
         (message) =>
-          (message.type === "shell" &&
-            (message.status === "timeout" ||
-              message.status === "killed" ||
-              (message.status === "exited" && message.exit !== 0))) ||
-          (message.type === "compaction" && message.status === "failed"),
+          message.type === "shell" &&
+          (message.status === "timeout" ||
+            message.status === "killed" ||
+            (message.status === "exited" && message.exit !== 0)),
       )
       .map((message) => `${message.type}:${message.id}`),
   ];
@@ -182,16 +195,15 @@ export function ActivityBlock(props: {
         <Show when={props.active}>
           <span class="transcript-activity-pulse" aria-hidden="true" />
         </Show>
-        <span class="transcript-activity-title">{props.active ? "Working" : "Activity"}</span>
+        <span class="transcript-activity-title">
+          {label() ?? (props.active ? "Working" : "Activity")}
+        </span>
         <Icon
           name={open() ? "chevron-down" : "chevron-right"}
           class="transcript-activity-chevron"
           size="small"
           aria-hidden="true"
         />
-        <span class="transcript-activity-count">
-          {` · ${stepCount()} ${stepCount() === 1 ? "step" : "steps"}`}
-        </span>
         <Show keyed when={failed() ? JSON.stringify(failureIDs()) : undefined}>
           <span class="transcript-activity-error" role="alert">
             · {failureIDs().length === 1 ? "Failed" : `${failureIDs().length} failed`}

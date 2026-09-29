@@ -27,14 +27,8 @@
 }
 
 .transcript-activity-title {
-  flex: none;
-}
-
-.transcript-activity-count {
   min-width: 0;
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-metadata-size);
-  font-weight: var(--oc-type-metadata-weight);
+  flex: 0 1 auto;
 }
 
 .transcript-activity-summary {
@@ -48,9 +42,11 @@
   white-space: nowrap;
 }
 
-.transcript-activity-count,
 .transcript-activity-error {
   flex: none;
+  color: var(--oc-status-danger);
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
 }
 
 .transcript-activity-pulse {
@@ -60,12 +56,6 @@
   border-radius: var(--oc-radius-full);
   background: var(--oc-accent);
   box-shadow: 0 0 0 3px var(--oc-selection-ring);
-}
-
-.transcript-activity-error {
-  color: var(--oc-status-danger);
-  font-size: var(--oc-type-metadata-size);
-  font-weight: var(--oc-type-metadata-weight);
 }
 
 .transcript-activity > .transcript-activity-content[data-expanded] {

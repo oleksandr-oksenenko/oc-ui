@@ -250,7 +250,9 @@ export const NestedToolOutput: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const transcript = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
-    await userEvent.click(canvas.getByRole("button", { name: /Activity · 2 steps/ }));
+    await userEvent.click(
+      canvasElement.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!,
+    );
     await userEvent.click(canvasElement.querySelector<HTMLElement>(".transcript-tool-header")!);
     const output = await waitFor(() => {
       const element = canvasElement.querySelector<HTMLElement>(
