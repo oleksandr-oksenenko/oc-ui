@@ -1,5 +1,4 @@
 import type { SessionAttention } from "../createSessionAttention.ts";
-import { ScrollView } from "@opencode/ui/scroll-view";
 import type { SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
 import { For, Show, createMemo } from "solid-js";
@@ -80,27 +79,23 @@ export function SessionTree(props: SessionTreeProps) {
   );
 
   return (
-    <ScrollView class="shell-session-tree" thumbVisibility="scroll">
-      <nav class="shell-session-tree-content" aria-label="Sessions">
-        <Show
-          when={projection().roots.length > 0}
-          fallback={
-            <p class="shell-session-no-match">No sessions match “{props.query?.trim()}”.</p>
-          }
-        >
-          <For each={projection().groups}>
-            {(group) => (
-              <section
-                class="shell-session-group"
-                aria-labelledby={`shell-session-group-${group.id}`}
-              >
-                <h2 id={`shell-session-group-${group.id}`}>{group.label}</h2>
-                <div class="shell-session-group-tree">{renderSessions(group.roots)}</div>
-              </section>
-            )}
-          </For>
-        </Show>
-      </nav>
-    </ScrollView>
+    <nav class="shell-session-tree-content" aria-label="Sessions">
+      <Show
+        when={projection().roots.length > 0}
+        fallback={<p class="shell-session-no-match">No sessions match “{props.query?.trim()}”.</p>}
+      >
+        <For each={projection().groups}>
+          {(group) => (
+            <section
+              class="shell-session-group"
+              aria-labelledby={`shell-session-group-${group.id}`}
+            >
+              <h2 id={`shell-session-group-${group.id}`}>{group.label}</h2>
+              <div class="shell-session-group-tree">{renderSessions(group.roots)}</div>
+            </section>
+          )}
+        </For>
+      </Show>
+    </nav>
   );
 }

@@ -60,7 +60,9 @@
 .shell-session-title-tooltip {
   max-width: min(420px, calc(100vw - 24px));
   overflow-wrap: anywhere;
-  pointer-events: none;
+
+  /* stylelint-disable-next-line declaration-no-important -- Kobalte's layer manager writes inline pointer-events when overlays change. */
+  pointer-events: none !important;
 }
 
 .shell-session-main:hover {
@@ -180,7 +182,7 @@
   transform: scale(0);
 }
 
-.shell-session-row:hover .shell-session-status,
+.shell-session-row:hover:has(.shell-session-delete) .shell-session-status,
 .shell-session-row:has(.shell-session-delete:focus-visible) .shell-session-status {
   opacity: 0;
 }

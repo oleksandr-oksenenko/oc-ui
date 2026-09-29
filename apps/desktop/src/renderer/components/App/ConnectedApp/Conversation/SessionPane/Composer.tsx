@@ -59,6 +59,8 @@ const isMacPlatform = () => document.documentElement.dataset.platform === "macos
 
 export type ComposerProps = {
   readonly value: string;
+  /** Keep submitted setup content visible without allowing edits. */
+  readonly readOnly?: boolean;
   readonly sessionID?: string;
   readonly skills?: readonly PromptSkillAttachment[];
   readonly catalog?: ComposerCatalog;
@@ -246,7 +248,7 @@ export function Composer(props: ComposerProps) {
     return repeat;
   };
   const [dropping, setDropping] = createSignal(false);
-  const canAttach = () => props.onAttachFiles !== undefined;
+  const canAttach = () => !props.readOnly && props.onAttachFiles !== undefined;
   const review = () => props.review;
   const attachments = () => ((props.attachments?.count ?? 0) > 0 ? props.attachments : undefined);
   const annotations = () => ((props.annotations?.count ?? 0) > 0 ? props.annotations : undefined);
@@ -358,6 +360,7 @@ export function Composer(props: ComposerProps) {
    * native paste process the same paste twice.
    */
   const paste = (event: ClipboardEvent) => {
+    if (props.readOnly) return;
     const data = event.clipboardData;
     if (data === null) return;
     const control = editorControl;
@@ -488,6 +491,7 @@ export function Composer(props: ComposerProps) {
                   kind="review"
                   label={`Review · ${item().comments.length}`}
                   title="Review comments"
+                  disabled={props.readOnly}
                   onRemove={(button) => item().onDiscard(button)}
                   removeLabel={`Discard ${item().comments.length} code review comments`}
                 >
@@ -507,7 +511,7 @@ export function Composer(props: ComposerProps) {
                   controls={annotation().controls}
                   onRemove={annotation().onDiscard}
                   removeLabel={`Discard ${annotation().count} annotations`}
-                  disabled={props.disabled || props.action === "sending"}
+                  disabled={props.readOnly || props.disabled || props.action === "sending"}
                 />
               )}
             </Show>
@@ -519,7 +523,9 @@ export function Composer(props: ComposerProps) {
                     alt={file.name || "Pasted image"}
                     name={file.name || "Pasted image"}
                     class="composer-file-preview"
+                    disabled={props.readOnly}
                     onRemove={() => {
+                      if (props.readOnly) return;
                       props.onRemoveFile?.(file);
                       editor?.focus();
                     }}
@@ -527,7 +533,9 @@ export function Composer(props: ComposerProps) {
                 ) : (
                   <AttachmentFilePill
                     name={file.name || "Pasted file"}
+                    disabled={props.readOnly}
                     onRemove={() => {
+                      if (props.readOnly) return;
                       props.onRemoveFile?.(file);
                       editor?.focus();
                     }}
@@ -555,6 +563,7 @@ export function Composer(props: ComposerProps) {
             control={(value) => {
               editorControl = value;
             }}
+            readOnly={props.readOnly}
             value={props.value}
             skills={props.skills}
             catalog={props.catalog}

@@ -27,6 +27,11 @@
   outline-offset: var(--oc-focus-ring-inset-offset);
 }
 
+/* Compact picker searches retain a visible neutral frame when autofocused. */
+:root .selection-list [data-slot="list-search"]:has([data-slot="input-input"]:focus-visible) {
+  outline-color: var(--oc-border-emphasis);
+}
+
 :root [data-slot="list-search"] [data-slot="input-input"]:focus-visible {
   outline: none !important;
   box-shadow: none !important;

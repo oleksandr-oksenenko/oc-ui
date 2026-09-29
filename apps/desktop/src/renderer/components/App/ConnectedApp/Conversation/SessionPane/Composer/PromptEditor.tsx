@@ -56,7 +56,10 @@ export type PromptEditorControl = {
   applyPaste: (input: PromptPasteInsert) => void;
 };
 
-type EditorProps = Pick<ComposerProps, "value" | "skills" | "catalog" | "sessionID" | "onInput"> & {
+type EditorProps = Pick<
+  ComposerProps,
+  "value" | "skills" | "catalog" | "sessionID" | "onInput" | "readOnly"
+> & {
   placeholder: string;
   onKeyDown: (event: KeyboardEvent) => void;
   ref: (element: HTMLDivElement) => void;
@@ -219,6 +222,7 @@ export function PromptEditor(props: EditorProps) {
           doc: fromDraft(props.value, props.skills ?? []),
           plugins,
         }),
+        editable: () => !props.readOnly,
         attributes: {
           class: "composer-input oc-focus-delegate prompt-editor-input",
           role: "textbox",
@@ -227,8 +231,11 @@ export function PromptEditor(props: EditorProps) {
           tabindex: "0",
         },
         dispatchTransaction(tr) {
+          if (props.readOnly && tr.docChanged) return;
           instance.updateState(instance.state.apply(tr));
-          refreshQuery(instance.composing ? undefined : slashQuery(instance.state));
+          refreshQuery(
+            props.readOnly || instance.composing ? undefined : slashQuery(instance.state),
+          );
           if (tr.docChanged) {
             const draft = toDraft(instance.state.doc);
             emitted = { text: draft.text, skills: draft.skills };
@@ -289,6 +296,7 @@ export function PromptEditor(props: EditorProps) {
                   <RemoveButton
                     label={"Remove " + attrs().name + " skill"}
                     title="Remove skill"
+                    disabled={props.readOnly}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       const pos = getPos();
@@ -338,6 +346,9 @@ export function PromptEditor(props: EditorProps) {
       },
     });
     createEffect(() => {
+      instance.setProps({ editable: () => !props.readOnly });
+      if (props.readOnly) close();
+      instance.dom.setAttribute("aria-readonly", String(props.readOnly === true));
       instance.dom.dataset.placeholder = props.placeholder;
       const value = props.value;
       const skills = props.skills ?? [];
@@ -377,7 +388,7 @@ export function PromptEditor(props: EditorProps) {
               ref={(value) => {
                 list = value;
               }}
-              class="composer-model-list"
+              class="composer-model-list selection-list"
               items={[...items()]}
               key={(suggestion) => suggestion.key}
               filterKeys={["name", "description"]}

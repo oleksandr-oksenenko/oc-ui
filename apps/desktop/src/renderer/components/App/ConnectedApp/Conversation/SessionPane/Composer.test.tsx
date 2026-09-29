@@ -71,6 +71,55 @@ const renderQueueComposer = (
 };
 
 describe("Composer", () => {
+  it("locks skill and file removal, then restores editing when readOnly clears", () => {
+    const [readOnly, setReadOnly] = createSignal(false);
+    const onInput = vi.fn<ComposerProps["onInput"]>();
+    const remove = vi.fn<(file: File) => void>();
+    const image = new File(["image"], "screenshot.png", { type: "image/png" });
+    const file = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const { host, dispose } = mount(() => (
+      <Composer
+        {...inertPasteProps}
+        value="review this"
+        skills={[{ id: "review", name: "review", mention: { start: 0, end: 6, text: "review" } }]}
+        files={[image, file]}
+        readOnly={readOnly()}
+        onRemoveFile={remove}
+        action="send"
+        disabled={false}
+        modelSelection={unavailableSelection}
+        agentSelection={unavailableAgentSelection}
+        onInput={onInput}
+        onSubmit={() => undefined}
+      />
+    ));
+    const prompt = host.querySelector<HTMLDivElement>('[aria-label="Prompt"]')!;
+    const buttons = ["review skill", "screenshot.png", "notes.txt"].map((name) =>
+      host.querySelector<HTMLButtonElement>(`[aria-label="Remove ${name}"]`)!,
+    );
+    setReadOnly(true);
+    expect(prompt.getAttribute("contenteditable")).toBe("false");
+    for (const button of buttons) {
+      expect(button.disabled).toBe(true);
+      button.click();
+    }
+    // Node-view callbacks can dispatch transactions outside native editing.
+    buttons[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onInput).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(prompt.textContent).toContain("review");
+
+    setReadOnly(false);
+    expect(prompt.getAttribute("contenteditable")).toBe("true");
+    for (const button of buttons) expect(button.disabled).toBe(false);
+    buttons[1]!.click();
+    buttons[2]!.click();
+    expect(remove.mock.calls).toEqual([[image], [file]]);
+    buttons[0]!.click();
+    expect(onInput).toHaveBeenLastCalledWith("this", []);
+    dispose();
+  });
+
   it("attaches pasted files and inserts ordinary text paste", () => {
     const paste = vi.fn<(files: readonly File[]) => void>();
     const remove = vi.fn<(file: File) => void>();

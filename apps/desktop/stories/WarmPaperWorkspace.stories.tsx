@@ -34,10 +34,7 @@ import {
 import { GlobalFormsRegion } from "../src/renderer/components/App/ConnectedApp/GlobalForms/GlobalFormsRegion.tsx";
 import { createFakeGlobalForms } from "./global-forms/global-form-fixtures.ts";
 import { PermissionRequestCard } from "../src/renderer/ui/PermissionRequestCard.tsx";
-import {
-  NewSessionDialog,
-  type NewSessionLocationMode,
-} from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/NewSessionFlow/NewSessionDialog.tsx";
+
 import { DeleteSessionDialog } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/DeleteSessionFlow/DeleteSessionDialog.tsx";
 import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts";
 import { parseSessionCommand } from "../src/renderer/opencode/session-command.ts";
@@ -49,7 +46,13 @@ import { createTranscriptAnnotations } from "../src/renderer/components/App/Conn
 import { AnnotationPopover } from "../src/renderer/components/App/ConnectedApp/Conversation/AnnotationPopover.tsx";
 import { PendingMessages } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/PendingMessages.tsx";
 import { CodeReviewRemovalDialog } from "../src/renderer/components/App/ConnectedApp/Review/ReviewRegion/CodeReviewRemovalDialog.tsx";
+import {
+  WorkspaceNewSession,
+  type WorkspaceNewSessionProps,
+  type NewSessionDraft,
+} from "./workspace-showcase/WorkspaceNewSession.tsx";
 import { WorkspaceAddProject } from "./workspace-showcase/WorkspaceAddProject.tsx";
+import { DraftList } from "../src/renderer/components/App/ConnectedApp/Sessions/DraftList.tsx";
 import { WorkspaceBrowser } from "./workspace-showcase/WorkspaceBrowser.tsx";
 import { createWorkspacePermissions } from "./workspace-showcase/permission-fixture.ts";
 import { storySession } from "./session-fixtures.ts";
@@ -58,7 +61,7 @@ import {
   composerModelSelection,
   composerPasteProps,
 } from "./composer-fixtures.ts";
-import { previewImageBase64 } from "./image-fixtures.ts";
+import { previewImageBase64, previewImageFile } from "./image-fixtures.ts";
 import {
   attachmentFiles,
   browserAnnotation,
@@ -214,7 +217,33 @@ export default meta;
 type WorkspaceShowcaseProps = {
   readonly initialState?: "ready" | "loading" | "error" | "empty";
   readonly initialSession?: string;
+  readonly newSession?: Omit<
+    WorkspaceNewSessionProps,
+    "onSubmit" | "onAddProject" | "draft" | "onDraftChange"
+  > & {
+    readonly mode?: "local" | "worktree";
+    readonly newBranch?: boolean;
+    readonly nonGit?: boolean;
+    readonly attachment?: boolean;
+  };
 };
+
+function initialNewSessionDraft(
+  options: WorkspaceShowcaseProps["newSession"] = {},
+): NewSessionDraft {
+  return {
+    value: options.empty ? "" : "Design the new session experience",
+    projectID: options.nonGit ? "notes" : "oc-ui",
+    mode: options.nonGit ? "local" : (options.mode ?? "local"),
+    branch: options.newBranch
+      ? { kind: "new", name: "feature/new-session" }
+      : { kind: "existing", name: "main" },
+    files: options.attachment ? [previewImageFile()] : [],
+    model: "openai/gpt-5",
+    variant: "deep",
+    agent: "build",
+  };
+}
 
 function WorkspaceShowcaseFixture(props: WorkspaceShowcaseProps) {
   const registry = AtomRegistry.make();
@@ -244,6 +273,22 @@ function WorkspaceShowcaseContent(
   const [selectedID, setSelectedID] = createSignal(
     props.initialState === "empty" ? "" : (props.initialSession ?? "compact-ledger"),
   );
+  const newSessionOptions = () => props.newSession ?? {};
+  const [newSessionDraft, setNewSessionDraft] = createSignal(
+    initialNewSessionDraft(props.newSession),
+  );
+  const draftStatus = () => newSessionOptions().status?.kind;
+  const [showNewSession, setShowNewSession] = createSignal(props.newSession !== undefined);
+  const [draftItems, setDraftItems] = createSignal([
+    {
+      id: "new-session",
+      title: "Design the new session experience",
+      project: "oc-ui",
+      status: draftStatus(),
+    },
+  ]);
+  const selectedSessionID = () => (showNewSession() ? undefined : selectedID());
+  const selectedDraftID = () => (showNewSession() ? "new-session" : undefined);
   const [viewState, setViewState] = createSignal(props.initialState ?? "ready");
   const showContent = () => viewState() !== "loading" && viewState() !== "empty";
   const visibleSessions = () => (showContent() ? sessionItems() : []);
@@ -260,7 +305,9 @@ function WorkspaceShowcaseContent(
     toastID = showToast({ title, description, persistent: true });
   };
   const selectedTitle = () =>
-    sessionItems().find((item) => item.id === selectedID())?.title ?? "New session";
+    showNewSession()
+      ? "New session"
+      : (sessionItems().find((item) => item.id === selectedID())?.title ?? "New session");
   const [sentMessages, setSentMessages] = createSignal<
     Record<string, readonly SessionMessageInfo[]>
   >({});
@@ -302,70 +349,38 @@ function WorkspaceShowcaseContent(
       payload: { text: "Add a focused test for the keyboard shortcuts." },
     },
   ]);
-  const [project, setProject] = createSignal("oc-ui");
-  const [mode, setMode] = createSignal<NewSessionLocationMode>("worktree");
-  const [projects, setProjects] = createSignal([
-    { id: "oc-ui", name: "oc-ui", location: { directory: "/srv/projects/oc-ui" }, vcs: "git" },
-    {
-      id: "opencode",
-      name: "OpenCode",
-      location: { directory: "/srv/projects/opencode" },
-      vcs: "git",
-    },
-  ]);
-  const createSession = (worktree: boolean) => {
+  const createSession = (mode: "local" | "worktree") => {
     const id = `showcase-${++nextID}`;
     setSessionItems((items) => [
-      storySession(id, `${project()} · ${worktree ? "worktree" : "project folder"}`),
+      storySession(id, `oc-ui · ${mode === "worktree" ? "worktree" : "project folder"}`),
       ...items,
     ]);
     setSelectedID(id);
+    setShowNewSession(false);
+    setDraftItems([]);
+    setNewSessionDraft((current) => ({ ...current, value: "", files: [] }));
     setDraft("");
     setFiles([]);
     setBrowserAttachments([]);
     setSkills([]);
     setViewState("ready");
-    dialog.close();
     notify("Session created", "This is a local Storybook session. No server request was sent.");
   };
-  const newSession = () =>
-    void dialog.show(() => (
-      <NewSessionDialog
-        state={{ projects: projects(), selectedProjectID: project(), mode: mode() }}
-        onProjectChange={setProject}
-        onModeChange={setMode}
-        onAddProject={() =>
-          void dialog.push(() => (
-            <WorkspaceAddProject
-              onAddProject={(location) => {
-                const id = location.directory;
-                setProjects((items) =>
-                  items.some((item) => item.id === id)
-                    ? items
-                    : [
-                        ...items,
-                        {
-                          id,
-                          name:
-                            location.directory.split("/").filter(Boolean).at(-1) ??
-                            location.directory,
-                          location,
-                          vcs: "git",
-                        },
-                      ],
-                );
-                setProject(id);
-                dialog.close();
-              }}
-            />
-          ))
-        }
-        onUseProject={() => createSession(false)}
-        onCreateWorktree={() => createSession(true)}
-        onRetryProjects={() => undefined}
-        onRetry={() => undefined}
-      />
-    ));
+  const newSession = () => {
+    if (draftItems().length === 0) {
+      setDraftItems([
+        {
+          id: "new-session",
+          title: "New session",
+          project: newSessionDraft().projectID,
+          status: draftStatus(),
+        },
+      ]);
+    }
+    setShowNewSession(true);
+    if (panelState.mobile()) panelState.setLeftSidebarOpen(false);
+    panelState.setRightPanelOpen(false);
+  };
   const deleteSession = (id: string) => {
     const removed = new Set([id]);
     for (let count = -1; count !== removed.size;) {
@@ -387,7 +402,10 @@ function WorkspaceShowcaseContent(
     ));
   };
   const contextTabsId = "showcase-workspace-context";
-  const panelState = createShellPanelState({ leftSidebarOpen: true, rightPanelOpen: true });
+  const panelState = createShellPanelState({
+    leftSidebarOpen: true,
+    rightPanelOpen: !showNewSession(),
+  });
   const [expandedSessions, setExpandedSessions] = createSignal<readonly string[]>([
     "compact-ledger",
     "refactor-utils",
@@ -576,6 +594,18 @@ function WorkspaceShowcaseContent(
                   showHeader={panelState.mobile()}
                   sidebarVisible={panelState.leftSidebarOpen()}
                   sessions={visibleSessions()}
+                  drafts={
+                    <DraftList
+                      drafts={draftItems()}
+                      selectedID={selectedDraftID()}
+                      onSelect={() => newSession()}
+                      onDelete={(id) => {
+                        setDraftItems((items) => items.filter((item) => item.id !== id));
+                        setNewSessionDraft((current) => ({ ...current, value: "", files: [] }));
+                        setShowNewSession(false);
+                      }}
+                    />
+                  }
 
                   attentionForSession={(id) =>
                     id === "extract-hooks" && !readCompleted()
@@ -587,7 +617,7 @@ function WorkspaceShowcaseContent(
                           : undefined
                   }
                   statusForSession={(id) => (running(id) ? "running" : "idle")}
-                  selectedID={selectedID()}
+                  selectedID={selectedSessionID()}
                   expandedIDs={expandedSessions()}
                   loading={viewState() === "loading"}
                   error={
@@ -606,6 +636,7 @@ function WorkspaceShowcaseContent(
                   }
                   serverStatus={serverStatus()}
                   onSelect={(id) => {
+                    setShowNewSession(false);
                     setSelectedID(id);
                     setDraft("");
                     setFiles([]);
@@ -628,253 +659,282 @@ function WorkspaceShowcaseContent(
                 />
               }
               main={
-                <SessionPane
-                  selected={selectedID() !== ""}
-                  title={selectedTitle()}
-                  transcript={
-                    <TranscriptView
-                      sessionID={selectedID()}
-                      messages={messages()}
-                      annotationRootRef={annotationUI.attach}
-                      onOpenAnnotation={annotationUI.openSent}
-                      loading={viewState() === "loading"}
-                      error={
-                        viewState() === "error"
-                          ? "The conversation could not be refreshed."
-                          : undefined
-                      }
-                      onRetry={() => setViewState("ready")}
-                      sessionStatus={running(selectedID()) ? "running" : "idle"}
-                      pendingInteraction={
-                        hasInteraction() ? (
-                          <>
-                            <Show when={showQuestion()}>
-                              <article
-                                class="transcript-message transcript-assistant-message transcript-pending-interaction"
-                                data-message-id="workspace-question-form"
-                              >
-                                <QuestionForm
-                                  form={workspaceQuestionForm}
-                                  onSubmit={() => setQuestionPending(false)}
-                                  onCancel={() => setQuestionPending(false)}
-                                />
-                              </article>
-                            </Show>
-                            <For each={selectedPermissions()}>
-                              {(request) => (
-                                <article
-                                  class="transcript-message transcript-pending-interaction"
-                                  data-message-id={request.id}
-                                >
-                                  <PermissionRequestCard
-                                    request={request}
-                                    onReply={(reply) => void permissions.reply(request.id, reply)}
-                                  />
-                                </article>
-                              )}
-                            </For>
-                          </>
-                        ) : undefined
-                      }
-                    />
-                  }
-                  composer={
-                    <>
-                      <PendingMessages
-                        messages={pending().filter((item) => item.sessionID === selectedID())}
-                        disabled={viewState() !== "ready"}
-                        onCancel={(id) =>
-                          setPending((items) => items.filter((item) => item.id !== id))
-                        }
-                        onSteer={(id) =>
-                          setPending((items) =>
-                            items.map((item) =>
-                              item.id === id ? { ...item, delivery: "steer" } : item,
-                            ),
-                          )
-                        }
-                      />
-                      <Composer
-                        {...composerPasteProps}
-                        sessionID={selectedID()}
-                        value={draft()}
-                        command={command()}
-                        skills={skills()}
-                        catalog={{
-                          commands: {
-                            state: "ready",
-                            items: [
-                              { name: "compact", description: "Compact the current session." },
-                            ],
-                          },
-                          skills: {
-                            state: "ready",
-                            items: [
-                              {
-                                id: "review",
-                                name: "review",
-                                description: "Review changes for bugs and missing tests.",
-                              },
-                              {
-                                id: "simplify",
-                                name: "simplify",
-                                description: "Find a smaller, clearer implementation.",
-                              },
-                            ],
-                          },
-                          onRetry: () => undefined,
-                        }}
-                        contextUsage={{
-                          used: running(selectedID()) ? 92000 : 42000,
-                          limit: 128000,
-                        }}
-                        disabled={viewState() !== "ready"}
-                        error={
-                          viewState() === "error"
-                            ? "Reconnect before sending. Your draft is preserved."
-                            : undefined
-                        }
-                        action={running(selectedID()) ? "running" : "send"}
-                        attachments={{
-                          count: browserAttachments().length,
-                          content: (
-                            <Show when={browserAttachments().length > 0}>
-                              <AttachmentDetailPill
-                                kind="browser"
-                                label={`Browser · ${browserAttachments().length}`}
-                                title="Browser annotation"
-                                removeLabel="Discard browser annotations"
-                                disabled={viewState() !== "ready"}
-                                onRemove={() => setBrowserAttachments([])}
-                              >
-                                <For each={browserAttachments()}>
-                                  {(item) => (
-                                    <div class="attachment-pill-comment">
-                                      <p>{item.body}</p>
-                                      <div class="attachment-pill-source">
-                                        {item.tab.title} · {item.tab.url}
-                                        <br />
-                                        {item.selection.label}
-                                      </div>
-                                      <ImagePreview
-                                        file={annotationFiles([item])[0]!}
-                                        alt={item.image.name}
-                                        class="attachment-pill-browser-image"
+                <Show
+                  when={showNewSession()}
+                  fallback={
+                    <SessionPane
+                      selected={selectedID() !== ""}
+                      title={selectedTitle()}
+                      transcript={
+                        <TranscriptView
+                          sessionID={selectedID()}
+                          messages={messages()}
+                          annotationRootRef={annotationUI.attach}
+                          onOpenAnnotation={annotationUI.openSent}
+                          loading={viewState() === "loading"}
+                          error={
+                            viewState() === "error"
+                              ? "The conversation could not be refreshed."
+                              : undefined
+                          }
+                          onRetry={() => setViewState("ready")}
+                          sessionStatus={running(selectedID()) ? "running" : "idle"}
+                          pendingInteraction={
+                            hasInteraction() ? (
+                              <>
+                                <Show when={showQuestion()}>
+                                  <article
+                                    class="transcript-message transcript-assistant-message transcript-pending-interaction"
+                                    data-message-id="workspace-question-form"
+                                  >
+                                    <QuestionForm
+                                      form={workspaceQuestionForm}
+                                      onSubmit={() => setQuestionPending(false)}
+                                      onCancel={() => setQuestionPending(false)}
+                                    />
+                                  </article>
+                                </Show>
+                                <For each={selectedPermissions()}>
+                                  {(request) => (
+                                    <article
+                                      class="transcript-message transcript-pending-interaction"
+                                      data-message-id={request.id}
+                                    >
+                                      <PermissionRequestCard
+                                        request={request}
+                                        onReply={(reply) =>
+                                          void permissions.reply(request.id, reply)
+                                        }
                                       />
-                                    </div>
+                                    </article>
                                   )}
                                 </For>
-                              </AttachmentDetailPill>
-                            </Show>
-                          ),
-                        }}
-                        files={files()}
-                        onAttachFiles={(added) => setFiles((items) => [...items, ...added])}
-                        onAttachText={(text) =>
-                          setFiles((items) => [
-                            ...items,
-                            new File([text], "pasted-text.txt", { type: "text/plain" }),
-                          ])
-                        }
-                        onRemoveFile={(file) =>
-                          setFiles((items) => items.filter((item) => item !== file))
-                        }
-                        review={
-                          review.get(reviewKey()).comments.length
-                            ? {
-                                comments: review.get(reviewKey()).comments,
-                                onDiscard: () => discardReview(),
-                              }
-                            : undefined
-                        }
-                        annotations={
-                          annotations.get(selectedID()).length
-                            ? {
-                                count: annotations.get(selectedID()).length,
-                                onOpen: annotationUI.toggleDrafts,
-                                expanded: annotationUI.draftsOpen(),
-                                controls: annotationUI.popupID,
-                                onDiscard: () => annotations.clear(selectedID()),
-                              }
-                            : undefined
-                        }
-                        modelSelection={composerModelSelection({
-                          selectedModelID: model(),
-                          disabled: viewState() !== "ready",
-                          selectedVariantID: variant(),
-                          onSelectModel: setModel,
-                          onSelectVariant: setVariant,
-                        })}
-                        agentSelection={composerAgentSelection({
-                          selectedAgentID: agent(),
-                          disabled: viewState() !== "ready",
-                          onSelectAgent: setAgent,
-                        })}
-                        onInput={(text, selectedSkills = []) => {
-                          setDraft(text);
-                          setSkills(selectedSkills);
-                        }}
-                        onQueue={() => queuePrompt("queue")}
-                        onSubmit={() => {
-                          if (runPreviewCommand()) return;
-                          if (running(selectedID())) {
-                            queuePrompt("steer");
-                            return;
+                              </>
+                            ) : undefined
                           }
-                          const id = `message-${++nextID}`;
-                          const prompt = createSessionPrompt({
-                            instruction: instruction(),
-                            skills: skills(),
-                            annotations: annotations.get(selectedID()),
-                            reviewComments: review.get(reviewKey()).comments,
-                          });
-                          const user: SessionMessageInfo = {
-                            id,
-                            type: "user",
-                            time: { created: nextID + 20 },
-                            text: prompt.text,
-                            metadata: prompt.metadata,
-
-                            files: attachedFiles().map((file) => ({
-                              name: file.name,
-                              mime: file.type || "application/octet-stream",
-                              data: previewImageBase64,
-                              source: { type: "inline" },
-                            })),
-                          };
-                          setSentMessages((items) => ({
-                            ...items,
-                            [selectedID()]: [
-                              ...(items[selectedID()] ?? []),
-                              user,
-                              {
-                                id: `reply-${id}`,
-                                type: "assistant",
-                                time: { created: nextID + 21, completed: nextID + 22 },
-                                agent: agent(),
-                                model: { providerID: "openai", id: "gpt-5" },
-                                finish: "stop",
-                                content: [
+                        />
+                      }
+                      composer={
+                        <>
+                          <PendingMessages
+                            messages={pending().filter((item) => item.sessionID === selectedID())}
+                            disabled={viewState() !== "ready"}
+                            onCancel={(id) =>
+                              setPending((items) => items.filter((item) => item.id !== id))
+                            }
+                            onSteer={(id) =>
+                              setPending((items) =>
+                                items.map((item) =>
+                                  item.id === id ? { ...item, delivery: "steer" } : item,
+                                ),
+                              )
+                            }
+                          />
+                          <Composer
+                            {...composerPasteProps}
+                            sessionID={selectedID()}
+                            value={draft()}
+                            command={command()}
+                            skills={skills()}
+                            catalog={{
+                              commands: {
+                                state: "ready",
+                                items: [
+                                  { name: "compact", description: "Compact the current session." },
+                                ],
+                              },
+                              skills: {
+                                state: "ready",
+                                items: [
                                   {
-                                    type: "text",
-                                    text: "This is a simulated Storybook response. Your prompt was added to this session; no server request was sent.",
+                                    id: "review",
+                                    name: "review",
+                                    description: "Review changes for bugs and missing tests.",
+                                  },
+                                  {
+                                    id: "simplify",
+                                    name: "simplify",
+                                    description: "Find a smaller, clearer implementation.",
                                   },
                                 ],
                               },
-                            ],
-                          }));
-                          setDraft("");
-                          setFiles([]);
-                          setBrowserAttachments([]);
-                          setSkills([]);
-                          review.clear(reviewKey());
-                          annotations.clear(selectedID());
-                        }}
-                        onStop={() => setStopped((items) => [...items, selectedID()])}
-                      />
-                    </>
+                              onRetry: () => undefined,
+                            }}
+                            contextUsage={{
+                              used: running(selectedID()) ? 92000 : 42000,
+                              limit: 128000,
+                            }}
+                            disabled={viewState() !== "ready"}
+                            error={
+                              viewState() === "error"
+                                ? "Reconnect before sending. Your draft is preserved."
+                                : undefined
+                            }
+                            action={running(selectedID()) ? "running" : "send"}
+                            attachments={{
+                              count: browserAttachments().length,
+                              content: (
+                                <Show when={browserAttachments().length > 0}>
+                                  <AttachmentDetailPill
+                                    kind="browser"
+                                    label={`Browser · ${browserAttachments().length}`}
+                                    title="Browser annotation"
+                                    removeLabel="Discard browser annotations"
+                                    disabled={viewState() !== "ready"}
+                                    onRemove={() => setBrowserAttachments([])}
+                                  >
+                                    <For each={browserAttachments()}>
+                                      {(item) => (
+                                        <div class="attachment-pill-comment">
+                                          <p>{item.body}</p>
+                                          <div class="attachment-pill-source">
+                                            {item.tab.title} · {item.tab.url}
+                                            <br />
+                                            {item.selection.label}
+                                          </div>
+                                          <ImagePreview
+                                            file={annotationFiles([item])[0]!}
+                                            alt={item.image.name}
+                                            class="attachment-pill-browser-image"
+                                          />
+                                        </div>
+                                      )}
+                                    </For>
+                                  </AttachmentDetailPill>
+                                </Show>
+                              ),
+                            }}
+                            files={files()}
+                            onAttachFiles={(added) => setFiles((items) => [...items, ...added])}
+                            onAttachText={(text) =>
+                              setFiles((items) => [
+                                ...items,
+                                new File([text], "pasted-text.txt", { type: "text/plain" }),
+                              ])
+                            }
+                            onRemoveFile={(file) =>
+                              setFiles((items) => items.filter((item) => item !== file))
+                            }
+                            review={
+                              review.get(reviewKey()).comments.length
+                                ? {
+                                    comments: review.get(reviewKey()).comments,
+                                    onDiscard: () => discardReview(),
+                                  }
+                                : undefined
+                            }
+                            annotations={
+                              annotations.get(selectedID()).length
+                                ? {
+                                    count: annotations.get(selectedID()).length,
+                                    onOpen: annotationUI.toggleDrafts,
+                                    expanded: annotationUI.draftsOpen(),
+                                    controls: annotationUI.popupID,
+                                    onDiscard: () => annotations.clear(selectedID()),
+                                  }
+                                : undefined
+                            }
+                            modelSelection={composerModelSelection({
+                              selectedModelID: model(),
+                              disabled: viewState() !== "ready",
+                              selectedVariantID: variant(),
+                              onSelectModel: setModel,
+                              onSelectVariant: setVariant,
+                            })}
+                            agentSelection={composerAgentSelection({
+                              selectedAgentID: agent(),
+                              disabled: viewState() !== "ready",
+                              onSelectAgent: setAgent,
+                            })}
+                            onInput={(text, selectedSkills = []) => {
+                              setDraft(text);
+                              setSkills(selectedSkills);
+                            }}
+                            onQueue={() => queuePrompt("queue")}
+                            onSubmit={() => {
+                              if (runPreviewCommand()) return;
+                              if (running(selectedID())) {
+                                queuePrompt("steer");
+                                return;
+                              }
+                              const id = `message-${++nextID}`;
+                              const prompt = createSessionPrompt({
+                                instruction: instruction(),
+                                skills: skills(),
+                                annotations: annotations.get(selectedID()),
+                                reviewComments: review.get(reviewKey()).comments,
+                              });
+                              const user: SessionMessageInfo = {
+                                id,
+                                type: "user",
+                                time: { created: nextID + 20 },
+                                text: prompt.text,
+                                metadata: prompt.metadata,
+
+                                files: attachedFiles().map((file) => ({
+                                  name: file.name,
+                                  mime: file.type || "application/octet-stream",
+                                  data: previewImageBase64,
+                                  source: { type: "inline" },
+                                })),
+                              };
+                              setSentMessages((items) => ({
+                                ...items,
+                                [selectedID()]: [
+                                  ...(items[selectedID()] ?? []),
+                                  user,
+                                  {
+                                    id: `reply-${id}`,
+                                    type: "assistant",
+                                    time: { created: nextID + 21, completed: nextID + 22 },
+                                    agent: agent(),
+                                    model: { providerID: "openai", id: "gpt-5" },
+                                    finish: "stop",
+                                    content: [
+                                      {
+                                        type: "text",
+                                        text: "This is a simulated Storybook response. Your prompt was added to this session; no server request was sent.",
+                                      },
+                                    ],
+                                  },
+                                ],
+                              }));
+                              setDraft("");
+                              setFiles([]);
+                              setBrowserAttachments([]);
+                              setSkills([]);
+                              review.clear(reviewKey());
+                              annotations.clear(selectedID());
+                            }}
+                            onStop={() => setStopped((items) => [...items, selectedID()])}
+                          />
+                        </>
+                      }
+                    />
                   }
-                />
+                >
+                  <WorkspaceNewSession
+                    {...props.newSession}
+                    draft={newSessionDraft()}
+                    onDraftChange={(patch) =>
+                      setNewSessionDraft((current) => ({ ...current, ...patch }))
+                    }
+                    onSubmit={createSession}
+                    onAddProject={() =>
+                      void dialog.show(() => (
+                        <WorkspaceAddProject
+                          onAddProject={() => {
+                            dialog.close();
+                            notify(
+                              "Project selected",
+                              "This is a Storybook preview. No server request was sent.",
+                            );
+                          }}
+                        />
+                      ))
+                    }
+                  />
+                </Show>
               }
               context={
                 <div class="workspace-context-body">
@@ -1142,7 +1202,7 @@ export const InteractiveWorkspace = {
     await userEvent.click(canvas.getByRole("button", { name: "Stop" }));
     await expect(canvas.getByRole("button", { name: "Refactor Utils, Idle" })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Create session" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Use project folder" }));
+    await userEvent.click(await canvas.findByRole("button", { name: "Send" }));
     await waitFor(() => expect(screen.getByText("Session created", { exact: true })).toBeVisible());
     await expect(
       await canvas.findByRole("region", { name: "oc-ui · project folder" }),
@@ -1177,4 +1237,142 @@ export const NarrowWorkspace = {
 export const MobileWorkspace = {
   render: () => <WorkspaceShowcaseFixture />,
   globals: { viewport: { value: "mobile", isRotated: false } },
+};
+
+export const NewSession = { render: () => <WorkspaceShowcaseFixture newSession={{}} /> };
+export const NewSessionInteractions = {
+  render: () => <WorkspaceShowcaseFixture newSession={{}} />,
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await userEvent.click(prompt);
+    await userEvent.type(prompt, " with saved edits");
+    const clipboardData = new DataTransfer();
+    clipboardData.setData("text/plain", "Pasted notes ".repeat(1500));
+    prompt.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }),
+    );
+    await expect(canvas.getByText("pasted-text.txt")).toBeVisible();
+    await expect(prompt).toHaveTextContent("with saved edits");
+    await userEvent.click(canvas.getByRole("button", { name: "Project: oc-ui" }));
+    await userEvent.click(await screen.findByRole("button", { name: /scout/ }));
+    await userEvent.click(canvas.getByRole("button", { name: "Branch: main" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Create new branch…" }));
+    await userEvent.type(
+      canvas.getByRole("textbox", { name: "New branch name" }),
+      "feature/design",
+    );
+    await expect(canvas.getByText("From main")).toBeVisible();
+    const showSessions = canvas.queryByRole("button", { name: "Show sessions" });
+    if (showSessions) await userEvent.click(showSessions);
+    await userEvent.click(canvas.getByRole("button", { name: /^Refactor Utils,/ }));
+    await expect(canvas.getByRole("region", { name: "Refactor Utils" })).toBeVisible();
+    const reopenSessions = canvas.queryByRole("button", { name: "Show sessions" });
+    if (reopenSessions) await userEvent.click(reopenSessions);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Design the new session experience" }),
+    );
+    await expect(canvas.getByRole("button", { name: "Project: scout" })).toBeVisible();
+    await expect(canvas.getByRole("textbox", { name: "New branch name" })).toHaveValue(
+      "feature/design",
+    );
+    await expect(canvas.getByRole("textbox", { name: "Prompt" })).toHaveTextContent(
+      "with saved edits",
+    );
+    await expect(canvas.getByText("pasted-text.txt")).toBeVisible();
+  },
+};
+export const NewSessionWorktree = {
+  render: () => <WorkspaceShowcaseFixture newSession={{ mode: "worktree" }} />,
+};
+export const NewSessionBranch = {
+  render: () => <WorkspaceShowcaseFixture newSession={{ newBranch: true }} />,
+};
+export const NewSessionPreparing = {
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("button", { name: "Project: oc-ui" })).toBeDisabled();
+    await expect(canvas.getByRole("textbox", { name: "Prompt" })).toHaveAttribute(
+      "contenteditable",
+      "false",
+    );
+    const showSessions = canvas.queryByRole("button", { name: "Show sessions" });
+    if (showSessions) await userEvent.click(showSessions);
+    await userEvent.click(canvas.getByRole("button", { name: /^Refactor Utils,/ }));
+    await expect(canvas.getByRole("region", { name: "Refactor Utils" })).toBeVisible();
+    const reopenSessions = canvas.queryByRole("button", { name: "Show sessions" });
+    if (reopenSessions) await userEvent.click(reopenSessions);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Design the new session experience" }),
+    );
+    await expect(canvas.getByRole("button", { name: "Project: oc-ui" })).toBeDisabled();
+  },
+  render: () => (
+    <WorkspaceShowcaseFixture
+      newSession={{
+        mode: "worktree",
+        status: {
+          kind: "preparing",
+          message: "Preparing worktree… You can keep working in another session.",
+        },
+      }}
+    />
+  ),
+};
+export const NewSessionFailed = {
+  render: () => (
+    <WorkspaceShowcaseFixture
+      newSession={{
+        status: {
+          kind: "error",
+          message:
+            "Worktree creation failed. Your draft is saved. Any created worktree has been left on the server.",
+        },
+      }}
+    />
+  ),
+};
+export const NewSessionInterrupted = {
+  render: () => (
+    <WorkspaceShowcaseFixture
+      newSession={{
+        status: {
+          kind: "interrupted",
+          message: "Setup was interrupted. Nothing will be sent automatically.",
+        },
+      }}
+    />
+  ),
+};
+export const NewSessionAttachment = {
+  render: () => <WorkspaceShowcaseFixture newSession={{ attachment: true }} />,
+};
+export const NewSessionNoProjects = {
+  render: () => <WorkspaceShowcaseFixture newSession={{ empty: true }} />,
+};
+export const NewSessionLoading = {
+  render: () => <WorkspaceShowcaseFixture newSession={{ loading: true }} />,
+};
+export const NewSessionNonGit = {
+  render: () => <WorkspaceShowcaseFixture newSession={{ mode: "worktree" }} />,
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Project: oc-ui" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Notes/ }));
+    await expect(canvas.queryByRole("button", { name: /^Location:/ })).toBeNull();
+    await expect(canvas.queryByRole("button", { name: /^Branch:/ })).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "Project: Notes" }));
+    await userEvent.click(await screen.findByRole("button", { name: /oc-ui/ }));
+    await expect(canvas.getByRole("button", { name: "Location: Local" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Project: oc-ui" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Notes/ }));
+  },
+};
+export const NewSessionMobile = {
+  render: () => <WorkspaceShowcaseFixture newSession={{}} />,
+  globals: { viewport: { value: "mobile", isRotated: false } },
+};
+export const NewSessionDark = {
+  render: () => <WorkspaceShowcaseFixture newSession={{}} />,
+  globals: { theme: "dark" },
 };

@@ -1,3 +1,4 @@
+import "../../../../../../ui/SelectionList.css";
 import { Icon } from "@opencode/ui/icon";
 import { List } from "@opencode/ui/list";
 import { Popover } from "@opencode/ui/popover";
@@ -65,7 +66,7 @@ export function ModelPicker(props: ModelPickerProps) {
           }}
           placement="top-start"
           fitViewport
-          class="composer-model-popover"
+          class="composer-model-popover selection-popover"
           triggerAs="button"
           triggerProps={{
             type: "button",
@@ -81,7 +82,7 @@ export function ModelPicker(props: ModelPickerProps) {
           }
         >
           <List
-            class="composer-model-list"
+            class="composer-model-list selection-list"
             search={{ placeholder: "Search models", autofocus: true }}
             emptyMessage="No matching models."
             items={[...props.options]}
@@ -92,7 +93,7 @@ export function ModelPicker(props: ModelPickerProps) {
             sortBy={(left, right) => left.label.localeCompare(right.label)}
             onSelect={select}
           >
-            {(option) => <span class="composer-model-option">{option.label}</span>}
+            {(option) => <span class="composer-model-option selection-option">{option.label}</span>}
           </List>
         </Popover>
       )}

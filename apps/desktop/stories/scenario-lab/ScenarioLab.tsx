@@ -1,3 +1,4 @@
+import { ScrollView } from "@opencode/ui/scroll-view";
 /* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- Scrollable failure output needs keyboard access. */
 
 import { Button } from "@opencode/ui/button";
@@ -117,25 +118,27 @@ function LabAttentionSidebar() {
           </button>
         </div>
       </div>
-      <SessionTree
-        attentionForSession={(id) =>
-          id === "audit" || id === "flaky"
-            ? "permission"
-            : id === "worktree"
-              ? "completed"
-              : undefined
-        }
-        sessions={sessions()}
-        now={labNow + 60 * 1000}
-        statusForSession={() => "idle"}
-        selectedID="audit"
-        expandedIDs={["audit", "worktree"]}
-        canDelete
-        deletionStatusForSession={() => "ready"}
-        onSelect={noop}
-        onToggleExpanded={noop}
-        onDelete={noop}
-      />
+      <ScrollView class="shell-session-tree" thumbVisibility="scroll">
+        <SessionTree
+          attentionForSession={(id) =>
+            id === "audit" || id === "flaky"
+              ? "permission"
+              : id === "worktree"
+                ? "completed"
+                : undefined
+          }
+          sessions={sessions()}
+          now={labNow + 60 * 1000}
+          statusForSession={() => "idle"}
+          selectedID="audit"
+          expandedIDs={["audit", "worktree"]}
+          canDelete
+          deletionStatusForSession={() => "ready"}
+          onSelect={noop}
+          onToggleExpanded={noop}
+          onDelete={noop}
+        />
+      </ScrollView>
     </aside>
   );
 }

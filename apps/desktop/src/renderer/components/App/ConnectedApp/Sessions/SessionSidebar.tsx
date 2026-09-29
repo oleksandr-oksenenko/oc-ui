@@ -1,6 +1,7 @@
 import type { SessionAttention } from "./createSessionAttention.ts";
 import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
+import { ScrollView } from "@opencode/ui/scroll-view";
 import { Loader } from "@opencode/ui/loader";
 import { TextInput } from "@opencode/ui/text-input";
 import type { SessionInfo } from "@opencode/client";
@@ -31,6 +32,7 @@ export type SessionSidebarProps = {
   readonly autoFocusClose?: boolean;
   readonly serverName: string;
   readonly globalControls?: JSX.Element;
+  readonly drafts?: JSX.Element;
   readonly sidebarVisible?: boolean;
   readonly serverStatus: SessionSidebarStatus;
   readonly onSelect: (sessionID: string) => void;
@@ -49,6 +51,7 @@ const statusLabel = {
 } satisfies Record<SessionSidebarStatus, string>;
 
 export function SessionSidebar(props: SessionSidebarProps) {
+  const drafts = props.drafts;
   const [filter, setFilter] = createSignal("");
 
   return (
@@ -76,57 +79,60 @@ export function SessionSidebar(props: SessionSidebarProps) {
         />
       </div>
 
-      <Show when={props.error}>
-        {(error) => (
-          <div class="shell-sidebar-message" role="alert">
-            <div class="shell-sidebar-status-row shell-sidebar-error-row">
-              <Icon name="warning" size="small" aria-hidden="true" />
-              <p>{error()}</p>
+      <ScrollView class="shell-session-tree" thumbVisibility="scroll">
+        {drafts}
+
+        <Show when={props.error}>
+          {(error) => (
+            <div class="shell-sidebar-message" role="alert">
+              <div class="shell-sidebar-status-row shell-sidebar-error-row">
+                <Icon name="warning" size="small" aria-hidden="true" />
+                <p>{error()}</p>
+              </div>
+              <Button
+                class="shell-sidebar-action oc-focus-inset"
+                type="button"
+                size="normal"
+                variant="outline"
+                onClick={props.onRetry}
+              >
+                Retry
+              </Button>
             </div>
-            <Button
-              class="shell-sidebar-action oc-focus-inset"
-              type="button"
-              size="normal"
-              variant="outline"
-              onClick={props.onRetry}
-            >
-              Retry
-            </Button>
+          )}
+        </Show>
+
+        <Show when={props.loading && props.sessions.length === 0 && !props.error}>
+          <output class="shell-sidebar-message shell-sidebar-loading" aria-live="polite">
+            <Loader width={16} height={16} />
+            <span>Loading sessions</span>
+          </output>
+        </Show>
+
+        <Show when={!props.loading && !props.error && props.sessions.length === 0}>
+          <div class="shell-sidebar-message">
+            <p>No sessions yet.</p>
           </div>
-        )}
-      </Show>
+        </Show>
 
-      <Show when={props.loading && props.sessions.length === 0 && !props.error}>
-        <output class="shell-sidebar-message shell-sidebar-loading" aria-live="polite">
-          <Loader width={16} height={16} />
-          <span>Loading sessions</span>
-        </output>
-      </Show>
-
-      <Show when={!props.loading && !props.error && props.sessions.length === 0}>
-        <div class="shell-sidebar-message">
-          <p>No sessions yet.</p>
-        </div>
-      </Show>
-
-      <Show when={props.sessions.length > 0 && !props.error}>
-        <SessionTree
-          attentionForSession={props.attentionForSession}
-          sessions={props.sessions}
-          now={props.now}
-          statusForSession={props.statusForSession}
-          selectedID={props.selectedID}
-          expandedIDs={props.expandedIDs}
-          canDelete={props.canDelete}
-          deletionStatusForSession={props.deletionStatusForSession}
-          query={filter()}
-          sidebarVisible={props.sidebarVisible}
-          onSelect={props.onSelect}
-          onToggleExpanded={props.onToggleExpanded}
-          onDelete={props.onDelete}
-        />
-      </Show>
-
+        <Show when={props.sessions.length > 0 && !props.error}>
+          <SessionTree
+            attentionForSession={props.attentionForSession}
+            sessions={props.sessions}
+            now={props.now}
+            statusForSession={props.statusForSession}
+            selectedID={props.selectedID}
+            expandedIDs={props.expandedIDs}
+            canDelete={props.canDelete}
+            deletionStatusForSession={props.deletionStatusForSession}
+            query={filter()}
+            sidebarVisible={props.sidebarVisible}
+            onSelect={props.onSelect}
+            onToggleExpanded={props.onToggleExpanded}
+            onDelete={props.onDelete}
+          />
+        </Show>
+      </ScrollView>
       <div class="shell-sidebar-footer">
         <div class="shell-sidebar-footer-top">
           <ThemeToggle />

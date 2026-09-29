@@ -1,4 +1,5 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook interaction tests use Promise APIs. */
+import { DraftList } from "../src/renderer/components/App/ConnectedApp/Sessions/DraftList.tsx";
 import { createSignal } from "solid-js";
 import type { SessionInfo } from "@opencode/client";
 import { expect, userEvent, within } from "storybook/test";
@@ -80,7 +81,10 @@ const meta = {
 
 export default meta;
 type StoryOptions = Partial<
-  Pick<SessionSidebarProps, "loading" | "error" | "canCreate" | "canDelete" | "showHeader">
+  Pick<
+    SessionSidebarProps,
+    "loading" | "error" | "canCreate" | "canDelete" | "showHeader" | "drafts"
+  >
 > & {
   readonly selectedID?: string;
   readonly expandedIDs?: readonly string[];
@@ -140,6 +144,7 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
       }}
     >
       <SessionSidebar
+        drafts={options.drafts}
         sessions={visibleSessions()}
         now={storyNow}
         statusForSession={(id) => (options.runningIDs?.includes(id) ? "running" : "idle")}
@@ -352,4 +357,36 @@ export const MobileCloseFocused = {
       showHideAction: true,
       autoFocusClose: true,
     }),
+};
+
+export const ManyDrafts = {
+  render: () =>
+    interactiveSidebar(flatSessions, {
+      drafts: (
+        <DraftList
+          drafts={Array.from({ length: 30 }, (_, index) => ({
+            id: `draft-${index}`,
+            title: `Draft ${index + 1}`,
+          }))}
+          onSelect={() => undefined}
+          onDelete={() => undefined}
+        />
+      ),
+    }),
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvasElement.querySelector<HTMLElement>(".scroll-view__viewport")!;
+    const drafts = canvas.getByRole("region", { name: "Drafts" });
+    const sessions = canvas.getByRole("navigation", { name: "Sessions" });
+    await expect(viewport.contains(drafts)).toBe(true);
+    await expect(viewport.contains(sessions)).toBe(true);
+    await expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
+    const footer = canvas.getByRole("button", { name: /Select server,/ });
+    await expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      canvas.getByRole("complementary", { name: "Sessions" }).getBoundingClientRect().bottom,
+    );
+    sessions.scrollIntoView({ block: "end" });
+    await expect(viewport.scrollTop).toBeGreaterThan(0);
+    await expect(footer).toBeVisible();
+  },
 };

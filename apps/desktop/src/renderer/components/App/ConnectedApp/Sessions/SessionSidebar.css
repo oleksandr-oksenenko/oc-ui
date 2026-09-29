@@ -31,7 +31,6 @@
 }
 
 .shell-sidebar-message {
-  grid-row: 3;
   display: grid;
   justify-items: start;
   gap: 8px;

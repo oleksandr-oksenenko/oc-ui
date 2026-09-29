@@ -1,3 +1,4 @@
+import { ScrollView } from "@opencode/ui/scroll-view";
 import type { PermissionReply } from "@opencode/client";
 import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
@@ -179,19 +180,21 @@ export function WorkbenchSupervision() {
                     </button>
                   </div>
                 </div>
-                <SessionTree
-                  attentionForSession={(id) => toSessionAttention(attentionKind(id))}
-                  sessions={visibleSessions()}
-                  now={labSupervisionNow + 60 * 1000}
-                  statusForSession={(id) => (id === "composer-cleanup" ? "running" : "idle")}
-                  selectedID={selectedID()}
-                  expandedIDs={["audit", "releases", "worktree"]}
-                  canDelete
-                  deletionStatusForSession={() => "ready"}
-                  onSelect={setSelectedID}
-                  onToggleExpanded={noop}
-                  onDelete={noop}
-                />
+                <ScrollView class="shell-session-tree" thumbVisibility="scroll">
+                  <SessionTree
+                    attentionForSession={(id) => toSessionAttention(attentionKind(id))}
+                    sessions={visibleSessions()}
+                    now={labSupervisionNow + 60 * 1000}
+                    statusForSession={(id) => (id === "composer-cleanup" ? "running" : "idle")}
+                    selectedID={selectedID()}
+                    expandedIDs={["audit", "releases", "worktree"]}
+                    canDelete
+                    deletionStatusForSession={() => "ready"}
+                    onSelect={setSelectedID}
+                    onToggleExpanded={noop}
+                    onDelete={noop}
+                  />
+                </ScrollView>
               </aside>
             }
             main={
