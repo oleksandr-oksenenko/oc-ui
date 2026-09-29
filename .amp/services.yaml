@@ -1,0 +1,21 @@
+# Orb services for this repository. Run `amp orb services ensure` from the
+# repository root; it starts anything missing and prints the portal URLs.
+services:
+  # The review portal deliberately serves the *bundled* Storybook build instead
+  # of the Vite dev server (`pnpm storybook`): the dev server sends ~430
+  # unbundled modules at dependency depth 10, which costs ~19s to load over a
+  # 250ms round trip, while this build serves 95 requests at depth 1 in ~5s.
+  #
+  # The command rebuilds on every start so the portal never shows a stale
+  # catalog, which means the port opens only after the ~30s build. If the first
+  # `ensure` in a fresh orb reports the port missing, rerun it: the build keeps
+  # going and the second run finds the service listening.
+  storybook:
+    command: >-
+      pnpm build-storybook &&
+      pnpm --filter desktop exec vp preview
+      --outDir storybook-static --host 127.0.0.1 --port "$PORT" --strictPort
+    health: /
+    portal:
+      title: Storybook
+      description: Bundled desktop component catalog; rebuilt on service restart.
