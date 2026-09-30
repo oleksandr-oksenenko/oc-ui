@@ -84,6 +84,7 @@ function dialog(
             effects={effects}
             listDirectory={options.listDirectory ?? listDirectory}
             initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
+            requestLocation={options.initialLocation ?? { directory: "/srv/projects" }}
             error={options.error}
             adding={options.adding}
             onDismissBlockedChange={onDismissBlockedChange}

@@ -226,7 +226,7 @@ function controller(
       },
     });
   });
-  return { adapter, select, pending, runtime, selectSession, setConnection };
+  return { adapter, select, pending, runtime, selectSession, setConnection, projects };
 }
 
 describe("native draft persistence", () => {
@@ -240,6 +240,8 @@ describe("native draft persistence", () => {
       runtime.data.location.model.list = () => [model];
       const directory = deferred<Awaited<ReturnType<typeof runtime.api.file.list>>>();
       let signal: AbortSignal | undefined;
+      await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+      vi.mocked(runtime.api.file.list).mockClear();
       if (phase === "pending") {
         cleanup.push(async () => directory.reject(new Error("Test cleanup")));
         vi.mocked(runtime.api.file.list).mockImplementationOnce((_input, options) => {
@@ -272,7 +274,7 @@ describe("native draft persistence", () => {
 
       setConnection("connected");
       await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
-      expect(runtime.api.file.list).toHaveBeenCalledTimes(2);
+      expect(runtime.api.file.list).toHaveBeenCalledTimes(4);
       expect(adapter.composer(id).value).toBe("Saved while quitting");
     },
   );
@@ -295,6 +297,8 @@ describe("native draft persistence", () => {
   it("keeps content when a saved project directory is unavailable and loads another project", async () => {
     const one = fixture();
     const { adapter, runtime, pending } = controller(one);
+    await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+    vi.mocked(runtime.api.file.list).mockClear();
     vi.mocked(runtime.api.file.list).mockRejectedValueOnce(new Error("UnexpectedStatus"));
     const modelSync = vi.spyOn(runtime.data.location.model, "sync");
     const agentSync = vi.spyOn(runtime.data.location.agent, "sync");
@@ -310,7 +314,7 @@ describe("native draft persistence", () => {
     expect(modelSync).not.toHaveBeenCalled();
     expect(agentSync).not.toHaveBeenCalled();
     expect(runtime.api.file.list).toHaveBeenCalledWith(
-      { location: { directory: "/srv/project", workspace: "logical" }, path: "." },
+      { location: { directory: "/srv/project", workspace: "logical" }, path: "/srv/project" },
       { signal: expect.any(AbortSignal) },
     );
     adapter.setup().onProjectChange("other");
@@ -318,6 +322,76 @@ describe("native draft persistence", () => {
     await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
     expect(adapter.composer(id).value).toBe("Keep my prompt");
     expect(adapter.current().error).toBeUndefined();
+  });
+
+  it("filters unavailable directories without registering them and restores them on retry", async () => {
+    const one = fixture();
+    const { adapter, runtime, pending } = controller(one);
+    const model = (await runtime.api.model.default({ location: { directory: "/srv/project" } }))
+      .data!;
+    runtime.data.location.model.list = () => [model];
+    vi.mocked(runtime.api.file.list).mockImplementation(async (input) => {
+      if (input?.path === "/srv/other") throw new Error("Missing directory");
+      return {
+        location: {
+          ...choices.project.location,
+          project: { id: "project", directory: "/srv/project", canonical: "/srv/project" },
+        },
+        data: [],
+      };
+    });
+    await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+    expect(adapter.setup().projects.map((item) => item.id)).toEqual(["project"]);
+    expect(runtime.api.project.current).not.toHaveBeenCalled();
+    expect(runtime.api.file.list).toHaveBeenCalledWith(
+      { location: { directory: "/srv/project", workspace: "logical" }, path: "/srv/other" },
+      { signal: expect.any(AbortSignal) },
+    );
+    adapter.create();
+    pending.resolve();
+    await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
+    expect(adapter.composer(adapter.selectedID()!).error).toContain("Some project directories");
+    vi.mocked(runtime.api.file.list).mockResolvedValue({
+      location: {
+        ...choices.project.location,
+        project: { id: "project", directory: "/srv/project", canonical: "/srv/project" },
+      },
+      data: [],
+    });
+    adapter.retry();
+    await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
+    expect(adapter.setup().projects.map((item) => item.id)).toEqual(["other", "project"]);
+    expect(adapter.current().projectsError).toBeUndefined();
+  });
+
+  it("does not approve a project path changed during a pending directory check", async () => {
+    const one = fixture();
+    const { adapter, runtime, projects } = controller(one);
+    const directory = deferred<Awaited<ReturnType<typeof runtime.api.file.list>>>();
+    cleanup.push(async () => directory.reject(new Error("Test cleanup")));
+    const response = {
+      location: {
+        ...choices.project.location,
+        project: { id: "project", directory: "/srv/project", canonical: "/srv/project" },
+      },
+      data: [],
+    };
+    vi.mocked(runtime.api.file.list).mockImplementation(async (input) =>
+      input?.path === "/srv/project" ? directory.promise : response,
+    );
+    await vi.waitFor(() => expect(runtime.api.file.list).toHaveBeenCalledTimes(2));
+    projects.find((item) => item.id === "project")!.canonical = "/srv/moved";
+    directory.resolve(response);
+    await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+    expect(adapter.setup().projects.map((item) => item.id)).toEqual(["other"]);
+    adapter.create();
+    expect(adapter.composer(adapter.selectedID()!).error).toContain("Some project directories");
+    expect(runtime.api.project.current).not.toHaveBeenCalled();
+    adapter.retry();
+    await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+    expect(adapter.setup().projects.find((item) => item.id === "project")?.detail).toBe(
+      "/srv/moved",
+    );
   });
 
   it.each(["text", "file"])(

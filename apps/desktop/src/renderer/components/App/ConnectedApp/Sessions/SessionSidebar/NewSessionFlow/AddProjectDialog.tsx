@@ -24,6 +24,7 @@ export type AddProjectDialogProps = {
   readonly effects: WorkspaceOwner;
   readonly listDirectory: OpenCodeClient["file"]["list"];
   readonly initialLocation: LocationRef;
+  readonly requestLocation: LocationRef;
   readonly error?: AddProjectDialogError;
   readonly adding?: boolean;
   readonly onDismissBlockedChange?: (blocked: boolean) => void;
@@ -95,7 +96,7 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
           <ServerDirectoryBrowser
             effects={props.effects}
             listDirectory={props.listDirectory}
-            requestLocation={props.initialLocation}
+            requestLocation={props.requestLocation}
             label="Project directory"
             initialLocation={props.initialLocation}
             disabled={props.adding === true}

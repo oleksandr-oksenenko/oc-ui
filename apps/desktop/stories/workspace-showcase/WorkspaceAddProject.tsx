@@ -42,6 +42,7 @@ export function WorkspaceAddProject(props: {
         effects={effects}
         listDirectory={listDirectory}
         initialLocation={{ directory: "/srv/projects" }}
+        requestLocation={{ directory: "/srv/projects" }}
         onAddProject={props.onAddProject}
       />
     </RegistryContext.Provider>

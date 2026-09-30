@@ -61,6 +61,7 @@ function mount(
             effects={effects}
             listDirectory={list}
             initialLocation={{ directory: "/srv/projects", workspaceID: "remote-workspace" }}
+            requestLocation={{ directory: "/srv/projects", workspaceID: "remote-workspace" }}
             adding={adding()}
             error={error()}
             onDismissBlockedChange={setBlocked}

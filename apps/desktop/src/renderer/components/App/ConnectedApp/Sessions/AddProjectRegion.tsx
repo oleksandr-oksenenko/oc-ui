@@ -43,6 +43,7 @@ export function AddProjectRegion(props: AddProjectRegionProps) {
             effects={props.runtime.effects}
             listDirectory={props.runtime.api.file.list}
             initialLocation={initialLocation}
+            requestLocation={props.runtime.defaultLocation}
             adding={props.controller.current().adding}
             error={
               props.controller.current().addError

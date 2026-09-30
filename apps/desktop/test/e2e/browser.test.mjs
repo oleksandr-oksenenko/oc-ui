@@ -1872,12 +1872,18 @@ describe.sequential("production browser app", () => {
   it("explains an unavailable saved project and preserves the prompt when choosing another", async () => {
     const canonical = await realpath(addedProject);
     const moved = addedProject + "-unavailable";
-    await rename(addedProject, moved);
     try {
       await page.getByRole("button", { name: "Create session", exact: true }).click();
       await page.getByRole("button", { name: /^Project:/u }).click();
       await page.locator(".selection-option-detail").filter({ hasText: canonical }).click();
+      await page.getByLabel(/^Model:/u).waitFor();
       await page.getByLabel("Prompt", { exact: true }).fill("Preserve missing-project draft");
+      await selectSession("Permission acceptance");
+      await rename(addedProject, moved);
+      await page
+        .locator(".session-drafts .shell-session-title")
+        .filter({ hasText: "Preserve missing-project draft" })
+        .click();
       await page
         .getByText(
           `The project directory could not be opened: ${canonical}. Choose another project or retry.`,
@@ -2078,18 +2084,15 @@ describe.sequential("production browser app", () => {
     await page.getByRole("button", { name: "Create session", exact: true }).click();
     const warning = page.getByRole("alert").filter({ hasText: "Some project directories" });
     await warning.waitFor();
-    await page.getByRole("combobox", { name: /^Project:/ }).click();
-    const options = page.locator(".new-session-project-option");
+    await page.getByRole("button", { name: /^Project:/u }).click();
+    const options = page.locator(".selection-option-detail");
     await expect.poll(() => options.count()).toBeGreaterThan(0);
-    expect(await options.locator(":scope > span").allTextContents()).not.toContain(
-      registered.canonical,
-    );
+    expect(await options.allTextContents()).not.toContain(registered.canonical);
     expect((await api.project.list()).some((candidate) => candidate.id === registered.id)).toBe(
       true,
     );
     await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-    await page.locator(".server-flow-dialog").waitFor({ state: "hidden" });
+    await selectSession("Permission acceptance");
   });
 
   it("recovers from browser navigation and unavailable storage without stopping the server", async () => {

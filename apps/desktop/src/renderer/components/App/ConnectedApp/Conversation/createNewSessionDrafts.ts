@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-solid";
-import { Effect, Schema } from "effect";
+import { Effect, Result, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { ProjectID } from "@opencode/schema/project-id";
 import { getFilename } from "@opencode/util/path";
@@ -11,6 +11,7 @@ import {
   createDraftSubmission,
   type DraftSubmissionRuntime,
 } from "../../../../new-session/submit.ts";
+import { listServerDirectory } from "../../../../opencode/server-directories.ts";
 import { readLocalBranches } from "../../../../opencode/local-branches.ts";
 import {
   draftTitle,
@@ -56,6 +57,8 @@ export function createNewSessionDrafts(
   const state = Atom.make<{
     projects: "loading" | "ready" | "failed";
     catalogs: "loading" | "ready" | "failed";
+    availableProjects: readonly { id: string; canonical: string }[];
+    projectsError?: string;
     branches: readonly string[];
     currentBranch?: string;
     defaultBranch?: string;
@@ -65,7 +68,7 @@ export function createNewSessionDrafts(
     adding?: boolean;
     addError?: string;
     addDraftID?: string;
-  }>({ projects: "loading", catalogs: "loading", branches: [] });
+  }>({ projects: "loading", catalogs: "loading", branches: [], availableProjects: [] });
   effects.mount(state);
   const current = useAtomValue(() => state);
   const projectsState = createMemo(() => current().projects);
@@ -83,7 +86,7 @@ export function createNewSessionDrafts(
     return id ? entries().get(id) : undefined;
   });
   const location = createMemo(() => selected()?.value.choices.project?.location);
-  const projects = () =>
+  const registeredProjects = () =>
     runtime.data.project
       .list()
       .filter((item) => item.id !== ProjectID.global)
@@ -102,8 +105,18 @@ export function createNewSessionDrafts(
           location: projectLocation,
         };
       });
+  const projects = () =>
+    registeredProjects().filter((item) =>
+      current().availableProjects.some(
+        (available) => available.id === item.id && available.canonical === item.location.directory,
+      ),
+    );
   const project = () =>
-    projects().find((item) => item.id === selected()?.value.choices.project?.id);
+    registeredProjects().find(
+      (item) =>
+        item.id === selected()?.value.choices.project?.id &&
+        item.location.directory === location()?.directory,
+    );
   const catalog = createComposerCatalog({
     effects,
     sources: { commands: runtime.data.location.command, skills: runtime.data.location.skill },
@@ -112,6 +125,7 @@ export function createNewSessionDrafts(
   });
   const read = effects.latest();
   const opening = effects.latest();
+  const projectRead = effects.latest();
   const run = <A, E>(effect: Effect.Effect<A, E>) =>
     effects.runFork(effect.pipe(Effect.catch(() => Effect.void)));
   const edit = (id: string, patch: Parameters<NewSessionDrafts["Service"]["edit"]>[1]) =>
@@ -158,21 +172,47 @@ export function createNewSessionDrafts(
     );
     sessions.selectDraft(id);
   };
-  const loadProjects = () =>
-    run(
-      service.hydrate(serverKey).pipe(
-        Effect.andThen(effects.request(() => runtime.data.project.sync())),
-        Effect.match({
-          onSuccess: () => update({ projects: "ready" }),
-          onFailure: () =>
+  const loadProjects = () => {
+    if (runtime.stream.status() !== "connected") {
+      projectRead.cancel();
+      return;
+    }
+    update({ projects: "loading", projectsError: undefined });
+    projectRead.run(
+      Effect.gen(function* () {
+        yield* service.hydrate(serverKey);
+        yield* effects.request(() => runtime.data.project.sync());
+        const checked = yield* Effect.forEach(
+          registeredProjects(),
+          (item) =>
+            listServerDirectory(
+              effects,
+              runtime.api.file.list,
+              runtime.defaultLocation,
+              item.location.directory,
+            ).pipe(Effect.as({ id: item.id, canonical: item.location.directory }), Effect.result),
+          { concurrency: 4 },
+        );
+        const availableProjects = checked.flatMap((result) =>
+          Result.isSuccess(result) ? [result.success] : [],
+        );
+        update({
+          projects: "ready",
+          availableProjects,
+        });
+      }).pipe(
+        Effect.catch(() =>
+          Effect.sync(() =>
             update({
               projects: "failed",
-              error: "Projects could not be loaded. Retry to continue.",
+              projectsError: "Projects could not be loaded. Retry to continue.",
             }),
-        }),
+          ),
+        ),
       ),
     );
-  loadProjects();
+  };
+  createEffect(on(() => runtime.stream.status(), loadProjects));
   createEffect(
     on(selectedID, (_id, previous) => {
       if (previous) {
@@ -214,6 +254,10 @@ export function createNewSessionDrafts(
       defaultModel: undefined,
       catalogLocationKey: undefined,
     });
+    if (current().projects === "loading") {
+      read.cancel();
+      return;
+    }
     if (!target || !id || !project()) {
       read.run(Effect.void);
       update({ catalogs: "failed" });
@@ -221,24 +265,19 @@ export function createNewSessionDrafts(
     }
     read.run(
       Effect.gen(function* () {
-        yield* effects
-          .request((signal) =>
-            runtime.api.file.list(
-              {
-                location: { directory: target.directory, workspace: target.workspaceID },
-                path: ".",
-              },
-              { signal },
-            ),
-          )
-          .pipe(
-            Effect.mapError(
-              () =>
-                new ProjectDirectoryError({
-                  message: `The project directory could not be opened: ${target.directory}. Choose another project or retry.`,
-                }),
-            ),
-          );
+        yield* listServerDirectory(
+          effects,
+          runtime.api.file.list,
+          runtime.defaultLocation,
+          target.directory,
+        ).pipe(
+          Effect.mapError(
+            () =>
+              new ProjectDirectoryError({
+                message: `The project directory could not be opened: ${target.directory}. Choose another project or retry.`,
+              }),
+          ),
+        );
         const [, , vcs, branches, model] = yield* Effect.all(
           [
             effects.request(() => runtime.data.location.model.sync(target)),
@@ -344,6 +383,7 @@ export function createNewSessionDrafts(
   onCleanup(() => {
     read.cancel();
     opening.cancel();
+    projectRead.cancel();
     const id = selectedID();
     if (id) service.release(id);
   });
@@ -481,6 +521,13 @@ export function createNewSessionDrafts(
       (attempt.phase === "sending" && attempt.request.kind === "command")
     );
   };
+  const serverError = () =>
+    current().error ??
+    storage().get(serverKey)?.error ??
+    current().projectsError ??
+    (current().projects !== "loading" && projects().length < registeredProjects().length
+      ? "Some project directories could not be opened. Retry to check them again, or choose an available project."
+      : undefined);
   const composer = (id: string): ComposerProps => {
     const entry = entries().get(id);
     return {
@@ -491,12 +538,7 @@ export function createNewSessionDrafts(
       readOnly: !!(lockedDraft(entry) || entry?.loading || (entry?.saved && !entry.files)),
       action: entry?.busy ? "sending" : "send",
       disabled: submissionDisabled(entry),
-      error:
-        entry?.error ??
-        entry?.notice ??
-        savedChoiceError() ??
-        current().error ??
-        storage().get(serverKey)?.error,
+      error: entry?.error ?? entry?.notice ?? savedChoiceError() ?? serverError(),
       onInput: (text, skills = []) => edit(id, { text, skills }),
       onSubmit: () => submission.submit(id),
       onAttachFiles: (files) => effects.runSync(service.attachFiles(id, files)),
@@ -529,7 +571,15 @@ export function createNewSessionDrafts(
           Effect.match({
             onSuccess: (addedProject) => {
               changeProject(id, { id: addedProject.id, location: target });
-              update({ adding: false, addDraftID: undefined, projects: "ready" });
+              update({
+                adding: false,
+                addDraftID: undefined,
+                projects: "ready",
+                availableProjects: [
+                  ...current().availableProjects.filter((item) => item.id !== addedProject.id),
+                  { id: addedProject.id, canonical: addedProject.canonical },
+                ],
+              });
             },
             onFailure: () => update({ adding: false, addError: "The project could not be added." }),
           }),
@@ -582,8 +632,7 @@ export function createNewSessionDrafts(
         run(service.open(id));
         run(service.flush(id));
       }
-      if (current().projects === "failed" || storage().get(serverKey)?.error) loadProjects();
-      refreshCatalogs();
+      loadProjects();
     },
     dismissAddProject: () => {
       if (!current().adding) update({ addDraftID: undefined });
