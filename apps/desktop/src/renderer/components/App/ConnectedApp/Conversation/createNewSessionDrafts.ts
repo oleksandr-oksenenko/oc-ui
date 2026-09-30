@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-solid";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { ProjectID } from "@opencode/schema/project-id";
 import { getFilename } from "@opencode/util/path";
@@ -29,15 +29,24 @@ type DraftRuntime = DraftSubmissionRuntime & {
   stream: Pick<ConnectedRuntime["stream"], "status">;
   data: { project: Pick<ConnectedRuntime["data"]["project"], "list" | "sync" | "invalidate"> };
   api: {
+    file: Pick<ConnectedRuntime["api"]["file"], "list">;
     model: Pick<ConnectedRuntime["api"]["model"], "default">;
     project: Pick<ConnectedRuntime["api"]["project"], "current">;
   };
 };
 
+class ProjectDirectoryError extends Schema.TaggedError<ProjectDirectoryError>()(
+  "ProjectDirectoryError",
+  { message: Schema.String },
+) {}
+
 /** Workspace adapts server catalogs and navigation; renderer owns durable content. */
 export function createNewSessionDrafts(
   runtime: DraftRuntime,
-  sessions: Pick<SessionWorkspace, "selectedDraftID" | "selectDraft" | "sessions" | "select">,
+  sessions: Pick<
+    SessionWorkspace,
+    "selectedDraftID" | "selectDraft" | "selectedSession" | "sessions" | "select"
+  >,
   service: NewSessionDrafts["Service"],
   serverKey: string,
 ) {
@@ -121,15 +130,18 @@ export function createNewSessionDrafts(
     const old = selected();
     if (old && !old.saved && !meaningfulDraft(old.value)) return;
     const remembered = service.choices(serverKey);
-    const fallback = projects()[0];
-    const choices = choicesForProject(
-      remembered.project ??
-        (fallback ? { id: fallback.id, location: fallback.location } : undefined),
-    );
     const previous = sessions
       .sessions()
       .filter((session) => !session.parentID)
       .toSorted((left, right) => right.time.created - left.time.created)[0];
+    const fallback =
+      projects().find((item) => item.id === sessions.selectedSession()?.projectID) ??
+      projects().find((item) => item.id === previous?.projectID) ??
+      projects().find((item) => item.location.directory === runtime.defaultLocation.directory);
+    const choices = choicesForProject(
+      remembered.project ??
+        (fallback ? { id: fallback.id, location: fallback.location } : undefined),
+    );
     const id = effects.runSync(
       service.create(serverKey, {
         ...choices,
@@ -205,6 +217,24 @@ export function createNewSessionDrafts(
     }
     read.run(
       Effect.gen(function* () {
+        yield* effects
+          .request((signal) =>
+            runtime.api.file.list(
+              {
+                location: { directory: target.directory, workspace: target.workspaceID },
+                path: ".",
+              },
+              { signal },
+            ),
+          )
+          .pipe(
+            Effect.mapError(
+              () =>
+                new ProjectDirectoryError({
+                  message: `The project directory could not be opened: ${target.directory}. Choose another project or retry.`,
+                }),
+            ),
+          );
         const [, , vcs, branches, model] = yield* Effect.all(
           [
             effects.request(() => runtime.data.location.model.sync(target)),
@@ -240,12 +270,21 @@ export function createNewSessionDrafts(
           catalogLocationKey: locationKey(),
         });
       }).pipe(
-        Effect.catch(() =>
-          Effect.sync(() =>
-            update({
-              catalogs: "failed",
-              error: "Project choices could not be loaded. Retry to continue.",
-            }),
+        Effect.catch((error) =>
+          Effect.logWarning("New-session project choices could not be loaded", {
+            directory: target.directory,
+            error,
+          }).pipe(
+            Effect.andThen(
+              Effect.sync(() =>
+                update({
+                  catalogs: "failed",
+                  error: Schema.is(ProjectDirectoryError)(error)
+                    ? error.message
+                    : "Project choices could not be loaded. Retry to continue.",
+                }),
+              ),
+            ),
           ),
         ),
       ),

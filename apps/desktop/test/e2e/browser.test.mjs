@@ -1862,6 +1862,38 @@ describe.sequential("production browser app", () => {
     await selectSession("Permission acceptance");
   });
 
+  it("explains an unavailable saved project and preserves the prompt when choosing another", async () => {
+    const canonical = await realpath(addedProject);
+    const moved = addedProject + "-unavailable";
+    await rename(addedProject, moved);
+    try {
+      await page.getByRole("button", { name: "Create session", exact: true }).click();
+      await page.getByRole("button", { name: /^Project:/u }).click();
+      await page.locator(".selection-option-detail").filter({ hasText: canonical }).click();
+      await page.getByLabel("Prompt", { exact: true }).fill("Preserve missing-project draft");
+      await page
+        .getByText(
+          `The project directory could not be opened: ${canonical}. Choose another project or retry.`,
+          { exact: true },
+        )
+        .waitFor();
+      expect(await page.getByRole("button", { name: "Send", exact: true }).isDisabled()).toBe(true);
+      await page.getByRole("button", { name: /^Project:/u }).click();
+      await page
+        .locator(".selection-option-detail")
+        .filter({ hasText: await realpath(project) })
+        .click();
+      await page.getByLabel(/^Model:/u).waitFor();
+      expect(await page.getByLabel("Prompt", { exact: true }).innerText()).toBe(
+        "Preserve missing-project draft",
+      );
+      expect(await page.getByText(/The project directory could not be opened:/u).count()).toBe(0);
+      await selectSession("Permission acceptance");
+    } finally {
+      await rename(moved, addedProject);
+    }
+  });
+
   it("submits new drafts through local branch creation and detached worktree preparation", async () => {
     const canonical = await realpath(project);
     const previousBranch = await git(project, "branch", "--show-current");

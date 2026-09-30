@@ -59,14 +59,16 @@ const choices = {
 const sync = async () => undefined;
 function controller(
   one: ReturnType<typeof fixture>,
-  options: { currentBranch?: string } = { currentBranch: "feature" },
+  options: { currentBranch?: string; previous?: ReturnType<typeof sessionFixture> } = {
+    currentBranch: "feature",
+  },
 ) {
   const scope = Scope.makeUnsafe();
   const effects = Effect.runSync(
     makeWorkspaceOwner(one.registry).pipe(Effect.provideService(Scope.Scope, scope)),
   );
   const pending = deferred();
-  const projects = ["project", "other"].map((id) => ({
+  const projects = ["other", "project"].map((id) => ({
     id,
     canonical: `/srv/${id}`,
     vcs: "git" as const,
@@ -123,6 +125,11 @@ function controller(
       },
     },
     api: {
+      file: {
+        list: vi.fn<Parameters<typeof createNewSessionDrafts>[0]["api"]["file"]["list"]>(
+          async () => ({ location, data: [] }),
+        ),
+      },
       plugin: { awaitActivation: sync },
       session: {
         get: vi.fn<Parameters<typeof createNewSessionDrafts>[0]["api"]["session"]["get"]>(),
@@ -203,6 +210,7 @@ function controller(
             {
               selectedDraftID,
               selectDraft,
+              selectedSession: () => options.previous,
               sessions: () => [],
               select: selectSession,
             },
@@ -218,6 +226,49 @@ function controller(
 }
 
 describe("native draft persistence", () => {
+  it.each([undefined, "other"])(
+    "uses the current session project %s or server default instead of the first catalog entry",
+    async (projectID) => {
+      const one = fixture();
+      const { adapter } = controller(one, {
+        previous: projectID
+          ? sessionFixture({ id: "previous", projectID, location: { directory: "/srv/other" } })
+          : undefined,
+      });
+      await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+      adapter.create();
+      expect(adapter.selected()?.value.choices.project?.id).toBe(projectID ?? "project");
+    },
+  );
+
+  it("keeps content when a saved project directory is unavailable and loads another project", async () => {
+    const one = fixture();
+    const { adapter, runtime, pending } = controller(one);
+    vi.mocked(runtime.api.file.list).mockRejectedValueOnce(new Error("UnexpectedStatus"));
+    const modelSync = vi.spyOn(runtime.data.location.model, "sync");
+    const agentSync = vi.spyOn(runtime.data.location.agent, "sync");
+    await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+    adapter.create();
+    const id = adapter.selectedID()!;
+    adapter.composer(id).onInput("Keep my prompt");
+    await vi.waitFor(() => expect(adapter.current().catalogs).toBe("failed"));
+    expect(adapter.composer(id).error).toContain(
+      "The project directory could not be opened: /srv/project",
+    );
+    expect(adapter.composer(id).disabled).toBe(true);
+    expect(modelSync).not.toHaveBeenCalled();
+    expect(agentSync).not.toHaveBeenCalled();
+    expect(runtime.api.file.list).toHaveBeenCalledWith(
+      { location: { directory: "/srv/project", workspace: "logical" }, path: "." },
+      { signal: expect.any(AbortSignal) },
+    );
+    adapter.setup().onProjectChange("other");
+    pending.resolve();
+    await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
+    expect(adapter.composer(id).value).toBe("Keep my prompt");
+    expect(adapter.current().error).toBeUndefined();
+  });
+
   it.each(["text", "file"])(
     "resolves defaults after %s autosaves ahead of server catalogs",
     async (content) => {
