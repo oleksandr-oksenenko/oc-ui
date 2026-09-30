@@ -487,6 +487,13 @@ describe.sequential("production browser app", () => {
       .toBe(true);
     await page.setViewportSize({ width: 1280, height: 860 });
     const prompt = page.getByLabel("Prompt", { exact: true });
+    await prompt.fill("hello,");
+    await prompt.press("End");
+    await prompt.pressSequentially(" ");
+    await expect
+      .poll(() => page.locator(".session-drafts .shell-session-title").allTextContents())
+      .toContain("hello,");
+    expect(await prompt.textContent()).toBe("hello, ");
     await prompt.fill("Persistent first draft");
     await prompt.press("End");
     await prompt.pressSequentially(" /rev");

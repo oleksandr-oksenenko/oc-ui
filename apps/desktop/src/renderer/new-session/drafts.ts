@@ -1,5 +1,6 @@
 import { Clock, Context, Deferred, Effect, Queue, Schema, Scope } from "effect";
 import { Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { fromDraft } from "@oc-ui/prompt-editor";
 import type { PromptSkillAttachment } from "@opencode/client";
 import { draftLockName, withBrowserLock } from "./locks.ts";
 import { Storage, StorageError } from "../storage.ts";
@@ -122,14 +123,21 @@ export const draftDatabase = {
     db.createObjectStore("preferences", { keyPath: "key" });
   },
 };
-export const draftTitle = (draft: DraftRecord) =>
-  draft.text
-    .split(/\r?\n/u)
-    .find((line) => line.trim())
-    ?.trim() ||
-  draft.attachments[0]?.name ||
-  draft.skills[0]?.name ||
-  "Untitled draft";
+export const draftTitle = (draft: DraftRecord) => {
+  const document = fromDraft(draft.text, draft.skills);
+  return (
+    document
+      .textBetween(0, document.content.size, "\n", (node) =>
+        node.type.name === "hard_break" ? "\n" : String(node.attrs.name ?? ""),
+      )
+      .split(/\r?\n/u)
+      .find((line) => line.trim())
+      ?.trim() ||
+    draft.attachments[0]?.name ||
+    draft.skills[0]?.name ||
+    "Untitled draft"
+  );
+};
 export const meaningfulDraft = (draft: DraftRecord) =>
   !!(draft.text.trim() || draft.skills.length || draft.attachments.length);
 const projectKey = (serverKey: string, project: NonNullable<DraftChoices["project"]>) =>

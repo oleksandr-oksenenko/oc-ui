@@ -45,6 +45,10 @@ export default mergeConfig(
         },
         {
           extends: true,
+          optimizeDeps: {
+            // Draft titles use the composer codec; prebundle it before browser tests start.
+            include: ["@oc-ui/prompt-editor"],
+          },
           test: {
             name: "storage",
             include: ["src/renderer/new-session/*.browser.test.ts"],
