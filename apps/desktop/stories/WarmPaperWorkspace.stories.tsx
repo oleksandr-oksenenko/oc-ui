@@ -1310,7 +1310,7 @@ export const NewSessionPreparing = {
         mode: "worktree",
         status: {
           kind: "preparing",
-          message: "Preparing worktree… You can keep working in another session.",
+          message: "Preparing worktree…",
         },
       }}
     />

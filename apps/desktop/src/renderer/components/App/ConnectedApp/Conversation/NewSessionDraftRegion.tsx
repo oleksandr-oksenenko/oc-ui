@@ -8,51 +8,60 @@ export type NewSessionDraftRegionProps = { readonly controller: WorkspaceModel["
 export function NewSessionDraftRegion(props: NewSessionDraftRegionProps) {
   return (
     <Show when={props.controller.selectedID()} keyed>
-      {(id) => (
-        <NewSessionScreen
-          setup={props.controller.setup()}
-          status={props.controller.operationStatus()}
-          composer={
-            <Composer
-              {...props.controller.composer(id)}
-              actions={
-                <div class="composer-status">
-                  {attemptActions(props.controller, id)}
-                  <Show when={props.controller.selected()?.conflict}>
-                    <div class="composer-status" role="alert">
-                      <Button
-                        size="small"
-                        variant="outline"
-                        disabled={props.controller.selected()?.busy}
-                        onClick={() => props.controller.keepCopy(id)}
-                      >
-                        Keep as separate draft
+      {(id) => {
+        const status = () => {
+          const operation = props.controller.operationStatus();
+          const error = props.controller.composer(id).error;
+          return operation ?? (error ? { kind: "error" as const, message: error } : undefined);
+        };
+        return (
+          <NewSessionScreen
+            setup={props.controller.setup()}
+            status={status()}
+            composer={
+              <Composer
+                {...props.controller.composer(id)}
+                error=""
+                actions={
+                  <div class="composer-status">
+                    {attemptActions(props.controller, id)}
+                    <Show when={props.controller.selected()?.conflict}>
+                      <div class="composer-status" role="alert">
+                        <Button
+                          size="small"
+                          variant="outline"
+                          disabled={props.controller.selected()?.busy}
+                          onClick={() => props.controller.keepCopy(id)}
+                        >
+                          Keep as separate draft
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="ghost-muted"
+                          disabled={props.controller.selected()?.busy}
+                          onClick={() => props.controller.loadSavedVersion(id)}
+                        >
+                          Use saved version
+                        </Button>
+                      </div>
+                    </Show>
+                    <Show
+                      when={
+                        props.controller.composer(id).error &&
+                        !props.controller.selected()?.conflict
+                      }
+                    >
+                      <Button size="small" variant="ghost-muted" onClick={props.controller.retry}>
+                        Retry
                       </Button>
-                      <Button
-                        size="small"
-                        variant="ghost-muted"
-                        disabled={props.controller.selected()?.busy}
-                        onClick={() => props.controller.loadSavedVersion(id)}
-                      >
-                        Use saved version
-                      </Button>
-                    </div>
-                  </Show>
-                  <Show
-                    when={
-                      props.controller.composer(id).error && !props.controller.selected()?.conflict
-                    }
-                  >
-                    <Button size="small" variant="ghost-muted" onClick={props.controller.retry}>
-                      Retry
-                    </Button>
-                  </Show>
-                </div>
-              }
-            />
-          }
-        />
-      )}
+                    </Show>
+                  </div>
+                }
+              />
+            }
+          />
+        );
+      }}
     </Show>
   );
 }

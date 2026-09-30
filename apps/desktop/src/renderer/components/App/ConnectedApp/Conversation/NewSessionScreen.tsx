@@ -19,22 +19,22 @@ export function NewSessionScreen(props: NewSessionScreenProps) {
   return (
     <section class="new-session-screen" aria-label="New session" aria-busy={preparing()}>
       <div class="new-session-center">
+        <Show when={props.status}>
+          {(status) => (
+            <div
+              class="new-session-operation"
+              data-kind={status().kind}
+              role={status().kind === "error" ? "alert" : "status"}
+            >
+              <Show when={preparing()} fallback={<Icon name="warning" size="small" />}>
+                <Loader width={14} height={14} />
+              </Show>
+              <span>{status().message}</span>
+            </div>
+          )}
+        </Show>
         <div class="new-session-compose-stack">
           <NewSessionSetup {...props.setup} disabled={props.setup.disabled || preparing()} />
-          <Show when={props.status}>
-            {(status) => (
-              <div
-                class="new-session-operation"
-                data-kind={status().kind}
-                role={status().kind === "error" ? "alert" : "status"}
-              >
-                <Show when={preparing()} fallback={<Icon name="warning" size="small" />}>
-                  <Loader width={14} height={14} />
-                </Show>
-                <span>{status().message}</span>
-              </div>
-            )}
-          </Show>
           {props.composer}
         </div>
       </div>

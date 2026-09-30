@@ -67,12 +67,16 @@
   margin-inline: auto;
   padding: 0 8px 8px;
   color: var(--oc-text-muted);
-  background: var(--oc-surface-control);
   font-size: var(--oc-type-caption-size);
+  line-height: var(--oc-type-caption-line-height);
 }
 
 .new-session-operation[data-kind="error"] {
   color: var(--oc-text-contrast);
+}
+
+.new-session-operation > :first-child {
+  flex-shrink: 0;
 }
 
 @media (width <= 600px) {
