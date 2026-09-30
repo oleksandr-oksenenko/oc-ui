@@ -95,6 +95,10 @@ An `ask` rule does not supply per-action protection in this version.
 - Both server RPC and desktop IPC attach calls remain pending for the attachment's
   lifetime. The renderer workspace retains its IPC call; disposing a view only
   hides the native viewport. Workspace cancellation detaches before awaiting IPC.
+- Quit pauses attachment admission and awaits every attachment's cleanup before
+  stopping built-in OpenCode. The Quit attempt owns that pause; a failed attempt
+  releases it so retained profiles can reconnect while the window and runtime stay
+  available for another Quit.
 - Subscribe before server attach. The matching `attached` event marks readiness;
   setup has a 15-second deadline. After a drop, restoration rebuilds the saved
   tabs (bounded to 30 seconds) before the connection becomes usable, and the

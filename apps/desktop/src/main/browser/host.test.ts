@@ -3,7 +3,18 @@ import { EventEmitter } from "node:events";
 import type { BrowserWindow } from "electron";
 import { Browser } from "@opencode/plugin-browser/rpc";
 import { SessionID } from "@opencode/schema/session-id";
-import { Deferred, Effect, ManagedRuntime, Queue, Stream } from "effect";
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  ManagedRuntime,
+  Queue,
+  Scheduler,
+  Scope,
+  Stream,
+} from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { emptyBrowserState, type BrowserEvent } from "../../shared/browser-api.ts";
 import type { BrowserCheckpoint, NativeBrowser } from "./native.ts";
@@ -134,6 +145,120 @@ afterEach(async () => {
 });
 
 describe("browser attachment lifetime", () => {
+  it.each([16, 2_048])(
+    "settles registration racing Quit with a %i-operation budget",
+    async (budget) => {
+      await runtime.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const attaching = yield* Effect.forkChild(
+              host.attach(window, input, (event) => events.push(event)),
+            );
+            yield* host.quiesce;
+            const result = yield* Fiber.await(attaching);
+            if (Exit.isFailure(result) && !Cause.hasInterruptsOnly(result.cause))
+              expect(Cause.squash(result.cause)).toMatchObject({ message: "Ocui is closing." });
+            expect(native.dispose.mock.calls).toHaveLength(nativeCalls.length);
+            expect(
+              events.every((event) => event.type === "state" && event.status === "closed"),
+            ).toBe(true);
+          }),
+        ).pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, budget)),
+      );
+      events.length = 0;
+      Queue.offerUnsafe(controls, { type: "server.connected" });
+      const reopened = start();
+      await vi.waitFor(() => expect(events.at(-1)).toMatchObject({ status: "connected" }));
+      await runtime.runPromise(host.detach(window, input.bindingID));
+      await reopened;
+    },
+  );
+
+  it("quiesces an executing command, awaits native cleanup, and permits reconnect after release", async () => {
+    const pending = Promise.withResolvers<Browser.Result>();
+    const disposal = Promise.withResolvers<void>();
+    let signal: AbortSignal | undefined;
+    native.execute.mockImplementation((_command, abort) => {
+      signal = abort;
+      return pending.promise;
+    });
+    native.dispose.mockReturnValueOnce(disposal.promise);
+    const lifetime = start();
+    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+    const command = runtime
+      .runPromiseExit(host.command(window, input.bindingID, { type: "tabs.open" }))
+      .then(browserIpcResult);
+    await vi.waitFor(() => expect(native.execute).toHaveBeenCalledOnce());
+    const attempt = await Effect.runPromise(Scope.make());
+    let settled = false;
+    const quiesce = runtime
+      .runPromise(host.quiesce.pipe(Effect.provideService(Scope.Scope, attempt)))
+      .then(() => {
+        settled = true;
+        return undefined;
+      });
+    try {
+      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+      expect(native.dispose).not.toHaveBeenCalled();
+      await expect(startWith({ ...input, bindingID: "late" })).rejects.toThrow("Ocui is closing.");
+      pending.resolve({ value: emptyBrowserState(), files: [] });
+      await vi.waitFor(() => expect(native.dispose).toHaveBeenCalledOnce());
+      expect(settled).toBe(false);
+      disposal.resolve();
+      await Promise.all([lifetime, command, quiesce]);
+      expect(events.at(-1)).toMatchObject({ status: "closed" });
+      await expect(startWith({ ...input, bindingID: "late" })).rejects.toThrow("Ocui is closing.");
+    } finally {
+      pending.resolve({ value: emptyBrowserState(), files: [] });
+      disposal.resolve();
+      await quiesce;
+      await Effect.runPromise(Scope.close(attempt, Exit.void));
+    }
+    Queue.offerUnsafe(controls, { type: "server.connected" });
+    const reconnected = start();
+    await vi.waitFor(() => expect(events.at(-1)).toMatchObject({ status: "connected" }));
+    await runtime.runPromise(host.detach(window, input.bindingID));
+    await reconnected;
+  });
+
+  it("interrupts every pending attachment before awaiting their disposal", async () => {
+    rpc.attach = vi.fn<Rpc["attach"]>(() => Deferred.await(closed));
+    const disposal = Promise.withResolvers<void>();
+    native.dispose.mockReturnValue(disposal.promise);
+    const first = start();
+    await vi.waitFor(() => expect(rpc.attach).toHaveBeenCalledOnce());
+    Queue.offerUnsafe(controls, { type: "server.connected" });
+    const second = startWith({
+      ...input,
+      bindingID: "second",
+      sessionID: SessionID.make("ses_second"),
+    });
+    await vi.waitFor(() => expect(rpc.attach).toHaveBeenCalledTimes(2));
+    const attempt = await Effect.runPromise(Scope.make());
+    let settled = false;
+    const quiesce = runtime
+      .runPromise(host.quiesce.pipe(Effect.provideService(Scope.Scope, attempt)))
+      .then(() => {
+        settled = true;
+        return undefined;
+      });
+    try {
+      await vi.waitFor(() => expect(native.dispose).toHaveBeenCalledTimes(2));
+      expect(settled).toBe(false);
+      expect(events).toEqual([]);
+      disposal.resolve();
+      await Promise.all([quiesce, first, second]);
+      expect(events).toHaveLength(2);
+      expect(events.every((event) => event.type === "state" && event.status === "closed")).toBe(
+        true,
+      );
+    } finally {
+      disposal.resolve();
+      await quiesce;
+      await Effect.runPromise(Scope.close(attempt, Exit.void));
+    }
+  });
+
   it("keeps attach pending after readiness and publishes state before command results", async () => {
     const acknowledged = Deferred.makeUnsafe<void>();
     rpc.state = () => Deferred.await(acknowledged);

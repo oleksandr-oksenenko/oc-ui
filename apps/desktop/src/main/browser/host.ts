@@ -154,6 +154,8 @@ const make = Effect.fn("BrowserHost.make")(function* () {
   const scope = yield* Effect.scope;
   const http = yield* HttpClient.HttpClient;
   const entries = new Map<string, Entry>();
+  const registration = Semaphore.makeUnsafe(1);
+  let paused = false;
   const owned = (win: BrowserWindow, id: string) => {
     const entry = entries.get(id);
     return entry?.window === win ? entry : undefined;
@@ -589,11 +591,12 @@ const make = Effect.fn("BrowserHost.make")(function* () {
     ]);
   });
 
-  const attach = Effect.fn("BrowserHost.attach")(function* (
+  const register = Effect.fn("BrowserHost.register")(function* (
     win: BrowserWindow,
     input: BrowserAttach,
     emit: (event: BrowserEvent) => void,
   ) {
+    if (paused) return yield* new BrowserHostError({ message: "Ocui is closing." });
     const serverUrl = yield* Effect.try({
       try: () => parseServerUrl(input.serverUrl).origin,
       catch: () => new BrowserHostError({ message: "Invalid browser server address." }),
@@ -671,12 +674,37 @@ const make = Effect.fn("BrowserHost.make")(function* () {
       Effect.asVoid,
       Effect.forkIn(scope),
     );
-    return yield* Fiber.join(entry.fiber);
+    return entry.fiber;
+  });
+  const attach = Effect.fn("BrowserHost.attach")(function* (
+    win: BrowserWindow,
+    input: BrowserAttach,
+    emit: (event: BrowserEvent) => void,
+  ) {
+    // Registration must finish before quiescence captures the owned fibers.
+    const fiber = yield* registration
+      .withPermit(register(win, input, emit))
+      .pipe(Effect.uninterruptible);
+    return yield* Fiber.join(fiber);
   });
   const detach = Effect.fn("BrowserHost.detach")(function* (win: BrowserWindow, id: string) {
     const entry = owned(win, id);
     if (entry?.fiber) yield* Fiber.interrupt(entry.fiber);
   });
+  // The Quit attempt owns admission until it finishes, including failure dialogs.
+  // Release only the pause on failure; retained profiles remain available to reconnect.
+  const quiesce = Effect.acquireRelease(
+    registration.withPermit(
+      Effect.sync(() => {
+        paused = true;
+        return Array.from(entries.values()).flatMap((entry) => (entry.fiber ? [entry.fiber] : []));
+      }),
+    ),
+    () =>
+      Effect.sync(() => {
+        paused = false;
+      }),
+  ).pipe(Effect.flatMap(Fiber.interruptAll));
   const command = Effect.fn("BrowserHost.command")(function* (
     win: BrowserWindow,
     id: string,
@@ -755,7 +783,7 @@ const make = Effect.fn("BrowserHost.make")(function* () {
       listenerCleanups.clear();
     }),
   );
-  return { attach, detach, command, layout, annotate, annotationCancel, forget };
+  return { attach, detach, quiesce, command, layout, annotate, annotationCancel, forget };
 });
 
 export class BrowserHost extends Context.Service<

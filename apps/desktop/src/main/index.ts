@@ -85,6 +85,14 @@ let rendererProtocolInstalled = false;
 const pendingIpc = new Set<Promise<unknown>>();
 
 const quitHandler = createAppQuitHandler({
+  quiesceBrowsers: Effect.suspend(() =>
+    desktopRuntime === undefined
+      ? Effect.void
+      : Effect.flatMap(
+          desktopRuntime.contextEffect,
+          (context) => Context.get(context, BrowserHost).quiesce,
+        ),
+  ),
   localOpenCode: Effect.suspend(() =>
     desktopRuntime === undefined
       ? Effect.void

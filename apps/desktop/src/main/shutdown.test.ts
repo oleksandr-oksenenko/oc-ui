@@ -25,14 +25,16 @@ const setup = () => {
     .mockResolvedValue({ response: 0, checkboxChecked: false });
   const cleanup = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const quit = vi.fn<() => void>();
+  const quiesceBrowsers = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const handler = createAppQuitHandler({
+    quiesceBrowsers: Effect.promise(quiesceBrowsers),
     localOpenCode: Effect.succeed({ shutdown: Effect.promise(local.shutdown) }),
     showMessageBox,
     cleanup: Effect.promise(cleanup),
     quit,
   });
   const event = { preventDefault: vi.fn<() => void>() };
-  return { local, showMessageBox, cleanup, quit, handler, event };
+  return { local, showMessageBox, cleanup, quit, handler, event, quiesceBrowsers };
 };
 
 describe("app quit", () => {
@@ -44,6 +46,7 @@ describe("app quit", () => {
     await runtime.runPromise(Effect.void);
     const quit = vi.fn<() => void>();
     const handler = createAppQuitHandler({
+      quiesceBrowsers: Effect.void,
       localOpenCode: Effect.void,
       showMessageBox: vi.fn<(options: MessageBoxOptions) => Promise<MessageBoxReturnValue>>(),
       cleanup: runtime.disposeEffect,
@@ -55,9 +58,12 @@ describe("app quit", () => {
     expect(quit).toHaveBeenCalledOnce();
   });
 
-  it("stops the built-in server, cleans up, and quits without asking", async () => {
-    const { handler, event, local, showMessageBox, cleanup, quit } = setup();
+  it("quiesces browsers, stops the built-in server, cleans up, and quits without asking", async () => {
+    const { handler, event, local, showMessageBox, cleanup, quit, quiesceBrowsers } = setup();
     const order: string[] = [];
+    quiesceBrowsers.mockImplementation(async () => {
+      order.push("browser");
+    });
     local.shutdown.mockImplementation(async () => {
       order.push("stop");
     });
@@ -71,8 +77,82 @@ describe("app quit", () => {
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(handler.isQuitting()).toBe(true);
     await flush();
-    expect(order).toEqual(["stop", "cleanup", "quit"]);
+    expect(order).toEqual(["browser", "stop", "cleanup", "quit"]);
     expect(showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it("coalesces Quit and awaits browser cleanup before stopping the server", async () => {
+    const { handler, event, local, cleanup, quit, quiesceBrowsers } = setup();
+    const browsers = deferred<void>();
+    quiesceBrowsers.mockReturnValue(browsers.promise);
+    handler.beforeQuit(event);
+    handler.beforeQuit(event);
+    await flush();
+    expect(quiesceBrowsers).toHaveBeenCalledOnce();
+    expect(local.shutdown).not.toHaveBeenCalled();
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+    browsers.resolve();
+    await flush();
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("releases the browser pause after a failed Quit dialog and allows a retry", async () => {
+    let paused = false;
+    const answer = deferred<MessageBoxReturnValue>();
+    const local = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("stop failed"))
+      .mockResolvedValue(undefined);
+    const quit = vi.fn<() => void>();
+    const handler = createAppQuitHandler({
+      quiesceBrowsers: Effect.acquireRelease(
+        Effect.sync(() => {
+          paused = true;
+        }),
+        () =>
+          Effect.sync(() => {
+            paused = false;
+          }),
+      ),
+      localOpenCode: Effect.succeed({ shutdown: Effect.promise(local) }),
+      showMessageBox: () => answer.promise,
+      cleanup: Effect.void,
+      quit,
+    });
+    const event = { preventDefault() {} };
+    handler.beforeQuit(event);
+    await flush();
+    expect(paused).toBe(true);
+    expect(handler.isQuitting()).toBe(true);
+    answer.resolve({ response: 0, checkboxChecked: false });
+    await flush();
+    expect(paused).toBe(false);
+    expect(handler.isQuitting()).toBe(false);
+    handler.beforeQuit(event);
+    await flush();
+    expect(local).toHaveBeenCalledTimes(2);
+    expect(quit).toHaveBeenCalledOnce();
+    expect(paused).toBe(false);
+  });
+
+  it("reports browser cleanup failure without stopping the server or destroying the app", async () => {
+    const { handler, event, local, cleanup, quit, quiesceBrowsers, showMessageBox } = setup();
+    quiesceBrowsers.mockRejectedValueOnce(new Error("browser cleanup failed"));
+    handler.beforeQuit(event);
+    await flush();
+    expect(local.shutdown).not.toHaveBeenCalled();
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+    expect(showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Ocui could not finish closing.",
+      }),
+    );
+    expect(handler.isQuitting()).toBe(false);
+    handler.beforeQuit(event);
+    await flush();
+    expect(quit).toHaveBeenCalledOnce();
   });
 
   it("shuts Settings down before waiting for accepted IPC and waits for both", async () => {
