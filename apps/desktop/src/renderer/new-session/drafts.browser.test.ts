@@ -91,10 +91,14 @@ function controller(
     time: { started: 0 },
   };
   const source = { sync, list: () => [], invalidate: () => undefined };
+  const [connection, setConnection] =
+    createSignal<ReturnType<Parameters<typeof createNewSessionDrafts>[0]["stream"]["status"]>>(
+      "connected",
+    );
   const runtime: Parameters<typeof createNewSessionDrafts>[0] = {
     effects,
     defaultLocation: choices.project.location,
-    stream: { status: () => "connected" },
+    stream: { status: connection },
     data: {
       on: () => () => undefined,
       session: {
@@ -222,10 +226,57 @@ function controller(
       },
     });
   });
-  return { adapter, select, pending, runtime, selectSession };
+  return { adapter, select, pending, runtime, selectSession, setConnection };
 }
 
 describe("native draft persistence", () => {
+  it.each(["ready", "pending"])(
+    "cancels %s project reads on disconnect without a directory error and reloads on reconnect",
+    async (phase) => {
+      const one = fixture();
+      const { adapter, runtime, pending, setConnection } = controller(one);
+      const model = (await runtime.api.model.default({ location: { directory: "/srv/project" } }))
+        .data!;
+      runtime.data.location.model.list = () => [model];
+      const directory = deferred<Awaited<ReturnType<typeof runtime.api.file.list>>>();
+      let signal: AbortSignal | undefined;
+      if (phase === "pending") {
+        cleanup.push(async () => directory.reject(new Error("Test cleanup")));
+        vi.mocked(runtime.api.file.list).mockImplementationOnce((_input, options) => {
+          signal = options?.signal;
+          return directory.promise;
+        });
+      }
+      await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+      adapter.create();
+      const id = adapter.selectedID()!;
+      adapter.composer(id).onInput("Saved while quitting");
+      await one.run(one.service.flush(id));
+      await vi.waitFor(() => expect(runtime.api.file.list).toHaveBeenCalledOnce());
+      pending.resolve();
+      if (phase === "ready") await vi.waitUntil(() => adapter.current().catalogs === "ready");
+      const before = adapter.current();
+
+      setConnection("connecting");
+      if (phase === "pending") {
+        await vi.waitUntil(() => signal?.aborted === true);
+        directory.reject(new Error("Server stopped"));
+      }
+      const restored = fixture(one.name);
+      await restored.run(restored.service.hydrate("server"));
+      expect(restored.service.get(id)?.value.text).toBe("Saved while quitting");
+      expect(adapter.current()).toEqual(before);
+      expect(adapter.composer(id).error).toBeUndefined();
+      expect(adapter.composer(id).disabled).toBe(true);
+      expect(runtime.api.file.list).toHaveBeenCalledOnce();
+
+      setConnection("connected");
+      await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
+      expect(runtime.api.file.list).toHaveBeenCalledTimes(2);
+      expect(adapter.composer(id).value).toBe("Saved while quitting");
+    },
+  );
+
   it.each([undefined, "other"])(
     "uses the current session project %s or server default instead of the first catalog entry",
     async (projectID) => {

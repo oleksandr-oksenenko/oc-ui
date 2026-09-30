@@ -198,6 +198,10 @@ export function createNewSessionDrafts(
     return value ? JSON.stringify([value.directory, value.workspaceID]) : undefined;
   });
   const refreshCatalogs = () => {
+    if (runtime.stream.status() !== "connected") {
+      read.cancel();
+      return;
+    }
     const target = location();
     const id = selectedID();
     const git = project()?.vcs === "git";
