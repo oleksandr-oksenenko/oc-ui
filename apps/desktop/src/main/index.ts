@@ -19,6 +19,7 @@ import type { BrowserWindowConstructorOptions, IpcMainInvokeEvent, WebContents }
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 
 import { BrowserHost } from "./browser/host.ts";
+import { browserIpcResult } from "./browser/ipc.ts";
 import { resolveDevProfiling } from "./dev-profiling.ts";
 import { BROWSER_CHANNELS, BrowserRequest } from "../shared/browser-api.ts";
 
@@ -240,23 +241,28 @@ const installIpcHandlers = (): void => {
     const input = Schema.decodeUnknownSync(BrowserRequest)(raw, { onExcessProperty: "error" });
     const win = mainWindow!;
     if (input._tag === "attach" && quitHandler.isQuitting()) throw new Error("Ocui is closing.");
-    return runIpc(
-      Effect.gen(function* () {
-        const host = yield* BrowserHost;
-        yield* BrowserRequest.match(input, {
-          attach: (value) =>
-            host.attach(win, value, (message) => {
-              if (!win.isDestroyed() && !win.webContents.isDestroyed())
-                win.webContents.send(BROWSER_CHANNELS.event, message);
-            }),
-          detach: (value) => host.detach(win, value.bindingID),
-          command: (value) => host.command(win, value.bindingID, value.action),
-          layout: (value) => host.layout(win, value),
-          annotationStart: (value) => host.annotate(win, value),
-          annotationCancel: (value) => host.annotationCancel(win, value),
-          forget: (value) => host.forget(win, value),
-        });
-      }),
+    if (desktopRuntime === undefined) throw new Error("Desktop services are not ready");
+    return trackPending(
+      desktopRuntime
+        .runPromiseExit(
+          Effect.gen(function* () {
+            const host = yield* BrowserHost;
+            yield* BrowserRequest.match(input, {
+              attach: (value) =>
+                host.attach(win, value, (message) => {
+                  if (!win.isDestroyed() && !win.webContents.isDestroyed())
+                    win.webContents.send(BROWSER_CHANNELS.event, message);
+                }),
+              detach: (value) => host.detach(win, value.bindingID),
+              command: (value) => host.command(win, value.bindingID, value.action),
+              layout: (value) => host.layout(win, value),
+              annotationStart: (value) => host.annotate(win, value),
+              annotationCancel: (value) => host.annotationCancel(win, value),
+              forget: (value) => host.forget(win, value),
+            });
+          }),
+        )
+        .then(browserIpcResult),
     );
   });
 

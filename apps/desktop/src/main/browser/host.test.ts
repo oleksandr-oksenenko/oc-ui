@@ -10,6 +10,7 @@ import type { BrowserCheckpoint, NativeBrowser } from "./native.ts";
 import type { BrowserNetwork } from "./network.ts";
 import type { AnnotationResult } from "./upstream/annotation.ts";
 import { BrowserHost } from "./host.ts";
+import { browserIpcResult } from "./ipc.ts";
 
 const native = {
   state: emptyBrowserState,
@@ -81,7 +82,9 @@ const input = {
 const control = (data: Browser.Control) =>
   Queue.offerUnsafe(controls, { type: "rpc.experimental.browser.control", data });
 const startWith = (value: typeof input) =>
-  runtime.runPromiseExit(host.attach(window, value, (event) => events.push(event)));
+  runtime
+    .runPromiseExit(host.attach(window, value, (event) => events.push(event)))
+    .then(browserIpcResult);
 const start = () => startWith(input);
 const rejectAttach = (type: string, message: string) =>
   Effect.fail(Object.assign(new Error(message), { type }));
@@ -172,26 +175,34 @@ describe("browser attachment lifetime", () => {
     expect(events.at(-1)).toMatchObject({ status: "closed" });
   });
 
-  it("signals an in-flight command and waits for its settlement on window reload", async () => {
-    const pending = Promise.withResolvers<Browser.Result>();
-    let signal: AbortSignal | undefined;
-    native.execute.mockImplementation((_command, abort) => {
-      signal = abort;
-      return pending.promise;
-    });
-    const lifetime = start();
-    await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
-    const command = runtime.runPromiseExit(
-      host.command(window, input.bindingID, { type: "tabs.open" }),
-    );
-    await vi.waitFor(() => expect(native.execute).toHaveBeenCalledOnce());
-    window.webContents.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false });
-    await vi.waitFor(() => expect(signal?.aborted).toBe(true));
-    expect(native.dispose).not.toHaveBeenCalled();
-    pending.resolve({ value: emptyBrowserState(), files: [] });
-    await Promise.all([lifetime, command]);
-    expect(native.dispose).toHaveBeenCalledOnce();
-  });
+  it.each(["reload", "destroyed"])(
+    "signals an in-flight command and waits for its settlement on window %s",
+    async (trigger) => {
+      const pending = Promise.withResolvers<Browser.Result>();
+      let signal: AbortSignal | undefined;
+      native.execute.mockImplementation((_command, abort) => {
+        signal = abort;
+        return pending.promise;
+      });
+      const lifetime = start();
+      await vi.waitFor(() => expect(events[0]).toMatchObject({ status: "connected" }));
+      const command = runtime
+        .runPromiseExit(host.command(window, input.bindingID, { type: "tabs.open" }))
+        .then(browserIpcResult);
+      await vi.waitFor(() => expect(native.execute).toHaveBeenCalledOnce());
+      if (trigger === "reload")
+        window.webContents.emit("did-start-navigation", {
+          isMainFrame: true,
+          isSameDocument: false,
+        });
+      else window.webContents.emit("destroyed");
+      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+      expect(native.dispose).not.toHaveBeenCalled();
+      pending.resolve({ value: emptyBrowserState(), files: [] });
+      await Promise.all([lifetime, command]);
+      expect(native.dispose).toHaveBeenCalledOnce();
+    },
+  );
 
   it("reports replacement only after cleanup and does not reconnect", async () => {
     const lifetime = start();
