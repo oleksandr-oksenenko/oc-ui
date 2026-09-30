@@ -32,6 +32,13 @@ function setup() {
   };
   const api = OpenCode.make({ baseUrl: "http://session-flows.test" });
   vi.spyOn(api.session, "remove").mockResolvedValue(undefined);
+  vi.spyOn(api.file, "list").mockResolvedValue({
+    location: {
+      directory: "/srv/worktree",
+      project: { id: "project", directory: "/srv/worktree", canonical: "/srv/worktree" },
+    },
+    data: [],
+  });
   const { effects: workspaceEffects, data } = withTestWorkspace((effects) => ({
     effects,
     data: createData({

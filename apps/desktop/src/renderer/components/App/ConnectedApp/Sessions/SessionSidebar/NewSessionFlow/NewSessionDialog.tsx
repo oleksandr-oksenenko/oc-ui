@@ -68,9 +68,9 @@ function existingWorktree(error: NewSessionDialogError | undefined) {
 
 function projectSelectionUnavailable(state: NewSessionDialogState): boolean {
   return (
-    state.selectedProjectID === undefined ||
+    !state.projects.some((project) => project.id === state.selectedProjectID) ||
     state.projectsLoading === true ||
-    state.projectsError !== undefined
+    (state.projectsError !== undefined && state.projects.length === 0)
   );
 }
 

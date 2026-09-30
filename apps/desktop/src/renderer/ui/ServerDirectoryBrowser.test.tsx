@@ -43,6 +43,7 @@ function mount(
   listDirectory: OpenCodeClient["file"]["list"],
   options: {
     readonly initialLocation?: LocationRef;
+    readonly requestLocation?: LocationRef;
     readonly disabled?: boolean;
     readonly validationError?: string;
   } = {},
@@ -54,6 +55,9 @@ function mount(
       <ServerDirectoryBrowser
         effects={effects}
         listDirectory={listDirectory}
+        requestLocation={
+          options.requestLocation ?? options.initialLocation ?? { directory: "/srv/projects" }
+        }
         label="Project directory"
         initialLocation={options.initialLocation ?? { directory: "/srv/projects" }}
         disabled={options.disabled}
@@ -66,6 +70,47 @@ function mount(
 }
 
 describe("ServerDirectoryBrowser", () => {
+  it("keeps the browsed alias separate from the request context and rebases child entries", async () => {
+    const queued = queuedApi();
+    const mounted = mount(queued.list, {
+      requestLocation: { directory: "/srv/context", workspaceID: "workspace-1" },
+      initialLocation: { directory: "/srv/alias", workspaceID: "workspace-1" },
+    });
+    await flush();
+    queued.requests[0]?.resolve(
+      response(
+        "/srv/context",
+        [
+          { path: "../alias/child/", type: "directory" },
+          { path: "../alias/.hidden/", type: "directory" },
+        ],
+        "workspace-1",
+      ),
+    );
+    await flush();
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith({
+      directory: "/srv/alias",
+      workspaceID: "workspace-1",
+    });
+    mounted.host
+      .querySelector<HTMLButtonElement>('[aria-label="Browse directory child/"]')
+      ?.click();
+    expect(queued.list).toHaveBeenLastCalledWith(
+      {
+        location: { directory: "/srv/context", workspace: "workspace-1" },
+        path: "/srv/alias/child",
+      },
+      { signal: expect.any(AbortSignal) },
+    );
+    queued.requests[1]?.resolve(response("/srv/context", [], "workspace-1"));
+    await flush();
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith({
+      directory: "/srv/alias/child",
+      workspaceID: "workspace-1",
+    });
+    mounted.dispose();
+  });
+
   it("loads the initial directory and maps only directory entries", async () => {
     const queued = queuedApi();
     const mounted = mount(queued.list);
@@ -75,7 +120,7 @@ describe("ServerDirectoryBrowser", () => {
     expect(queued.list).toHaveBeenCalledWith(
       {
         location: { directory: "/srv/projects" },
-        path: ".",
+        path: "/srv/projects",
       },
       { signal: expect.any(AbortSignal) },
     );
@@ -107,7 +152,7 @@ describe("ServerDirectoryBrowser", () => {
     expect(queued.list).toHaveBeenLastCalledWith(
       {
         location: { directory: "/srv/projects", workspace: "workspace-1" },
-        path: ".",
+        path: "/srv/projects",
       },
       { signal: expect.any(AbortSignal) },
     );
@@ -118,12 +163,12 @@ describe("ServerDirectoryBrowser", () => {
     mounted.host.querySelector<HTMLButtonElement>('[aria-label="Browse directory oc-ui"]')?.click();
     expect(queued.list).toHaveBeenLastCalledWith(
       {
-        location: { directory: "/srv/projects/oc-ui", workspace: "workspace-2" },
-        path: ".",
+        location: { directory: "/srv/projects", workspace: "workspace-2" },
+        path: "/srv/projects/oc-ui",
       },
       { signal: expect.any(AbortSignal) },
     );
-    queued.requests.at(-1)?.resolve(response("/srv/projects/oc-ui", [], "workspace-2"));
+    queued.requests.at(-1)?.resolve(response("/srv/projects", [], "workspace-2"));
     await flush();
     expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith({
       directory: "/srv/projects/oc-ui",
@@ -172,12 +217,12 @@ describe("ServerDirectoryBrowser", () => {
     ).toBe(true);
     expect(queued.list).toHaveBeenLastCalledWith(
       {
-        location: { directory: "/srv/projects/oc-ui" },
-        path: ".",
+        location: { directory: "/srv/projects" },
+        path: "/srv/projects/oc-ui",
       },
       { signal: expect.any(AbortSignal) },
     );
-    queued.requests[1]?.resolve(response("/srv/projects/oc-ui", []));
+    queued.requests[1]?.resolve(response("/srv/projects", []));
     await flush();
 
     expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(
@@ -192,7 +237,7 @@ describe("ServerDirectoryBrowser", () => {
     expect(queued.list).toHaveBeenLastCalledWith(
       {
         location: { directory: "/srv/projects" },
-        path: ".",
+        path: "/srv/projects",
       },
       { signal: expect.any(AbortSignal) },
     );
@@ -217,6 +262,7 @@ describe("ServerDirectoryBrowser", () => {
         <ServerDirectoryBrowser
           effects={effects}
           listDirectory={queued.list}
+          requestLocation={{ directory: "/srv/first" }}
           label="Project directory"
           initialLocation={{ directory: initialDirectory() }}
           onDirectoryChange={onDirectoryChange}
@@ -274,7 +320,7 @@ describe("ServerDirectoryBrowser", () => {
     expect(queued.list).toHaveBeenLastCalledWith(
       {
         location: { directory: "/srv/projects" },
-        path: ".",
+        path: "/srv/projects",
       },
       { signal: expect.any(AbortSignal) },
     );

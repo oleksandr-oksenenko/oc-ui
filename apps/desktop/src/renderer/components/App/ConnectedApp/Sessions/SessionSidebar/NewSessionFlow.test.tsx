@@ -178,6 +178,7 @@ function docsProject(): Project {
 /** A flow runtime whose project data is the real SDK data layer. */
 function sdkBackedRuntime(api: OpenCodeClient): NewSessionFlowRuntime {
   const fake = fakeRuntime([]);
+  vi.spyOn(api.file, "list").mockImplementation(fake.fileList);
   const workspace = withTestWorkspace((effects) => ({
     effects,
     data: createData({
@@ -321,6 +322,160 @@ describe("NewSessionFlow", () => {
     },
   );
 
+  it("offers accessible Git and non-Git projects while preserving unavailable SDK records", async () => {
+    const missing = { ...project, id: "missing", canonical: "/srv/missing" };
+    const fake = fakeRuntime([], { projects: [missing, project, nonGitProject] });
+    fake.fileList.mockImplementation((input) =>
+      input?.path === missing.canonical
+        ? Promise.reject(new Error("directory unavailable"))
+        : Promise.resolve(fileResponse("/srv/projects")),
+    );
+    const operation = controller(fake.runtime);
+    await vi.waitFor(() => expect(operation.flow.state().projectsLoading).toBe(false));
+    expect(operation.flow.state().projects.map((candidate) => candidate.id)).toEqual([
+      project.id,
+      nonGitProject.id,
+    ]);
+    expect(operation.flow.state().projectsError).toContain("Retry");
+    expect(fake.runtime.data.project.list()).toEqual([missing, project, nonGitProject]);
+    expect(fake.projectCurrent).not.toHaveBeenCalled();
+    expect(fake.fileList.mock.calls.map(([input]) => input)).toEqual([
+      { location: { directory: "/srv/projects" }, path: missing.canonical },
+      { location: { directory: "/srv/projects" }, path: project.canonical },
+      { location: { directory: "/srv/projects" }, path: nonGitProject.canonical },
+    ]);
+    operation.flow.useProject(missing.id);
+    expect(fake.sessionCreate).not.toHaveBeenCalled();
+    operation.dispose();
+  });
+
+  it("requires a new availability check when the SDK changes a canonical path under the same ID", async () => {
+    const fake = fakeRuntime([]);
+    const [listed, setListed] = createSignal([project]);
+    const runtime = {
+      ...fake.runtime,
+      data: { ...fake.runtime.data, project: { ...fake.runtime.data.project, list: listed } },
+    };
+    const mounted = mount(runtime);
+    await vi.waitFor(() => expect(mounted.flow.state().projectsLoading).toBe(false));
+    setListed([{ ...project, canonical: "/srv/moved" }]);
+    expect(mounted.flow.state().projects).toEqual([]);
+    expect(mounted.flow.state().projectsError).toContain("Retry");
+    expect(mounted.root.textContent).not.toContain(
+      "Add a server project before creating a session",
+    );
+    mounted.flow.useProject(project.id);
+    expect(fake.sessionCreate).not.toHaveBeenCalled();
+    mounted.flow.syncProjects();
+    await vi.waitFor(() => expect(mounted.flow.state().projectsLoading).toBe(false));
+    expect(mounted.flow.state().projects[0]?.location.directory).toBe("/srv/moved");
+    expect(fake.fileList).toHaveBeenLastCalledWith(
+      { location: { directory: "/srv/projects" }, path: "/srv/moved" },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    mounted.dispose();
+  });
+
+  it("does not apply a pending check to an SDK project mutated in place", async () => {
+    const mutableProject = { ...project };
+    const pending = deferred<FileListOutput>();
+    const fake = fakeRuntime([], { projects: [mutableProject] });
+    fake.fileList.mockReturnValueOnce(pending.promise);
+    const operation = controller(fake.runtime);
+    await vi.waitFor(() => expect(fake.fileList).toHaveBeenCalledOnce());
+    mutableProject.canonical = "/srv/moved";
+    pending.resolve(fileResponse("/srv/projects"));
+    await vi.waitFor(() => expect(operation.flow.state().projectsLoading).toBe(false));
+    expect(operation.flow.state().projects).toEqual([]);
+    expect(operation.flow.state().projectsError).toContain("Retry");
+    operation.flow.useProject(project.id);
+    expect(fake.sessionCreate).not.toHaveBeenCalled();
+    operation.dispose();
+  });
+
+  it("shows a retryable failure instead of empty projects and restores the selection on retry", async () => {
+    const fake = fakeRuntime([]);
+    const mounted = mount(fake.runtime);
+    await vi.waitFor(() => expect(mounted.flow.state().projectsLoading).toBe(false));
+    expect(mounted.flow.state().selectedProjectID).toBe(project.id);
+    fake.fileList.mockRejectedValue(new Error("offline"));
+    mounted.flow.syncProjects();
+    await vi.waitFor(() => expect(mounted.flow.state().projectsLoading).toBe(false));
+    expect(mounted.flow.state().projects).toEqual([]);
+    expect(mounted.flow.state().selectedProjectID).toBe(project.id);
+    expect(mounted.root.textContent).toContain("Some project directories could not be opened");
+    expect(mounted.root.textContent).not.toContain(
+      "Add a server project before creating a session",
+    );
+    submit(mounted.root);
+    expect(fake.sessionCreate).not.toHaveBeenCalled();
+    fake.fileList.mockResolvedValue(fileResponse("/srv/projects"));
+    clickButton(mounted.root, "Retry");
+    await vi.waitFor(() => expect(mounted.flow.state().projectsLoading).toBe(false));
+    expect(mounted.flow.state().projects.map((candidate) => candidate.id)).toEqual([project.id]);
+    expect(mounted.flow.state().projectsError).toBeUndefined();
+    expect(mounted.flow.state().error).toBeUndefined();
+    mounted.dispose();
+  });
+
+  it("cancels an obsolete project check and ignores its late result", async () => {
+    const pending = deferred<FileListOutput>();
+    const fake = fakeRuntime([]);
+    fake.fileList.mockReturnValueOnce(pending.promise);
+    const operation = controller(fake.runtime);
+    await vi.waitFor(() => expect(fake.fileList).toHaveBeenCalledOnce());
+    const signal = fake.fileList.mock.calls[0]![1]!.signal!;
+    fake.fileList.mockRejectedValue(new Error("unavailable"));
+    operation.flow.syncProjects();
+    await vi.waitFor(() => expect(operation.flow.state().projectsLoading).toBe(false));
+    expect(signal.aborted).toBe(true);
+    pending.resolve(fileResponse("/srv/projects"));
+    await flush();
+    expect(operation.flow.state().projects).toEqual([]);
+    operation.dispose();
+  });
+
+  it("retains directory checks until aborted I/O settles during workspace shutdown", async () => {
+    const pending = deferred<FileListOutput>();
+    const fake = fakeRuntime([]);
+    fake.fileList.mockReturnValueOnce(pending.promise);
+    const operation = controller(fake.runtime);
+    await vi.waitFor(() => expect(fake.fileList).toHaveBeenCalledOnce());
+    const signal = fake.fileList.mock.calls[0]![1]!.signal!;
+    let closed = false;
+    const closing = Effect.runPromise(Scope.close(fake.runtime.effects.scope, Exit.void)).then(
+      () => {
+        closed = true;
+        return undefined;
+      },
+    );
+    await flush();
+    expect(signal.aborted).toBe(true);
+    expect(closed).toBe(false);
+    pending.resolve(fileResponse("/srv/projects"));
+    await closing;
+    expect(operation.flow.state().projects).toEqual([]);
+    expect(fake.projectCurrent).not.toHaveBeenCalled();
+  });
+
+  it("checks an added directory before registering it and allows a retry", async () => {
+    const fake = fakeRuntime([]);
+    const operation = controller(fake.runtime);
+    await vi.waitFor(() => expect(operation.flow.state().projectsLoading).toBe(false));
+    fake.fileList.mockRejectedValueOnce(new Error("directory deleted after browsing"));
+    operation.flow.addProject({ directory: project.canonical });
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
+    expect(operation.flow.current().addProjectError?.message).toBe(
+      "The project could not be added.",
+    );
+    expect(fake.projectCurrent).not.toHaveBeenCalled();
+    operation.flow.addProject({ directory: project.canonical });
+    await vi.waitFor(() => expect(operation.flow.pending()).toBe(false));
+    expect(fake.projectCurrent).toHaveBeenCalledOnce();
+    expect(operation.flow.current().addProjectError).toBeUndefined();
+    operation.dispose();
+  });
+
   it("creates a direct session in the selected project", async () => {
     const fake = fakeRuntime([Promise.resolve(session("session-1", project.canonical))]);
     const operation = controller(fake.runtime);
@@ -400,7 +555,7 @@ describe("NewSessionFlow", () => {
     expect(fake.fileList).toHaveBeenCalledWith(
       {
         location: { directory: "/srv/projects" },
-        path: ".",
+        path: "/srv/projects",
       },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
@@ -420,7 +575,7 @@ describe("NewSessionFlow", () => {
     expect(fake.fileList).toHaveBeenCalledWith(
       {
         location: { directory: "/srv/projects", workspace: "workspace-a" },
-        path: ".",
+        path: "/srv/projects",
       },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
@@ -734,7 +889,7 @@ describe("NewSessionFlow", () => {
       expect(fake.fileList).toHaveBeenCalledWith(
         {
           location: { directory: location },
-          path: ".",
+          path: location,
         },
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );

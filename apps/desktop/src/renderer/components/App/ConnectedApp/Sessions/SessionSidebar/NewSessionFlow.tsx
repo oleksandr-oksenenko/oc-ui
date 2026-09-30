@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-solid";
-import { Effect, Exit, Result } from "effect";
+import { Effect, Exit, Fiber, Result } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../../../../../workspace-owner.ts";
 import type { LocationRef, OpenCodeClient, Project, SessionInfo } from "@opencode/client";
@@ -10,6 +10,7 @@ import { showToast, toaster } from "@opencode/ui/toast";
 import { createEffect, createSignal, on, onCleanup } from "solid-js";
 
 import type { SessionCatalog } from "../../../../../opencode/session-catalog.ts";
+import { listServerDirectory } from "../../../../../opencode/server-directories.ts";
 import {
   createSessionWorktree,
   type SessionWorktreeInput,
@@ -67,13 +68,14 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     closed?: boolean;
     dialog: "session" | "project";
     projectsLoading: boolean;
+    availableProjects: readonly Pick<Project, "id" | "canonical">[];
     projectsError?: string;
     error?: NewSessionDialogError;
     mutation?: "creating-worktree" | "creating-session";
     action?: NewSessionAction;
     addingProject: boolean;
     addProjectError?: AddProjectDialogError;
-  }>({ projectsLoading: true, addingProject: false, dialog: "session" });
+  }>({ projectsLoading: true, availableProjects: [], addingProject: false, dialog: "session" });
   const releaseStatus = effects.mount(status);
   const current = () => effects.registry.get(status);
   const pending = () => current().mutation !== undefined || current().addingProject;
@@ -81,17 +83,24 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     effects.registry.set(status, { ...effects.registry.get(status), ...patch });
   const dispose = (): void => {
     update({ closed: true });
+    projectRead.cancel();
     if (!pending()) releaseStatus();
   };
   let retainedToast:
     | { readonly id: ReturnType<typeof showToast>; readonly location?: LocationRef }
     | undefined;
 
+  const registeredProjects = () =>
+    props.runtime.data.project.list().filter((project) => project.id !== ProjectID.global);
+
   // The global project is OpenCode's system fallback, not a user location.
   const projects = (): readonly NewSessionProject[] =>
-    props.runtime.data.project
-      .list()
-      .filter((project) => project.id !== ProjectID.global)
+    registeredProjects()
+      .filter((project) =>
+        current().availableProjects.some(
+          (available) => available.id === project.id && available.canonical === project.canonical,
+        ),
+      )
       .map((project) => projectOption(project, props.runtime.defaultLocation.workspaceID));
 
   const selectedProject = () => {
@@ -105,32 +114,69 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     selectedProjectID: selectedProjectID(),
     mode: mode(),
     projectsLoading: current().projectsLoading,
-    projectsError: current().projectsError,
+    projectsError:
+      current().projectsError ??
+      (!current().projectsLoading && projects().length < registeredProjects().length
+        ? "Some project directories could not be opened. Retry to check them again, or choose an available project."
+        : undefined),
     error: current().error,
   });
 
   const syncProjects = Effect.fn("NewSessionFlow.syncProjects")(function* () {
     update({ projectsLoading: true, projectsError: undefined });
-    const result = yield* effects
+    const syncResult = yield* effects
       .request(() => props.runtime.data.project.sync())
       .pipe(Effect.result);
-    if (Result.isFailure(result)) {
+    if (Result.isFailure(syncResult)) {
       update({
         projectsLoading: false,
+        availableProjects: [],
         projectsError: "Projects could not be loaded from the server.",
       });
       return;
     }
-    const available = projects();
+    const checked = yield* Effect.forEach(
+      registeredProjects().map(({ id, canonical }) => ({ id, canonical })),
+      (project) =>
+        listServerDirectory(
+          effects,
+          props.runtime.api.file.list,
+          props.runtime.defaultLocation,
+          project.canonical,
+        ).pipe(
+          Effect.result,
+          Effect.map((result) => ({ project, result })),
+        ),
+      { concurrency: 4 },
+    );
+    const available = checked.filter((item) => Result.isSuccess(item.result));
+    update({
+      availableProjects: available.map(({ project }) => ({
+        id: project.id,
+        canonical: project.canonical,
+      })),
+      projectsLoading: false,
+    });
     const selected = selectedProjectID();
-    if (!selected || !available.some((project) => project.id === selected)) {
-      setSelectedProjectID(available[0]?.id);
+    if (!selected) {
+      setSelectedProjectID(available[0]?.project.id);
       setSelectedLocation(undefined);
+    } else if (!available.some(({ project }) => project.id === selected)) {
+      update({
+        error: {
+          kind: "validation",
+          message:
+            "The selected project directory is unavailable. Retry or choose another project.",
+        },
+      });
+    } else if (current().error?.kind === "validation") {
+      update({ error: undefined });
     }
-    update({ projectsLoading: false });
   });
 
-  effects.runFork(syncProjects());
+  const projectRead = effects.latest();
+  const refreshProjects = () => projectRead.run(syncProjects());
+  refreshProjects();
 
   const changeProject = (projectID: string): void => {
     setSelectedProjectID(projectID);
@@ -226,7 +272,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
   }, Effect.scoped);
 
   const useProject = (projectID: string): void => {
-    if (current().closed || pending()) return;
+    if (current().closed || pending() || current().projectsLoading) return;
     const project =
       projectID === selectedProjectID()
         ? selectedProject()
@@ -239,7 +285,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
   };
 
   const createWorktree = Effect.fn("NewSessionFlow.createWorktree")(function* () {
-    if (current().closed || pending()) return;
+    if (current().closed || pending() || current().projectsLoading) return;
     const project = selectedProject();
     if (!project || project.vcs !== "git") {
       update({ error: { kind: "validation", message: "Choose a Git project." } });
@@ -291,28 +337,40 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
   const addProject = Effect.fn("NewSessionFlow.addProject")(function* (location: LocationRef) {
     if (current().closed || pending()) return;
     update({ addingProject: true, addProjectError: undefined });
-    const result = yield* effects
-      .request((signal) =>
-        props.runtime.api.project.current(
-          {
-            location: { directory: location.directory, workspace: location.workspaceID },
-          },
-          { signal },
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        update({ addingProject: false });
+        if (current().closed) releaseStatus();
+      }),
+    );
+    const result = yield* listServerDirectory(
+      effects,
+      props.runtime.api.file.list,
+      { ...props.runtime.defaultLocation, workspaceID: location.workspaceID },
+      location.directory,
+    ).pipe(
+      Effect.andThen(
+        effects.request((signal) =>
+          props.runtime.api.project.current(
+            { location: { directory: location.directory, workspace: location.workspaceID } },
+            { signal },
+          ),
         ),
-      )
-      .pipe(
-        Effect.tap(() =>
-          Effect.gen(function* () {
-            // The SDK memoizes a completed project sync, and resolving a project
-            // does not emit a project event, so force the refreshed list.
-            props.runtime.data.project.invalidate();
-            yield* effects.request(() => props.runtime.data.project.sync());
-          }),
-        ),
-        Effect.result,
-      );
-    update({ addingProject: false });
-    if (Result.isFailure(result)) {
+      ),
+      Effect.tap(() =>
+        Effect.gen(function* () {
+          // The SDK memoizes a completed project sync, and resolving a project
+          // does not emit a project event, so force the refreshed list.
+          props.runtime.data.project.invalidate();
+          yield* Fiber.join(refreshProjects());
+        }),
+      ),
+      Effect.result,
+    );
+    if (
+      Result.isFailure(result) ||
+      !projects().some((project) => project.id === result.success.id)
+    ) {
       update({
         addProjectError: { kind: "add-project", message: "The project could not be added." },
       });
@@ -323,9 +381,9 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
     if (projects().find((project) => project.id === result.success.id)?.vcs !== "git")
       setMode("direct");
     // The refreshed list supersedes any earlier loading failure.
-    update({ error: undefined, projectsError: undefined, projectsLoading: false });
+    update({ error: undefined });
     update({ dialog: "session" });
-  });
+  }, Effect.scoped);
 
   return {
     runtime: props.runtime,
@@ -349,9 +407,7 @@ export function createNewSessionFlow(props: CreateNewSessionFlowInput) {
       setMode(next);
       update({ error: undefined });
     },
-    syncProjects: () => {
-      effects.runFork(syncProjects());
-    },
+    syncProjects: refreshProjects,
     createWorktree: () => {
       effects.runFork(createWorktree());
     },
@@ -389,7 +445,7 @@ export function NewSessionFlow(props: NewSessionFlowProps) {
           showOwnedDialog(
             () => (
               <NewSessionDialog
-                state={{ ...flow.state(), ...current() }}
+                state={{ ...current(), ...flow.state() }}
                 mutation={current().mutation}
                 action={current().action}
                 onDismissBlockedChange={setDismissBlocked}

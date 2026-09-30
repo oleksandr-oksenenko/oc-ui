@@ -3,11 +3,29 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   serverFilePathFromFileUrl,
   serverPathChild,
+  serverPathEntryName,
   serverPathParent,
   serverPathRelative,
 } from "./serverPath.ts";
 
 describe("serverPath", () => {
+  it.each([
+    ["/srv/context", "./", "context/"],
+    ["/srv/projects/context", "../", "projects/"],
+    ["/srv/projects/context", "../../", "srv/"],
+    ["/srv/back\\slash/context", "../", "back\\slash/"],
+    ["C:\\Users\\alex\\code", "..\\..\\", "Users\\"],
+    ["\\\\server\\share\\context", ".\\", "context\\"],
+    ["/srv/context", "../projects/child/", "child/"],
+    ["/srv/context", "../projects/child\\name/", "child\\name/"],
+    ["C:/context", "..\\projects\\child\\", "child\\"],
+    ["C:\\context", "E:\\projects\\child\\", "child\\"],
+    ["\\\\server\\share\\context", "..\\projects\\child\\", "child\\"],
+    ["//server/share/context", "../projects/child/", "child/"],
+  ])("extracts a child name using server path rules for %s", (context, entry, expected) => {
+    expect(serverPathEntryName(context, entry)).toBe(expected);
+  });
+
   it.each([
     ["/srv/projects", "oc-ui/", "/srv/projects/oc-ui"],
     ["/", "srv/", "/srv"],

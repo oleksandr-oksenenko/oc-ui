@@ -95,6 +95,7 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
           <ServerDirectoryBrowser
             effects={props.effects}
             listDirectory={props.listDirectory}
+            requestLocation={props.initialLocation}
             label="Project directory"
             initialLocation={props.initialLocation}
             disabled={props.adding === true}

@@ -37,6 +37,26 @@ export function serverFilePathFromFileUrl(value: string): string | undefined {
   return pathname;
 }
 
+/** Immediate entry name from a listing path relative to another server location. */
+export function serverPathEntryName(directory: string, entryPath: string): string {
+  const windows = /^[a-zA-Z]:[\\/]|^\\\\|^\/\//.test(directory);
+  const normalized = windows ? entryPath.replaceAll("\\", "/") : entryPath;
+  const trimmed = normalized.replace(/\/+$/, "");
+  const name = trimmed.slice(trimmed.lastIndexOf("/") + 1);
+  if (name !== "." && name !== "..") return entryPath.slice(trimmed.lastIndexOf("/") + 1);
+
+  // Listings of a parent can refer to the request context or its ancestors.
+  let absolute = windows ? directory.replaceAll("\\", "/") : directory;
+  for (const segment of trimmed.split("/")) {
+    if (segment === "..") {
+      absolute = absolute.replace(/\/+$/, "");
+      absolute = absolute.slice(0, absolute.lastIndexOf("/"));
+    }
+  }
+  absolute = absolute.replace(/\/+$/, "");
+  return absolute.slice(absolute.lastIndexOf("/") + 1) + entryPath.slice(trimmed.length);
+}
+
 export function serverPathChild(directory: string, relativeEntry: string): string {
   const separator = serverPathSeparator(directory);
   const base = nativeSeparators(trimTrailingSeparators(directory), separator);

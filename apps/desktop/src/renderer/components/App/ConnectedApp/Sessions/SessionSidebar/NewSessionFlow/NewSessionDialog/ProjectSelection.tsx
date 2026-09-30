@@ -46,7 +46,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
   const selectedOption = () =>
     projectOptions().find(({ project }) => project.id === props.state.selectedProjectID);
   const selectedProject = () => selectedOption()?.project;
-  const ready = () => !props.state.projectsLoading && !props.state.projectsError;
+  const ready = () => !props.state.projectsLoading;
 
   const closePicker = (restoreFocus = false) => {
     setPickerOpen(false);
@@ -92,7 +92,7 @@ export function ProjectSelection(props: ProjectSelectionProps) {
         <Show
           when={ready() && props.state.projects.length > 0}
           fallback={
-            <Show when={ready()}>
+            <Show when={ready() && !props.state.projectsError}>
               <div class="new-session-empty-projects">
                 <Icon name="folder" />
                 <span>Add a server project before creating a session.</span>

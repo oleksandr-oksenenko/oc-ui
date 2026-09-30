@@ -8,6 +8,7 @@ import { Atom } from "effect/unstable/reactivity";
 import { For, Show, createEffect, createMemo, createUniqueId, onCleanup } from "solid-js";
 
 import type { WorkspaceOwner } from "../workspace-owner.ts";
+import { listServerDirectory } from "../opencode/server-directories.ts";
 
 import "./ServerDirectoryBrowser.css";
 import { serverPathChild, serverPathParent } from "./serverPath.ts";
@@ -15,6 +16,7 @@ import { serverPathChild, serverPathParent } from "./serverPath.ts";
 export type ServerDirectoryBrowserProps = {
   readonly effects: WorkspaceOwner;
   readonly listDirectory: OpenCodeClient["file"]["list"];
+  readonly requestLocation: LocationRef;
   readonly label: string;
   readonly initialLocation: LocationRef;
   readonly disabled?: boolean;
@@ -51,6 +53,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
   let browserElement: HTMLElement | undefined;
   let entriesList: HTMLUListElement | undefined;
   let hasResolvedDirectory = false;
+  let requestLocation = props.requestLocation;
   const request = effects.latest();
   onCleanup(request.cancel);
 
@@ -71,32 +74,22 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
         error: undefined,
       }));
       props.onLoadingChange?.(true);
-      const response = yield* effects.request((signal) =>
-        props.listDirectory(
-          {
-            location:
-              requestedLocation.workspaceID === undefined
-                ? { directory: requestedLocation.directory }
-                : {
-                    directory: requestedLocation.directory,
-                    workspace: requestedLocation.workspaceID,
-                  },
-            path: ".",
-          },
-          { signal },
-        ),
+      const response = yield* listServerDirectory(
+        effects,
+        props.listDirectory,
+        requestLocation,
+        requestedLocation.directory,
       );
-      const workspaceID = response.location.workspaceID;
+      requestLocation = response.context;
+      const workspaceID = response.context.workspaceID;
       const resolvedLocation: LocationRef =
         workspaceID === undefined
-          ? { directory: response.location.directory }
-          : { directory: response.location.directory, workspaceID };
+          ? { directory: requestedLocation.directory }
+          : { directory: requestedLocation.directory, workspaceID };
       effects.registry.set(state, {
         location: resolvedLocation,
         requestedLocation,
-        directories: response.data
-          .filter((entry) => entry.type === "directory")
-          .map((entry) => entry.path),
+        directories: response.directories,
         loading: false,
       });
       props.onLoadingChange?.(false);
@@ -125,6 +118,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
   };
 
   createEffect(() => {
+    requestLocation = props.requestLocation;
     loadDirectory(initialLocation());
   });
 

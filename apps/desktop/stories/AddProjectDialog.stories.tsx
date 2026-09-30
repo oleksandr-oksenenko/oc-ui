@@ -32,14 +32,16 @@ function response(
 }
 
 const listDirectory: OpenCodeClient["file"]["list"] = (input) => {
-  const directory = input?.location?.directory ?? "/";
+  const directory = input?.path ?? input?.location?.directory ?? "/";
   const entries =
     directory === "/srv/projects"
       ? ["oc-ui", "opencode", "api"]
       : directory === "/srv"
         ? ["projects", "worktrees"]
         : [];
-  return Promise.resolve(response(directory, entries, input?.location?.workspace));
+  return Promise.resolve(
+    response(input?.location?.directory ?? "/", entries, input?.location?.workspace),
+  );
 };
 
 // Keep the loading fixture pending until its view closes.
@@ -104,7 +106,7 @@ export const BrowseServerProjects: Story = {
         {dialog({
           initialLocation: { directory: "/srv/projects", workspaceID: "workspace-1" },
           listDirectory: (input) => {
-            if (input?.location?.directory === "/srv/projects/oc-ui") {
+            if (input?.path === "/srv/projects/oc-ui") {
               return childNavigation.promise;
             }
             return listDirectory(input);
@@ -148,7 +150,7 @@ export const BrowseServerProjects: Story = {
     await step("Add the resolved directory with its workspace identity", async () => {
       const childNavigation = browseStoryState.get(fixture);
       if (!childNavigation) throw new Error("Browse story did not create child navigation");
-      childNavigation.resolve(response("/srv/projects/oc-ui", [], "workspace-1"));
+      childNavigation.resolve(response("/srv/projects", [], "workspace-1"));
 
       await expect(await dialogCanvas.findByText("/srv/projects/oc-ui")).toBeVisible();
       const browserShell = dialogCanvas.getByRole("region", { name: "Project directory" });

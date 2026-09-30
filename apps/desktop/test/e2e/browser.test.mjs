@@ -4,7 +4,7 @@ import { OpenCode } from "@opencode/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 import { build, preview } from "vite-plus";
 import { chromium } from "playwright";
-import { access, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, realpath, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { startScriptedProvider } from "./scripted-provider.mjs";
@@ -1831,10 +1831,18 @@ describe.sequential("production browser app", () => {
       await expect.poll(() => directory.textContent()).toBe(await realpath(project));
       await page.getByLabel("Go to parent directory").click();
       await expect.poll(() => directory.textContent()).toBe(dirname(await realpath(project)));
+      // The context itself is returned as `./` by the pinned server.
+      await page
+        .getByRole("button", { name: "Browse directory acceptance-project/", exact: true })
+        .waitFor();
       await page
         .getByRole("button", { name: "Browse directory added-project/", exact: true })
         .click();
       await expect.poll(() => directory.textContent()).toBe(addedDirectory);
+      // Inspecting markerless directories must not register projects implicitly.
+      expect((await api.project.list()).map((candidate) => candidate.id).toSorted()).toEqual(
+        existing.map((candidate) => candidate.id).toSorted(),
+      );
       await page.locator('.server-flow-dialog button[type="submit"]').click();
 
       // The refreshed server-backed list must publish the resolved project, not
@@ -1865,6 +1873,31 @@ describe.sequential("production browser app", () => {
         if (previousTitle) await selectSession(previousTitle);
       }
     }
+  });
+
+  it("keeps a deleted project out of the picker without deleting its registry record", async () => {
+    const directory = join(profile.paths.app, "deleted-project");
+    await mkdir(directory);
+    const registered = await api.project.current({ location: { directory } });
+    await rm(directory, { recursive: true });
+    // Load the externally arranged registry row into a fresh SDK workspace.
+    await page.reload();
+    await ensureConnected();
+    await page.getByRole("button", { name: "Create session", exact: true }).click();
+    const warning = page.getByRole("alert").filter({ hasText: "Some project directories" });
+    await warning.waitFor();
+    await page.getByRole("combobox", { name: /^Project:/ }).click();
+    const options = page.locator(".new-session-project-option");
+    await expect.poll(() => options.count()).toBeGreaterThan(0);
+    expect(await options.locator(":scope > span").allTextContents()).not.toContain(
+      registered.canonical,
+    );
+    expect((await api.project.list()).some((candidate) => candidate.id === registered.id)).toBe(
+      true,
+    );
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await page.locator(".server-flow-dialog").waitFor({ state: "hidden" });
   });
 
   it("recovers from browser navigation and unavailable storage without stopping the server", async () => {
