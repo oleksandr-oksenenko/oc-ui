@@ -2082,8 +2082,11 @@ describe.sequential("production browser app", () => {
     await page.reload();
     await ensureConnected();
     await page.getByRole("button", { name: "Create session", exact: true }).click();
-    const warning = page.getByRole("alert").filter({ hasText: "Some project directories" });
+    const warning = page.getByRole("alert").filter({ hasText: "saved project folder" });
     await warning.waitFor();
+    expect(await warning.textContent()).toContain(registered.canonical);
+    await warning.getByRole("button", { name: "Retry", exact: true }).waitFor();
+    expect(await page.locator(".composer").getByRole("button", { name: "Retry" }).count()).toBe(0);
     await page.getByRole("button", { name: /^Project:/u }).click();
     const options = page.locator(".selection-option-detail");
     await expect.poll(() => options.count()).toBeGreaterThan(0);
@@ -2091,6 +2094,13 @@ describe.sequential("production browser app", () => {
     expect((await api.project.list()).some((candidate) => candidate.id === registered.id)).toBe(
       true,
     );
+    await page.keyboard.press("Escape");
+    await page.screenshot({ path: join(artifacts, "browser-unavailable-project.png") });
+    await mkdir(directory);
+    await warning.getByRole("button", { name: "Retry", exact: true }).click();
+    await warning.waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: /^Project:/u }).click();
+    await page.getByText(registered.canonical, { exact: true }).waitFor();
     await page.keyboard.press("Escape");
     await selectSession("Permission acceptance");
   });

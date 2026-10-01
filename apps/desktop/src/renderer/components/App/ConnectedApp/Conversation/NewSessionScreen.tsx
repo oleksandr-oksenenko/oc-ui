@@ -1,12 +1,14 @@
 import { Show, type JSX } from "solid-js";
 import { Loader } from "@opencode/ui/loader";
 import { Icon } from "@opencode/ui/icon";
+import { Button } from "@opencode/ui/button";
 import { NewSessionSetup, type NewSessionSetupProps } from "./NewSessionScreen/NewSessionSetup.tsx";
 import "./NewSessionScreen/NewSessionScreen.css";
 
 export type NewSessionScreenProps = {
   readonly setup: NewSessionSetupProps;
   readonly composer: JSX.Element;
+  readonly onRetry?: () => void;
   readonly status?: {
     readonly kind: "preparing" | "error" | "interrupted";
     readonly message: string;
@@ -29,7 +31,12 @@ export function NewSessionScreen(props: NewSessionScreenProps) {
               <Show when={preparing()} fallback={<Icon name="warning" size="small" />}>
                 <Loader width={14} height={14} />
               </Show>
-              <span>{status().message}</span>
+              <span class="new-session-operation-message">{status().message}</span>
+              <Show when={props.onRetry}>
+                <Button type="button" size="small" variant="outline" onClick={props.onRetry}>
+                  Retry
+                </Button>
+              </Show>
             </div>
           )}
         </Show>

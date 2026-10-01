@@ -521,13 +521,20 @@ export function createNewSessionDrafts(
       (attempt.phase === "sending" && attempt.request.kind === "command")
     );
   };
-  const serverError = () =>
-    current().error ??
-    storage().get(serverKey)?.error ??
-    current().projectsError ??
-    (current().projects !== "loading" && projects().length < registeredProjects().length
-      ? "Some project directories could not be opened. Retry to check them again, or choose an available project."
-      : undefined);
+  const serverError = () => {
+    const error = current().error ?? storage().get(serverKey)?.error ?? current().projectsError;
+    if (error || current().projects === "loading") return error;
+    const available = projects();
+    const unavailable = registeredProjects().filter(
+      (item) =>
+        !available.some(
+          (candidate) =>
+            candidate.id === item.id && candidate.location.directory === item.location.directory,
+        ),
+    );
+    if (!unavailable.length) return undefined;
+    return `The server could not open ${unavailable.length} saved project ${unavailable.length === 1 ? "folder" : "folders"}: ${unavailable.map((item) => item.location.directory).join(", ")}. Unavailable projects are hidden from the project picker.`;
+  };
   const composer = (id: string): ComposerProps => {
     const entry = entries().get(id);
     return {

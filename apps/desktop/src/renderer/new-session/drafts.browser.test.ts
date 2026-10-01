@@ -350,7 +350,9 @@ describe("native draft persistence", () => {
     adapter.create();
     pending.resolve();
     await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
-    expect(adapter.composer(adapter.selectedID()!).error).toContain("Some project directories");
+    expect(adapter.composer(adapter.selectedID()!).error).toBe(
+      "The server could not open 1 saved project folder: /srv/other. Unavailable projects are hidden from the project picker.",
+    );
     vi.mocked(runtime.api.file.list).mockResolvedValue({
       location: {
         ...choices.project.location,
@@ -362,6 +364,7 @@ describe("native draft persistence", () => {
     await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
     expect(adapter.setup().projects.map((item) => item.id)).toEqual(["other", "project"]);
     expect(adapter.current().projectsError).toBeUndefined();
+    expect(adapter.composer(adapter.selectedID()!).error).toBeUndefined();
   });
 
   it("does not approve a project path changed during a pending directory check", async () => {
@@ -385,7 +388,9 @@ describe("native draft persistence", () => {
     await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
     expect(adapter.setup().projects.map((item) => item.id)).toEqual(["other"]);
     adapter.create();
-    expect(adapter.composer(adapter.selectedID()!).error).toContain("Some project directories");
+    expect(adapter.composer(adapter.selectedID()!).error).toBe(
+      "The server could not open 1 saved project folder: /srv/moved. Unavailable projects are hidden from the project picker.",
+    );
     expect(runtime.api.project.current).not.toHaveBeenCalled();
     adapter.retry();
     await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));

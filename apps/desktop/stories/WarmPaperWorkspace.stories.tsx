@@ -1329,6 +1329,37 @@ export const NewSessionFailed = {
     />
   ),
 };
+export const NewSessionUnavailableProject = {
+  render: () => {
+    const [status, setStatus] = createSignal<WorkspaceNewSessionProps["status"]>({
+      kind: "error",
+      message:
+        "The server could not open 1 saved project folder: /Users/alex/code/old-project. Unavailable projects are hidden from the project picker.",
+    });
+    return (
+      <WorkspaceShowcaseFixture
+        newSession={{ status: status(), onRetry: () => setStatus(undefined) }}
+      />
+    );
+  },
+};
+export const NewSessionUnavailableProjectInteractions = {
+  ...NewSessionUnavailableProject,
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    const warning = canvas.getByRole("alert");
+    const retry = within(warning).getByRole("button", { name: "Retry" });
+    await userEvent.click(retry);
+    await expect(canvas.queryByRole("alert")).toBeNull();
+    await expect(canvas.getByRole("textbox", { name: "Prompt" })).toHaveTextContent(
+      "Design the new session experience",
+    );
+  },
+};
+export const NewSessionUnavailableProjectMobile = {
+  ...NewSessionUnavailableProject,
+  globals: { viewport: { value: "mobile", isRotated: false } },
+};
 export const NewSessionInterrupted = {
   render: () => (
     <WorkspaceShowcaseFixture

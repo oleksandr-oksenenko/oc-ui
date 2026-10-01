@@ -79,6 +79,15 @@
   flex-shrink: 0;
 }
 
+.new-session-operation-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.new-session-operation > [data-component="button-v2"] {
+  flex-shrink: 0;
+}
+
 @media (width <= 600px) {
   .new-session-setup-trigger > span {
     max-width: 140px;

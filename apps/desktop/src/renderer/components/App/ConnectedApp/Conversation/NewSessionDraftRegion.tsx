@@ -18,6 +18,11 @@ export function NewSessionDraftRegion(props: NewSessionDraftRegionProps) {
           <NewSessionScreen
             setup={props.controller.setup()}
             status={status()}
+            onRetry={
+              props.controller.composer(id).error && !props.controller.selected()?.conflict
+                ? props.controller.retry
+                : undefined
+            }
             composer={
               <Composer
                 {...props.controller.composer(id)}
@@ -44,16 +49,6 @@ export function NewSessionDraftRegion(props: NewSessionDraftRegionProps) {
                           Use saved version
                         </Button>
                       </div>
-                    </Show>
-                    <Show
-                      when={
-                        props.controller.composer(id).error &&
-                        !props.controller.selected()?.conflict
-                      }
-                    >
-                      <Button size="small" variant="ghost-muted" onClick={props.controller.retry}>
-                        Retry
-                      </Button>
                     </Show>
                   </div>
                 }

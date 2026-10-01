@@ -21,6 +21,7 @@ export type WorkspaceNewSessionProps = {
   readonly draft: NewSessionDraft;
   readonly onDraftChange: (patch: Partial<NewSessionDraft>) => void;
   readonly status?: NewSessionScreenProps["status"];
+  readonly onRetry?: NewSessionScreenProps["onRetry"];
   readonly empty?: boolean;
   readonly loading?: boolean;
   readonly onSubmit: (mode: "local" | "worktree") => void;
@@ -70,6 +71,7 @@ export function WorkspaceNewSession(options: WorkspaceNewSessionProps) {
         onAddProject: options.onAddProject,
       }}
       status={status()}
+      onRetry={options.onRetry}
       composer={
         <Composer
           {...{
