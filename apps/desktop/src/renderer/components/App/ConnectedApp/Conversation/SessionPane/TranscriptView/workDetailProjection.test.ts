@@ -26,6 +26,42 @@ const ids = (rows: ReturnType<typeof projectTranscriptRows>) =>
   rows.map((row) => [row.message.id, row.workDetails.map((item) => item.id)]);
 
 describe("projectTranscriptRows", () => {
+  it("chains prefix activity across cycles and stops at prose, exposed events and turn boundaries", () => {
+    const activity = (id: string): SessionMessageAssistant => ({
+      ...assistant(id),
+      content: [{ type: "reasoning", text: id }],
+    });
+    const first = activity("first");
+    const second = activity("second");
+    const prose = {
+      ...activity("prose"),
+      content: [...activity("prose").content, { type: "text" as const, text: "Progress" }],
+    };
+    const rows = projectTranscriptRows([
+      first,
+      shell("between", 0),
+      second,
+      prose,
+      activity("after-prose"),
+      { ...assistant("empty"), content: [] },
+      shell("empty-details", 0),
+      activity("after-empty"),
+      { id: "model", type: "model-switched", time, model: { providerID: "p", id: "m" } },
+      activity("after-event"),
+      { id: "idle", type: "idle", time, outcome: "succeeded" },
+      activity("after-idle"),
+    ]);
+    expect(rows[0]?.message).toBe(first);
+    expect(rows[0]?.continuations?.map((row) => row.message)).toEqual([second, prose]);
+    expect(rows[0]?.workDetails.map((detail) => detail.id)).toEqual(["between"]);
+    expect(
+      rows.filter((row) => row.chainedTo).map((row) => [row.message.id, row.chainedTo]),
+    ).toEqual([
+      ["second", "first"],
+      ["prose", "first"],
+    ]);
+  });
+
   it("groups completed details in source order and keeps turn boundaries outside Activity", () => {
     const rows = projectTranscriptRows([
       { id: "user-1", type: "user", time, text: "Start" },

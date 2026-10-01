@@ -59,10 +59,8 @@
 }
 
 .transcript-activity > .transcript-activity-content[data-expanded] {
-  max-height: var(--oc-activity-max-height, 240px);
   padding: 4px 0 0 24px;
-  overflow: hidden auto;
-  overscroll-behavior: contain;
+  overflow: visible;
 }
 
 .transcript-activity-steps {
@@ -74,10 +72,12 @@
   display: none;
 }
 
-.transcript-activity-steps > * {
+.transcript-activity-steps > *,
+.transcript-activity-continuation > * {
   margin-bottom: 4px;
 }
 
-.transcript-activity-steps > :last-child {
+.transcript-activity-steps > :last-child,
+.transcript-activity-continuation > :last-child {
   margin-bottom: 0;
 }

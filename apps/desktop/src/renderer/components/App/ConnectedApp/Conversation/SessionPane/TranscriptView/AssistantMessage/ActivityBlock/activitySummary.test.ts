@@ -161,6 +161,15 @@ describe("activitySummary", () => {
         true,
       ),
     ).toBe("Reasoning");
+    // Missing reasoning completion timestamps must not keep earlier batches live
+    // after later tools have already finished.
+    expect(
+      activitySummary(
+        [{ type: "reasoning", text: "Earlier", time: { created: 1 } }, tool(2, 3)],
+        [],
+        true,
+      ),
+    ).toBeUndefined();
   });
 
   it("reports a running shell and never measures a finished run", () => {

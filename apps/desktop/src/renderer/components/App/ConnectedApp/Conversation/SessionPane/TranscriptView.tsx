@@ -89,7 +89,6 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   let detachWheel: (() => void) | undefined;
   let viewport: HTMLDivElement | undefined;
   let resumeFrame: number | undefined;
-  let activityHeightFrame: number | undefined;
   let scrollIntentBaseline: number | undefined;
   let scrollIntentTimer: number | undefined;
   type Positioning = {
@@ -132,15 +131,6 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     if (resumeFrame === undefined) return;
     cancelAnimationFrame(resumeFrame);
     resumeFrame = undefined;
-  };
-
-  const updateActivityHeight = () => {
-    if (!viewport || viewport.clientHeight <= 0) return;
-    const height = Math.min(340, Math.max(120, viewport.clientHeight * 0.3));
-    const value = `${height}px`;
-    if (viewport.style.getPropertyValue("--oc-activity-max-height") !== value) {
-      viewport.style.setProperty("--oc-activity-max-height", value);
-    }
   };
 
   const cancelScrollIntent = () => {
@@ -301,17 +291,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
   // Created before the upstream hook's observer so a paused view can latch the
   // follow state before the hook's resize callback runs.
-  const pauseObserver = new ResizeObserver((entries) => {
-    if (
-      viewport &&
-      entries.some((entry) => entry.target === viewport) &&
-      activityHeightFrame === undefined
-    ) {
-      activityHeightFrame = requestAnimationFrame(() => {
-        activityHeightFrame = undefined;
-        updateActivityHeight();
-      });
-    }
+  const pauseObserver = new ResizeObserver(() => {
     readGeometry(true);
     if (!readerPaused()) return;
     untrack(() => {
@@ -358,7 +338,6 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
   onCleanup(() => {
     cancelResumeFrame();
-    if (activityHeightFrame !== undefined) cancelAnimationFrame(activityHeightFrame);
     cancelAwayTimer();
     cancelScrollIntent();
     pauseObserver.disconnect();
@@ -475,7 +454,6 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     <div
       ref={(element) => {
         viewport = element;
-        updateActivityHeight();
         // A window resize can move the newest content out of view without
         // resizing the document or firing a scroll.
         pauseObserver.observe(element);
@@ -592,6 +570,8 @@ function renderMessage(
         <AssistantMessage
           message={message}
           workDetails={row()?.workDetails}
+          continuations={row()?.continuations}
+          chainedTo={row()?.chainedTo}
           sessionID={props.sessionID}
           sessionStatus={props.sessionStatus}
           turnActive={activeTurnMessages().has(message.id)}

@@ -194,11 +194,13 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    expect(activity.textContent).toContain("Working");
+    expect(activity.textContent).not.toContain("Working");
     expect(activity.textContent).toContain("check");
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("true");
     setMessages(0, "content", 2, { type: "reasoning", text: "Check the result" });
-    expect(activity.textContent).toContain("Working");
+    expect(activity.textContent).not.toContain("Working");
     expect(host.querySelector(".transcript-tool-call")).not.toBeNull();
     setMessages(0, "content", 1, assistant("first", "error"));
     expect(activity.textContent).toContain("Failed");
@@ -210,7 +212,7 @@ describe("TranscriptView", () => {
     expect(groups).toHaveLength(2);
     expect(groups[0]).toBe(activity);
     expect(activity.getAttribute("aria-expanded")).toBe("true");
-    expect(groups[1]!.getAttribute("aria-expanded")).toBe("true");
+    expect(groups[1]!.getAttribute("aria-expanded")).toBe("false");
     expect(host.querySelector(".transcript-tool-header")).toBe(tool);
     expect(tool.getAttribute("aria-expanded")).toBe("true");
     expect(
@@ -228,7 +230,7 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps a reader's choice during tool cycles and collapses when the turn ends", () => {
+  it("chains consecutive model cycles without resetting tools and ends the chain at prose", () => {
     stubResizeObserver();
     const user: SessionMessageUser = { id: "prompt", time: base, type: "user", text: "Check" };
     const [responses, setResponses] = createStore<SessionMessageAssistant[]>([
@@ -250,11 +252,9 @@ describe("TranscriptView", () => {
       />
     ));
     const first = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    expect(first.getAttribute("aria-expanded")).toBe("true");
-    first.click();
     expect(first.getAttribute("aria-expanded")).toBe("false");
     setResponses(0, "content", 1, { type: "reasoning", text: "Checking another path" });
-    expect(first.textContent).toContain("Working");
+    expect(first.textContent).toContain("Used 1 other tool");
     expect(first.getAttribute("aria-expanded")).toBe("false");
 
     first.click();
@@ -262,23 +262,45 @@ describe("TranscriptView", () => {
     setResponses(0, "finish", "tool-calls");
     setResponses(1, toolAssistantMessage("second-cycle", "write"));
     const panels = host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger");
-    expect(panels).toHaveLength(2);
+    expect(panels).toHaveLength(1);
+    expect(panels[0]).toBe(first);
     expect(first.getAttribute("aria-expanded")).toBe("true");
-    expect(panels[1]!.getAttribute("aria-expanded")).toBe("true");
+    expect(first.textContent).toContain("Used 2 other tools");
 
     const secondTool = host.querySelector<HTMLButtonElement>(
-      '[data-message-id="second-cycle"] .transcript-tool-header',
+      '.transcript-activity-continuation[data-message-id="second-cycle"] .transcript-tool-header',
     )!;
+    secondTool.click();
     secondTool.focus();
+    setResponses(1, "content", 1, { type: "reasoning", text: "Next cycle reasoning" });
+    const reasoning = host.querySelector<HTMLButtonElement>(
+      ".transcript-activity-continuation .transcript-reasoning .transcript-context-trigger",
+    )!;
+    reasoning.click();
+    const annotation = host.querySelector<HTMLElement>(
+      ".transcript-activity-continuation .transcript-reasoning-summary",
+    )!;
+    expect(annotation.getAttribute("data-annotation-block")).toBe('["content",1,"reasoning"]');
+    expect(annotation.closest("[data-message-id]")?.getAttribute("data-message-id")).toBe(
+      "second-cycle",
+    );
+    setResponses(1, "content", 2, { type: "text", text: "Done" });
+    expect(host.querySelector(".transcript-activity-continuation .transcript-tool-header")).toBe(
+      secondTool,
+    );
+    expect(secondTool.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      host.querySelector('[data-message-id="second-cycle"] .transcript-markdown')?.textContent,
+    ).toBe("Done");
+    setResponses(1, "content", 3, assistant("after-prose", "completed"));
+    expect(host.querySelectorAll(".transcript-activity-trigger")).toHaveLength(2);
     setEnded(true);
     setStatus("idle");
-    expect(first.textContent).toContain("Used 1 other tool");
+    expect(first.textContent).toContain("Used 2 other tools");
     expect(first.getAttribute("aria-expanded")).toBe("false");
-    expect(panels[1]!.getAttribute("aria-expanded")).toBe("false");
-    expect(document.activeElement).toBe(panels[1]);
+    expect(document.activeElement).toBe(first);
 
     first.click();
-    setResponses(1, "content", 1, { type: "text", text: "Done" });
     expect(first.getAttribute("aria-expanded")).toBe("true");
 
     dispose();
@@ -300,6 +322,8 @@ describe("TranscriptView", () => {
       ));
     const first = render();
     const trigger = first.host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    trigger.click();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     trigger.click();
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
@@ -330,6 +354,7 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    activity.click();
     host.querySelector<HTMLButtonElement>(".transcript-tool-header")!.click();
     const output = host.querySelector<HTMLElement>(".transcript-tool-output")!;
     selectNodeContents(output);
@@ -354,6 +379,7 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    activity.click();
     host.querySelector<HTMLButtonElement>(".transcript-tool-header")!.click();
     selectNodeContents(host.querySelector<HTMLElement>(".transcript-tool-output")!);
     setStatus("idle");
@@ -386,6 +412,7 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
     ));
     const row = host.querySelector('[data-message-id="response"]')!;
+    host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
     const trigger = host.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
     trigger.click();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
@@ -854,8 +881,9 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus={sessionStatus()} />
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
     expect(activity.textContent).toContain("Shell · pnpm test");
+    activity.click();
     activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     activity.click();
@@ -949,7 +977,6 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus={sessionStatus()} />
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     setMessages(1, { type: "shell", status: "exited", exit: 1 });
     expect(activity.getAttribute("aria-expanded")).toBe("true");

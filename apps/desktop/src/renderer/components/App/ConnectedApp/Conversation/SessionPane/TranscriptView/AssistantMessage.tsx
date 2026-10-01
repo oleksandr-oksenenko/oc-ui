@@ -7,7 +7,7 @@ import type { ServerFileImageReader } from "../../../../../../opencode/file-imag
 
 import { Markdown } from "./AssistantMessage/Markdown.tsx";
 import { ActivityBlock } from "./AssistantMessage/ActivityBlock.tsx";
-import type { ActivityDetailInfo } from "./workDetailProjection.ts";
+import type { ActivityContinuation, ActivityDetailInfo } from "./workDetailProjection.ts";
 
 export type AssistantMessageProps = {
   readonly message: SessionMessageAssistant;
@@ -16,6 +16,8 @@ export type AssistantMessageProps = {
   readonly turnActive?: boolean;
   readonly activityOpen?: Map<string, boolean>;
   readonly workDetails?: readonly ActivityDetailInfo[];
+  readonly continuations?: readonly ActivityContinuation[];
+  readonly chainedTo?: string;
   /** Resolves `file:` images in Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
   readonly directory?: string;
@@ -36,6 +38,11 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
       class={`transcript-message transcript-assistant-message transcript-assistant-${state()}`}
       data-message-id={props.message.id}
       data-state={state()}
+      hidden={
+        props.chainedTo !== undefined &&
+        !failed() &&
+        !props.message.content.some((part) => part.type === "text")
+      }
     >
       <div class="transcript-assistant-document">
         <For each={props.message.content}>
@@ -92,7 +99,12 @@ function renderContent(
     case "reasoning":
     case "tool":
       return (
-        <Show when={index() === 0 || props.message.content[index() - 1]?.type === "text"}>
+        <Show
+          when={
+            (index() === 0 && props.chainedTo === undefined) ||
+            props.message.content[index() - 1]?.type === "text"
+          }
+        >
           <ActivityBlock
             content={props.message.content}
             start={index()}
@@ -100,6 +112,11 @@ function renderContent(
               props.message.content.slice(index()).some((part) => part.type === "text")
                 ? undefined
                 : props.workDetails
+            }
+            continuations={
+              props.message.content.slice(index()).some((part) => part.type === "text")
+                ? undefined
+                : props.continuations
             }
             active={props.turnActive === true}
             disclosureKey={

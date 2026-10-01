@@ -14,10 +14,20 @@ import {
   activitySummary,
   shellCommandOutcome,
 } from "./ActivityBlock/activitySummary.ts";
-import type { ActivityDetailInfo } from "../workDetailProjection.ts";
+import type { ActivityContinuation, ActivityDetailInfo } from "../workDetailProjection.ts";
 import "./ActivityBlock.css";
 
 type Content = SessionMessageAssistant["content"][number];
+
+function activitySteps(content: readonly Content[], start: number) {
+  const items: Exclude<Content, { type: "text" }>[] = [];
+  for (let index = start; index < content.length; index++) {
+    const item = content[index]!;
+    if (item.type === "text") break;
+    items.push(item);
+  }
+  return items;
+}
 
 /** A consecutive run of activity; prose stays in its original position. */
 export function ActivityBlock(props: {
@@ -28,36 +38,37 @@ export function ActivityBlock(props: {
   readonly activityOpen?: Map<string, boolean>;
   readonly directory?: string;
   readonly workDetails?: readonly ActivityDetailInfo[];
+  readonly continuations?: readonly ActivityContinuation[];
 }) {
   const savedOpen = () =>
     props.disclosureKey === undefined ? undefined : props.activityOpen?.get(props.disclosureKey);
-  const steps = createMemo(() => {
-    const items: Exclude<Content, { type: "text" }>[] = [];
-    for (let index = props.start; index < props.content.length; index++) {
-      const item = props.content[index]!;
-      if (item.type === "text") break;
-      items.push(item);
-    }
-    return items;
-  });
-  const stepCount = () => steps().length + (props.workDetails?.length ?? 0);
+  const steps = createMemo(() => activitySteps(props.content, props.start));
+  const continuationMessages = createMemo(() => props.continuations?.map((row) => row.message));
+  const continuationDetails = (message: SessionMessageAssistant) =>
+    message.content.some((part) => part.type === "text")
+      ? []
+      : (props.continuations?.find((row) => row.message.id === message.id)?.workDetails ?? []);
+  const allSteps = createMemo(() => [
+    ...steps(),
+    ...(continuationMessages() ?? []).flatMap((message) => activitySteps(message.content, 0)),
+  ]);
+  const allDetails = createMemo(() => [
+    ...(props.workDetails ?? []),
+    ...(continuationMessages() ?? []).flatMap(continuationDetails),
+  ]);
   const summary = createMemo(() =>
-    activitySummary(steps(), props.workDetails ?? [], props.active, props.directory),
+    activitySummary(allSteps(), allDetails(), props.active, props.directory),
   );
-  // What the run did, once it is no longer live. A run whose only work failed
-  // keeps the neutral title; its failure count carries the outcome.
-  const label = createMemo(() =>
-    props.active ? undefined : activityLabel(steps(), props.workDetails ?? []),
-  );
+  const label = createMemo(() => activityLabel(allSteps(), allDetails()));
   const failureIDs = () => [
-    ...steps().flatMap((step) =>
+    ...allSteps().flatMap((step) =>
       step.type !== "tool"
         ? []
         : shellCommandOutcome(step) === "failed" || step.state.status === "error"
           ? [`tool:${step.id}`]
           : [],
     ),
-    ...(props.workDetails ?? [])
+    ...allDetails()
       .filter(
         (message) =>
           message.type === "shell" &&
@@ -68,44 +79,28 @@ export function ActivityBlock(props: {
       .map((message) => `${message.type}:${message.id}`),
   ];
   const failed = () => failureIDs().length > 0;
-  const mounted = createDeferredCollapsibleMount(savedOpen() ?? (props.active || failed()));
-  const [open, setOpen] = createSignal(savedOpen() ?? (props.active || failed()));
+  const mounted = createDeferredCollapsibleMount(savedOpen() ?? failed());
+  const [open, setOpen] = createSignal(savedOpen() ?? failed());
   let trigger: HTMLButtonElement | undefined;
-  let scrollArea: HTMLDivElement | undefined;
-  let follow = true;
-  let lastScrollTop = 0;
-  let followFrame: number | undefined;
-  let observer: ResizeObserver | undefined;
+  let contentArea: HTMLDivElement | undefined;
   let pendingClose = false;
   const selectionInside = () => {
     const selection = window.getSelection();
     return (
-      scrollArea !== undefined &&
+      contentArea !== undefined &&
       selection !== null &&
       !selection.isCollapsed &&
       selection.rangeCount > 0 &&
-      (scrollArea.contains(selection.anchorNode) || scrollArea.contains(selection.focusNode))
+      (contentArea.contains(selection.anchorNode) || contentArea.contains(selection.focusNode))
     );
   };
   const rememberOpen = (next: boolean) => {
     if (props.disclosureKey === undefined || props.activityOpen === undefined) return;
-    if (next === (props.active || failed())) props.activityOpen.delete(props.disclosureKey);
+    if (next === failed()) props.activityOpen.delete(props.disclosureKey);
     else props.activityOpen.set(props.disclosureKey, next);
   };
-  const scheduleFollow = () => {
-    if (selectionInside()) follow = false;
-    if (!open() || !follow || followFrame !== undefined) return;
-    followFrame = requestAnimationFrame(() => {
-      followFrame = undefined;
-      if (selectionInside()) follow = false;
-      if (open() && follow && scrollArea) {
-        scrollArea.scrollTop = scrollArea.scrollHeight;
-        lastScrollTop = scrollArea.scrollTop;
-      }
-    });
-  };
   const closeNow = () => {
-    if (scrollArea?.contains(document.activeElement)) trigger?.focus({ preventScroll: true });
+    if (contentArea?.contains(document.activeElement)) trigger?.focus({ preventScroll: true });
     setOpen(false);
   };
   const stopWaitingForSelection = () => {
@@ -143,10 +138,6 @@ export function ActivityBlock(props: {
           return;
         }
         stopWaitingForSelection();
-        follow = true;
-        mounted.onOpenChange(true);
-        setOpen(true);
-        scheduleFollow();
       },
       { defer: true },
     ),
@@ -161,14 +152,8 @@ export function ActivityBlock(props: {
     }
     previousFailureIDs = currentFailureIDs;
   });
-  createEffect(() => {
-    if (!open()) return;
-    if (stepCount() > 0) scheduleFollow();
-  });
   onCleanup(() => {
     stopWaitingForSelection();
-    observer?.disconnect();
-    if (followFrame !== undefined) cancelAnimationFrame(followFrame);
   });
   return (
     <Collapsible
@@ -176,14 +161,12 @@ export function ActivityBlock(props: {
       variant="ghost"
       forceMount
       open={open()}
-      data-active={props.active}
+      data-active={summary() !== undefined}
       onOpenChange={(next) => {
         stopWaitingForSelection();
-        if (next) follow = true;
         mounted.onOpenChange(next);
         setOpen(next);
         rememberOpen(next);
-        if (next) scheduleFollow();
       }}
     >
       <Collapsible.Trigger
@@ -192,12 +175,10 @@ export function ActivityBlock(props: {
         }}
         class="transcript-activity-trigger"
       >
-        <Show when={props.active}>
+        <Show when={summary()}>
           <span class="transcript-activity-pulse" aria-hidden="true" />
         </Show>
-        <span class="transcript-activity-title">
-          {label() ?? (props.active ? "Working" : "Activity")}
-        </span>
+        <span class="transcript-activity-title">{label() ?? summary() ?? "Activity"}</span>
         <Icon
           name={open() ? "chevron-down" : "chevron-right"}
           class="transcript-activity-chevron"
@@ -209,7 +190,7 @@ export function ActivityBlock(props: {
             · {failureIDs().length === 1 ? "Failed" : `${failureIDs().length} failed`}
           </span>
         </Show>
-        <Show when={summary()}>
+        <Show when={label() !== undefined ? summary() : undefined}>
           {(text) => (
             <span class="transcript-activity-summary" title={text()}>
               {text()}
@@ -220,31 +201,11 @@ export function ActivityBlock(props: {
       <Show when={mounted.mount()}>
         <Collapsible.Content
           ref={(element: HTMLDivElement) => {
-            scrollArea = element;
+            contentArea = element;
           }}
-          class="transcript-activity-content oc-scrollable"
-          data-scrollable
-          tabIndex={0}
-          aria-label="Activity steps"
-          onScroll={(event: UIEvent & { currentTarget: HTMLDivElement }) => {
-            const element = event.currentTarget;
-            if (selectionInside()) follow = false;
-            else if (element.scrollHeight - element.clientHeight - element.scrollTop < 20)
-              follow = true;
-            else if (element.scrollTop < lastScrollTop - 1) follow = false;
-            lastScrollTop = element.scrollTop;
-          }}
-          onWheel={(event: WheelEvent) => {
-            if (event.deltaY < 0) follow = false;
-          }}
+          class="transcript-activity-content"
         >
-          <div
-            ref={(element) => {
-              observer = new ResizeObserver(() => scheduleFollow());
-              observer.observe(element);
-            }}
-            class="transcript-activity-steps"
-          >
+          <div class="transcript-activity-steps">
             <For each={steps()}>
               {(step, index) =>
                 step.type === "reasoning" ? (
@@ -259,6 +220,27 @@ export function ActivityBlock(props: {
             </For>
             <For each={props.workDetails}>
               {(message) => <WorkDetailMessage message={message} />}
+            </For>
+            <For each={continuationMessages()}>
+              {(message) => (
+                <div class="transcript-activity-continuation" data-message-id={message.id}>
+                  <For each={activitySteps(message.content, 0)}>
+                    {(step, index) =>
+                      step.type === "reasoning" ? (
+                        <ReasoningBlock
+                          reasoning={step}
+                          annotationBlock={annotationBlock("content", index(), "reasoning")}
+                        />
+                      ) : (
+                        <ToolCall tool={step} directory={props.directory} />
+                      )
+                    }
+                  </For>
+                  <For each={continuationDetails(message)}>
+                    {(detail) => <WorkDetailMessage message={detail} />}
+                  </For>
+                </div>
+              )}
             </For>
           </div>
         </Collapsible.Content>

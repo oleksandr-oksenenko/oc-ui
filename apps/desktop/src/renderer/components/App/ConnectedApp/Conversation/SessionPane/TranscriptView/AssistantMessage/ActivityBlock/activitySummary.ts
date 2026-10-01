@@ -168,7 +168,7 @@ export function activitySummary(
   const step = steps.findLast((item) =>
     item.type === "tool"
       ? item.state.status === "running" || item.state.status === "streaming"
-      : item.time !== undefined && item.time.completed === undefined,
+      : item === steps.at(-1) && item.time !== undefined && item.time.completed === undefined,
   );
   if (step?.type === "reasoning") return "Reasoning";
   if (step?.type === "tool") {
