@@ -16,6 +16,7 @@ import { ImagePreview } from "../../../../../../../../ui/ImagePreview.tsx";
 import { createDeferredCollapsibleMount } from "../../createDeferredCollapsibleMount.ts";
 
 import { toolParameter } from "../toolParameter.ts";
+import { shellCommandOutcome } from "./activitySummary.ts";
 
 export type ToolCallProps = {
   readonly tool: SessionMessageAssistantTool;
@@ -27,18 +28,27 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
   const details = () => toolDetails(props.tool);
   const parameter = () => toolParameter(props.tool, props.directory);
   const status = () => props.tool.state.status;
+  const outcome = () => shellCommandOutcome(props.tool);
+  const settled = () =>
+    outcome() !== "running" && (status() === "completed" || status() === "error");
+  const failed = () => outcome() === "failed" || status() === "error";
   const statusLabel = () =>
-    status() === "completed"
-      ? "Completed"
-      : status() === "error"
-        ? "Error"
-        : status() === "streaming"
-          ? "Streaming"
-          : "Running";
+    outcome() === "failed"
+      ? "Failed"
+      : outcome() === "running" && status() === "completed"
+        ? "Running"
+        : status() === "completed"
+          ? "Completed"
+          : status() === "error"
+            ? "Error"
+            : status() === "streaming"
+              ? "Streaming"
+              : "Running";
 
   return (
     <Collapsible
       class={`transcript-tool-call transcript-tool-${status()}`}
+      data-outcome={outcome()}
       defaultOpen={false}
       onOpenChange={content.onOpenChange}
     >
@@ -59,18 +69,14 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
         </span>
         <span class="transcript-tool-status">
           <Show
-            when={status() === "completed" || status() === "error"}
+            when={settled()}
             fallback={
               <Loader class="transcript-tool-loader" width={14} height={14} aria-hidden="true" />
             }
           >
-            <Icon
-              name={status() === "completed" ? "check" : "warning"}
-              size="small"
-              aria-hidden="true"
-            />
+            <Icon name={failed() ? "warning" : "check"} size="small" aria-hidden="true" />
           </Show>
-          <span class="sr-only">{statusLabel()}</span>
+          <span classList={{ "sr-only": outcome() !== "failed" }}>{statusLabel()}</span>
         </span>
       </Collapsible.Trigger>
       <Show when={content.mount()}>

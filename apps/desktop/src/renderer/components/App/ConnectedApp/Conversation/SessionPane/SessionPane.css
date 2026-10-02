@@ -485,8 +485,13 @@
   color: var(--oc-status-success);
 }
 
-.transcript-tool-error .transcript-tool-status {
+.transcript-tool-error .transcript-tool-status,
+.transcript-tool-call[data-outcome="failed"] .transcript-tool-status {
   color: var(--oc-status-danger);
+}
+
+.transcript-tool-call[data-outcome="running"] .transcript-tool-status {
+  color: var(--oc-text-muted);
 }
 
 .transcript-tool-output {

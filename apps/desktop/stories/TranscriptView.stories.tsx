@@ -701,6 +701,21 @@ export const ActivityStates: Story = {
       "Read 1 file",
       "Shell · pnpm watch",
     ]);
+    const canvas = within(canvasElement);
+    for (const command of ["pnpm slow", "pnpm tests"]) {
+      const tool = canvas.getByRole("button", { name: `shell ${command} Failed` });
+      await expect(within(tool).getByText("Failed")).toBeVisible();
+      await userEvent.click(tool);
+      await expect(tool).toHaveAttribute("aria-expanded", "true");
+      await userEvent.click(tool);
+      await expect(tool).toHaveAttribute("aria-expanded", "false");
+    }
+    const background = canvasElement.querySelector<HTMLButtonElement>(
+      '[data-message-id="turn-17"] .transcript-activity-trigger',
+    )!;
+    await userEvent.click(background);
+    await expect(canvas.getByRole("button", { name: "shell pnpm watch Running" })).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "shell pnpm watch Completed" })).toBeNull();
   },
 };
 export const ActivityStatesNarrow: Story = {
@@ -826,7 +841,7 @@ export const CatalogInteractions: Story = {
       "read Streaming",
       "grep TranscriptView Running",
       "apply_patch Completed",
-      "bash pnpm build Error",
+      "bash pnpm build Failed",
       "skill release-checklist Completed",
       "pnpm watch Killed",
       "Compaction manual Failed",

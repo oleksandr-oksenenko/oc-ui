@@ -178,6 +178,57 @@ function stubAnimationFrames() {
 }
 
 describe("TranscriptView", () => {
+  it("updates shell rows from background work to a visible command failure without resetting output", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
+      {
+        ...toolAssistantMessage("activity", "shell"),
+        content: [
+          {
+            type: "tool",
+            id: "shell",
+            name: "shell",
+            time: base,
+            state: {
+              status: "completed",
+              input: { command: "pnpm test" },
+              metadata: { status: "running" },
+              content: [{ type: "text", text: "Command output" }],
+            },
+          },
+        ],
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    activity.click();
+    const tool = host.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
+    expect(tool.querySelector(".transcript-tool-status")?.textContent).toBe("Running");
+    expect(tool.querySelector(".transcript-tool-loader")).not.toBeNull();
+    tool.click();
+    const output = host.querySelector(
+      '[data-annotation-block=\'["tool","shell","output",0,"text"]\']',
+    );
+    setMessages(0, "content", 0, "state", {
+      status: "completed",
+      metadata: { status: "completed", exit: 1 },
+    });
+    expect(activity.textContent).toContain("Failed");
+    expect(host.querySelector(".transcript-tool-header")).toBe(tool);
+    expect(tool.getAttribute("aria-expanded")).toBe("true");
+    expect(tool.querySelector(".transcript-tool-status")?.textContent).toBe("Failed");
+    expect(tool.querySelector(".transcript-tool-status .sr-only")).toBeNull();
+    expect(tool.querySelector(".transcript-tool-loader")).toBeNull();
+    expect(
+      host.querySelector('[data-annotation-block=\'["tool","shell","output",0,"text"]\']'),
+    ).toBe(output);
+    expect(output?.textContent).toBe("Command output");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
   it("updates live activity summaries and failures without moving prose or resetting expansion", () => {
     stubResizeObserver();
     const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
