@@ -103,6 +103,9 @@ export const Idle: Story = {
       const modelPicker = within(modelDialog);
       const search = await modelPicker.findByPlaceholderText("Search models");
       await expect(search).toHaveFocus();
+      const current = modelPicker.getByRole("button", { name: "GPT-5" });
+      await expect(current).toHaveAttribute("data-selected", "true");
+      await expect(current.querySelector('[data-slot="list-item-selected-icon"]')).not.toBeNull();
 
       await userEvent.type(search, "mini");
       await expect(modelPicker.getByText("GPT-5 Mini", { exact: true })).toBeVisible();
@@ -121,11 +124,27 @@ export const Idle: Story = {
       const modelList = modelDialog.querySelector<HTMLElement>('[data-component="list"]');
       if (!modelList) throw new Error("Model picker list did not render");
       await expect(within(modelList).getByText("GPT-5", { exact: true })).toBeVisible();
-      await userEvent.keyboard("{ArrowDown}{Enter}");
+      await userEvent.keyboard("{ArrowDown}");
+      await expect(modelPicker.getByRole("button", { name: "GPT-5 Mini" })).toHaveAttribute(
+        "data-active",
+        "true",
+      );
+      await expect(modelPicker.getByRole("button", { name: "GPT-5" })).toHaveAttribute(
+        "data-selected",
+        "true",
+      );
+      await userEvent.keyboard("{Enter}");
       await expect(idleOnSelectModel).toHaveBeenCalledWith("openai/gpt-5-mini");
       await expect(canvas.getByRole("button", { name: "Model: GPT-5 Mini" })).toHaveTextContent(
         "GPT-5 Mini",
       );
+      await userEvent.click(canvas.getByRole("button", { name: "Model: GPT-5 Mini" }));
+      const reopened = within(await screen.findByRole("dialog", { name: "Models" }));
+      await expect(reopened.getByRole("button", { name: "GPT-5 Mini" })).toHaveAttribute(
+        "data-selected",
+        "true",
+      );
+      await userEvent.keyboard("{Escape}");
     });
   },
 };

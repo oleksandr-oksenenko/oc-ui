@@ -2,7 +2,7 @@ import "../../../../../../ui/SelectionList.css";
 import { Icon } from "@opencode/ui/icon";
 import { List } from "@opencode/ui/list";
 import { Popover } from "@opencode/ui/popover";
-import { createEffect, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal } from "solid-js";
 
 export type ModelPickerOption = {
   readonly id: string;
@@ -20,7 +20,9 @@ type ModelPickerProps = {
 export function ModelPicker(props: ModelPickerProps) {
   let root: HTMLSpanElement | undefined;
   const [open, setOpen] = createSignal(false);
-  const selected = () => props.options.find((option) => option.id === props.selectedID);
+  // Upstream List identifies the current option by object identity.
+  const options = createMemo(() => props.options);
+  const selected = () => options().find((option) => option.id === props.selectedID);
 
   const select = (option: ModelPickerOption | undefined) => {
     if (!option) return;
@@ -29,7 +31,7 @@ export function ModelPicker(props: ModelPickerProps) {
   };
 
   createEffect(() => {
-    if (props.disabled || props.options.length === 0) {
+    if (props.disabled || options().length === 0) {
       setOpen(false);
       return;
     }
@@ -50,7 +52,7 @@ export function ModelPicker(props: ModelPickerProps) {
       }}
       class="composer-picker"
     >
-      {props.options.length === 0 ? (
+      {options().length === 0 ? (
         <span class="composer-picker--unavailable" aria-disabled="true">
           No models
         </span>
@@ -85,7 +87,7 @@ export function ModelPicker(props: ModelPickerProps) {
             class="composer-model-list selection-list"
             search={{ placeholder: "Search models", autofocus: true }}
             emptyMessage="No matching models."
-            items={[...props.options]}
+            items={[...options()]}
             key={(option) => option.id}
             current={selected()}
             filterKeys={["label", "group"]}

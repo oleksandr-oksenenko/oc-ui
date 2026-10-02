@@ -4,7 +4,7 @@ import { Popover } from "@opencode/ui/popover";
 import { List, type ListRef } from "@opencode/ui/list";
 import { Icon } from "@opencode/ui/icon";
 import { Button } from "@opencode/ui/button";
-import { For, Show, createEffect, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import type { ComponentProps } from "solid-js";
 
 type Option = {
@@ -31,6 +31,8 @@ type NewSessionPickerProps = {
 
 export function NewSessionPicker(props: NewSessionPickerProps) {
   const [open, setOpen] = createSignal(false);
+  // Upstream List identifies the current option by object identity.
+  const options = createMemo(() => props.options);
   const rows = new WeakMap<Option, HTMLButtonElement>();
   let list: ListRef | undefined;
   let direction = "ArrowDown";
@@ -65,9 +67,9 @@ export function NewSessionPicker(props: NewSessionPickerProps) {
       <List
         ref={(ref) => (list = ref)}
         class="selection-list"
-        items={[...props.options]}
+        items={[...options()]}
         key={(option) => option.id}
-        current={props.options.find((option) => option.id === props.selectedID)}
+        current={options().find((option) => option.id === props.selectedID)}
         search={{ placeholder: `Search ${props.label.toLowerCase()}`, autofocus: true }}
         filterKeys={["label", "detail"]}
         emptyMessage="No matches."

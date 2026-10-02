@@ -1254,6 +1254,11 @@ export const NewSessionInteractions = {
     await userEvent.click(canvas.getByRole("button", { name: "Project: oc-ui" }));
     await userEvent.click(await screen.findByRole("button", { name: /scout/ }));
     await userEvent.click(canvas.getByRole("button", { name: "Branch: main" }));
+    const currentBranch = await screen.findByRole("button", { name: "main" });
+    await expect(currentBranch).toHaveAttribute("data-selected", "true");
+    await expect(
+      currentBranch.querySelector('[data-slot="list-item-selected-icon"]'),
+    ).not.toBeNull();
     await userEvent.click(await screen.findByRole("button", { name: "Create new branch…" }));
     await userEvent.type(
       canvas.getByRole("textbox", { name: "New branch name" }),
