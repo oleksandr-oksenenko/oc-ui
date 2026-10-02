@@ -436,6 +436,22 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     }
     return active;
   });
+  // Tool completion does not end activity. Visible prose ends the preceding
+  // activity run, including runs chained across assistant messages.
+  const liveActivityMessages = createMemo(() => {
+    const live = new Set<string>();
+    for (let index = props.messages.length - 1; index >= 0; index--) {
+      const message = props.messages[index]!;
+      if (!activeTurnMessages().has(message.id)) break;
+      live.add(message.id);
+      if (
+        message.type === "assistant" &&
+        message.content.some((part) => part.type === "text" && part.text.trim())
+      )
+        break;
+    }
+    return live;
+  });
   const hasLiveActivity = createMemo(() =>
     visibleProjection().some(
       (row) =>
@@ -517,7 +533,9 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
         >
           <For each={visibleMessages()}>
             {(message) =>
-              renderMessage(message, props, activeTurnMessages, () => rowsByID().get(message.id))
+              renderMessage(message, props, activeTurnMessages, liveActivityMessages, () =>
+                rowsByID().get(message.id),
+              )
             }
           </For>
 
@@ -560,6 +578,7 @@ function renderMessage(
     | "activityOpen"
   >,
   activeTurnMessages: () => ReadonlySet<string>,
+  liveActivityMessages: () => ReadonlySet<string>,
   row: () => TranscriptRow | undefined,
 ): JSX.Element {
   switch (message.type) {
@@ -575,6 +594,10 @@ function renderMessage(
           sessionID={props.sessionID}
           sessionStatus={props.sessionStatus}
           turnActive={activeTurnMessages().has(message.id)}
+          activityLive={
+            liveActivityMessages().has(message.id) ||
+            row()?.continuations?.some((item) => liveActivityMessages().has(item.message.id))
+          }
           activityOpen={props.activityOpen}
           readFileImage={props.readFileImage}
           directory={props.directory}
@@ -592,6 +615,7 @@ function renderMessage(
               start={0}
               workDetails={details()}
               active={activeTurnMessages().has(message.id)}
+              live={liveActivityMessages().has(message.id)}
               disclosureKey={JSON.stringify([props.sessionID, message.id, "work-details"])}
               activityOpen={props.activityOpen}
               directory={props.directory}

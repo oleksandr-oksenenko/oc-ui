@@ -457,8 +457,7 @@ export const ActivityStreamingNarrow: Story = {
 
     canvas.getByRole("button", { name: "Finish turn" }).click();
     const title = canvasElement.querySelector<HTMLElement>(".transcript-activity-title")!;
-    await waitFor(() => expect(title.textContent).toContain("Read 9 files"));
-    await expect(title.textContent).toContain("ran 5 searches");
+    await waitFor(() => expect(title.textContent).toBe("Read 9 files, ran 5 searches"));
     await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
     await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
   },
@@ -471,7 +470,8 @@ export const ActivityStreamingBehavior: Story = {
     const activity = canvasElement.querySelector<HTMLElement>(".transcript-activity")!;
     const header = activity.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     await expect(header).toHaveAttribute("aria-expanded", "false");
-    await expect(header).toHaveTextContent("Read 9 files and ran 5 searches");
+    await expect(header).toHaveTextContent("Read 9 files, ran 5 searches");
+    await expect(header.querySelector(".transcript-activity-pulse")).toBeVisible();
     header.click();
     const panel = activity.querySelector<HTMLElement>(".transcript-activity-content")!;
     await expect(header).toHaveAttribute("aria-expanded", "true");
@@ -492,6 +492,7 @@ export const ActivityStreamingBehavior: Story = {
     );
     await expect(headers).toHaveLength(1);
     await expect(headers[0]).toBe(header);
+    await expect(header.querySelector(".transcript-activity-pulse")).toBeVisible();
     await expect(header).toHaveAttribute("aria-expanded", "true");
     header.click();
     canvas.getByRole("button", { name: "Add activity step" }).click();
@@ -499,7 +500,8 @@ export const ActivityStreamingBehavior: Story = {
 
     canvas.getByRole("button", { name: "Finish turn" }).click();
     await waitFor(() => expect(header).toHaveAttribute("aria-expanded", "false"));
-    await expect(header).toHaveTextContent("Read 11 files and ran 6 searches");
+    await expect(header.querySelector(".transcript-activity-pulse")).toBeNull();
+    await expect(header).toHaveTextContent("Read 11 files, ran 6 searches");
     await expect(
       canvas.getByText("I checked the changed modules and found no blocking issue."),
     ).toBeVisible();
@@ -548,10 +550,9 @@ export const ActivityWithPendingRequest: Story = {
   render: () => <TranscriptActivityFixture pending />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("button", { name: /^Read 9 files/ })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    await expect(
+      canvas.getByRole("button", { name: "Read 9 files, ran 5 searches" }),
+    ).toHaveAttribute("aria-expanded", "false");
     await expect(canvasElement.querySelector(".transcript-pending-interaction")).not.toBeNull();
     await expect(canvasElement.querySelector("[data-permission-request-id]")).not.toBeNull();
   },
@@ -745,9 +746,9 @@ export const ActivityStates: Story = {
       "Loaded 1 skill",
       "Asked 1 question",
       "Used 2 other tools",
-      "Read 2 files, updated 1 file and ran 3 searches",
+      "Read 6 files, ran 1 search, 3 commands, started 2 commands, delegated 2 tasks, loaded 1 skill, asked 1 question, used 1 other tool",
       "Used 1 other tool",
-      "Read 1 file and used 1 other tool",
+      "Read 1 file, used 1 other tool",
       "Used 2 other tools",
       "Read 1 file",
       "Started 1 command",
@@ -757,7 +758,7 @@ export const ActivityStates: Story = {
       "Activity",
       "Ran 2 commands",
       "Read 1 file",
-      "Shell · pnpm watch",
+      "Activity",
     ]);
     const canvas = within(canvasElement);
     for (const activity of canvasElement.querySelectorAll<HTMLButtonElement>(
@@ -794,12 +795,17 @@ export const ActivityStatesNarrow: Story = {
       expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(25),
     );
     await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
-    // The longest label wraps inside the column instead of clipping.
+    // A run spanning many kinds of work stays on one line, with the complete
+    // summary available on hover when the narrow column clips it.
     const label = [
       ...canvasElement.querySelectorAll<HTMLElement>(".transcript-activity-title"),
-    ].find((title) => title.textContent?.startsWith("Read 2 files"));
-    if (!label) throw new Error("The long label is missing");
-    await expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth + 1);
+    ].find((title) => title.textContent?.startsWith("Read 6 files, ran 1 search, 3 commands"));
+    if (!label) throw new Error("The mixed activity label is missing");
+    await expect(label.scrollWidth).toBeGreaterThan(label.clientWidth);
+    await expect(label.getAttribute("title")).toBe(label.textContent);
+    await expect(contentRect(label).height).toBeLessThanOrEqual(
+      Number.parseFloat(getComputedStyle(label).lineHeight) + 1,
+    );
   },
 };
 export const CompactionStates: Story = {

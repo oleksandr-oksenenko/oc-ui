@@ -9,7 +9,7 @@ import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMoun
 import { ReasoningBlock } from "./ActivityBlock/ReasoningBlock.tsx";
 import { ToolCall } from "./ActivityBlock/ToolCall.tsx";
 import { WorkDetailMessage } from "./ActivityBlock/WorkDetailMessage.tsx";
-import { activityLabel, activitySummary } from "./ActivityBlock/activitySummary.ts";
+import { activityLabel } from "./ActivityBlock/activitySummary.ts";
 import type { ActivityContinuation, ActivityDetailInfo } from "../workDetailProjection.ts";
 import "./ActivityBlock.css";
 
@@ -30,6 +30,7 @@ export function ActivityBlock(props: {
   readonly content: readonly Content[];
   readonly start: number;
   readonly active: boolean;
+  readonly live: boolean;
   readonly disclosureKey?: string;
   readonly activityOpen?: Map<string, boolean>;
   readonly directory?: string;
@@ -52,9 +53,12 @@ export function ActivityBlock(props: {
     ...(props.workDetails ?? []),
     ...(continuationMessages() ?? []).flatMap(continuationDetails),
   ]);
-  const summary = createMemo(() =>
-    activitySummary(allSteps(), allDetails(), props.active, props.directory),
-  );
+  const live = () =>
+    props.live &&
+    !props.content.slice(props.start).some((part) => part.type === "text" && part.text.trim()) &&
+    !continuationMessages()?.some((message) =>
+      message.content.some((part) => part.type === "text" && part.text.trim()),
+    );
   const label = createMemo(() => activityLabel(allSteps(), allDetails()));
   const mounted = createDeferredCollapsibleMount(savedOpen() ?? false);
   const [open, setOpen] = createSignal(savedOpen() ?? false);
@@ -127,7 +131,7 @@ export function ActivityBlock(props: {
       variant="ghost"
       forceMount
       open={open()}
-      data-active={summary() !== undefined}
+      data-active={live()}
       onOpenChange={(next) => {
         stopWaitingForSelection();
         mounted.onOpenChange(next);
@@ -141,23 +145,18 @@ export function ActivityBlock(props: {
         }}
         class="transcript-activity-trigger"
       >
-        <Show when={summary()}>
+        <Show when={live()}>
           <span class="transcript-activity-pulse" aria-hidden="true" />
         </Show>
-        <span class="transcript-activity-title">{label() ?? summary() ?? "Activity"}</span>
+        <span class="transcript-activity-title" title={label() ?? "Activity"}>
+          {label() ?? "Activity"}
+        </span>
         <Icon
           name={open() ? "chevron-down" : "chevron-right"}
           class="transcript-activity-chevron"
           size="small"
           aria-hidden="true"
         />
-        <Show when={label() !== undefined && summary() !== "Reasoning" ? summary() : undefined}>
-          {(text) => (
-            <span class="transcript-activity-summary" title={text()}>
-              {text()}
-            </span>
-          )}
-        </Show>
       </Collapsible.Trigger>
       <Show when={mounted.mount()}>
         <Collapsible.Content

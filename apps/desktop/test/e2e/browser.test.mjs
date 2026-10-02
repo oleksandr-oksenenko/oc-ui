@@ -647,12 +647,16 @@ describe.sequential("production browser app", () => {
     await idle();
     await send("E2E_QUESTION browser");
     await page.locator(".question-form").waitFor();
+    const questionActivity = page.locator(".transcript-activity-trigger").last();
+    await expect.poll(() => questionActivity.locator(".transcript-activity-pulse").count()).toBe(1);
+    expect(await questionActivity.textContent()).toBe("Activity");
     await expect
       .poll(() => page.locator('.shell-session-row.selected [data-status="question"]').count())
       .toBe(1);
     await page.locator(".question-form label").filter({ hasText: "Alpha" }).click();
     await page.locator('.question-form button[type="submit"]').click();
     await transcript("Acceptance question resolved:");
+    await expect.poll(() => questionActivity.locator(".transcript-activity-pulse").count()).toBe(0);
     await expect
       .poll(() => page.locator(".shell-session-row.selected .shell-session-attention-dot").count())
       .toBe(0);

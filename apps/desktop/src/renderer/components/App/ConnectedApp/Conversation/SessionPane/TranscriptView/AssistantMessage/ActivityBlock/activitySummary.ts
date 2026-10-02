@@ -2,7 +2,6 @@ import type { SessionMessageAssistant } from "@opencode/client";
 import { Schema } from "effect";
 
 import type { ActivityDetailInfo } from "../../workDetailProjection.ts";
-import { toolParameter } from "../toolParameter.ts";
 
 type Step = Exclude<SessionMessageAssistant["content"][number], { type: "text" }>;
 
@@ -64,7 +63,7 @@ const LOADED: Operation = { verb: "Loaded", singular: "skill", plural: "skills" 
 const ASKED: Operation = { verb: "Asked", singular: "question", plural: "questions" };
 const OTHER: Operation = { verb: "Used", singular: "other tool", plural: "other tools" };
 
-/** Exact tool names, in the order their clause appears in the label. */
+/** Exact tool names and the operation each carries out. */
 const OPERATIONS = new Map<string, Operation>([
   ["read", READ],
   ["write", WROTE],
@@ -82,13 +81,14 @@ const OPERATIONS = new Map<string, Operation>([
   ["question", ASKED],
 ]);
 
-const OPERATION_ORDER = [
+// Keep operations with the same verb adjacent so the label names that verb once.
+const LABEL_OPERATIONS = [
   READ,
   WROTE,
   UPDATED,
   PATCHED,
-  SEARCHED,
   FETCHED,
+  SEARCHED,
   RAN,
   STARTED,
   DELEGATED,
@@ -98,11 +98,9 @@ const OPERATION_ORDER = [
 ];
 
 /**
- * Action label for an Activity header, or undefined when the run carried out no
- * operation to describe. Every operation the run carried out is named, whatever
- * its outcome: a failed command still reads as the command it was. Running and
- * streaming calls are excluded because they have not been carried out yet, and a command moved to
- * the background counts as started rather than run.
+ * Name completed operations, sharing verbs: "Ran 1 search, 4 commands".
+ * Failures still count as attempted operations.
+ * Running and streaming calls are excluded; background commands count as started.
  */
 export function activityLabel(
   steps: readonly Step[],
@@ -138,41 +136,16 @@ export function activityLabel(
     if (detail.type === "skill") count(LOADED);
   }
   const clauses: string[] = [];
-  for (const operation of OPERATION_ORDER) {
+  let previousVerb: string | undefined;
+  for (const operation of LABEL_OPERATIONS) {
     const value = counts.get(operation);
     if (value === undefined) continue;
-    const unit = value === 1 ? operation.singular : operation.plural;
-    // Only the opening clause keeps its capital; the rest read as one sentence.
-    const verb = clauses.length === 0 ? operation.verb : operation.verb.toLowerCase();
-    clauses.push(`${verb} ${value} ${unit}`);
+    const verb =
+      operation.verb === previousVerb
+        ? ""
+        : `${clauses.length === 0 ? operation.verb : operation.verb.toLowerCase()} `;
+    clauses.push(`${verb}${value} ${value === 1 ? operation.singular : operation.plural}`);
+    previousVerb = operation.verb;
   }
-  if (clauses.length === 0) return undefined;
-  if (clauses.length === 1) return clauses[0]!;
-  return `${clauses.slice(0, -1).join(", ")} and ${clauses.at(-1)}`;
-}
-
-/**
- * The action a live run is performing right now, or undefined when the run is
- * not live or has nothing in flight.
- */
-export function activitySummary(
-  steps: readonly Step[],
-  details: readonly ActivityDetailInfo[],
-  active: boolean,
-  directory?: string,
-): string | undefined {
-  if (!active) return undefined;
-  const work = details.findLast((item) => item.type === "shell" && item.status === "running");
-  if (work?.type === "shell") return `Shell · ${work.command.replace(/\s+/g, " ")}`;
-  const step = steps.findLast((item) =>
-    item.type === "tool"
-      ? item.state.status === "running" || item.state.status === "streaming"
-      : item === steps.at(-1) && item.time !== undefined && item.time.completed === undefined,
-  );
-  if (step?.type === "reasoning") return "Reasoning";
-  if (step?.type === "tool") {
-    const parameter = toolParameter(step, directory);
-    return parameter ? `${step.name} · ${parameter.text}` : step.name;
-  }
-  return undefined;
+  return clauses.length === 0 ? undefined : clauses.join(", ");
 }

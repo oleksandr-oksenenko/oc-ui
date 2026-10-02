@@ -1,23 +1,11 @@
 import type {
   SessionMessageAssistantTool,
-  SessionMessageInfo,
   SessionMessageShell,
   SessionMessageSkill,
   SessionMessageSynthetic,
 } from "@opencode/client";
 import { describe, expect, it } from "vite-plus/test";
-import { activityLabel, activitySummary } from "./activitySummary.ts";
-
-const tool = (created: number, completed?: number): SessionMessageAssistantTool => ({
-  type: "tool",
-  id: "read",
-  name: "read",
-  time: { created, completed },
-  state:
-    completed === undefined
-      ? { status: "running", input: { path: "/workspace/src/app.ts" }, metadata: {} }
-      : { status: "completed", input: {}, content: [{ type: "text", text: "done" }] },
-});
+import { activityLabel } from "./activitySummary.ts";
 
 const shell = (id: string, exit: number): SessionMessageShell => ({
   id,
@@ -82,13 +70,13 @@ const synthetic: SessionMessageSynthetic = {
 };
 
 describe("activityLabel", () => {
-  it("counts completed calls per operation in a stable order", () => {
+  it("names mixed operations in a stable order and keeps single-operation labels", () => {
     expect(
       activityLabel(
         [named("a", "read"), named("b", "read"), named("c", "grep"), named("d", "edit")],
         [],
       ),
-    ).toBe("Read 2 files, updated 1 file and ran 1 search");
+    ).toBe("Read 2 files, updated 1 file, ran 1 search");
     expect(activityLabel([named("a", "read")], [])).toBe("Read 1 file");
     expect(activityLabel([], [shell("ok", 0), shell("ok-2", 0)])).toBe("Ran 2 commands");
   });
@@ -99,10 +87,33 @@ describe("activityLabel", () => {
         [named("a", "write"), named("b", "patch"), named("c", "webfetch"), named("d", "mcp__x")],
         [],
       ),
-    ).toBe("Wrote 1 file, applied 1 patch, fetched 1 page and used 1 other tool");
+    ).toBe("Wrote 1 file, applied 1 patch, fetched 1 page, used 1 other tool");
     expect(activityLabel([named("a", "execute"), named("b", "custom")], [])).toBe(
       "Used 2 other tools",
     );
+  });
+
+  it("shares the ran verb for searches and commands regardless of arrival order", () => {
+    expect(
+      activityLabel(
+        [
+          named("command", "shell"),
+          named("first", "read"),
+          named("second", "read"),
+          named("search", "grep"),
+        ],
+        [shell("one", 0), shell("two", 0), shell("three", 1)],
+      ),
+    ).toBe("Read 2 files, ran 1 search, 4 commands");
+    expect(activityLabel([named("search", "grep")], [shell("command", 0)])).toBe(
+      "Ran 1 search, 1 command",
+    );
+    expect(
+      activityLabel(
+        [named("search", "grep"), shellTool("background", { status: "running" })],
+        [shell("command", 0)],
+      ),
+    ).toBe("Ran 1 search, 1 command, started 1 command");
   });
 
   it("names every operation the run carried out, whatever its outcome", () => {
@@ -147,49 +158,5 @@ describe("activityLabel", () => {
       },
     };
     expect(activityLabel([custom], [])).toBe("Used 1 other tool");
-  });
-});
-
-describe("activitySummary", () => {
-  it("names the running action using the existing relative-path summary", () => {
-    expect(activitySummary([tool(1000)], [], true, "/workspace")).toBe("read · src/app.ts");
-    expect(activitySummary([tool(1000, 2000)], [], true)).toBeUndefined();
-    expect(
-      activitySummary(
-        [{ type: "reasoning", text: "Private detail", time: { created: 1 } }],
-        [],
-        true,
-      ),
-    ).toBe("Reasoning");
-    // Missing reasoning completion timestamps must not keep earlier batches live
-    // after later tools have already finished.
-    expect(
-      activitySummary(
-        [{ type: "reasoning", text: "Earlier", time: { created: 1 } }, tool(2, 3)],
-        [],
-        true,
-      ),
-    ).toBeUndefined();
-  });
-
-  it("reports a running shell and never measures a finished run", () => {
-    const running: SessionMessageInfo = {
-      id: "shell",
-      type: "shell",
-      time: { created: 1 },
-      shellID: "shell",
-      command: "pnpm check",
-      status: "running",
-    };
-    expect(activitySummary([tool(1)], [running], true)).toBe("Shell · pnpm check");
-    expect(
-      activitySummary([tool(1, 2000)], [{ ...running, status: "exited", exit: 0 }], true),
-    ).toBeUndefined();
-    // A finished run shows its completed actions only: the header carries no
-    // elapsed time, whatever the recorded timestamps are.
-    expect(activitySummary([tool(1000, 33000)], [], false)).toBeUndefined();
-    expect(activitySummary([tool(1000, 33000)], [skill], false)).toBeUndefined();
-    expect(activitySummary([tool(0, NaN)], [], false)).toBeUndefined();
-    expect(activitySummary([], [], false)).toBeUndefined();
   });
 });

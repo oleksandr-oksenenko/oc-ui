@@ -143,12 +143,17 @@ const states: readonly State[] = [
   {
     caption: "Several operations",
     content: [
-      tool("app", "read"),
-      tool("util", "read"),
-      tool("layout", "edit"),
+      ...Array.from({ length: 6 }, (_, index) => tool(`read-${index}`, "read")),
       tool("usage", "grep"),
-      tool("docs", "grep"),
-      tool("tests", "grep"),
+      ...Array.from({ length: 3 }, (_, index) => tool(`command-${index}`, "shell")),
+      ...Array.from({ length: 2 }, (_, index) =>
+        tool(`background-${index}`, "shell", { status: "running" }),
+      ),
+      tool("explore", "subagent"),
+      tool("verify", "subagent"),
+      tool("review", "skill"),
+      tool("choice", "question"),
+      tool("custom", "custom"),
     ],
   },
   { caption: "Only a failure", content: [failedTool("check")] },
