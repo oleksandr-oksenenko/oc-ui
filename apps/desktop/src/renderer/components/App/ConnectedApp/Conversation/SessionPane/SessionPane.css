@@ -626,6 +626,11 @@
   font-size: var(--oc-type-metadata-size);
 }
 
+.transcript-context-message .transcript-context-label {
+  flex: none;
+  white-space: nowrap;
+}
+
 .transcript-context-detail {
   min-width: 0;
   overflow: hidden;

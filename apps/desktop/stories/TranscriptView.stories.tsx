@@ -152,6 +152,30 @@ export const CollapsedActivity: Story = {
   },
 };
 
+export const ContextLongDescription: Story = {
+  args: {
+    sessionStatus: "idle",
+    messages: [
+      {
+        id: "long-context",
+        type: "synthetic",
+        time: { created: 1 },
+        description:
+          "pnpm storybook > /private/var/folders/0m/8pbhxmdx1c73_s21w3n7pcr40000gq/T/opencode/clever-planet-storybook.log 2>&1",
+        text: "Storybook is ready at http://localhost:6006. The command is still running.",
+      },
+      {
+        id: "long-system-context",
+        type: "system",
+        time: { created: 2 },
+        description: "Session instructions loaded from /workspace/project/.opencode/AGENTS.md",
+        text: "Follow the project instructions when making changes.",
+      },
+    ],
+  },
+  render: renderTranscript,
+};
+
 export const ImagePreviews: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
   render: renderTranscript,
