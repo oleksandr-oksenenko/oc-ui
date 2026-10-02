@@ -65,7 +65,7 @@ export function AnnotationPopover(props: AnnotationPopoverProps): JSX.Element {
           >
             <Button
               size="small"
-              variant="outline"
+              variant="ghost"
               disabled={selection().pending}
               aria-busy={selection().pending}
               onPointerDown={(event: PointerEvent) => event.preventDefault()}
