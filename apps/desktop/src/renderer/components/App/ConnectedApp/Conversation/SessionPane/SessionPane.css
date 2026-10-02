@@ -257,7 +257,7 @@
 }
 
 .transcript-markdown :is(h1, h2, h3, h4, h5, h6) {
-  margin: 16px 0 8px;
+  margin: 8px 0;
   line-height: 1.25;
 }
 
@@ -269,7 +269,11 @@
   font-size: 1.2em;
 }
 
-.transcript-markdown :is(h3, h4, h5, h6) {
+.transcript-markdown h3 {
+  font-size: 1.15em;
+}
+
+.transcript-markdown :is(h4, h5, h6) {
   font-size: 1.05em;
 }
 
