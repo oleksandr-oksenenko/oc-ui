@@ -100,9 +100,8 @@ const OPERATION_ORDER = [
 /**
  * Action label for an Activity header, or undefined when the run carried out no
  * operation to describe. Every operation the run carried out is named, whatever
- * its outcome: the failure badge marks which runs had failures, so a failed
- * command still reads as the command it was. Running and streaming calls are
- * excluded because they have not been carried out yet, and a command moved to
+ * its outcome: a failed command still reads as the command it was. Running and
+ * streaming calls are excluded because they have not been carried out yet, and a command moved to
  * the background counts as started rather than run.
  */
 export function activityLabel(

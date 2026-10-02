@@ -411,6 +411,40 @@ export const ActivityStreaming: Story = {
   args: { messages: [], sessionStatus: "running" },
   render: () => <TranscriptActivityFixture />,
 };
+export const ActivityReasoning: Story = {
+  args: {
+    sessionStatus: "running",
+    messages: [
+      {
+        id: "activity-reasoning",
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "test", id: "test" },
+        time: { created: 1 },
+        content: [
+          {
+            type: "tool",
+            id: "reasoning-read",
+            name: "read",
+            time: { created: 1, completed: 2 },
+            state: {
+              status: "completed",
+              input: { path: "README.md" },
+              content: [{ type: "text", text: "Project overview" }],
+            },
+          },
+          { type: "reasoning", text: "Considering the next step.", time: { created: 3 } },
+        ],
+      },
+    ],
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    const header = canvasElement.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    await expect(header.textContent).toBe("Read 1 file");
+    await expect(header.querySelector(".transcript-activity-pulse")).toBeVisible();
+  },
+};
 export const ActivityStreamingNarrow: Story = {
   ...ActivityStreaming,
   render: () => <TranscriptActivityFixture width="320px" />,
@@ -712,13 +746,13 @@ export const ActivityStates: Story = {
       "Asked 1 question",
       "Used 2 other tools",
       "Read 2 files, updated 1 file and ran 3 searches",
-      "Used 1 other tool· Failed",
-      "Read 1 file and used 1 other tool· Failed",
-      "Used 2 other tools· 2 failed",
-      "Read 1 file· Failed",
+      "Used 1 other tool",
+      "Read 1 file and used 1 other tool",
+      "Used 2 other tools",
+      "Read 1 file",
       "Started 1 command",
-      "Ran 1 command· Failed",
-      "Ran 1 command· Failed",
+      "Ran 1 command",
+      "Ran 1 command",
       "Activity",
       "Activity",
       "Ran 2 commands",
@@ -730,9 +764,12 @@ export const ActivityStates: Story = {
       ".transcript-activity-trigger",
     )) {
       await expect(activity).toHaveAttribute("aria-expanded", "false");
-      if (activity.querySelector('[role="alert"]')) await userEvent.click(activity);
     }
-    for (const command of ["pnpm slow", "pnpm tests"]) {
+    for (const [index, command] of ["pnpm slow", "pnpm tests"].entries()) {
+      const activity = canvasElement.querySelector<HTMLButtonElement>(
+        `[data-message-id="turn-${index + 18}"] .transcript-activity-trigger`,
+      )!;
+      await userEvent.click(activity);
       const tool = canvas.getByRole("button", { name: `shell ${command} Failed` });
       await expect(within(tool).getByText("Failed")).toBeVisible();
       await userEvent.click(tool);

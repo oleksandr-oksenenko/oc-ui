@@ -7,8 +7,8 @@ import type {
 import { TranscriptView } from "../../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 
 /**
- * Every Activity header state in one transcript, so the label, the failure badge
- * and the neutral fallbacks can be reviewed together. Each caption is the prompt
+ * Every Activity header state in one transcript, so operation labels
+ * and neutral fallbacks can be reviewed together. Each caption is the prompt
  * of its own turn; the last turn stays live.
  */
 

@@ -9,11 +9,7 @@ import { createDeferredCollapsibleMount } from "../createDeferredCollapsibleMoun
 import { ReasoningBlock } from "./ActivityBlock/ReasoningBlock.tsx";
 import { ToolCall } from "./ActivityBlock/ToolCall.tsx";
 import { WorkDetailMessage } from "./ActivityBlock/WorkDetailMessage.tsx";
-import {
-  activityLabel,
-  activitySummary,
-  shellCommandOutcome,
-} from "./ActivityBlock/activitySummary.ts";
+import { activityLabel, activitySummary } from "./ActivityBlock/activitySummary.ts";
 import type { ActivityContinuation, ActivityDetailInfo } from "../workDetailProjection.ts";
 import "./ActivityBlock.css";
 
@@ -60,25 +56,6 @@ export function ActivityBlock(props: {
     activitySummary(allSteps(), allDetails(), props.active, props.directory),
   );
   const label = createMemo(() => activityLabel(allSteps(), allDetails()));
-  const failureIDs = () => [
-    ...allSteps().flatMap((step) =>
-      step.type !== "tool"
-        ? []
-        : shellCommandOutcome(step) === "failed" || step.state.status === "error"
-          ? [`tool:${step.id}`]
-          : [],
-    ),
-    ...allDetails()
-      .filter(
-        (message) =>
-          message.type === "shell" &&
-          (message.status === "timeout" ||
-            message.status === "killed" ||
-            (message.status === "exited" && message.exit !== 0)),
-      )
-      .map((message) => `${message.type}:${message.id}`),
-  ];
-  const failed = () => failureIDs().length > 0;
   const mounted = createDeferredCollapsibleMount(savedOpen() ?? false);
   const [open, setOpen] = createSignal(savedOpen() ?? false);
   let trigger: HTMLButtonElement | undefined;
@@ -174,12 +151,7 @@ export function ActivityBlock(props: {
           size="small"
           aria-hidden="true"
         />
-        <Show keyed when={failed() ? JSON.stringify(failureIDs()) : undefined}>
-          <span class="transcript-activity-error" role="alert">
-            · {failureIDs().length === 1 ? "Failed" : `${failureIDs().length} failed`}
-          </span>
-        </Show>
-        <Show when={label() !== undefined ? summary() : undefined}>
+        <Show when={label() !== undefined && summary() !== "Reasoning" ? summary() : undefined}>
           {(text) => (
             <span class="transcript-activity-summary" title={text()}>
               {text()}

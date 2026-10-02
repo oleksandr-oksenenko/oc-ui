@@ -215,7 +215,7 @@ describe("TranscriptView", () => {
       status: "completed",
       metadata: { status: "completed", exit: 1 },
     });
-    expect(activity.textContent).toContain("Failed");
+    expect(activity.textContent).toBe("Ran 1 command");
     expect(host.querySelector(".transcript-tool-header")).toBe(tool);
     expect(tool.getAttribute("aria-expanded")).toBe("true");
     expect(tool.querySelector(".transcript-tool-status")?.textContent).toBe("Failed");
@@ -250,11 +250,15 @@ describe("TranscriptView", () => {
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("true");
-    setMessages(0, "content", 2, { type: "reasoning", text: "Check the result" });
+    setMessages(0, "content", 2, {
+      type: "reasoning",
+      text: "Check the result",
+      time: { created: 2 },
+    });
     expect(activity.textContent).not.toContain("Working");
     expect(host.querySelector(".transcript-tool-call")).not.toBeNull();
     setMessages(0, "content", 1, assistant("first", "error"));
-    expect(activity.textContent).toContain("Failed");
+    expect(activity.textContent).toBe("Used 1 other tool");
     const tool = host.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
     tool.click();
     setMessages(0, "content", 3, { type: "text", text: "After" });
@@ -445,7 +449,7 @@ describe("TranscriptView", () => {
     selectNodeContents(host.querySelector<HTMLElement>(".transcript-tool-output")!);
     setStatus("idle");
     setMessages(0, "content", (content) => [...content, assistant("late-error", "error")]);
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Failed");
+    expect(activity.textContent).toBe("Used 2 other tools");
     expect(activity.getAttribute("aria-expanded")).toBe("true");
 
     window.getSelection()?.removeAllRanges();
@@ -999,7 +1003,7 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    expect(activity.textContent).toContain("Failed");
+    expect(activity.textContent).toBe("Ran 1 command");
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     expect(host.querySelector('[data-message-id="shell-failed"]')).toBeNull();
     activity.click();
@@ -1043,16 +1047,14 @@ describe("TranscriptView", () => {
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     setMessages(1, { type: "shell", status: "exited", exit: 1 });
     expect(activity.getAttribute("aria-expanded")).toBe("false");
-    expect(activity.textContent).toContain("Failed");
-    const firstAlert = activity.querySelector('[role="alert"]');
+    expect(activity.textContent).toContain("Ran 1 command");
     activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("true");
     activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     setMessages(2, { type: "shell", status: "exited", exit: 1 });
     expect(activity.getAttribute("aria-expanded")).toBe("false");
-    expect(activity.querySelector('[role="alert"]')).not.toBe(firstAlert);
-    expect(activity.querySelector('[role="alert"]')?.textContent).toContain("2 failed");
+    expect(activity.textContent).toBe("Ran 2 commands");
     activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("true");
     setSessionStatus("idle");

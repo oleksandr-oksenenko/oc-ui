@@ -42,17 +42,11 @@
   white-space: nowrap;
 }
 
-.transcript-activity-error {
-  flex: none;
-  color: var(--oc-status-danger);
-  font-size: var(--oc-type-metadata-size);
-  font-weight: var(--oc-type-metadata-weight);
-}
-
 .transcript-activity-pulse {
   flex: none;
   width: 7px;
   height: 7px;
+  margin: 3px;
   border-radius: var(--oc-radius-full);
   background: var(--oc-accent);
   box-shadow: 0 0 0 3px var(--oc-selection-ring);
