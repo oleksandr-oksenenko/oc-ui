@@ -1,5 +1,9 @@
 # oc-ui repository guidance
 
+## Toolchain
+
+- Use the exact Node.js version pinned in [`.node-version`](.node-version) for dependency installation, development, checks, tests, and builds. Verify `node --version` matches before running these commands. The `package.json` engine range is a compatibility minimum, not the development version.
+
 ## Effect and state ownership
 
 This repository uses Effect v4 RC for server communication, persistence, connections, and feature workflows. Keep pure calculations and rendering as ordinary code.
