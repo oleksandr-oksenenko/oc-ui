@@ -33,10 +33,11 @@
   --oc-icon-base: #636361;
   --oc-accent: #075ebd;
 
-  /* Warm Paper uses an accent outline with space around keyboard-focused controls. */
-  --oc-focus-ring: var(--oc-accent);
+  /* Product contract across themes: neutral, flush focus; never accent-colored
+     glows or detached outer rings. Keep this independent of theme accent choices. */
+  --oc-focus-ring: var(--oc-border-emphasis);
   --oc-focus-ring-width: 1px;
-  --oc-focus-ring-offset: 2px;
+  --oc-focus-ring-offset: 0px;
   --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
   --oc-focus-ring-inset-offset: calc(-1 * var(--oc-focus-ring-width));
   --oc-status-info: #075ebd;

@@ -92,7 +92,7 @@
   box-shadow: none !important;
 }
 
-/* Keep validation visible alongside the accent keyboard outline. */
+/* Keep validation visible alongside the neutral keyboard outline. */
 :where(
     [data-component="text-input-v2"],
     [data-component="textarea-v2"],

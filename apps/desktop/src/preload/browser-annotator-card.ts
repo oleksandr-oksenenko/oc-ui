@@ -76,6 +76,10 @@ button.primary { border-color: transparent; background: var(--oc-selection); col
 button:disabled { opacity: 0.45; cursor: default; }
 button:not(:disabled):hover { border-color: var(--oc-border-strong); }
 button.primary:not(:disabled):hover { background: var(--oc-selection-hover); }
+button:focus-visible {
+  outline: var(--oc-focus-ring-outline);
+  outline-offset: var(--oc-focus-ring-offset);
+}
 `;
 
 /** Places the card beside the anchor inside the current viewport. */

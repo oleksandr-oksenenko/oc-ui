@@ -28,6 +28,7 @@ This repository uses Effect v4 RC for server communication, persistence, connect
 
 ## UI and desktop runtime
 
+- Focus styling is a product contract: neutral, compact, and flush with controls in both themes. Do not restore blue/accent focus glows or detached outer rings during theme redesigns. Preserve visible keyboard focus and compound-field delegation; keep the literal neutral-color and geometry regressions in the Focus and Composer stories.
 - Follow the approved Storybook story, mockup, and latest browser annotations for structure, controls, spacing, density, and placement.
 - Use the Codex in-app browser for standalone pages and Storybook when it supports the required check. Verify Electron and embedded views in the running app; they are not reachable through that browser.
 - Launch through the repository entrypoint, normally `pnpm dev` from the root. Identify processes by their repository and entrypoint, never just the name `Electron`. Use the pinned `@opencode/server` library (through `pnpm dev:opencode` or the browser fixtures) when testing this integration.

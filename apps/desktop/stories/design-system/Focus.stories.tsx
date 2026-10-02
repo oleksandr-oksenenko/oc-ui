@@ -11,8 +11,10 @@ import { Switch } from "@opencode/ui/switch";
 import { Textarea } from "@opencode/ui/textarea";
 import { TextInput } from "@opencode/ui/text-input";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { onCleanup } from "solid-js";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
+import { createAnnotatorCard } from "../../src/preload/browser-annotator-card.ts";
 import { CatalogCard, CatalogPage } from "./StoryLayout";
 
 const meta = {
@@ -22,13 +24,13 @@ const meta = {
 
 export default meta;
 
-async function ring(element: Element, offset = "2px") {
+async function ring(element: Element, offset = "0px") {
   await waitFor(async () => {
     const style = getComputedStyle(element);
-    // Keep a literal Warm Paper expectation: deriving this from the focus token
-    // would let a palette regression change both the result and the expectation.
+    // Product contract: neutral, flush focus in every theme. Theme redesigns must
+    // preserve this; deriving the expectation from tokens would hide regressions.
     const dark = document.documentElement.dataset.colorScheme === "dark";
-    await expect(style.outlineColor).toBe(dark ? "rgb(116, 167, 255)" : "rgb(7, 94, 189)");
+    await expect(style.outlineColor).toBe(dark ? "rgb(135, 133, 128)" : "rgb(119, 119, 117)");
     await expect(style.outlineStyle).toBe("solid");
     await expect(style.outlineWidth).toBe("1px");
     await expect(style.outlineOffset).toBe(offset);
@@ -39,7 +41,7 @@ export const SharedTreatment: StoryObj = {
   render: () => (
     <CatalogPage
       title="Focus"
-      intro="Warm Paper focus is shared across controls. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
+      intro="Focus stays neutral and flush across themes. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
     >
       <CatalogCard
         title="Shared controls"
@@ -145,4 +147,48 @@ export const SharedTreatment: StoryObj = {
 export const SharedTreatmentDark: StoryObj = {
   ...SharedTreatment,
   globals: { theme: "dark" },
+};
+
+export const EmbeddedAnnotationCard: StoryObj = {
+  render: () => {
+    const card = createAnnotatorCard(() => undefined, { shadowRootMode: "open" });
+    onCleanup(() => card.close());
+    return (
+      <CatalogPage
+        title="Embedded annotation focus"
+        intro="The in-page card owns an isolated shadow root and uses neutral focus even on pages without app styles."
+      >
+        <Button onClick={() => card.open({ left: 24, top: 100, width: 100, height: 24 })}>
+          Open embedded annotation card
+        </Button>
+      </CatalogPage>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole("button", { name: "Open embedded annotation card" }),
+    );
+    const host = document.querySelector<HTMLElement>("[data-ocui-annotator][data-open]");
+    const root = host?.shadowRoot;
+    if (!root) throw new Error("Embedded annotation card did not open");
+    const editor = root.querySelector("textarea")!;
+    const buttons = [...root.querySelectorAll("button")];
+    await expect(root.activeElement).toBe(editor);
+    await expect(getComputedStyle(editor).borderColor).toBe("rgb(135, 133, 128)");
+    await userEvent.type(editor, "Keep focus neutral");
+    for (const button of buttons) {
+      // userEvent's synthetic Tab traversal does not enter shadow roots.
+      button.focus();
+      await expect(root.activeElement).toBe(button);
+      await expect(button.matches(":focus-visible")).toBe(true);
+      const style = getComputedStyle(button);
+      await expect(style.outlineColor).toBe("rgb(135, 133, 128)");
+      await expect(style.outlineStyle).toBe("solid");
+      await expect(style.outlineWidth).toBe("1px");
+      await expect(style.outlineOffset).toBe("0px");
+      await expect(style.boxShadow).toBe("none");
+    }
+    await userEvent.keyboard("{Enter}");
+    await expect(host).not.toHaveAttribute("data-open");
+  },
 };

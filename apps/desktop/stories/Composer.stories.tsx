@@ -83,8 +83,13 @@ export const Idle: Story = {
     await step("Submit a non-empty draft with Enter", async () => {
       await userEvent.type(prompt, "Send");
       const frame = canvas.getByRole("form", { name: "Message composer" });
-      await expect(getComputedStyle(frame).outlineColor).toBe("rgb(7, 94, 189)");
+      await expect(getComputedStyle(frame).outlineColor).toBe(
+        document.documentElement.dataset.colorScheme === "dark"
+          ? "rgb(135, 133, 128)"
+          : "rgb(119, 119, 117)",
+      );
       await expect(getComputedStyle(frame).outlineWidth).toBe("1px");
+      await expect(getComputedStyle(frame).outlineOffset).toBe("0px");
       await expect(getComputedStyle(prompt).outlineStyle).toBe("none");
       await userEvent.keyboard("{Enter}");
       await expect(prompt).toHaveTextContent("");
@@ -123,6 +128,11 @@ export const Idle: Story = {
       );
     });
   },
+};
+
+export const IdleDark: Story = {
+  ...Idle,
+  globals: { theme: "dark" },
 };
 
 export const PastedFiles: Story = {
