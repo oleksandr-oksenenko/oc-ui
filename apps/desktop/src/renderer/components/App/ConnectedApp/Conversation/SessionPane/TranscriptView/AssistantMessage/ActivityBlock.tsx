@@ -79,8 +79,8 @@ export function ActivityBlock(props: {
       .map((message) => `${message.type}:${message.id}`),
   ];
   const failed = () => failureIDs().length > 0;
-  const mounted = createDeferredCollapsibleMount(savedOpen() ?? failed());
-  const [open, setOpen] = createSignal(savedOpen() ?? failed());
+  const mounted = createDeferredCollapsibleMount(savedOpen() ?? false);
+  const [open, setOpen] = createSignal(savedOpen() ?? false);
   let trigger: HTMLButtonElement | undefined;
   let contentArea: HTMLDivElement | undefined;
   let pendingClose = false;
@@ -96,7 +96,7 @@ export function ActivityBlock(props: {
   };
   const rememberOpen = (next: boolean) => {
     if (props.disclosureKey === undefined || props.activityOpen === undefined) return;
-    if (next === failed()) props.activityOpen.delete(props.disclosureKey);
+    if (!next) props.activityOpen.delete(props.disclosureKey);
     else props.activityOpen.set(props.disclosureKey, next);
   };
   const closeNow = () => {
@@ -132,7 +132,6 @@ export function ActivityBlock(props: {
       () => props.active,
       (active) => {
         if (!active) {
-          if (failed()) return;
           if (props.disclosureKey !== undefined) props.activityOpen?.delete(props.disclosureKey);
           closeAtTurnEnd();
           return;
@@ -142,16 +141,6 @@ export function ActivityBlock(props: {
       { defer: true },
     ),
   );
-  let previousFailureIDs = new Set(failureIDs());
-  createEffect(() => {
-    const currentFailureIDs = new Set(failureIDs());
-    if ([...currentFailureIDs].some((id) => !previousFailureIDs.has(id))) {
-      stopWaitingForSelection();
-      mounted.onOpenChange(true);
-      setOpen(true);
-    }
-    previousFailureIDs = currentFailureIDs;
-  });
   onCleanup(() => {
     stopWaitingForSelection();
   });

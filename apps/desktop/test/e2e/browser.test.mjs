@@ -664,7 +664,12 @@ describe.sequential("production browser app", () => {
       .click();
     await page.locator(".question-form").waitFor({ state: "hidden" });
     await idle();
-    await page.locator('.transcript-activity-trigger[aria-expanded="false"]').last().click();
+    const failedActivity = page
+      .locator(".transcript-activity-trigger")
+      .filter({ hasText: "Failed" })
+      .last();
+    await expect.poll(() => failedActivity.getAttribute("aria-expanded")).toBe("false");
+    await failedActivity.click();
     await page.locator(".transcript-tool-error .transcript-tool-header").last().click();
     await transcript("The user dismissed this question");
     await send("E2E_PROVIDER_ERROR browser");

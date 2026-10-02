@@ -358,44 +358,54 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
-  it("remembers a manual close across transcript remounts during an active turn", () => {
-    stubResizeObserver();
-    const activityOpen = new Map<string, boolean>();
-    const messages = [toolAssistantMessage("running-response", "read")];
-    const render = () =>
-      mount(() => (
-        <TranscriptView
-          sessionID="session"
-          messages={messages}
-          sessionStatus="running"
-          activityOpen={activityOpen}
-        />
-      ));
-    const first = render();
-    const trigger = first.host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    trigger.click();
-    expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    trigger.click();
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    first.dispose();
+  it.each(["completed", "error"] as const)(
+    "remembers reader choices across remounts for %s activity",
+    (status) => {
+      stubResizeObserver();
+      const activityOpen = new Map<string, boolean>();
+      const messages = [
+        {
+          ...toolAssistantMessage("running-response", "read"),
+          content: [assistant("read", status)],
+        },
+      ];
+      const render = () =>
+        mount(() => (
+          <TranscriptView
+            sessionID="session"
+            messages={messages}
+            sessionStatus="running"
+            activityOpen={activityOpen}
+          />
+        ));
+      const first = render();
+      const trigger = first.host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+      expect(trigger.getAttribute("aria-expanded")).toBe("false");
+      trigger.click();
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      trigger.click();
+      expect(trigger.getAttribute("aria-expanded")).toBe("false");
+      first.dispose();
 
-    const second = render();
-    const restored = second.host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    expect(restored.getAttribute("aria-expanded")).toBe("false");
-    restored.click();
-    expect(restored.getAttribute("aria-expanded")).toBe("true");
-    second.dispose();
+      const second = render();
+      const restored = second.host.querySelector<HTMLButtonElement>(
+        ".transcript-activity-trigger",
+      )!;
+      expect(restored.getAttribute("aria-expanded")).toBe("false");
+      restored.click();
+      expect(restored.getAttribute("aria-expanded")).toBe("true");
+      second.dispose();
 
-    const third = render();
-    expect(
-      third.host
-        .querySelector<HTMLButtonElement>(".transcript-activity-trigger")
-        ?.getAttribute("aria-expanded"),
-    ).toBe("true");
-    third.dispose();
-    vi.unstubAllGlobals();
-  });
+      const third = render();
+      expect(
+        third.host
+          .querySelector<HTMLButtonElement>(".transcript-activity-trigger")
+          ?.getAttribute("aria-expanded"),
+      ).toBe("true");
+      third.dispose();
+      vi.unstubAllGlobals();
+    },
+  );
 
   it("keeps selected activity text visible until the selection is cleared", () => {
     stubResizeObserver();
@@ -420,7 +430,7 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps a late failure visible after clearing a selection that deferred Activity closing", () => {
+  it("lets deferred Activity closing finish when a late failure arrives", () => {
     stubResizeObserver();
     const [status, setStatus] = createSignal<"running" | "idle">("running");
     const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
@@ -436,11 +446,10 @@ describe("TranscriptView", () => {
     setStatus("idle");
     setMessages(0, "content", (content) => [...content, assistant("late-error", "error")]);
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Failed");
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
 
     window.getSelection()?.removeAllRanges();
     document.dispatchEvent(new Event("selectionchange"));
-    expect(activity.getAttribute("aria-expanded")).toBe("true");
-    activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     dispose();
     vi.unstubAllGlobals();
@@ -970,7 +979,7 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps a completed turn's failed shell visible in Activity until the reader closes it", () => {
+  it("keeps a completed turn's failed shell collapsed until the reader opens Activity", () => {
     stubResizeObserver();
     const messages: readonly SessionMessageInfo[] = [
       textAssistantMessage("assistant", "The check failed"),
@@ -991,6 +1000,9 @@ describe("TranscriptView", () => {
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     expect(activity.textContent).toContain("Failed");
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector('[data-message-id="shell-failed"]')).toBeNull();
+    activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("true");
     expect(host.textContent).toContain("pnpm test");
     expect(
@@ -1002,7 +1014,7 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
-  it("reopens Activity for each newly failed live shell and keeps it open at turn end", () => {
+  it("keeps Activity collapsed for newly failed shells and closes manually opened work at turn end", () => {
     stubResizeObserver();
     const [sessionStatus, setSessionStatus] = createSignal<"running" | "idle">("running");
     const [messages, setMessages] = createStore<SessionMessageInfo[]>([
@@ -1030,17 +1042,21 @@ describe("TranscriptView", () => {
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     setMessages(1, { type: "shell", status: "exited", exit: 1 });
-    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
     expect(activity.textContent).toContain("Failed");
     const firstAlert = activity.querySelector('[role="alert"]');
     activity.click();
+    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     setMessages(2, { type: "shell", status: "exited", exit: 1 });
-    expect(activity.getAttribute("aria-expanded")).toBe("true");
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
     expect(activity.querySelector('[role="alert"]')).not.toBe(firstAlert);
     expect(activity.querySelector('[role="alert"]')?.textContent).toContain("2 failed");
-    setSessionStatus("idle");
+    activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("true");
+    setSessionStatus("idle");
+    expect(activity.getAttribute("aria-expanded")).toBe("false");
     dispose();
     vi.unstubAllGlobals();
   });

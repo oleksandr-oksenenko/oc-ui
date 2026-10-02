@@ -702,6 +702,12 @@ export const ActivityStates: Story = {
       "Shell · pnpm watch",
     ]);
     const canvas = within(canvasElement);
+    for (const activity of canvasElement.querySelectorAll<HTMLButtonElement>(
+      ".transcript-activity-trigger",
+    )) {
+      await expect(activity).toHaveAttribute("aria-expanded", "false");
+      if (activity.querySelector('[role="alert"]')) await userEvent.click(activity);
+    }
     for (const command of ["pnpm slow", "pnpm tests"]) {
       const tool = canvas.getByRole("button", { name: `shell ${command} Failed` });
       await expect(within(tool).getByText("Failed")).toBeVisible();
