@@ -105,6 +105,24 @@
   padding: 0;
 }
 
+/* One highlight for searchable lists and portalled select menus. Scope foreground
+ * roles to the active row so descriptions and selection indicators remain legible. */
+:root
+  [data-component="list"]
+  [data-slot="list-items"]
+  [data-slot="list-item"][data-active="true"]:not(:disabled, [data-disabled]),
+:root [data-component="menu-v2-item"][data-highlighted]:not([data-disabled]) {
+  --oc-text-muted: var(--oc-text-on-selection);
+  --icon-strong-base: var(--oc-text-on-selection);
+  --menu-v2-fg: var(--oc-text-on-selection);
+  --menu-v2-fg-muted: var(--oc-text-on-selection);
+  --menu-v2-fg-subtle: var(--oc-text-on-selection);
+  --menu-v2-icon: var(--oc-text-on-selection);
+
+  color: var(--oc-text-on-selection);
+  background: var(--oc-selection);
+}
+
 :root
   [data-slot="radio-v2-item"]:not([data-disabled], [data-checked])
   [data-slot="radio-v2-item-control"] {
