@@ -106,11 +106,12 @@ export function createNewSessionDrafts(
         };
       });
   const projects = () =>
-    registeredProjects().filter((item) =>
-      current().availableProjects.some(
+    registeredProjects().map((item) => ({
+      ...item,
+      disabled: !current().availableProjects.some(
         (available) => available.id === item.id && available.canonical === item.location.directory,
       ),
-    );
+    }));
   const project = () =>
     registeredProjects().find(
       (item) =>
@@ -148,10 +149,11 @@ export function createNewSessionDrafts(
       .sessions()
       .filter((session) => !session.parentID)
       .toSorted((left, right) => right.time.created - left.time.created)[0];
+    const available = projects().filter((item) => !item.disabled);
     const fallback =
-      projects().find((item) => item.id === sessions.selectedSession()?.projectID) ??
-      projects().find((item) => item.id === previous?.projectID) ??
-      projects().find((item) => item.location.directory === runtime.defaultLocation.directory);
+      available.find((item) => item.id === sessions.selectedSession()?.projectID) ??
+      available.find((item) => item.id === previous?.projectID) ??
+      available.find((item) => item.location.directory === runtime.defaultLocation.directory);
     const choices = choicesForProject(
       remembered.project ??
         (fallback ? { id: fallback.id, location: fallback.location } : undefined),
@@ -403,10 +405,12 @@ export function createNewSessionDrafts(
     git: project()?.vcs === "git",
     disabled: lockedDraft(selected()) || selected()?.loading || selected()?.conflict,
     loading: current().projects === "loading",
+    onRetryProjects: loadProjects,
     onProjectChange: (id) => {
       const item = projects().find((candidate) => candidate.id === id);
       const draft = selected();
-      if (item && draft) changeProject(draft.value.id, { id, location: item.location });
+      if (item && !item.disabled && draft)
+        changeProject(draft.value.id, { id, location: item.location });
     },
     onModeChange: (mode) => {
       const choices = selected()?.value.choices;
@@ -521,20 +525,8 @@ export function createNewSessionDrafts(
       (attempt.phase === "sending" && attempt.request.kind === "command")
     );
   };
-  const serverError = () => {
-    const error = current().error ?? storage().get(serverKey)?.error ?? current().projectsError;
-    if (error || current().projects === "loading") return error;
-    const available = projects();
-    const unavailable = registeredProjects().filter(
-      (item) =>
-        !available.some(
-          (candidate) =>
-            candidate.id === item.id && candidate.location.directory === item.location.directory,
-        ),
-    );
-    if (!unavailable.length) return undefined;
-    return `The server could not open ${unavailable.length} saved project ${unavailable.length === 1 ? "folder" : "folders"}: ${unavailable.map((item) => item.location.directory).join(", ")}. Unavailable projects are hidden from the project picker.`;
-  };
+  const serverError = () =>
+    current().error ?? storage().get(serverKey)?.error ?? current().projectsError;
   const composer = (id: string): ComposerProps => {
     const entry = entries().get(id);
     return {

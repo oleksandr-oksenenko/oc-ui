@@ -154,6 +154,23 @@
   text-overflow: ellipsis;
 }
 
+.selection-option-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.selection-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selection-list [data-slot="list-items"] [data-slot="list-item"]:disabled {
+  color: var(--oc-text-muted);
+  background: transparent;
+  cursor: not-allowed;
+}
+
 .selection-action[data-component="button-v2"] {
   width: 100%;
   justify-content: flex-start;

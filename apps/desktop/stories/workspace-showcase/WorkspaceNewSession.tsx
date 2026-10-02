@@ -24,6 +24,8 @@ export type WorkspaceNewSessionProps = {
   readonly onRetry?: NewSessionScreenProps["onRetry"];
   readonly empty?: boolean;
   readonly loading?: boolean;
+  readonly projects?: NewSessionSetupProps["projects"];
+  readonly onRetryProjects?: () => void;
   readonly onSubmit: (mode: "local" | "worktree") => void;
   readonly onAddProject: () => void;
 };
@@ -37,11 +39,11 @@ export function WorkspaceNewSession(options: WorkspaceNewSessionProps) {
       setup={{
         projects: options.empty
           ? []
-          : [
+          : (options.projects ?? [
               { id: "oc-ui", label: "oc-ui", detail: "/Users/alex/code/oc-ui" },
               { id: "scout", label: "scout", detail: "/Users/alex/code/scout" },
               { id: "notes", label: "Notes", detail: "/Users/alex/Documents/Notes" },
-            ],
+            ]),
         projectID: options.empty ? undefined : options.draft.projectID,
         mode: options.draft.mode,
         branch: options.draft.branch,
@@ -69,6 +71,7 @@ export function WorkspaceNewSession(options: WorkspaceNewSessionProps) {
         },
         onBranchChange: (branch) => options.onDraftChange({ branch }),
         onAddProject: options.onAddProject,
+        onRetryProjects: options.onRetryProjects,
       }}
       status={status()}
       onRetry={options.onRetry}

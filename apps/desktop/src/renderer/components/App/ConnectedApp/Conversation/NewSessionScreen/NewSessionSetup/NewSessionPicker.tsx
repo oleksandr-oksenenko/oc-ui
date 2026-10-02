@@ -1,13 +1,18 @@
 import "../../../../../../ui/SelectionList.css";
 import { Popover as Kobalte } from "@kobalte/core/popover";
 import { Popover } from "@opencode/ui/popover";
-import { List } from "@opencode/ui/list";
+import { List, type ListRef } from "@opencode/ui/list";
 import { Icon } from "@opencode/ui/icon";
 import { Button } from "@opencode/ui/button";
-import { Show, createEffect, createSignal } from "solid-js";
+import { For, Show, createEffect, createSignal } from "solid-js";
 import type { ComponentProps } from "solid-js";
 
-type Option = { readonly id: string; readonly label: string; readonly detail?: string };
+type Option = {
+  readonly id: string;
+  readonly label: string;
+  readonly detail?: string;
+  readonly disabled?: boolean;
+};
 
 type NewSessionPickerProps = {
   readonly label: string;
@@ -17,11 +22,18 @@ type NewSessionPickerProps = {
   readonly selectedID?: string;
   readonly disabled?: boolean;
   readonly onSelect: (id: string) => void;
-  readonly action?: { readonly label: string; readonly onClick: () => void };
+  readonly actions?: readonly {
+    readonly label: string;
+    readonly icon?: ComponentProps<typeof Icon>["name"];
+    readonly onClick: () => void;
+  }[];
 };
 
 export function NewSessionPicker(props: NewSessionPickerProps) {
   const [open, setOpen] = createSignal(false);
+  const rows = new WeakMap<Option, HTMLButtonElement>();
+  let list: ListRef | undefined;
+  let direction = "ArrowDown";
   createEffect(() => {
     if (props.disabled) setOpen(false);
   });
@@ -51,6 +63,7 @@ export function NewSessionPicker(props: NewSessionPickerProps) {
     >
       <Kobalte.Title class="sr-only">{props.label}</Kobalte.Title>
       <List
+        ref={(ref) => (list = ref)}
         class="selection-list"
         items={[...props.options]}
         key={(option) => option.id}
@@ -58,22 +71,53 @@ export function NewSessionPicker(props: NewSessionPickerProps) {
         search={{ placeholder: `Search ${props.label.toLowerCase()}`, autofocus: true }}
         filterKeys={["label", "detail"]}
         emptyMessage="No matches."
+        onKeyEvent={(event) => {
+          if (event.key === "ArrowUp" || (event.ctrlKey && event.key === "p"))
+            direction = "ArrowUp";
+          if (event.key === "ArrowDown" || (event.ctrlKey && event.key === "n"))
+            direction = "ArrowDown";
+        }}
+        onMove={(option) => {
+          if (!option?.disabled) return;
+          // Keep upstream filtering/navigation, but only advance if this filtered list has a usable row.
+          const container = rows.get(option)?.closest('[data-component="list"]');
+          if (!container?.querySelector('[data-slot="list-item"]:not(:disabled)')) return;
+          list?.onKeyDown(new KeyboardEvent("keydown", { key: direction }));
+        }}
+        itemWrapper={(option, node) => {
+          if (node instanceof HTMLButtonElement) {
+            rows.set(option, node);
+            createEffect(() => {
+              node.disabled = option.disabled === true;
+              node.title = option.disabled
+                ? `Unavailable ${props.label.toLowerCase()}: ${option.detail ?? option.label}`
+                : "";
+            });
+          }
+          return node;
+        }}
         onSelect={(option) => {
-          if (!option) return;
+          if (!option || option.disabled) return;
           props.onSelect(option.id);
           setOpen(false);
         }}
       >
         {(option) => (
           <span class="selection-option">
-            <span>{option.label}</span>
+            <span class="selection-option-label">
+              <span class="selection-option-name">{option.label}</span>
+              <Show when={option.disabled}>
+                <Icon name="warning" size="small" />
+                <span class="sr-only">Unavailable</span>
+              </Show>
+            </span>
             <Show when={option.detail}>
               <span class="selection-option-detail">{option.detail}</span>
             </Show>
           </span>
         )}
       </List>
-      <Show when={props.action}>
+      <For each={props.actions}>
         {(action) => (
           <Button
             class="selection-action"
@@ -81,14 +125,14 @@ export function NewSessionPicker(props: NewSessionPickerProps) {
             variant="ghost-muted"
             onClick={() => {
               setOpen(false);
-              action().onClick();
+              action.onClick();
             }}
           >
-            <Icon name="plus-small" />
-            {action().label}
+            <Icon name={action.icon ?? "plus-small"} />
+            {action.label}
           </Button>
         )}
-      </Show>
+      </For>
     </Popover>
   );
 }

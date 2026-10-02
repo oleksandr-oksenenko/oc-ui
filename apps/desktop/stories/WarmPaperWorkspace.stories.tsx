@@ -1331,14 +1331,28 @@ export const NewSessionFailed = {
 };
 export const NewSessionUnavailableProject = {
   render: () => {
-    const [status, setStatus] = createSignal<WorkspaceNewSessionProps["status"]>({
-      kind: "error",
-      message:
-        "The server could not open 1 saved project folder: /Users/alex/code/old-project. Unavailable projects are hidden from the project picker.",
-    });
+    const [recovered, setRecovered] = createSignal(false);
     return (
       <WorkspaceShowcaseFixture
-        newSession={{ status: status(), onRetry: () => setStatus(undefined) }}
+        newSession={{
+          projects: [
+            {
+              id: "old-project",
+              label: "old-project",
+              detail: "/Users/alex/code/old-project",
+              disabled: !recovered(),
+            },
+            {
+              id: "other-unavailable",
+              label: "other-unavailable",
+              detail: "/Users/alex/code/other-unavailable",
+              disabled: !recovered(),
+            },
+            { id: "oc-ui", label: "oc-ui", detail: "/Users/alex/code/oc-ui" },
+            { id: "scout", label: "scout", detail: "/Users/alex/code/scout" },
+          ],
+          onRetryProjects: () => setRecovered(true),
+        }}
       />
     );
   },
@@ -1347,10 +1361,38 @@ export const NewSessionUnavailableProjectInteractions = {
   ...NewSessionUnavailableProject,
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
     const canvas = within(canvasElement);
-    const warning = canvas.getByRole("alert");
-    const retry = within(warning).getByRole("button", { name: "Retry" });
-    await userEvent.click(retry);
+    const trigger = canvas.getByRole("button", { name: "Project: oc-ui" });
     await expect(canvas.queryByRole("alert")).toBeNull();
+    await userEvent.click(trigger);
+    const unavailable = await screen.findByRole("button", { name: /old-project.*Unavailable/ });
+    await expect(unavailable).toBeDisabled();
+    const projectList = unavailable.closest('[data-component="list"]');
+    const active = () => projectList?.querySelector('[data-active="true"]');
+    await waitFor(() => expect(active()).toHaveTextContent("oc-ui"));
+    await userEvent.keyboard("{ArrowUp}");
+    await waitFor(() => expect(active()).toHaveTextContent("scout"));
+    await userEvent.keyboard("{ArrowDown}");
+    await waitFor(() => expect(active()).toHaveTextContent("oc-ui"));
+    await userEvent.click(unavailable);
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await userEvent.type(screen.getByPlaceholderText("Search project"), "old-project");
+    await userEvent.keyboard("{Enter}");
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await userEvent.click(trigger);
+    await userEvent.click(await screen.findByRole("button", { name: /scout/ }));
+    await expect(canvas.getByRole("button", { name: "Project: scout" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Project: scout" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Retry unavailable projects" }),
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "Project: scout" }));
+    const restored = await screen.findByRole("button", { name: /old-project/ });
+    await expect(restored).toBeEnabled();
+    await expect(screen.queryByRole("button", { name: "Retry unavailable projects" })).toBeNull();
+    await userEvent.click(restored);
+    await expect(canvas.getByRole("button", { name: "Project: old-project" })).toBeVisible();
     await expect(canvas.getByRole("textbox", { name: "Prompt" })).toHaveTextContent(
       "Design the new session experience",
     );

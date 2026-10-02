@@ -2073,7 +2073,7 @@ describe.sequential("production browser app", () => {
     }
   });
 
-  it("keeps a deleted project out of the picker without deleting its registry record", async () => {
+  it("shows a deleted project as unavailable in the picker without a global warning", async () => {
     const directory = join(profile.paths.app, "deleted-project");
     await mkdir(directory);
     const registered = await api.project.current({ location: { directory } });
@@ -2083,24 +2083,31 @@ describe.sequential("production browser app", () => {
     await ensureConnected();
     await page.getByRole("button", { name: "Create session", exact: true }).click();
     const warning = page.getByRole("alert").filter({ hasText: "saved project folder" });
-    await warning.waitFor();
-    expect(await warning.textContent()).toContain(registered.canonical);
-    await warning.getByRole("button", { name: "Retry", exact: true }).waitFor();
+    expect(await warning.count()).toBe(0);
     expect(await page.locator(".composer").getByRole("button", { name: "Retry" }).count()).toBe(0);
     await page.getByRole("button", { name: /^Project:/u }).click();
     const options = page.locator(".selection-option-detail");
     await expect.poll(() => options.count()).toBeGreaterThan(0);
-    expect(await options.allTextContents()).not.toContain(registered.canonical);
+    const unavailable = page.locator('.selection-list [data-slot="list-item"]').filter({
+      has: page.getByText(registered.canonical, { exact: true }),
+    });
+    await expect.poll(() => unavailable.isDisabled()).toBe(true);
+    await page.getByPlaceholder("Search project").fill("deleted-project");
+    await page.keyboard.press("Enter");
+    expect(
+      await page.getByRole("button", { name: /^Project:/u }).getAttribute("aria-expanded"),
+    ).toBe("true");
     expect((await api.project.list()).some((candidate) => candidate.id === registered.id)).toBe(
       true,
     );
-    await page.keyboard.press("Escape");
     await page.screenshot({ path: join(artifacts, "browser-unavailable-project.png") });
     await mkdir(directory);
-    await warning.getByRole("button", { name: "Retry", exact: true }).click();
-    await warning.waitFor({ state: "hidden" });
-    await page.getByRole("button", { name: /^Project:/u }).click();
+    await page.getByRole("button", { name: "Retry unavailable projects", exact: true }).click();
+    const picker = page.getByRole("button", { name: /^Project:/u });
+    await expect.poll(() => picker.isEnabled()).toBe(true);
+    await picker.click();
     await page.getByText(registered.canonical, { exact: true }).waitFor();
+    await expect.poll(() => unavailable.isEnabled()).toBe(true);
     await page.keyboard.press("Escape");
     await selectSession("Permission acceptance");
   });

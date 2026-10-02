@@ -8,6 +8,7 @@ export type NewSessionSetupProps = {
     readonly id: string;
     readonly label: string;
     readonly detail?: string;
+    readonly disabled?: boolean;
   }[];
   readonly projectID?: string;
   readonly mode: "local" | "worktree";
@@ -23,6 +24,7 @@ export type NewSessionSetupProps = {
   readonly onModeChange: (mode: "local" | "worktree") => void;
   readonly onBranchChange: (branch: NewSessionSetupProps["branch"]) => void;
   readonly onAddProject: () => void;
+  readonly onRetryProjects?: () => void;
 };
 
 export function NewSessionSetup(props: NewSessionSetupProps) {
@@ -53,7 +55,18 @@ export function NewSessionSetup(props: NewSessionSetupProps) {
           value={projectLabel()}
           disabled={disabled()}
           onSelect={props.onProjectChange}
-          action={{ label: "Add project…", onClick: props.onAddProject }}
+          actions={[
+            { label: "Add project…", onClick: props.onAddProject },
+            ...(props.onRetryProjects && props.projects.some((project) => project.disabled)
+              ? [
+                  {
+                    label: "Retry unavailable projects",
+                    icon: "refresh" as const,
+                    onClick: props.onRetryProjects,
+                  },
+                ]
+              : []),
+          ]}
         />
         <Show when={props.git}>
           <NewSessionPicker
@@ -80,12 +93,14 @@ export function NewSessionSetup(props: NewSessionSetupProps) {
             value={branchLabel()}
             disabled={projectDisabled()}
             onSelect={(name) => props.onBranchChange({ kind: "existing", name })}
-            action={
+            actions={
               props.mode === "local"
-                ? {
-                    label: "Create new branch…",
-                    onClick: () => props.onBranchChange({ kind: "new", name: "" }),
-                  }
+                ? [
+                    {
+                      label: "Create new branch…",
+                      onClick: () => props.onBranchChange({ kind: "new", name: "" }),
+                    },
+                  ]
                 : undefined
             }
           />
