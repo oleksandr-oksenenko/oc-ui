@@ -176,6 +176,59 @@ export const ContextLongDescription: Story = {
   render: renderTranscript,
 };
 
+export const ContextOutsideActivity: Story = {
+  args: {
+    sessionStatus: "running",
+    messages: [
+      {
+        ...assistant("before-context"),
+        time: { created: 1, completed: 2 },
+        content: [{ type: "reasoning", text: "The first cycle has finished." }],
+      },
+      {
+        id: "restart-context",
+        type: "synthetic",
+        time: { created: 2 },
+        description: "Continuing after restart",
+        text: "The previous work is preserved. Continue from the last step.",
+      },
+      {
+        ...assistant("after-context"),
+        time: { created: 3 },
+        finish: undefined,
+        content: [{ type: "reasoning", text: "Continuing with the next cycle." }],
+      },
+    ],
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const context = canvas.getByRole("button", { name: "Context Continuing after restart" });
+    await expect(context).toBeVisible();
+    await expect(context.closest(".transcript-activity")).toBeNull();
+    await expect(
+      [...canvasElement.querySelectorAll<HTMLElement>(".transcript-document > *")].map(
+        (element) => element.dataset.messageId,
+      ),
+    ).toEqual(["before-context", "restart-context", "after-context"]);
+    await expect(
+      [...canvasElement.querySelectorAll(".transcript-activity-title")].map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(["Thought", "Thinking"]);
+    for (const activity of canvasElement.querySelectorAll(".transcript-activity-trigger")) {
+      await expect(activity).toHaveAttribute("aria-expanded", "false");
+    }
+    context.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByText(/The previous work is preserved/)).toBeVisible();
+    await userEvent.keyboard(" ");
+    await expect(context).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(context);
+    await expect(canvas.getByText(/The previous work is preserved/)).toBeVisible();
+  },
+};
+
 export const ImagePreviews: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
   render: renderTranscript,
@@ -441,7 +494,7 @@ export const ActivityReasoning: Story = {
   render: renderTranscript,
   play: async ({ canvasElement }) => {
     const header = canvasElement.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    await expect(header.textContent).toBe("Read 1 file");
+    await expect(header.textContent).toBe("Read 1 file, thinking");
     await expect(header.querySelector(".transcript-activity-pulse")).toBeVisible();
   },
 };
@@ -457,7 +510,7 @@ export const ActivityStreamingNarrow: Story = {
 
     canvas.getByRole("button", { name: "Finish turn" }).click();
     const title = canvasElement.querySelector<HTMLElement>(".transcript-activity-title")!;
-    await waitFor(() => expect(title.textContent).toBe("Read 9 files, ran 5 searches"));
+    await waitFor(() => expect(title.textContent).toBe("Read 9 files, ran 5 searches, thought"));
     await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
     await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
   },
@@ -470,7 +523,7 @@ export const ActivityStreamingBehavior: Story = {
     const activity = canvasElement.querySelector<HTMLElement>(".transcript-activity")!;
     const header = activity.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     await expect(header).toHaveAttribute("aria-expanded", "false");
-    await expect(header).toHaveTextContent("Read 9 files, ran 5 searches");
+    await expect(header).toHaveTextContent("Read 9 files, ran 5 searches, thought");
     await expect(header.querySelector(".transcript-activity-pulse")).toBeVisible();
     header.click();
     const panel = activity.querySelector<HTMLElement>(".transcript-activity-content")!;
@@ -501,7 +554,7 @@ export const ActivityStreamingBehavior: Story = {
     canvas.getByRole("button", { name: "Finish turn" }).click();
     await waitFor(() => expect(header).toHaveAttribute("aria-expanded", "false"));
     await expect(header.querySelector(".transcript-activity-pulse")).toBeNull();
-    await expect(header).toHaveTextContent("Read 11 files, ran 6 searches");
+    await expect(header).toHaveTextContent("Read 11 files, ran 6 searches, thought");
     await expect(
       canvas.getByText("I checked the changed modules and found no blocking issue."),
     ).toBeVisible();
@@ -551,7 +604,7 @@ export const ActivityWithPendingRequest: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      canvas.getByRole("button", { name: "Read 9 files, ran 5 searches" }),
+      canvas.getByRole("button", { name: "Read 9 files, ran 5 searches, thought" }),
     ).toHaveAttribute("aria-expanded", "false");
     await expect(canvasElement.querySelector(".transcript-pending-interaction")).not.toBeNull();
     await expect(canvasElement.querySelector("[data-permission-request-id]")).not.toBeNull();
@@ -728,7 +781,7 @@ export const ActivityStates: Story = {
   play: async ({ canvasElement }) => {
     // The transcript mounts its newest rows first and materializes the rest.
     await waitFor(() =>
-      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(25),
+      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(29),
     );
     const headers = [
       ...canvasElement.querySelectorAll<HTMLElement>(".transcript-activity-trigger"),
@@ -754,11 +807,15 @@ export const ActivityStates: Story = {
       "Started 1 command",
       "Ran 1 command",
       "Ran 1 command",
-      "Activity",
-      "Activity",
+      "Thought for 1 s",
       "Ran 2 commands",
       "Read 1 file",
-      "Activity",
+      "Thought for 3 s",
+      "Read 1 file, thought for 3 s",
+      "Thought",
+      "Running",
+      "Running",
+      "Running",
     ]);
     const canvas = within(canvasElement);
     for (const activity of canvasElement.querySelectorAll<HTMLButtonElement>(
@@ -792,7 +849,7 @@ export const ActivityStatesNarrow: Story = {
   play: async ({ canvasElement }) => {
     const view = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
     await waitFor(() =>
-      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(25),
+      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(29),
     );
     await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
     // A run spanning many kinds of work stays on one line, with the complete

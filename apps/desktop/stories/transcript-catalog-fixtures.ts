@@ -1,11 +1,11 @@
-import type { SessionMessageInfo } from "@opencode/client";
+import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode/client";
 import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts";
 import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 
 export const assistant = (
   id: string,
   status: "completed" | "error" = "completed",
-): SessionMessageInfo => ({
+): SessionMessageAssistant => ({
   id,
   time: { created: 2, completed: 3 },
   type: "assistant",

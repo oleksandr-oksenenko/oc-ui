@@ -110,6 +110,11 @@ function renderContent(
           <ActivityBlock
             content={props.message.content}
             start={index()}
+            messageCompleted={
+              props.message.time.completed !== undefined ||
+              props.message.finish !== undefined ||
+              props.message.error !== undefined
+            }
             workDetails={
               props.message.content.slice(index()).some((part) => part.type === "text")
                 ? undefined

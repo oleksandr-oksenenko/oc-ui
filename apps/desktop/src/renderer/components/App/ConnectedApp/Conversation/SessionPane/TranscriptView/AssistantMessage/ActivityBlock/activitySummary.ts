@@ -97,18 +97,52 @@ const LABEL_OPERATIONS = [
   OTHER,
 ];
 
+/** Only complete timing for all settled reasoning can describe thought duration. */
+function thoughtLabel(steps: readonly Step[], active: boolean): string | undefined {
+  let thought = false;
+  let thinking = false;
+  let duration: number | undefined = 0;
+  for (const step of steps) {
+    if (step.type !== "reasoning") continue;
+    // Earlier reasoning has ended once another step follows, even when the
+    // provider omitted its completion timestamp.
+    if (active && step === steps.at(-1) && step.time?.completed === undefined) {
+      thinking = true;
+      continue;
+    }
+    thought = true;
+    const time = step.time;
+    if (
+      time?.completed === undefined ||
+      !Number.isFinite(time.created) ||
+      !Number.isFinite(time.completed) ||
+      time.completed < time.created
+    ) {
+      duration = undefined;
+    } else if (duration !== undefined) {
+      duration += time.completed - time.created;
+    }
+  }
+  if (!thought) return thinking ? "Thinking" : undefined;
+  const label =
+    duration !== undefined && Number.isFinite(duration) && duration > 0
+      ? `Thought for ${Math.max(1, Math.round(duration / 1000))} s`
+      : "Thought";
+  return thinking ? `${label}, thinking` : label;
+}
+
 /**
- * Name completed operations, sharing verbs: "Ran 1 search, 4 commands".
+ * Name reasoning and completed operations, sharing verbs: "Ran 1 search, 4 commands".
  * Failures still count as attempted operations.
  * Running and streaming calls are excluded; background commands count as started.
  */
 export function activityLabel(
   steps: readonly Step[],
   details: readonly ActivityDetailInfo[],
+  active = false,
 ): string | undefined {
   const counts = new Map<Operation, number>();
-  const count = (operation: Operation | undefined) => {
-    if (operation === undefined) return;
+  const count = (operation: Operation) => {
     counts.set(operation, (counts.get(operation) ?? 0) + 1);
   };
   for (const step of steps) {
@@ -126,14 +160,11 @@ export function activityLabel(
   for (const detail of details) {
     if (detail.type === "shell") {
       // A shell row that exited, timed out, or was killed all ran.
-      if (detail.status !== "exited" && detail.status !== "timeout" && detail.status !== "killed")
-        continue;
+      if (detail.status === "running") continue;
       count(RAN);
       continue;
     }
-    // A synthetic detail is injected context or a notification, never a tool
-    // call, so it contributes no operation.
-    if (detail.type === "skill") count(LOADED);
+    count(LOADED);
   }
   const clauses: string[] = [];
   let previousVerb: string | undefined;
@@ -146,6 +177,10 @@ export function activityLabel(
         : `${clauses.length === 0 ? operation.verb : operation.verb.toLowerCase()} `;
     clauses.push(`${verb}${value} ${value === 1 ? operation.singular : operation.plural}`);
     previousVerb = operation.verb;
+  }
+  const thought = thoughtLabel(steps, active);
+  if (thought !== undefined) {
+    clauses.push(clauses.length === 0 ? thought : thought.toLowerCase());
   }
   return clauses.length === 0 ? undefined : clauses.join(", ");
 }

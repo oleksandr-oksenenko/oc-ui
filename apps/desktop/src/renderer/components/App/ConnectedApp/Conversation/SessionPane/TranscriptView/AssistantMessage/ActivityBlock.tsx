@@ -31,6 +31,8 @@ export function ActivityBlock(props: {
   readonly start: number;
   readonly active: boolean;
   readonly live: boolean;
+  /** The source assistant cycle can finish while its turn stays active. */
+  readonly messageCompleted?: boolean;
   readonly disclosureKey?: string;
   readonly activityOpen?: Map<string, boolean>;
   readonly directory?: string;
@@ -59,7 +61,25 @@ export function ActivityBlock(props: {
     !continuationMessages()?.some((message) =>
       message.content.some((part) => part.type === "text" && part.text.trim()),
     );
-  const label = createMemo(() => activityLabel(allSteps(), allDetails()));
+  const reasoningActive = () => {
+    const continuation = props.continuations?.at(-1)?.message;
+    const content = continuation?.content ?? props.content.slice(props.start);
+    const completed =
+      continuation === undefined
+        ? props.messageCompleted === true
+        : continuation.time.completed !== undefined ||
+          continuation.finish !== undefined ||
+          continuation.error !== undefined;
+    return (
+      props.active &&
+      !completed &&
+      content.length > 0 &&
+      !content.some((part) => part.type === "text")
+    );
+  };
+  const label = createMemo(
+    () => activityLabel(allSteps(), allDetails(), reasoningActive()) ?? "Running",
+  );
   const mounted = createDeferredCollapsibleMount(savedOpen() ?? false);
   const [open, setOpen] = createSignal(savedOpen() ?? false);
   let trigger: HTMLButtonElement | undefined;
@@ -148,8 +168,8 @@ export function ActivityBlock(props: {
         <Show when={live()}>
           <span class="transcript-activity-pulse" aria-hidden="true" />
         </Show>
-        <span class="transcript-activity-title" title={label() ?? "Activity"}>
-          {label() ?? "Activity"}
+        <span class="transcript-activity-title" title={label()}>
+          {label()}
         </span>
         <Icon
           name={open() ? "chevron-down" : "chevron-right"}

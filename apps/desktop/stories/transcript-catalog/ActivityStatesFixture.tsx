@@ -173,13 +173,29 @@ const states: readonly State[] = [
     content: [tool("tests", "shell", { status: "completed", exit: 1 })],
   },
   { caption: "Reasoning only", content: [reasoning] },
-  { caption: "Injected context only", details: [injectedContext] },
+  { caption: "Injected context only", after: [injectedContext] },
   { caption: "Two shell rows", details: [exitedShell("first", 0), exitedShell("second", 0)] },
   {
     caption: "Switch, location and compaction rows",
     content: [tool("app", "read")],
     after: [modelSwitch, locationSwitch, compaction],
   },
+  {
+    caption: "Timed thought",
+    content: [{ ...reasoning, time: { created: 1000, completed: 4300 } }],
+  },
+  {
+    caption: "Thought and a read",
+    content: [{ ...reasoning, time: { created: 1000, completed: 4300 } }, tool("app", "read")],
+  },
+  { caption: "Thought without timestamps", content: [{ type: "reasoning", text: "Considering" }] },
+  {
+    caption: "Unfinished tool outside the active turn",
+    content: [
+      { ...tool("unfinished", "read"), state: { status: "running", input: {}, metadata: {} } },
+    ],
+  },
+  { caption: "Background shell row", details: [runningShell("background-watch")] },
   // Last: the transcript's final turn stays live while the session is running.
   { caption: "Live: running command", details: [runningShell("watch")] },
 ];

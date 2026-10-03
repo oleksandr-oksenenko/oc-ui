@@ -649,7 +649,7 @@ describe.sequential("production browser app", () => {
     await page.locator(".question-form").waitFor();
     const questionActivity = page.locator(".transcript-activity-trigger").last();
     await expect.poll(() => questionActivity.locator(".transcript-activity-pulse").count()).toBe(1);
-    expect(await questionActivity.textContent()).toBe("Activity");
+    expect(await questionActivity.textContent()).toBe("Running");
     await expect
       .poll(() => page.locator('.shell-session-row.selected [data-status="question"]').count())
       .toBe(1);

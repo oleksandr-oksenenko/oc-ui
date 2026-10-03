@@ -1,8 +1,8 @@
 import type {
+  SessionMessageAssistantReasoning,
   SessionMessageAssistantTool,
   SessionMessageShell,
   SessionMessageSkill,
-  SessionMessageSynthetic,
 } from "@opencode/client";
 import { describe, expect, it } from "vite-plus/test";
 import { activityLabel } from "./activitySummary.ts";
@@ -62,14 +62,64 @@ const skill: SessionMessageSkill = {
   text: "Done",
 };
 
-const synthetic: SessionMessageSynthetic = {
-  id: "synthetic",
-  type: "synthetic",
-  time: { created: 3000 },
-  text: "Inserted context",
-};
-
 describe("activityLabel", () => {
+  it("names thought alongside tools and sums only reasoning time, excluding gaps and tools", () => {
+    const first: SessionMessageAssistantReasoning = {
+      type: "reasoning",
+      text: "First thought",
+      time: { created: 1000, completed: 2500 },
+    };
+    const second: SessionMessageAssistantReasoning = {
+      type: "reasoning",
+      text: "Second thought",
+      time: { created: 10000, completed: 12000 },
+    };
+    expect(activityLabel([first], [])).toBe("Thought for 2 s");
+    expect(
+      activityLabel(
+        [first, { ...named("read", "read"), time: { created: 2500, completed: 10000 } }, second],
+        [],
+      ),
+    ).toBe("Read 1 file, thought for 4 s");
+    expect(activityLabel([{ ...first, time: { created: 1, completed: 2 } }], [])).toBe(
+      "Thought for 1 s",
+    );
+  });
+
+  it("uses Thought when timing is missing or invalid, without reporting a partial duration", () => {
+    for (const time of [
+      undefined,
+      { created: 1 },
+      { created: 2, completed: 1 },
+      { created: 1, completed: NaN },
+      { created: 1, completed: 1 },
+    ]) {
+      expect(activityLabel([{ type: "reasoning", text: "Thought", time }], [])).toBe("Thought");
+    }
+    expect(
+      activityLabel(
+        [
+          { type: "reasoning", text: "Timed", time: { created: 1000, completed: 4000 } },
+          { type: "reasoning", text: "Untimed" },
+        ],
+        [],
+      ),
+    ).toBe("Thought");
+  });
+
+  it("keeps current reasoning Thinking until it settles, even without timestamps", () => {
+    const thinking: SessionMessageAssistantReasoning = { type: "reasoning", text: "Thinking" };
+    expect(activityLabel([thinking], [], true)).toBe("Thinking");
+    expect(activityLabel([thinking], [], false)).toBe("Thought");
+    expect(activityLabel([thinking, named("read", "read")], [], true)).toBe("Read 1 file, thought");
+    expect(activityLabel([named("read", "read"), thinking], [], true)).toBe(
+      "Read 1 file, thinking",
+    );
+    expect(activityLabel([{ type: "reasoning", text: "Earlier" }, thinking], [], true)).toBe(
+      "Thought, thinking",
+    );
+  });
+
   it("names mixed operations in a stable order and keeps single-operation labels", () => {
     expect(
       activityLabel(
@@ -143,9 +193,7 @@ describe("activityLabel", () => {
     );
   });
 
-  it("counts real tool calls and treats injected context as no operation", () => {
-    // A synthetic message is injected context or a notification, never a tool.
-    expect(activityLabel([], [synthetic])).toBeUndefined();
+  it("counts skill loads and ignores outcome metadata on non-shell tools", () => {
     expect(activityLabel([], [skill])).toBe("Loaded 1 skill");
     // Only shell tools carry a command outcome; another tool's metadata is opaque.
     const custom: SessionMessageAssistantTool = {
