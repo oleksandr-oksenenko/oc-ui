@@ -67,6 +67,43 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
   assert.match(page.proxy, /^PROXY /);
   assert.ok(page.bounds.width > 100 && page.bounds.height > 100);
 
+  // A native title event replaces the browser snapshot without committing a URL.
+  // Keep the renderer-owned draft/selection, then submit through the real owner.
+  const address = $('[aria-label="Browser address"]');
+  const draftUrl = `${provider}/browser-test#address-draft-preserved`;
+  await address.setValue(draftUrl);
+  await browser.execute(() => {
+    const input = document.querySelector<HTMLInputElement>('[aria-label="Browser address"]');
+    if (!input) throw new Error("Browser address missing");
+    input.setSelectionRange(7, 16, "backward");
+  });
+  await browser.electron.execute(async (electron, pageID: number) => {
+    const contents = electron.webContents.fromId(pageID);
+    if (!contents) throw new Error("Native browser page missing");
+    await contents.executeJavaScript('document.title = "Address update acceptance"');
+  }, page.id);
+  await $(".browser-tab-select=Address update acceptance").waitForDisplayed({ timeout: TIMEOUT });
+  assert.equal(await address.getValue(), draftUrl);
+  assert.deepEqual(
+    await browser.execute(() => {
+      const input = document.querySelector<HTMLInputElement>('[aria-label="Browser address"]');
+      return [input?.selectionStart, input?.selectionEnd, input?.selectionDirection];
+    }),
+    [7, 16, "backward"],
+  );
+  await $("button=Go").click();
+  await browser.waitUntil(
+    async () =>
+      (await browser.electron.execute(
+        (electron, pageID: number) => electron.webContents.fromId(pageID)?.getURL(),
+        page.id,
+      )) === draftUrl,
+    { timeout: TIMEOUT, timeoutMsg: "Preserved address draft did not navigate the native page" },
+  );
+  await $('[aria-label="Reload browser page"]').click();
+  await $(".browser-tab-select=Browser acceptance").waitForDisplayed({ timeout: TIMEOUT });
+  assert.equal(await address.getValue(), draftUrl);
+
   await $('[aria-label="Hide context panel"]').click();
   await browser.waitUntil(async () => (await nativePages()).every((item) => !item.visible));
   await $('[aria-label="Show context"]').click();
