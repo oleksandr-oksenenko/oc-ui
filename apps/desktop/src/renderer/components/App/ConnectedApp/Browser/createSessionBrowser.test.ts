@@ -252,6 +252,22 @@ describe("session browser ownership", () => {
     fixture.connected(first);
     expect(fixture.controller.current().bindingID).toBe(inputs()[2]!.bindingID);
     expect(fixture.controller.current().status).toBe("connecting");
+    const latestTab = { ...annotationTab(), url: "http://server/current?view=preview#heading" };
+    fixture.emit({
+      bindingID: inputs()[2]!.bindingID,
+      type: "state",
+      status: "connected",
+      state: { tabs: [latestTab], focusedTabID: latestTab.id },
+    });
+    const latest = fixture.controller.current();
+    fixture.emit({
+      bindingID: first,
+      type: "state",
+      status: "connected",
+      state: { tabs: [annotationTab()], focusedTabID: annotationTab().id },
+      error: "Stale attachment event",
+    });
+    expect(fixture.controller.current()).toBe(latest);
   });
 
   it("projects an unselected session's closure without duplicating main's cleanup", async () => {

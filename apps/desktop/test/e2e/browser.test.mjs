@@ -1066,97 +1066,112 @@ describe.sequential("production browser app", () => {
   });
 
   it("queues, cancels, steers and restores server-owned pending messages after reload", async () => {
-    const before = (await providerState()).requests.length;
-    const admitted = page.waitForResponse(
-      (response) =>
-        /\/session\/[^/]+\/prompt$/u.test(new URL(response.url()).pathname) &&
-        response.request().method() === "POST",
-    );
-    await send("E2E_QUEUE_HOLD browser");
-    const sessionID = decodeURIComponent(
-      new URL((await admitted).url()).pathname.split("/").at(-2),
-    );
-    await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
-    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
-    const pending = page.getByRole("region", { name: "Pending messages" });
-    for (const text of [
-      "First queued review",
-      "Remove this task",
-      "Middle queued task",
-      "Last queued task",
-    ]) {
-      if (text === "First queued review") {
-        await prompt.fill("First queued ");
-        await prompt.press("End");
-        await prompt.pressSequentially("/rev");
-        await page.getByRole("button", { name: /\/review Acceptance review/ }).waitFor();
-        await prompt.press("Enter");
-        await prompt.press("Backspace");
-      } else await prompt.fill(text);
-      // The queue chord follows the renderer's platform marker: Cmd on macOS,
-      // Ctrl elsewhere.
-      await prompt.press(process.platform === "darwin" ? "Meta+Enter" : "Control+Enter");
+    try {
+      const before = (await providerState()).requests.length;
+      const admitted = page.waitForResponse(
+        (response) =>
+          /\/session\/[^/]+\/prompt$/u.test(new URL(response.url()).pathname) &&
+          response.request().method() === "POST",
+      );
+      await send("E2E_QUEUE_HOLD browser");
+      const sessionID = decodeURIComponent(
+        new URL((await admitted).url()).pathname.split("/").at(-2),
+      );
+      await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
+      const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+      const pending = page.getByRole("region", { name: "Pending messages" });
+      for (const text of [
+        "First queued review",
+        "Remove this task",
+        "Middle queued task",
+        "Last queued task",
+      ]) {
+        if (text === "First queued review") {
+          await prompt.fill("First queued ");
+          await prompt.press("End");
+          await prompt.pressSequentially("/rev");
+          await page.getByRole("button", { name: /\/review Acceptance review/ }).waitFor();
+          await prompt.press("Enter");
+          await prompt.press("Backspace");
+        } else await prompt.fill(text);
+        // The queue chord follows the renderer's platform marker: Cmd on macOS,
+        // Ctrl elsewhere.
+        await prompt.press(process.platform === "darwin" ? "Meta+Enter" : "Control+Enter");
+        await expect.poll(() => prompt.textContent()).toBe("");
+        await pending.getByText(text, { exact: true }).waitFor();
+      }
+      expect(
+        (await api.session.inbox.list({ sessionID })).filter((item) => item.type === "user"),
+      ).toHaveLength(4);
+      expect(await page.locator(".transcript-view").textContent()).not.toContain(
+        "First queued review",
+      );
+      await pending
+        .getByRole("button", { name: "Cancel message: Remove this task", exact: true })
+        .click();
+      await pending.getByText("Remove this task", { exact: true }).waitFor({ state: "hidden" });
+      await page.reload();
+      await connect();
+      await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
+      await pending.getByText("First queued review", { exact: true }).waitFor();
+      await pending
+        .locator("li")
+        .filter({ hasText: "First queued review" })
+        .getByRole("button", { name: "Steer now" })
+        .click();
+      await expect
+        .poll(
+          async () =>
+            (await api.session.inbox.list({ sessionID })).find(
+              (item) => item.type === "user" && item.payload.text === "First queued review",
+            )?.delivery,
+        )
+        .toBe("steer");
+      await prompt.fill("Direct steering task");
+      const directSteer = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname.endsWith(`/session/${sessionID}/prompt`) &&
+          response.request().method() === "POST",
+      );
+      await prompt.press("Enter");
       await expect.poll(() => prompt.textContent()).toBe("");
-      await pending.getByText(text, { exact: true }).waitFor();
+      // Admission can project into either the inbox or transcript before this
+      // assertion. Check the server acknowledgement before releasing the hold.
+      const accepted = await directSteer;
+      expect(accepted.ok()).toBe(true);
+      expect(accepted.request().postDataJSON().delivery).toBe("steer");
+      provider.releaseHeld();
+      await pending.waitFor({ state: "hidden" });
+      await idle();
+      await transcript("First queued review");
+      await transcript("Direct steering task");
+      await transcript("Last queued task");
+      const requests = (await providerState()).requests
+        .slice(before)
+        .filter((item) => item.model !== "title");
+      expect(requests.some((item) => item.prompt.includes("Remove this task"))).toBe(false);
+      const steerIndex = requests.findIndex((item) => item.prompt.includes("Direct steering task"));
+      const middleIndex = requests.findIndex((item) => item.prompt.includes("Middle queued task"));
+      const queueIndex = requests.findIndex((item) => item.prompt.includes("Last queued task"));
+      const messages = await api.message.list({ sessionID });
+      const selected = messages.data.find(
+        (message) => message.type === "user" && message.text === "First queued review",
+      );
+      expect(selected.skills).toEqual([
+        expect.objectContaining({
+          name: "review",
+          mention: { start: 13, end: 19, text: "review" },
+          text: expect.stringContaining("Acceptance review instructions."),
+        }),
+      ]);
+      expect(steerIndex).toBeGreaterThan(0);
+      expect(middleIndex).toBeGreaterThan(steerIndex);
+      expect(queueIndex).toBeGreaterThan(middleIndex);
+    } finally {
+      // The test owns this hold; a failed assertion must not stall later flows.
+      provider.releaseHeld();
+      await idle();
     }
-    expect(
-      (await api.session.inbox.list({ sessionID })).filter((item) => item.type === "user"),
-    ).toHaveLength(4);
-    expect(await page.locator(".transcript-view").textContent()).not.toContain(
-      "First queued review",
-    );
-    await pending
-      .getByRole("button", { name: "Cancel message: Remove this task", exact: true })
-      .click();
-    await pending.getByText("Remove this task", { exact: true }).waitFor({ state: "hidden" });
-    await page.reload();
-    await connect();
-    await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
-    await pending.getByText("First queued review", { exact: true }).waitFor();
-    await pending
-      .locator("li")
-      .filter({ hasText: "First queued review" })
-      .getByRole("button", { name: "Steer now" })
-      .click();
-    await expect
-      .poll(
-        async () =>
-          (await api.session.inbox.list({ sessionID })).find(
-            (item) => item.type === "user" && item.payload.text === "First queued review",
-          )?.delivery,
-      )
-      .toBe("steer");
-    await prompt.fill("Direct steering task");
-    await prompt.press("Enter");
-    await expect.poll(() => prompt.textContent()).toBe("");
-    await pending.getByText("Direct steering task", { exact: true }).waitFor();
-    provider.releaseHeld();
-    await pending.waitFor({ state: "hidden" });
-    await idle();
-    await transcript("First queued review");
-    await transcript("Direct steering task");
-    await transcript("Last queued task");
-    const requests = (await providerState()).requests
-      .slice(before)
-      .filter((item) => item.model !== "title");
-    expect(requests.some((item) => item.prompt.includes("Remove this task"))).toBe(false);
-    const steerIndex = requests.findIndex((item) => item.prompt.includes("Direct steering task"));
-    const middleIndex = requests.findIndex((item) => item.prompt.includes("Middle queued task"));
-    const queueIndex = requests.findIndex((item) => item.prompt.includes("Last queued task"));
-    const messages = await api.message.list({ sessionID });
-    const selected = messages.data.find(
-      (message) => message.type === "user" && message.text === "First queued review",
-    );
-    expect(selected.skills).toEqual([
-      expect.objectContaining({
-        name: "review",
-        mention: { start: 13, end: 19, text: "review" },
-        text: expect.stringContaining("Acceptance review instructions."),
-      }),
-    ]);
-    expect(steerIndex).toBeGreaterThan(0);
-    expect(middleIndex).toBeGreaterThan(steerIndex);
-    expect(queueIndex).toBeGreaterThan(middleIndex);
   });
 
   it("marks completed background turns until their session is opened", async () => {

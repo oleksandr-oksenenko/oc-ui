@@ -565,7 +565,7 @@ export const ReviewComments: Story = {
       await expect(reopened.scrollHeight).toBeLessThanOrEqual(reopened.clientHeight + 1);
       await userEvent.keyboard("{Escape}");
       await expect(
-        canvas.getByRole("button", {
+        await canvas.findByRole("button", {
           name: /Please keep this state controlled by the parent\.\s+Keep the existing behavior\./,
         }),
       ).toBeVisible();

@@ -59,8 +59,22 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   await $(".selection-option*=New worktree").click();
   await $('[aria-label^="Branch:"]').click();
   await $(".selection-option=main").click();
-  await $('[aria-label^="Model:"]').click();
-  await $(".composer-model-option=Acceptance Stream").click();
+  // The closing branch popover restores focus asynchronously. Opening another
+  // popover before that restoration can dismiss it as an outside focus change.
+  await $(".selection-popover:not(.composer-model-popover)").waitForExist({
+    reverse: true,
+    timeout: TIMEOUT,
+  });
+  await browser.waitUntil(() => $('[aria-label="Branch: main"]').isFocused(), {
+    timeout: TIMEOUT,
+    timeoutMsg: "The branch picker did not restore focus before model selection",
+  });
+  const modelTrigger = $('[aria-label^="Model:"]');
+  await modelTrigger.waitForClickable({ timeout: TIMEOUT });
+  await modelTrigger.click();
+  const modelOption = $(".composer-model-option=Acceptance Stream");
+  await modelOption.waitForClickable({ timeout: TIMEOUT });
+  await modelOption.click();
   await $('[aria-label^="Agent:"]').click();
   await $('[role="option"]=Build').click();
   await $('[aria-label="Prompt"]').setValue("Native new-session worktree admission");

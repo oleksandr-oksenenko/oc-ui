@@ -2,7 +2,7 @@ import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
 import type { Browser } from "@opencode/plugin-browser/rpc";
-import { For, Show, createEffect, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import type { SessionBrowserState } from "./createSessionBrowser.ts";
 import "./BrowserPane.css";
 
@@ -19,7 +19,12 @@ export function BrowserPane(props: BrowserPaneProps) {
   const tab = () =>
     props.state.browser.tabs.find((item) => item.id === props.state.browser.focusedTabID);
   const [address, setAddress] = createSignal("");
-  createEffect(() => setAddress(tab()?.url ?? ""));
+  const tabID = createMemo(() => tab()?.id);
+  const committedUrl = createMemo(() => tab()?.url ?? "");
+  // Drafts belong to this pane, not a tab cache. Switching tabs or committing a
+  // different URL (even during editing) shows the actual location. Other browser
+  // updates must leave the draft and its DOM selection alone.
+  createEffect(on([tabID, committedUrl], ([, url]) => setAddress(url)));
   const navigate = (event: SubmitEvent) => {
     event.preventDefault();
     const current = tab();
