@@ -152,6 +152,23 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
   await typeAnnotationComment("E2E_ANNOTATION: make this heading bolder");
   await annotation.waitForDisplayed({ timeout: TIMEOUT });
   assert.match(await annotation.getValue(), /E2E_ANNOTATION/);
+  const preview = $('[aria-label="Enlarge Browser annotation 1"]');
+  await preview.click();
+  await $('[role="dialog"][aria-modal="true"]').waitForDisplayed({ timeout: TIMEOUT });
+  await browser.waitUntil(async () => (await nativePages()).every((item) => !item.visible), {
+    timeout: TIMEOUT,
+    timeoutMsg: "Native browser remained above the capture preview",
+  });
+  await browser.saveScreenshot(join(artifacts, "browser-capture-preview.png"));
+  await browser.keys("Escape");
+  await browser.waitUntil(async () => (await nativePages()).some((item) => item.visible), {
+    timeout: TIMEOUT,
+    timeoutMsg: "Native browser did not return after dismissing the capture preview",
+  });
+  assert.equal((await nativePages())[0]?.id, page.id);
+  await browser.waitUntil(() => preview.isFocused(), { timeout: TIMEOUT });
+  assert.match(await annotation.getValue(), /E2E_ANNOTATION/);
+  await browser.saveScreenshot(join(artifacts, "browser-capture-card.png"));
   await $("button=Add to composer").click();
   try {
     await browser.waitUntil(

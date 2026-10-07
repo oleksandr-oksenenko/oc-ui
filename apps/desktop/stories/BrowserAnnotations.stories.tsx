@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook owns the async interaction test lifecycle. */
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import { Browser } from "@opencode/plugin-browser/rpc";
 import {
   BrowserAnnotations,
@@ -64,6 +64,9 @@ const meta = {
       <div
         style={{
           width: "min(520px, 100vw)",
+          height: "650px",
+          display: "flex",
+          "flex-direction": "column",
           padding: "8px",
           background: "var(--oc-surface-canvas)",
         }}
@@ -96,6 +99,120 @@ export const Captured: Story = {
     await expect(controller.annotationBody).toHaveBeenCalled();
     await userEvent.click(canvas.getByRole("button", { name: "Add to composer" }));
     await expect(controller.addAnnotations).toHaveBeenCalledOnce();
+    const preview = canvas.getByRole("button", { name: "Enlarge Browser annotation 1" });
+    await userEvent.click(preview);
+    await expect(
+      await screen.findByRole("dialog", { name: "Preview of Browser annotation 1" }),
+    ).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Close image preview" }));
+    await waitFor(() => expect(preview).toHaveFocus());
+    await userEvent.keyboard("{Enter}");
+    await expect(
+      await screen.findByRole("dialog", { name: "Preview of Browser annotation 1" }),
+    ).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(preview).toHaveFocus());
+    await expect(comment.value).toBe("Make this button wider and taller");
+  },
+};
+
+export const CapturedDark: Story = { ...Captured, globals: { theme: "dark" } };
+
+export const AnotherTab: Story = {
+  args: {
+    state: {
+      status: "connected",
+      browser: {
+        tabs: [tab, { ...tab, id: Browser.TabID.make("tab_00000000-0000-4000-8000-000000000002") }],
+        focusedTabID: Browser.TabID.make("tab_00000000-0000-4000-8000-000000000002"),
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Captured in another tab.")).toBeVisible();
+    await expect(canvas.queryByText("Captured before the latest navigation.")).toBeNull();
+    await expect(canvas.getByText(`${tab.title} · ${tab.url}`)).toBeVisible();
+  },
+};
+
+export const Navigated: Story = {
+  args: {
+    state: {
+      status: "connected",
+      browser: {
+        tabs: [{ ...tab, generation: 2, url: "http://localhost:3000/about" }],
+        focusedTabID: tab.id,
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Captured before the latest navigation.")).toBeVisible();
+    await expect(canvas.queryByText("Captured in another tab.")).toBeNull();
+    await expect(canvas.getByText(`${tab.title} · ${tab.url}`)).toBeVisible();
+  },
+};
+
+export const FullBatch: Story = {
+  args: {
+    controller: {
+      ...controller,
+      annotations: () => ({
+        status: "idle",
+        items: Array.from({ length: 8 }, (_, index) => ({
+          ...draft,
+          id: `annotation-${index + 1}`,
+          number: index + 1,
+          tab: { ...tab, url: `${tab.url}?long-page-provenance=${"path".repeat(40)}` },
+        })),
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = canvas.getByRole("list");
+    const add = canvas.getByRole("button", { name: "Add to composer" });
+    const capture = canvas.getByRole("button", { name: "Annotate" });
+    const clear = canvas.getByRole("button", { name: "Clear" });
+    const positions = [capture, add, clear].map((button) => button.getBoundingClientRect().top);
+    await expect(capture).toBeDisabled();
+    await expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    list.scrollTop = list.scrollHeight;
+    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0));
+    await expect([capture, add, clear].map((button) => button.getBoundingClientRect().top)).toEqual(
+      positions,
+    );
+    await expect(canvas.getByRole("textbox", { name: "Annotation 8 comment" })).toBeVisible();
+    await userEvent.click(clear);
+    await expect(controller.clearAnnotations).toHaveBeenCalled();
+  },
+};
+
+export const MissingComment: Story = {
+  args: {
+    controller: {
+      ...controller,
+      annotations: () => ({ status: "idle", items: [{ ...draft, body: "" }] }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole("button", { name: "Add to composer" }),
+    ).toBeDisabled();
+  },
+};
+
+export const Empty: Story = {
+  args: { controller: { ...controller, annotations: () => ({ status: "idle", items: [] }) } },
+};
+
+export const CaptureError: Story = {
+  args: {
+    controller: {
+      ...controller,
+      annotations: () => ({ status: "idle", items: [draft], error: "Capture failed. Try again." }),
+    },
   },
 };
 

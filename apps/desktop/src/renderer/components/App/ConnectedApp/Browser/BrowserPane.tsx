@@ -73,10 +73,11 @@ export function BrowserPane(props: BrowserPaneProps) {
                     {item.title || "New tab"}
                   </button>
                   <IconButton
-                    size="small"
+                    size="normal"
                     variant="ghost-muted"
                     icon={<Icon name="close" size="small" />}
                     aria-label={`Close ${item.title || "new tab"}`}
+                    title={`Close ${item.title || "new tab"}`}
                     onClick={() => props.onCommand({ type: "tabs.close", tabID: item.id })}
                   />
                 </div>
@@ -84,20 +85,22 @@ export function BrowserPane(props: BrowserPaneProps) {
             </For>
           </div>
           <IconButton
-            size="small"
+            size="normal"
             variant="ghost-muted"
             icon={<Icon name="plus" size="small" />}
             aria-label="New browser tab"
+            title="New browser tab"
             onClick={() => props.onCommand({ type: "tabs.open" })}
           />
         </div>
         <form class="browser-navigation" onSubmit={navigate}>
           <IconButton
             type="button"
-            size="small"
+            size="normal"
             variant="ghost-muted"
             icon={<Icon name="arrow-left" size="small" />}
             aria-label="Browser back"
+            title="Browser back"
             disabled={!tab()?.canGoBack}
             onClick={() => {
               const item = tab();
@@ -106,19 +109,22 @@ export function BrowserPane(props: BrowserPaneProps) {
           />
           <IconButton
             type="button"
-            size="small"
+            size="normal"
             variant="ghost-muted"
             icon={<Icon name="arrow-right" size="small" />}
             aria-label="Browser forward"
+            title="Browser forward"
             disabled={!tab()?.canGoForward}
             onClick={() => {
               const item = tab();
               if (item) props.onCommand({ type: "forward", tabID: item.id });
             }}
           />
-          <button
+          <Button
             class="browser-reload oc-focus-inset"
             type="button"
+            size="small"
+            variant="ghost-muted"
             disabled={!tab()}
             aria-label={tab()?.loading ? "Stop loading browser page" : "Reload browser page"}
             onClick={() => {
@@ -127,7 +133,7 @@ export function BrowserPane(props: BrowserPaneProps) {
             }}
           >
             {tab()?.loading ? "Stop" : "Reload"}
-          </button>
+          </Button>
           <input
             aria-label="Browser address"
             placeholder="Enter a URL"
