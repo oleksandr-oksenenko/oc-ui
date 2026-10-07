@@ -62,7 +62,11 @@ export function SessionsRegion(props: SessionsRegionProps) {
       onDelete={(sessionID, opener) =>
         props.flows.openSessionDeletion(sessionID, opener, resolveDeletionFocusFallback)
       }
-      onCreate={props.drafts.create}
+      onCreate={() => {
+        props.drafts.create();
+        const id = props.drafts.selectedID();
+        if (id) props.onSessionOpened(id);
+      }}
       onRetry={() => void props.workspace.retryCatalog().catch(() => undefined)}
       onHide={props.onHide}
       onSelectServer={props.onChangeServer}

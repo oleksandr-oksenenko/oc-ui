@@ -37,6 +37,9 @@ export type ConversationRegionProps = {
   readonly forms: SessionFormsController;
   readonly permissions: SessionPermissionsController;
   readonly connected: () => boolean;
+  readonly canCreate?: boolean;
+  readonly onCreate?: () => void;
+  readonly onBrowseSessions?: () => void;
 };
 
 const formRenderKey = (form: { readonly sessionID: string; readonly id: string }): string =>
@@ -343,12 +346,9 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
       <SessionPane
         selected={props.workspace.selectedSession() !== undefined}
         title={props.workspace.selectedSession()?.title}
-        noSelection={
-          <>
-            <h2>No session selected</h2>
-            <p>Select a session from the sidebar.</p>
-          </>
-        }
+        canCreate={props.canCreate}
+        onCreate={props.onCreate}
+        onBrowseSessions={props.onBrowseSessions}
         transcript={
           <Show when={props.workspace.selectedSession()}>
             <TranscriptView
@@ -427,6 +427,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
                 error: props.modelSelection.error(),
                 onSelectModel: (id) => void props.modelSelection.selectModel(id),
                 onSelectVariant: (id) => void props.modelSelection.selectVariant(id),
+                onRetry: () => void props.modelSelection.sync().catch(() => undefined),
               }}
               agentSelection={{
                 state: props.agentSelection.state(),
@@ -436,6 +437,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
                 selectedAgentID: props.agentSelection.selectedAgentID(),
                 error: props.agentSelection.error(),
                 onSelectAgent: (id) => void props.agentSelection.selectAgent(id),
+                onRetry: () => void props.agentSelection.sync().catch(() => undefined),
               }}
               onInput={props.composer.input}
               onSubmit={() => {

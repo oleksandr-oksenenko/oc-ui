@@ -6,6 +6,7 @@ import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import type { ComposerReview } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
+import type { ComposerProps } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import {
   composerAgentSelection,
   composerModelSelection,
@@ -435,6 +436,156 @@ export const LoadingPickers: Story = {
         onSubmit={() => setValue("")}
       />
     );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Loading models…")).toBeVisible();
+    await expect(canvas.queryByText("No models", { exact: true })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /models/i })).not.toBeInTheDocument();
+  },
+};
+
+function modelStateComposer(
+  selection: () => ComposerProps["modelSelection"],
+  agents: () => ComposerProps["agentSelection"] = () => composerAgentSelection(),
+) {
+  return (
+    <Composer
+      {...composerPasteProps}
+      value=""
+      disabled
+      action="send"
+      modelSelection={selection()}
+      agentSelection={agents()}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
+  );
+}
+
+export const EmptyModels: Story = {
+  render: () =>
+    modelStateComposer(() =>
+      composerModelSelection({ models: [], variants: [], selectedModelID: undefined }),
+    ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("No models", { exact: true })).toBeVisible();
+    await expect(canvas.getByRole("status")).toHaveTextContent(
+      "Configure or enable a model in OpenCode on the connected server.",
+    );
+    await expect(canvas.queryByRole("button", { name: /models/i })).not.toBeInTheDocument();
+  },
+};
+
+export const ModelCatalogRecovery: Story = {
+  render: () => {
+    const [state, setState] = createSignal<ComposerProps["modelSelection"]["state"]>("failed");
+    const [models, setModels] = createSignal<ComposerProps["modelSelection"]["models"]>([]);
+    return modelStateComposer(() =>
+      composerModelSelection({
+        state: state(),
+        models: models(),
+        variants: [],
+        selectedModelID: undefined,
+        onRetry: () => {
+          if (state() === "failed") setState("ready");
+          else setModels(composerModelSelection().models);
+        },
+      }),
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Models could not be loaded.");
+    await expect(canvas.queryByText("No models", { exact: true })).not.toBeInTheDocument();
+    const retry = canvas.getByRole("button", { name: "Retry models" });
+    retry.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByText("No models", { exact: true })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Refresh models" }));
+    await expect(canvas.getByRole("button", { name: "Model: Select model" })).toBeEnabled();
+    await expect(canvas.queryByRole("status")).not.toBeInTheDocument();
+  },
+};
+
+export const MissingModel: Story = {
+  render: () => {
+    const [selectedModelID, setSelectedModelID] = createSignal("missing");
+    return modelStateComposer(() =>
+      composerModelSelection({
+        selectedModelID: selectedModelID(),
+        variants: [],
+        selectedVariantID: undefined,
+        onSelectModel: setSelectedModelID,
+      }),
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("status")).toHaveTextContent("Choose another model.");
+    await userEvent.click(canvas.getByRole("button", { name: "Model: Model unavailable" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Models" }));
+    await userEvent.click(dialog.getByText("GPT-5", { exact: true }));
+    await expect(canvas.getByRole("button", { name: "Model: GPT-5" })).toBeVisible();
+    await expect(canvas.queryByRole("status")).not.toBeInTheDocument();
+  },
+};
+
+export const MissingModelEmptyCatalog: Story = {
+  render: () => modelStateComposer(() => composerModelSelection({ models: [], variants: [] })),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Model unavailable", { exact: true })).toBeVisible();
+    await expect(canvas.getByRole("status")).toHaveTextContent(
+      "The selected model is unavailable.",
+    );
+  },
+};
+
+export const ModelRecoveryDisabled: Story = {
+  render: () =>
+    modelStateComposer(() =>
+      composerModelSelection({ state: "failed", disabled: true, onRetry: fn() }),
+    ),
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole("button", { name: "Retry models" }),
+    ).toBeDisabled();
+  },
+};
+
+export const AgentCatalogRecovery: Story = {
+  render: () => {
+    const [state, setState] = createSignal<ComposerProps["agentSelection"]["state"]>("failed");
+    return modelStateComposer(
+      () => composerModelSelection(),
+      () => composerAgentSelection({ state: state(), onRetry: () => setState("ready") }),
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Agents could not be loaded.");
+    await expect(canvas.getByRole("button", { name: "Model: GPT-5" })).toBeVisible();
+    const retry = canvas.getByRole("button", { name: "Retry agents" });
+    retry.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("button", { name: /^Agent: Build/ })).toBeVisible();
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Retry agents" })).not.toBeInTheDocument();
+  },
+};
+
+export const AgentRecoveryDisabled: Story = {
+  render: () =>
+    modelStateComposer(
+      () => composerModelSelection(),
+      () => composerAgentSelection({ state: "failed", disabled: true, onRetry: fn() }),
+    ),
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole("button", { name: "Retry agents" }),
+    ).toBeDisabled();
   },
 };
 

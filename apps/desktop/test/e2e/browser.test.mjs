@@ -29,6 +29,11 @@ let failed = false;
 let permissionRequestNumber = 0;
 const errors = [];
 const artifacts = new URL("../../dist/web-artifacts/", import.meta.url).pathname;
+const modelRoute = (url) => url.pathname === "/api/model";
+const modelDefaultRoute = (url) => url.pathname === "/api/model/default";
+const agentRoute = (url) => url.pathname === "/api/agent";
+const failCatalog = (route) =>
+  route.fulfill({ status: 503, json: { message: "Catalog unavailable" } });
 
 // A 1×1 PNG so the resolved server file decodes as a real image.
 const acceptancePng = Buffer.from(
@@ -456,6 +461,29 @@ describe.sequential("production browser app", () => {
     await connect();
   });
 
+  it("opens session drafts from both empty states and browses a hidden sidebar", async () => {
+    const empty = page.getByRole("region", { name: "Session", exact: true });
+    await empty.getByRole("heading", { name: "No session selected" }).waitFor();
+    const sidebar = page.getByRole("complementary", { name: "Sessions", exact: true });
+    await sidebar.getByText("No sessions yet.", { exact: true }).waitFor();
+    expect((await api.session.list({ limit: 100 })).data).toHaveLength(0);
+    await page.getByRole("button", { name: "Hide sessions", exact: true }).click();
+    await empty.getByRole("button", { name: "Browse sessions" }).click();
+    await sidebar.getByRole("button", { name: "New session", exact: true }).waitFor();
+    await empty.getByRole("button", { name: "New session", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("region", { name: "New session", exact: true }).waitFor();
+    await page.reload();
+    await connect();
+    await empty.getByRole("heading", { name: "No session selected" }).waitFor();
+    await page.setViewportSize({ width: 430, height: 760 });
+    await empty.getByRole("button", { name: "Browse sessions" }).click();
+    await sidebar.getByRole("button", { name: "New session", exact: true }).click();
+    await page.getByRole("region", { name: "New session", exact: true }).waitFor();
+    expect((await api.session.list({ limit: 100 })).data).toHaveLength(0);
+    await page.setViewportSize({ width: 1280, height: 860 });
+  });
+
   it("uses the centered composer, directory dialog and independent persistent drafts", async () => {
     const opener = page.getByRole("button", { name: "Create session", exact: true });
     await opener.click();
@@ -585,6 +613,91 @@ describe.sequential("production browser app", () => {
     await selectSession("Browser fixture one");
     await page.getByLabel("Prompt", { exact: true }).fill("Independent draft");
     expect(await page.evaluate(() => document.documentElement.dataset.host)).toBe("browser");
+  });
+
+  it("recovers the session model catalog without losing the draft", async () => {
+    // Controlled catalog responses exercise rare failure/empty states; recovery
+    // returns to the authenticated pinned server's real catalog.
+    let catalogState = "failed";
+    const routeCatalog = async (route) => {
+      if (catalogState === "failed") {
+        await route.fulfill({ status: 503, json: { message: "Catalog unavailable" } });
+        return;
+      }
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), data: [] } });
+    };
+    await page.route(modelRoute, routeCatalog);
+    try {
+      await page.reload();
+      await connect();
+      await selectSession("Browser fixture two");
+      await page.getByRole("button", { name: "Retry models" }).waitFor();
+      await page.getByLabel("Prompt", { exact: true }).fill("Catalog recovery draft");
+      expect(await page.getByText("No models", { exact: true }).count()).toBe(0);
+      catalogState = "empty";
+      await page.getByRole("button", { name: "Retry models" }).click();
+      await page.getByRole("status").filter({ hasText: "No enabled models" }).waitFor();
+      await page.unroute(modelRoute, routeCatalog);
+      await page.getByRole("button", { name: "Refresh models" }).click();
+      await page.getByRole("button", { name: /^Model: Acceptance/u }).waitFor();
+      expect(await page.getByLabel("Prompt", { exact: true }).textContent()).toBe(
+        "Catalog recovery draft",
+      );
+      await selectSession("Browser fixture one");
+      await page.getByLabel("Prompt", { exact: true }).fill("Independent draft");
+    } finally {
+      await page.unroute(modelRoute, routeCatalog);
+    }
+  });
+
+  it("retries session agents and shared draft choices while retaining selections and text", async () => {
+    const directory = await realpath(secondaryProject);
+    const source = await api.session.create({
+      title: "Catalog recovery source",
+      agent: "acceptance-agent",
+      model: { providerID: "acceptance", id: "alternate", variant: "high" },
+      location: { directory },
+    });
+    await page.route(agentRoute, failCatalog);
+    try {
+      await selectSession("Catalog recovery source");
+      await page.getByRole("button", { name: "Retry agents" }).waitFor();
+      const prompt = page.getByLabel("Prompt", { exact: true });
+      await prompt.fill("Retained session draft");
+      await page.unroute(agentRoute, failCatalog);
+      await page.getByRole("button", { name: "Retry agents" }).click();
+      await page.getByLabel("Agent: acceptance-agent", { exact: true }).waitFor();
+      expect(await prompt.textContent()).toBe("Retained session draft");
+      expect((await api.session.get({ sessionID: source.id })).agent).toBe("acceptance-agent");
+      await page.route(modelDefaultRoute, failCatalog);
+      await page.getByLabel("Create session", { exact: true }).click();
+      await page.getByRole("button", { name: "Retry models" }).waitFor();
+      await prompt.fill("Retained new-session draft");
+      await page.unroute(modelDefaultRoute, failCatalog);
+      // Draft model/agent choices share one existing catalog owner: either
+      // recovery action reloads that location's choices without editing them.
+      await page.getByRole("button", { name: "Retry agents" }).click();
+      for (const label of [
+        "Agent: acceptance-agent",
+        "Model: Acceptance Alternate",
+        "Variant: high",
+      ])
+        await page.getByLabel(label, { exact: true }).waitFor();
+      expect(await prompt.textContent()).toBe("Retained new-session draft");
+      const draft = page
+        .locator(".session-drafts .shell-session-row")
+        .filter({ hasText: "Retained new-session draft" });
+      await draft.hover();
+      await draft.getByRole("button", { name: "Delete draft: Retained new-session draft" }).click();
+      await selectSession("Catalog recovery source");
+      expect(await prompt.textContent()).toBe("Retained session draft");
+      await selectSession("Browser fixture one");
+    } finally {
+      await page.unroute(agentRoute, failCatalog);
+      await page.unroute(modelDefaultRoute, failCatalog);
+      await api.session.remove({ sessionID: source.id });
+    }
   });
 
   it("switches palettes without replacing the workspace and restores the choice after reload", async () => {

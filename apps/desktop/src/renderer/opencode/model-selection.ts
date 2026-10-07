@@ -84,6 +84,8 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
     return fallback?.enabled ? models().find((model) => sameModel(model, fallback)) : undefined;
   });
   const selectedModelID = createMemo(() => {
+    const reference = input.selectedSession()?.model;
+    if (reference) return modelChoiceID(reference);
     const model = selectedModel();
     return model ? modelChoiceID(model) : undefined;
   });

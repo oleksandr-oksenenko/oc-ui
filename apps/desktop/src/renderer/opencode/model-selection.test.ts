@@ -252,11 +252,19 @@ describe("model selection", () => {
 
     await root.selection.sync();
     expect(root.selection.models()).toEqual([]);
+    expect(root.selection.selectedModelID()).toBe(
+      JSON.stringify([available.providerID, available.id]),
+    );
+    expect(root.selection.contextLimit()).toBeUndefined();
     root.setCatalog([available]);
     expect(root.selection.models().map((choice) => choice.label)).toEqual(["GPT"]);
     expect(root.selection.selectedModelID()).toBe(root.selection.models()[0]?.id);
     root.setCatalog([]);
     expect(root.selection.models()).toEqual([]);
+    expect(root.selection.selectedModelID()).toBe(
+      JSON.stringify([available.providerID, available.id]),
+    );
+    expect(root.selection.contextLimit()).toBeUndefined();
     root.dispose();
   });
 

@@ -121,6 +121,16 @@ export function SessionSidebar(props: SessionSidebarProps) {
         <Show when={!props.loading && !props.error && props.sessions.length === 0}>
           <div class="shell-sidebar-message">
             <p>No sessions yet.</p>
+            <Button
+              class="shell-sidebar-action oc-focus-inset"
+              type="button"
+              size="small"
+              variant="outline"
+              disabled={!props.canCreate}
+              onClick={props.onCreate}
+            >
+              New session
+            </Button>
           </div>
         </Show>
 

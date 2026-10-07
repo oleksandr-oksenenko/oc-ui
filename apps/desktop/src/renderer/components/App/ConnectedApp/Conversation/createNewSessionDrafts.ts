@@ -335,6 +335,13 @@ export function createNewSessionDrafts(
       ),
     );
   };
+  const reloadCatalogs = () => {
+    const target = location();
+    if (!target || runtime.stream.status() !== "connected") return;
+    runtime.data.location.model.invalidate(target);
+    runtime.data.location.agent.invalidate(target);
+    refreshCatalogs();
+  };
   createEffect(
     on(
       () => [locationKey(), selectedID(), projectsState(), runtime.stream.status()],
@@ -487,6 +494,7 @@ export function createNewSessionDrafts(
       variants:
         selectedModel?.variants.map((variant) => ({ id: variant.id, label: variant.id })) ?? [],
       selectedVariantID: reference?.variant,
+      onRetry: runtime.stream.status() === "connected" && project() ? reloadCatalogs : undefined,
       onSelectModel: (choiceID) => {
         const chosen = models().find((option) => modelChoiceID(option) === choiceID);
         if (chosen) editChoices(id, { model: { id: chosen.id, providerID: chosen.providerID } });
@@ -504,6 +512,7 @@ export function createNewSessionDrafts(
       disabled: lockedDraft(entry) || entry?.loading === true,
       agents: agents().map((option) => ({ id: option.id, label: option.name })),
       selectedAgentID: entry?.value.choices.agent,
+      onRetry: runtime.stream.status() === "connected" && project() ? reloadCatalogs : undefined,
       onSelectAgent: (agent) => editChoices(id, { agent }),
     };
   };

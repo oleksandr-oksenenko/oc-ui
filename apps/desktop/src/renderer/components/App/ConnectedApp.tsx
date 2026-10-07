@@ -106,6 +106,9 @@ export function ConnectedApp(props: ConnectedAppProps) {
                 forms={forms}
                 permissions={permissions}
                 connected={connected}
+                canCreate={drafts.canCreate()}
+                onCreate={drafts.create}
+                onBrowseSessions={() => panels.setLeftSidebarOpen(true)}
               />
             }
           >

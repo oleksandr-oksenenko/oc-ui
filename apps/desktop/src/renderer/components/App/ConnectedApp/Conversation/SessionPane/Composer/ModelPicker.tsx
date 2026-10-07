@@ -54,7 +54,7 @@ export function ModelPicker(props: ModelPickerProps) {
     >
       {options().length === 0 ? (
         <span class="composer-picker--unavailable" aria-disabled="true">
-          No models
+          {props.selectedID === undefined ? "No models" : "Model unavailable"}
         </span>
       ) : (
         <Popover
@@ -74,11 +74,14 @@ export function ModelPicker(props: ModelPickerProps) {
             type: "button",
             disabled: props.disabled,
             class: "composer-model-trigger oc-dropdown-trigger",
-            "aria-label": `Model: ${selected()?.label ?? "Select model"}`,
+            "aria-label": `Model: ${selected()?.label ?? (props.selectedID === undefined ? "Select model" : "Model unavailable")}`,
           }}
           trigger={
             <>
-              <span>{selected()?.label ?? "Select model"}</span>
+              <span>
+                {selected()?.label ??
+                  (props.selectedID === undefined ? "Select model" : "Model unavailable")}
+              </span>
               <Icon name="chevron-down" size="small" />
             </>
           }

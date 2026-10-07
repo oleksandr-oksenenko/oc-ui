@@ -230,6 +230,46 @@ function controller(
 }
 
 describe("native draft persistence", () => {
+  it.each(["model", "agent"] as const)(
+    "retries failed %s choices through the existing catalog owner without replacing draft content",
+    async (catalog) => {
+      const one = fixture();
+      const { adapter, runtime, pending } = controller(one);
+      const model = (await runtime.api.model.default({ location: choices.project.location })).data!;
+      runtime.data.location.model.list = () => [model];
+      runtime.data.location.model.invalidate =
+        vi.fn<typeof runtime.data.location.model.invalidate>();
+      runtime.data.location.agent.invalidate =
+        vi.fn<typeof runtime.data.location.agent.invalidate>();
+      await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+      adapter.create();
+      pending.resolve();
+      await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
+      const id = adapter.selectedID()!;
+      adapter.composer(id).onInput("Keep this draft through catalog recovery");
+      const before = one.service.get(id)!.value.choices;
+      const syncCatalog = vi
+        .fn<typeof runtime.data.location.model.sync>()
+        .mockRejectedValueOnce(new Error("Catalog unavailable"))
+        .mockResolvedValue(undefined);
+      runtime.data.location[catalog].sync = syncCatalog;
+      const selection = catalog === "model" ? "modelSelection" : "agentSelection";
+      adapter.composer(id)[selection].onRetry!();
+      await vi.waitFor(() => expect(adapter.current().catalogs).toBe("failed"));
+      expect(adapter.composer(id).value).toBe("Keep this draft through catalog recovery");
+      adapter.composer(id)[selection].onRetry!();
+      await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
+      expect(adapter.selectedID()).toBe(id);
+      expect(one.service.get(id)!.value.choices).toEqual(before);
+      expect(adapter.composer(id).value).toBe("Keep this draft through catalog recovery");
+      expect(syncCatalog).toHaveBeenCalledTimes(2);
+      expect(runtime.data.location.model.invalidate).toHaveBeenCalledWith(choices.project.location);
+      expect(runtime.data.location.agent.invalidate).toHaveBeenCalledWith(choices.project.location);
+      expect(runtime.data.session.create).not.toHaveBeenCalled();
+      expect(runtime.data.session.prompt).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(["ready", "pending"])(
     "cancels %s project reads on disconnect without a directory error and reloads on reconnect",
     async (phase) => {
