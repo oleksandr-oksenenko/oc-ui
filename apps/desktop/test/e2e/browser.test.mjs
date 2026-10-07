@@ -2127,6 +2127,33 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
+  it("renders real background shell completion as a dedicated disclosure after navigation", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const session = await api.session.create({ title: "Background process updates", location });
+    await selectSession(session.title);
+    await send("E2E_BACKGROUND_PROCESS");
+    const row = page.locator(".transcript-background-message");
+    await expect.poll(() => row.count()).toBe(1);
+    const trigger = row.getByRole("button", { name: /Background process.*Completed/u });
+    expect(await trigger.getAttribute("aria-expanded")).toBe("false");
+    await trigger.click();
+    await expect
+      .poll(() => row.locator(".transcript-tool-output").textContent())
+      .toContain("Background acceptance output");
+    expect(await row.locator(".transcript-tool-output").textContent()).not.toContain("<shell");
+    await idle();
+    const other = await api.session.create({ title: "Away from background updates", location });
+    await selectSession(other.title);
+    await selectSession(session.title);
+    await trigger.waitFor();
+    if ((await trigger.getAttribute("aria-expanded")) === "false") await trigger.click();
+    await expect
+      .poll(() => row.locator(".transcript-tool-output").textContent())
+      .toContain("Background acceptance output");
+    expect(errors).toEqual([]);
+  });
+
   it("highlights streamed code and restores highlighting after session navigation", async () => {
     await ensureConnected();
     const location = { directory: await realpath(project) };

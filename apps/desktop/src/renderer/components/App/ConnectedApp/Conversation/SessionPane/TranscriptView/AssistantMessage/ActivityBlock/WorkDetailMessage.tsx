@@ -6,6 +6,8 @@ import { ContextMessage } from "./WorkDetailMessage/ContextMessage.tsx";
 import { ShellMessage } from "./WorkDetailMessage/ShellMessage.tsx";
 import { SkillMessage } from "./WorkDetailMessage/SkillMessage.tsx";
 import { TimelineRow } from "./WorkDetailMessage/TimelineRow.tsx";
+import { BackgroundProcessMessage } from "./WorkDetailMessage/BackgroundProcessMessage.tsx";
+import { backgroundProcessUpdate } from "./WorkDetailMessage/backgroundProcessUpdate.ts";
 
 export type WorkDetailInfo = Exclude<
   SessionMessageInfo,
@@ -49,13 +51,25 @@ export function WorkDetailMessage(props: { readonly message: WorkDetailInfo }): 
       );
     case "compaction":
       return <CompactionMessage message={message} />;
-    case "system":
-    case "synthetic":
+    case "synthetic": {
+      const update = backgroundProcessUpdate(message);
+      if (update !== undefined) return <BackgroundProcessMessage id={message.id} update={update} />;
       return (
         <ContextMessage
           id={message.id}
-          icon={message.type === "system" ? "settings-gear" : "align-right"}
-          label={message.type === "system" ? "System context" : "Context"}
+          icon="align-right"
+          label="Context"
+          text={message.text}
+          description={message.description}
+        />
+      );
+    }
+    case "system":
+      return (
+        <ContextMessage
+          id={message.id}
+          icon="settings-gear"
+          label="System context"
           text={message.text}
           description={message.description}
         />

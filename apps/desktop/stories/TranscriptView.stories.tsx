@@ -184,6 +184,65 @@ export const ContextLongDescription: Story = {
   render: renderTranscript,
 };
 
+export const BackgroundProcesses: Story = {
+  args: {
+    sessionStatus: "idle",
+    messages: [
+      ...["completed", "error", "cancelled"].map((state, index) => {
+        const command = 'export PATH="/node/bin:$PATH"\nnode --version\npnpm check && pnpm test';
+        const output =
+          state === "completed"
+            ? "v24.20.0\nAll checks passed.\n\nCommand exited with code 0."
+            : state === "error"
+              ? "Command failed"
+              : "Command cancelled because the server restarted";
+        return {
+          id: `background-${state}`,
+          type: "synthetic" as const,
+          time: { created: index + 1 },
+          description: command,
+          metadata: { source: "shell", shellID: `shell-${index}`, jobID: `job-${index}`, state },
+          text: `<shell id="job-${index}" state="${state}" command="${command}">\n${output}\n</shell>`,
+        };
+      }),
+      {
+        id: "ordinary-context",
+        type: "synthetic",
+        time: { created: 4 },
+        description: "Continuing after restart",
+        text: "The previous work is preserved.",
+      },
+    ],
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const completed = canvas.getByRole("button", { name: /Background process.*Completed/ });
+    await expect(completed).toHaveAttribute("aria-expanded", "false");
+    await expect(canvas.queryByText(/All checks passed/)).toBeNull();
+    completed.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByText(/All checks passed/)).toBeVisible();
+    await expect(canvasElement.querySelector(".transcript-background-command")).toHaveTextContent(
+      'export PATH="/node/bin:$PATH"',
+    );
+    await expect(canvasElement.querySelector(".transcript-tool-output")).not.toHaveTextContent(
+      "<shell",
+    );
+    await userEvent.keyboard(" ");
+    await expect(completed).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(completed);
+    await expect(canvas.getByText(/All checks passed/)).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: /Background process.*Failed/ }));
+    await expect(canvas.getByText("Command failed")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: /Background process.*Cancelled/ }));
+    await expect(canvas.getByText("Command cancelled because the server restarted")).toBeVisible();
+    await expect(
+      canvas.getByRole("button", { name: "Context Continuing after restart" }),
+    ).toBeVisible();
+  },
+};
+
 export const ContextOutsideActivity: Story = {
   args: {
     sessionStatus: "running",
