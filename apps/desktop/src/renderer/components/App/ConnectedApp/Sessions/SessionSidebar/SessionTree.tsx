@@ -1,5 +1,5 @@
 import type { SessionAttention } from "../createSessionAttention.ts";
-import type { SessionInfo } from "@opencode/client";
+import type { Project, SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
 import { Collapsible } from "@opencode/ui/collapsible";
 import { For, Show, createComputed, createEffect, createMemo, createSignal } from "solid-js";
@@ -14,6 +14,7 @@ import "./SessionTree.css";
 export type SessionTreeProps = {
   readonly attentionForSession?: (sessionID: string) => SessionAttention | undefined;
   readonly sessions: readonly SessionInfo[];
+  readonly projects?: readonly Project[];
   readonly now?: number;
   readonly statusForSession: (sessionID: string) => DataSessionStatus;
   readonly selectedID?: string;
@@ -83,6 +84,7 @@ export function SessionTree(props: SessionTreeProps) {
               return (
                 <SessionTreeItem
                   session={session()}
+                  projects={props.projects}
                   status={props.statusForSession(session().id)}
                   attention={attentionByID().get(session().id)}
                   hasChildren={node().children.length > 0}

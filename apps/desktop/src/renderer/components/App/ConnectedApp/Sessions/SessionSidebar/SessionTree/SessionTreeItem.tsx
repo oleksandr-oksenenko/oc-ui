@@ -1,15 +1,17 @@
 import type { SessionAttentionState } from "../../session-attention-rollup.ts";
 import { Collapsible } from "@opencode/ui/collapsible";
 import { Loader } from "@opencode/ui/loader";
-import type { SessionInfo } from "@opencode/client";
+import type { Project, SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
 import type { JSX } from "solid-js";
 import { RemoveButton } from "../../../../../../ui/RemoveButton.tsx";
 
 import { SessionRow } from "../../../../../../ui/SessionRow.tsx";
+import { sessionProjectLabel } from "../../session-project-label.ts";
 
 export type SessionTreeItemProps = {
   readonly session: SessionInfo;
+  readonly projects?: readonly Project[];
   readonly attention?: SessionAttentionState;
   readonly status: DataSessionStatus;
   readonly hasChildren: boolean;
@@ -26,6 +28,7 @@ export type SessionTreeItemProps = {
 
 export function SessionTreeItem(props: SessionTreeItemProps) {
   const title = () => props.session.title?.trim() || "Untitled session";
+  const project = () => sessionProjectLabel(props.session.projectID, props.projects ?? []);
   const inherited = () => props.attention?.origin === "subagents";
   const statusLabel = () => {
     const attention = props.attention;
@@ -53,6 +56,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
       >
         <SessionRow
           title={title()}
+          subtitle={project()}
           label={`${title()}, ${statusLabel()}`}
           selected={props.selected}
           hasChildren={props.hasChildren}

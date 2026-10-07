@@ -780,6 +780,9 @@ describe.sequential("production browser app", () => {
       .poll(() => page.locator(".session-drafts .shell-session-title").allTextContents())
       .toContain("hello,");
     expect(await prompt.textContent()).toBe("hello, ");
+    await expect
+      .poll(() => page.locator(".session-drafts .shell-session-project").first().textContent())
+      .toBe("acceptance-project");
     await prompt.fill("Persistent first draft");
     await prompt.press("End");
     await prompt.pressSequentially(" /rev");
@@ -869,6 +872,39 @@ describe.sequential("production browser app", () => {
     await api.session.create({ title: "Browser fixture one" });
     await api.session.create({ title: "Browser fixture two" });
     await selectSession("Browser fixture one");
+    await expect
+      .poll(() =>
+        page
+          .locator('.shell-session-main[aria-current="page"] .shell-session-project')
+          .textContent(),
+      )
+      .toBe("acceptance-project");
+    expect(
+      await page
+        .locator('.shell-session-main[aria-current="page"]')
+        .getAttribute("aria-description"),
+    ).toBe("acceptance-project");
+    const selectedRow = page.locator(
+      '.shell-session-row:has(.shell-session-main[aria-current="page"])',
+    );
+    const selectedRemove = selectedRow.getByRole("button", {
+      name: "Delete Browser fixture one",
+      exact: true,
+    });
+    await selectedRow.hover();
+    expect(await selectedRemove.evaluate((button) => getComputedStyle(button).opacity)).toBe("1");
+    expect(
+      await selectedRow.evaluate((row) => {
+        const title = row.querySelector(".shell-session-title").getBoundingClientRect();
+        const remove = row.querySelector(".shell-session-delete").getBoundingClientRect();
+        return Math.abs(title.top + title.height / 2 - (remove.top + remove.height / 2));
+      }),
+    ).toBeLessThanOrEqual(0.5);
+    await page.getByLabel("Prompt", { exact: true }).hover();
+    await selectedRow.locator(".shell-session-main").focus();
+    await page.keyboard.press("Tab");
+    expect(await selectedRemove.evaluate((button) => button === document.activeElement)).toBe(true);
+    expect(await selectedRemove.evaluate((button) => getComputedStyle(button).opacity)).toBe("1");
     await page.getByLabel("Prompt", { exact: true }).fill("Independent draft");
     expect(await page.evaluate(() => document.documentElement.dataset.host)).toBe("browser");
   });

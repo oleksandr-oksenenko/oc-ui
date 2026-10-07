@@ -39,6 +39,7 @@ export function SessionsRegion(props: SessionsRegionProps) {
       }}
       attentionForSession={props.attentionForSession}
       sessions={props.workspace.sessions()}
+      projects={props.runtime.data.project.list()}
       statusForSession={(sessionID) => props.runtime.data.session.status(sessionID)}
       selectedID={props.workspace.selectedID()}
       expandedIDs={props.flows.expandedIDs()}

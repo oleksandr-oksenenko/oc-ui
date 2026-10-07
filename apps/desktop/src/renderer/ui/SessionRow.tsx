@@ -5,6 +5,7 @@ import "./SessionRow.css";
 
 export type SessionRowProps = {
   readonly title: string;
+  readonly subtitle: string;
   readonly label: string;
   readonly selected: boolean;
   readonly sidebarVisible?: boolean;
@@ -40,6 +41,7 @@ export function SessionRow(props: SessionRowProps) {
           variant="ghost-muted"
           aria-current={props.selected ? "page" : undefined}
           aria-label={props.label}
+          aria-description={props.subtitle}
           onFocus={(event: FocusEvent & { currentTarget: HTMLButtonElement }) =>
             setTitleFocused(event.currentTarget.matches(":focus-visible"))
           }
@@ -51,6 +53,7 @@ export function SessionRow(props: SessionRowProps) {
           onClick={props.onSelect}
         >
           <span class="shell-session-title">{props.title}</span>
+          <span class="shell-session-project">{props.subtitle}</span>
         </Button>
       </Tooltip>
       <span class="shell-session-row-end">{props.end}</span>

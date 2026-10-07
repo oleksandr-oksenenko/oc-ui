@@ -659,6 +659,7 @@ export function createNewSessionDrafts(
         .map((entry) => ({
           id: entry.value.id,
           title: draftTitle(entry.value),
+          project: entry.value.choices.project,
           status:
             entry.busy || (entry.value.attempt && !entry.value.attempt.result)
               ? ("preparing" as const)
