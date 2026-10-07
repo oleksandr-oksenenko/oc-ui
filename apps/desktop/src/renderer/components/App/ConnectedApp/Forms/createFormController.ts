@@ -28,6 +28,9 @@ type FormController = {
   readonly pending: Accessor<boolean>;
   readonly submitting: (sessionID: string, formID: string) => boolean;
   readonly errorFor: (sessionID: string, formID: string) => string | undefined;
+  readonly answerFor: (sessionID: string, formID: string) => FormAnswer | undefined;
+  readonly saveAnswer: (sessionID: string, formID: string, answer: FormAnswer) => void;
+  readonly clearAnswers: (sessionID: string, formIDs?: readonly string[]) => void;
   readonly sync: () => Promise<void>;
   readonly startSync: () => void;
   readonly syncSession: (sessionID: string) => void;
@@ -41,6 +44,11 @@ type MutationKind = "reply" | "cancel";
 const mutationKey = (sessionID: string, formID: string): string => `${sessionID}\u0000${formID}`;
 const RELATED_LOAD_FAILURE = "Some subagent questions could not be loaded.";
 
+const copyAnswer = (answer: FormAnswer): FormAnswer =>
+  Object.fromEntries(
+    Object.entries(answer).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]),
+  );
+
 /** Shared lifecycle and mutation state for session-scoped and location-scoped forms. */
 export function createFormController(input: FormControllerInput): FormController {
   const { effects } = input;
@@ -49,16 +57,49 @@ export function createFormController(input: FormControllerInput): FormController
   });
   const mutations = Atom.make<ReadonlyMap<string, { pending: boolean; error?: string }>>(new Map());
   const relatedFailures = Atom.make(new Set<string>());
+  const answers = Atom.make<ReadonlyMap<string, ReadonlyMap<string, FormAnswer>>>(new Map());
   effects.mount(status);
   effects.mount(mutations);
   effects.mount(relatedFailures);
+  effects.mount(answers);
   const current = useAtomValue(() => status);
   const mutationState = useAtomValue(() => mutations);
   const relatedFailureSet = useAtomValue(() => relatedFailures);
+  const answerState = useAtomValue(() => answers);
   const read = effects.latest();
   const relatedRead = effects.latest();
   const relatedPermits = Semaphore.makeUnsafe(4);
   let selection: object | undefined = {};
+
+  const clearAnswers = (sessionID: string, formIDs?: readonly string[]) => {
+    if (!selection) return;
+    const saved = effects.registry.get(answers);
+    const session = saved.get(sessionID);
+    if (!session) return;
+    const remaining = new Map(session);
+    if (formIDs) for (const id of formIDs) remaining.delete(id);
+    else remaining.clear();
+    if (remaining.size === session.size) return;
+    const next = new Map(saved);
+    if (remaining.size > 0) next.set(sessionID, remaining);
+    else next.delete(sessionID);
+    effects.registry.set(answers, next);
+  };
+
+  // Called only by the successful, still-owned Effect read. Cancelled SDK
+  // promises remain owned until settlement but cannot prune drafts afterwards.
+  const pruneAnswers = (sessionID: string, before: ReadonlyMap<string, FormAnswer> | undefined) => {
+    const listed = input.form.list(sessionID, input.location);
+    if (!before || listed === undefined) return;
+    const ids = new Set(listed.map((form) => form.id));
+    const saved = effects.registry.get(answers).get(sessionID);
+    clearAnswers(
+      sessionID,
+      [...before]
+        .filter(([id, answer]) => !ids.has(id) && saved?.get(id) === answer)
+        .map(([id]) => id),
+    );
+  };
 
   const activeSessionIDs = (): readonly string[] => {
     const sessionID = input.sessionID();
@@ -85,9 +126,11 @@ export function createFormController(input: FormControllerInput): FormController
   };
 
   const syncRelatedSession = Effect.fn("forms.syncRelatedSession")(function* (sessionID: string) {
+    const before = effects.registry.get(answers).get(sessionID);
     const synced = yield* effects
       .request(() => input.form.sync(sessionID, input.location))
       .pipe(Effect.match({ onSuccess: () => true, onFailure: () => false }));
+    if (synced) pruneAnswers(sessionID, before);
     setRelatedFailure(sessionID, !synced);
     return synced;
   });
@@ -144,11 +187,15 @@ export function createFormController(input: FormControllerInput): FormController
       return;
     }
     effects.registry.set(status, { state: "loading" });
+    const before = effects.registry.get(answers).get(sessionID);
     yield* effects
       .request(() => input.form.sync(sessionID, input.location))
       .pipe(
         Effect.match({
-          onSuccess: () => effects.registry.set(status, { state: "ready" }),
+          onSuccess: () => {
+            pruneAnswers(sessionID, before);
+            effects.registry.set(status, { state: "ready" });
+          },
           onFailure: (failure) =>
             effects.registry.set(status, {
               state: "failed",
@@ -208,7 +255,10 @@ export function createFormController(input: FormControllerInput): FormController
       )
       .pipe(
         Effect.match({
-          onSuccess: () => true,
+          onSuccess: () => {
+            clearAnswers(sessionID, [formID]);
+            return true;
+          },
           onFailure: (failure) => {
             if (selection === initiatingSelection) {
               updateMutation(key, {
@@ -265,6 +315,7 @@ export function createFormController(input: FormControllerInput): FormController
     selection = undefined;
     read.cancel();
     relatedRead.cancel();
+    effects.registry.set(answers, new Map());
   });
 
   return {
@@ -281,6 +332,22 @@ export function createFormController(input: FormControllerInput): FormController
     pending,
     submitting: (sessionID, formID) => mutation(sessionID, formID)?.pending ?? false,
     errorFor: (sessionID, formID) => mutation(sessionID, formID)?.error,
+    answerFor: (sessionID, formID) => {
+      const answer = selection ? answerState().get(sessionID)?.get(formID) : undefined;
+      return answer === undefined ? undefined : copyAnswer(answer);
+    },
+    saveAnswer: (sessionID, formID, answer) => {
+      if (!selection) return;
+      const saved = effects.registry.get(answers);
+      effects.registry.set(
+        answers,
+        new Map(saved).set(
+          sessionID,
+          new Map(saved.get(sessionID)).set(formID, copyAnswer(answer)),
+        ),
+      );
+    },
+    clearAnswers,
     sync,
     startSync: startRefresh,
     syncSession,

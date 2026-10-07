@@ -1,5 +1,5 @@
 import type { WorkspaceOwner } from "../../../../workspace-owner.ts";
-import type { FormAnswer, LocationRef } from "@opencode/client";
+import type { FormAnswer, LocationRef, OpenCodeEvent } from "@opencode/client";
 import { locationKey, type Data, type FormWithLocation } from "@opencode/client/solid";
 import { createMemo, onCleanup, type Accessor } from "solid-js";
 
@@ -28,6 +28,8 @@ export type GlobalFormsController = {
   readonly pending: Accessor<boolean>;
   readonly submitting: (formID: string) => boolean;
   readonly errorFor: (formID: string) => string | undefined;
+  readonly answerFor: (formID: string) => FormAnswer | undefined;
+  readonly saveAnswer: (formID: string, answer: FormAnswer) => void;
   readonly refresh: () => Promise<void>;
   readonly reply: (formID: string, answer: FormAnswer) => Promise<boolean>;
   readonly cancel: (formID: string) => Promise<boolean>;
@@ -59,7 +61,18 @@ export function createGlobalForms(input: CreateGlobalFormsInput): GlobalFormsCon
     controller.startSync();
   });
 
-  onCleanup(stopCreated);
+  const settle = (event: Extract<OpenCodeEvent, { type: "form.replied" | "form.cancelled" }>) => {
+    if (event.data.sessionID !== GLOBAL_SESSION_ID) return;
+    if (event.location && locationKey(event.location) !== locationKey(input.location)) return;
+    controller.clearAnswers(GLOBAL_SESSION_ID, [event.data.id]);
+  };
+  const stopReplied = input.runtime.data.on("form.replied", settle);
+  const stopCancelled = input.runtime.data.on("form.cancelled", settle);
+  onCleanup(() => {
+    stopCreated();
+    stopReplied();
+    stopCancelled();
+  });
 
   return {
     location: input.location,
@@ -70,6 +83,8 @@ export function createGlobalForms(input: CreateGlobalFormsInput): GlobalFormsCon
     pending: controller.pending,
     submitting: (formID) => controller.submitting(GLOBAL_SESSION_ID, formID),
     errorFor: (formID) => controller.errorFor(GLOBAL_SESSION_ID, formID),
+    answerFor: (formID) => controller.answerFor(GLOBAL_SESSION_ID, formID),
+    saveAnswer: (formID, answer) => controller.saveAnswer(GLOBAL_SESSION_ID, formID, answer),
     refresh: controller.sync,
     reply: (formID, answer) => controller.reply(GLOBAL_SESSION_ID, formID, answer),
     cancel: (formID) => controller.cancel(GLOBAL_SESSION_ID, formID),

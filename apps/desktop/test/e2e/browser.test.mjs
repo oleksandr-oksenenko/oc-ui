@@ -654,6 +654,24 @@ describe.sequential("production browser app", () => {
       .poll(() => page.locator('.shell-session-row.selected [data-status="question"]').count())
       .toBe(1);
     await page.locator(".question-form label").filter({ hasText: "Alpha" }).click();
+    await selectSession("Browser fixture two");
+    await page.locator(".question-form").waitFor({ state: "hidden" });
+    await selectSession("Browser fixture one");
+    await expect
+      .poll(() => page.locator('.question-form input[value="option:0"]').isChecked())
+      .toBe(true);
+    await page.route(
+      "**/api/session/*/form/*/reply",
+      (route) => route.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
+      { times: 1 },
+    );
+    await page.locator('.question-form button[type="submit"]').click();
+    await page.getByRole("alert").filter({ hasText: "The form could not be submitted" }).waitFor();
+    await selectSession("Browser fixture two");
+    await selectSession("Browser fixture one");
+    await expect
+      .poll(() => page.locator('.question-form input[value="option:0"]').isChecked())
+      .toBe(true);
     await page.locator('.question-form button[type="submit"]').click();
     await transcript("Acceptance question resolved:");
     await expect.poll(() => questionActivity.locator(".transcript-activity-pulse").count()).toBe(0);

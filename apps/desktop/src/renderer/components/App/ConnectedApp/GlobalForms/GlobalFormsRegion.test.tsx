@@ -23,6 +23,7 @@ function form(
 }
 
 function controller(initial: readonly FormInfo[] = []) {
+  const answers = new Map<string, FormAnswer>();
   const [forms, setForms] = createSignal<readonly FormInfo[]>(initial);
   const [connected, setConnected] = createSignal(true);
   const [loading, setLoading] = createSignal(false);
@@ -48,6 +49,10 @@ function controller(initial: readonly FormInfo[] = []) {
     pending,
     submitting,
     errorFor,
+    answerFor: (id) => answers.get(id),
+    saveAnswer: (id, answer) => {
+      answers.set(id, answer);
+    },
     loading,
     loadError,
     refresh,
@@ -216,21 +221,21 @@ describe("GlobalFormsRegion", () => {
     dispose();
   });
 
-  it("prunes snapshots when requests disappear while the dialog is closed", async () => {
+  it("restores controller-owned drafts after region remount and form-object replacement", async () => {
     const state = controller([form("one")]);
     const mounted = mount(state.value);
     launcher(mounted.host).click();
     await settle();
-    enterAnswer("stale answer");
+    enterAnswer("saved answer");
     buttonWithText(document.body, "Keep pending").click();
     await settle();
-    state.setForms([]);
-    await settle();
-    state.setForms([form("one")]);
-    launcher(mounted.host).click();
-    await settle();
-    expect(answerInput().value).toBe("");
     mounted.dispose();
+    state.setForms([form("one", "Replaced request")]);
+    const remounted = mount(state.value);
+    launcher(remounted.host).click();
+    await settle();
+    expect(answerInput().value).toBe("saved answer");
+    remounted.dispose();
   });
 
   it("uses QuestionForm validation, submits, then cancels the next request", async () => {

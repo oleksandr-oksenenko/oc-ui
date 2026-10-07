@@ -186,6 +186,8 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
         disabled={!props.connected()}
         submitting={props.forms.submitting(form()!.sessionID, form()!.id)}
         error={props.forms.errorFor(form()!.sessionID, form()!.id)}
+        initialAnswer={props.forms.answerFor(form()!.sessionID, form()!.id)}
+        onAnswerChange={(answer) => props.forms.saveAnswer(form()!.sessionID, form()!.id, answer)}
         onSubmit={(answer) => void props.forms.reply(form()!.sessionID, form()!.id, answer)}
         onCancel={() => void props.forms.cancel(form()!.sessionID, form()!.id)}
       />

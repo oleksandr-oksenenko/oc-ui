@@ -29,6 +29,8 @@ export type SessionFormsController = {
   readonly subagentError: Accessor<string | undefined>;
   readonly submitting: (sessionID: string, formID: string) => boolean;
   readonly errorFor: (sessionID: string, formID: string) => string | undefined;
+  readonly answerFor: (sessionID: string, formID: string) => FormAnswer | undefined;
+  readonly saveAnswer: (sessionID: string, formID: string, answer: FormAnswer) => void;
   readonly sync: () => Promise<void>;
   readonly retrySubagents: () => Promise<void>;
   readonly reply: (sessionID: string, formID: string, answer: FormAnswer) => Promise<void>;
@@ -39,7 +41,7 @@ const SYNC_FAILURE_MESSAGE = "Forms could not be refreshed. Try again.";
 const REPLY_FAILURE_MESSAGE = "The form could not be submitted. Try again.";
 const CANCEL_FAILURE_MESSAGE = "The form could not be cancelled. Try again.";
 
-/** Owns pending forms for the selected session and their server mutations. */
+/** Owns form workflows and in-memory answer drafts for the connected workspace. */
 export function createSessionForms(input: SessionFormsInput): SessionFormsController {
   const controller = createFormController({
     effects: input.effects,
@@ -61,7 +63,21 @@ export function createSessionForms(input: SessionFormsInput): SessionFormsContro
     else if (input.subagentIDs().includes(sessionID)) controller.syncSession(sessionID);
   });
 
-  onCleanup(stopCreated);
+  const stopReplied = input.data.on("form.replied", (event) =>
+    controller.clearAnswers(event.data.sessionID, [event.data.id]),
+  );
+  const stopCancelled = input.data.on("form.cancelled", (event) =>
+    controller.clearAnswers(event.data.sessionID, [event.data.id]),
+  );
+  const stopDeleted = input.data.on("session.deleted", (event) =>
+    controller.clearAnswers(event.data.sessionID),
+  );
+  onCleanup(() => {
+    stopCreated();
+    stopReplied();
+    stopCancelled();
+    stopDeleted();
+  });
 
   return {
     sessionForms: controller.forms,
@@ -70,6 +86,8 @@ export function createSessionForms(input: SessionFormsInput): SessionFormsContro
     subagentError: controller.relatedError,
     submitting: controller.submitting,
     errorFor: controller.errorFor,
+    answerFor: controller.answerFor,
+    saveAnswer: controller.saveAnswer,
     sync: controller.sync,
     retrySubagents: controller.retryRelated,
     reply: (sessionID, formID, answer) =>

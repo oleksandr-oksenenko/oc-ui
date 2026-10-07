@@ -79,6 +79,7 @@ function setup(initialConnected = false, initialForms: FormWithLocation[] = []) 
       emitCreated(event: CreatedEvent) {
         events.emit(event);
       },
+      emit: events.emit,
     };
   });
 }
@@ -89,6 +90,47 @@ async function settle(): Promise<void> {
 }
 
 describe("createGlobalForms", () => {
+  it("retains drafts through read failures and prunes on a successful authoritative refresh", async () => {
+    const root = setup(true, [form("one")]);
+    await root.value.refresh();
+    root.value.saveAnswer("one", { answer: "saved" });
+    root.setListed([]);
+    root.sync.mockRejectedValueOnce(new Error("offline"));
+    await root.value.refresh();
+    expect(root.value.answerFor("one")).toEqual({ answer: "saved" });
+    await root.value.refresh();
+    expect(root.value.answerFor("one")).toBeUndefined();
+    root.dispose();
+  });
+
+  it("scopes external settlement cleanup by global session and complete server location", async () => {
+    const root = setup(true, [form("one"), form("two")]);
+    await root.value.refresh();
+    root.value.saveAnswer("one", { answer: "one" });
+    root.value.saveAnswer("two", { answer: "two" });
+    const event = {
+      id: "evt_settled",
+      created: 1,
+      type: "form.cancelled",
+      location,
+      data: { sessionID: "global", id: "one" },
+    } satisfies OpenCodeEvent;
+    root.emit({ ...event, location: { ...location, directory: "/other" } });
+    root.emit({ ...event, location: { ...location, workspaceID: "other" } });
+    root.emit({ ...event, data: { ...event.data, sessionID: "session-one" } });
+    expect(root.value.answerFor("one")).toEqual({ answer: "one" });
+    root.emit(event);
+    expect(root.value.answerFor("one")).toBeUndefined();
+    expect(root.value.answerFor("two")).toEqual({ answer: "two" });
+    root.emit({
+      id: "evt_replied",
+      created: 1,
+      type: "form.replied",
+      data: { sessionID: "global", id: "two", answer: {} },
+    });
+    expect(root.value.answerFor("two")).toBeUndefined();
+    root.dispose();
+  });
   it("syncs global forms with the complete location on each reconnect", async () => {
     const root = setup();
     await settle();

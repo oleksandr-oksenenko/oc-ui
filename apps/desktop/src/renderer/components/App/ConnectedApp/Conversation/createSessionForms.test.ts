@@ -63,6 +63,7 @@ function setup(
       effects,
       dispose,
       forms,
+      loaded,
       setSelectedID,
       setSubagentIDs,
       setConnected,
@@ -77,6 +78,7 @@ function setup(
       emitCreated(event: CreatedEvent) {
         events.emit(event);
       },
+      emit: events.emit,
     };
   });
 }
@@ -97,6 +99,277 @@ function created(sessionID: string, id = "new-form"): CreatedEvent {
 }
 
 describe("createSessionForms", () => {
+  it("takes defensive answer snapshots without exposing stored arrays to callers", async () => {
+    const fixture = setup({ selectedID: "one", listed: [form("draft", "one")] });
+    await fixture.forms.sync();
+    const choices = ["alpha"];
+    const answer: FormAnswer = { answer: "saved", choices };
+    fixture.forms.saveAnswer("one", "draft", answer);
+    answer.answer = "mutated input";
+    choices.push("beta");
+    const restored = fixture.forms.answerFor("one", "draft")!;
+    expect(restored).toEqual({ answer: "saved", choices: ["alpha"] });
+    restored.answer = "mutated output";
+    if (!Array.isArray(restored.choices)) throw new Error("Expected restored choices");
+    restored.choices.push("gamma");
+    expect(fixture.forms.answerFor("one", "draft")).toEqual({
+      answer: "saved",
+      choices: ["alpha"],
+    });
+    fixture.dispose();
+  });
+
+  it("prevents a superseded successful read from pruning drafts after the current refresh", async () => {
+    const fixture = setup({ selectedID: "one", listed: [form("draft", "one")] });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "draft", { answer: "current" });
+    const staleRead = deferred();
+    fixture.sync.mockReturnValueOnce(staleRead.promise);
+    const staleRefresh = fixture.forms.sync();
+    await fixture.forms.sync();
+    fixture.setListed([]);
+    staleRead.resolve();
+    await staleRefresh;
+    expect(fixture.forms.answerFor("one", "draft")).toEqual({ answer: "current" });
+    await fixture.forms.sync();
+    expect(fixture.forms.answerFor("one", "draft")).toBeUndefined();
+    fixture.dispose();
+  });
+
+  it("retains drafts when a successful SDK read settles after disconnection cancels it", async () => {
+    const fixture = setup({ selectedID: "one", listed: [form("draft", "one")] });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "draft", { answer: "current" });
+    const read = deferred();
+    fixture.sync.mockReturnValueOnce(read.promise);
+    const refresh = fixture.forms.sync();
+    fixture.setConnected(false);
+    fixture.setListed([]);
+    read.resolve();
+    await refresh;
+    expect(fixture.forms.answerFor("one", "draft")).toEqual({ answer: "current" });
+    fixture.dispose();
+  });
+
+  it("retains distinct session/form drafts through navigation, replacement and missing caches", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      listed: [form("shared", "one"), form("other", "one"), form("shared", "two")],
+    });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "shared", { answer: "one", hidden: ["a", "b"] });
+    fixture.forms.saveAnswer("one", "other", {});
+    fixture.forms.saveAnswer("two", "shared", { answer: false });
+    fixture.setSelectedID("two");
+    await fixture.forms.sync();
+    fixture.setListed([form("shared", "one"), form("other", "one"), form("shared", "two")]);
+    fixture.setSelectedID("one");
+    await fixture.forms.sync();
+    expect(fixture.forms.answerFor("one", "shared")).toEqual({
+      answer: "one",
+      hidden: ["a", "b"],
+    });
+    expect(fixture.forms.answerFor("one", "other")).toEqual({});
+    expect(fixture.forms.answerFor("two", "shared")).toEqual({ answer: false });
+    fixture.loaded.delete("one");
+    await fixture.forms.sync();
+    expect(fixture.forms.answerFor("one", "shared")?.answer).toBe("one");
+    fixture.dispose();
+    expect(fixture.forms.answerFor("one", "shared")).toBeUndefined();
+  });
+
+  it("retains edits after failed reply/cancel and prunes only the settled identity on retry", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      listed: [form("shared", "one"), form("other", "one"), form("shared", "two")],
+    });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "shared", { answer: "reply" });
+    fixture.forms.saveAnswer("one", "other", { answer: "cancel" });
+    fixture.forms.saveAnswer("two", "shared", { answer: "unrelated" });
+    fixture.reply.mockRejectedValueOnce(new Error("reply failed"));
+    fixture.cancel.mockRejectedValueOnce(new Error("cancel failed"));
+    await fixture.forms.reply("one", "shared", { answer: "reply" });
+    await fixture.forms.cancel("one", "other");
+    expect(fixture.forms.answerFor("one", "shared")).toEqual({ answer: "reply" });
+    expect(fixture.forms.answerFor("one", "other")).toEqual({ answer: "cancel" });
+    await fixture.forms.reply("one", "shared", { answer: "reply" });
+    expect(fixture.forms.answerFor("one", "shared")).toBeUndefined();
+    expect(fixture.forms.answerFor("one", "other")).toEqual({ answer: "cancel" });
+    await fixture.forms.cancel("one", "other");
+    expect(fixture.forms.answerFor("one", "other")).toBeUndefined();
+    expect(fixture.forms.answerFor("two", "shared")).toEqual({ answer: "unrelated" });
+    fixture.dispose();
+  });
+
+  it("ignores transient list omissions and failed reads, then prunes on authoritative refresh", async () => {
+    const fixture = setup({ selectedID: "one", listed: [form("draft", "one")] });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "draft", { answer: "keep" });
+    fixture.forms.saveAnswer("two", "draft", { answer: "unselected" });
+    fixture.setListed([]);
+    expect(fixture.forms.answerFor("one", "draft")).toEqual({ answer: "keep" });
+    fixture.sync.mockRejectedValueOnce(new Error("catalog unavailable"));
+    await fixture.forms.sync();
+    expect(fixture.forms.answerFor("one", "draft")).toEqual({ answer: "keep" });
+    await fixture.forms.sync();
+    expect(fixture.forms.answerFor("one", "draft")).toBeUndefined();
+    expect(fixture.forms.answerFor("two", "draft")).toEqual({ answer: "unselected" });
+    fixture.dispose();
+  });
+
+  it("does not let a late read erase newer edits, including after leaving the session", async () => {
+    const fixture = setup({ selectedID: "one", listed: [form("draft", "one")] });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "draft", { answer: "before" });
+    const read = deferred();
+    fixture.sync.mockReturnValueOnce(read.promise);
+    const refresh = fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "draft", { answer: "during" });
+    fixture.setSelectedID("two");
+    fixture.setListed([]);
+    read.resolve();
+    await refresh;
+    expect(fixture.forms.answerFor("one", "draft")).toEqual({ answer: "during" });
+    fixture.setListed([form("draft", "one")]);
+    fixture.setSelectedID("one");
+    await fixture.forms.sync();
+    expect(fixture.forms.answerFor("one", "draft")).toEqual({ answer: "during" });
+    fixture.dispose();
+  });
+
+  it("prunes unchanged missing forms but retains edits arriving during the current refresh", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      listed: [form("editing", "one"), form("removed", "one")],
+    });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "editing", { answer: "old" });
+    fixture.forms.saveAnswer("one", "removed", { answer: "old" });
+    const read = deferred();
+    fixture.sync.mockReturnValueOnce(read.promise);
+    const refresh = fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "editing", { answer: "new" });
+    fixture.setListed([]);
+    read.resolve();
+    await refresh;
+    expect(fixture.forms.answerFor("one", "editing")).toEqual({ answer: "new" });
+    expect(fixture.forms.answerFor("one", "removed")).toBeUndefined();
+    fixture.dispose();
+  });
+
+  it("prunes related forms only after successful hydration and retains them when the subtree changes", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      subagentIDs: ["child"],
+      listed: [form("draft", "child")],
+    });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("child", "draft", { answer: "child" });
+    fixture.setSubagentIDs([]);
+    fixture.setListed([]);
+    expect(fixture.forms.answerFor("child", "draft")).toEqual({ answer: "child" });
+    fixture.sync.mockRejectedValueOnce(new Error("child unavailable"));
+    fixture.setSubagentIDs(["child"]);
+    fixture.emitCreated(created("child"));
+    await vi.waitFor(() => expect(fixture.forms.subagentError()).toBeDefined());
+    expect(fixture.forms.answerFor("child", "draft")).toEqual({ answer: "child" });
+    await fixture.forms.retrySubagents();
+    expect(fixture.forms.answerFor("child", "draft")).toBeUndefined();
+    fixture.dispose();
+  });
+
+  it("retains pending and late failed submissions across navigation without rollback of edits", async () => {
+    const fixture = setup({ selectedID: "one", listed: [form("draft", "one")] });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "draft", { answer: "before" });
+    const request = deferred();
+    fixture.reply.mockReturnValueOnce(request.promise);
+    const submitted = fixture.forms.reply("one", "draft", { answer: "before" });
+    fixture.setSelectedID("two");
+    fixture.setSelectedID("one");
+    fixture.forms.saveAnswer("one", "draft", { answer: "current" });
+    await fixture.forms.reply("one", "draft", { answer: "duplicate" });
+    expect(fixture.reply).toHaveBeenCalledOnce();
+    request.reject(new Error("late failure"));
+    await submitted;
+    expect(fixture.forms.answerFor("one", "draft")).toEqual({ answer: "current" });
+    fixture.dispose();
+  });
+
+  it("clears only the acknowledged form when submission succeeds after navigation", async () => {
+    const fixture = setup({
+      selectedID: "one",
+      listed: [form("shared", "one"), form("shared", "two")],
+    });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "shared", { answer: "submitted" });
+    fixture.forms.saveAnswer("two", "shared", { answer: "current" });
+    const request = deferred();
+    fixture.reply.mockReturnValueOnce(request.promise);
+    const submitted = fixture.forms.reply("one", "shared", { answer: "submitted" });
+    fixture.setSelectedID("two");
+    request.resolve();
+    await submitted;
+    expect(fixture.forms.answerFor("one", "shared")).toBeUndefined();
+    expect(fixture.forms.answerFor("two", "shared")).toEqual({ answer: "current" });
+    fixture.dispose();
+  });
+
+  it("awaits pending SDK submission on workspace shutdown and cannot recreate disposed drafts", async () => {
+    const fixture = setup({ selectedID: "one", listed: [form("draft", "one")] });
+    await fixture.forms.sync();
+    fixture.forms.saveAnswer("one", "draft", { answer: "draft" });
+    const request = deferred();
+    fixture.reply.mockReturnValueOnce(request.promise);
+    const submitted = fixture.forms
+      .reply("one", "draft", { answer: "draft" })
+      .catch(() => undefined);
+    fixture.dispose();
+    const closed = vi.fn<() => void>();
+    const shutdown = Effect.runPromise(Scope.close(fixture.effects.scope, Exit.void)).then(closed);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(closed).not.toHaveBeenCalled();
+    request.resolve();
+    await shutdown;
+    await submitted;
+    fixture.forms.saveAnswer("one", "draft", { answer: "late" });
+    expect(fixture.forms.answerFor("one", "draft")).toBeUndefined();
+  });
+
+  it("prunes unselected and descendant drafts on settlement and session deletion events", async () => {
+    const fixture = setup({ selectedID: "one" });
+    await fixture.forms.sync();
+    for (const sessionID of ["one", "child", "unselected"])
+      for (const id of ["shared", "other"])
+        fixture.forms.saveAnswer(sessionID, id, { answer: sessionID });
+    fixture.emit({
+      id: "evt_replied",
+      created: 1,
+      type: "form.replied",
+      data: { sessionID: "unselected", id: "shared", answer: {} },
+    });
+    fixture.emit({
+      id: "evt_cancelled",
+      created: 1,
+      type: "form.cancelled",
+      data: { sessionID: "child", id: "shared" },
+    });
+    fixture.emit({
+      id: "evt_deleted",
+      created: 1,
+      type: "session.deleted",
+      durable: { aggregateID: "unselected", seq: 1, version: 2 },
+      data: { sessionID: "unselected" },
+    });
+    expect(fixture.forms.answerFor("unselected", "shared")).toBeUndefined();
+    expect(fixture.forms.answerFor("unselected", "other")).toBeUndefined();
+    expect(fixture.forms.answerFor("child", "shared")).toBeUndefined();
+    expect(fixture.forms.answerFor("child", "other")).toEqual({ answer: "child" });
+    expect(fixture.forms.answerFor("one", "shared")).toEqual({ answer: "one" });
+    fixture.dispose();
+  });
+
   it("is ready and does not start a refresh without a selected session", async () => {
     const fixture = setup();
     expect(fixture.forms.state()).toBe("ready");

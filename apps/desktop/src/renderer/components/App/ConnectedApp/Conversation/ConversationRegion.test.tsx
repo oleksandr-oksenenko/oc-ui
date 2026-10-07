@@ -1,10 +1,11 @@
 import type {
+  FormAnswer,
   FormInfo,
   PermissionRequest,
   SessionInfo,
   SessionMessageAssistant,
 } from "@opencode/client";
-import { createSignal } from "solid-js";
+import { Show, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { withTestWorkspace } from "../../../../test/workspace.ts";
@@ -70,6 +71,8 @@ function setup(
   const [recoveryError, setRecoveryError] = createSignal<string>();
   const [permissionsSubagentError, setPermissionsSubagentError] = createSignal<string>();
   const [formsSubagentError, setFormsSubagentError] = createSignal<string>();
+  const answers = new Map<string, FormAnswer>();
+  const [visible, setVisible] = createSignal(true);
   const formsController: SessionFormsController = {
     sessionForms: forms,
     state,
@@ -77,6 +80,8 @@ function setup(
     subagentError: formsSubagentError,
     submitting: () => false,
     errorFor: () => undefined,
+    answerFor: (sessionID, formID) => answers.get(`${sessionID}\u0000${formID}`),
+    saveAnswer: (sessionID, formID, answer) => answers.set(`${sessionID}\u0000${formID}`, answer),
     sync: vi.fn<SessionFormsController["sync"]>(async () => undefined),
     retrySubagents: vi.fn<SessionFormsController["retrySubagents"]>(async () => undefined),
     reply: vi.fn<SessionFormsController["reply"]>(async () => undefined),
@@ -162,24 +167,26 @@ function setup(
   };
   const { host, dispose } = withTestWorkspace((effects) =>
     mount(() => (
-      <ConversationRegion
-        annotationDrafts={createAnnotationDraftStore(effects)}
-        workspace={workspace}
-        composer={composer}
-        inbox={{
-          messages: () => [],
-          busy: () => false,
-          error: () => undefined,
-          cancel: async () => undefined,
-          steer: async () => undefined,
-          refresh: async () => undefined,
-        }}
-        modelSelection={modelSelection}
-        agentSelection={agentSelection}
-        forms={formsController}
-        permissions={permissionsController}
-        connected={connected}
-      />
+      <Show when={visible()}>
+        <ConversationRegion
+          annotationDrafts={createAnnotationDraftStore(effects)}
+          workspace={workspace}
+          composer={composer}
+          inbox={{
+            messages: () => [],
+            busy: () => false,
+            error: () => undefined,
+            cancel: async () => undefined,
+            steer: async () => undefined,
+            refresh: async () => undefined,
+          }}
+          modelSelection={modelSelection}
+          agentSelection={agentSelection}
+          forms={formsController}
+          permissions={permissionsController}
+          connected={connected}
+        />
+      </Show>
     )),
   );
   return {
@@ -190,6 +197,7 @@ function setup(
     setState,
     setConnected,
     setSelectedID,
+    setVisible,
     setPermissions,
     setPermissionsState,
     setPermissionsPending,
@@ -245,7 +253,7 @@ describe("ConversationRegion session forms", () => {
     mounted.dispose();
   });
 
-  it("resets a draft when another session reuses the same form ID", () => {
+  it("restores each session's edits after navigation and a whole conversation remount", () => {
     const mounted = setup([formForSession("session-a", "shared", "Session A")]);
     const input = mounted.host.querySelector<HTMLInputElement>(
       '[data-form-field-key="answer"] input',
@@ -260,6 +268,24 @@ describe("ConversationRegion session forms", () => {
     expect(
       mounted.host.querySelector<HTMLInputElement>('[data-form-field-key="answer"] input')?.value,
     ).toBe("");
+    const secondInput = mounted.host.querySelector<HTMLInputElement>(
+      '[data-form-field-key="answer"] input',
+    )!;
+    secondInput.value = "Only for session B";
+    secondInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    mounted.setForms([formForSession("session-a", "shared", "Session A refreshed")]);
+    expect(
+      mounted.host.querySelector<HTMLInputElement>('[data-form-field-key="answer"] input')?.value,
+    ).toBe("Only for session A");
+    mounted.setVisible(false);
+    mounted.setVisible(true);
+    expect(
+      mounted.host.querySelector<HTMLInputElement>('[data-form-field-key="answer"] input')?.value,
+    ).toBe("Only for session A");
+    mounted.setForms([formForSession("session-b", "shared", "Session B refreshed")]);
+    expect(
+      mounted.host.querySelector<HTMLInputElement>('[data-form-field-key="answer"] input')?.value,
+    ).toBe("Only for session B");
     mounted.dispose();
   });
 

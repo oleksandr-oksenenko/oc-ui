@@ -239,6 +239,7 @@ export function createFakeGlobalForms(options: FakeControllerOptions = {}): Fake
   >();
   const actionIDs = new Set<string>();
   const remainingFailures = new Map(Object.entries(options.replyFailures ?? {}));
+  const answers = new Map<string, FormAnswer>();
   let nextID = 1;
 
   // oxlint-disable-next-line effecttsgo/async-function -- Fake controller models a Promise API.
@@ -278,6 +279,7 @@ export function createFakeGlobalForms(options: FakeControllerOptions = {}): Fake
       return false;
     }
     void answer;
+    answers.delete(form.id);
     setForms((current) => current.filter((candidate) => candidate.id !== form.id));
     actionIDs.delete(form.id);
     setActiveAction(undefined);
@@ -306,6 +308,8 @@ export function createFakeGlobalForms(options: FakeControllerOptions = {}): Fake
   };
 
   const removeLastForm = () => {
+    const removed = forms().at(-1);
+    if (removed) answers.delete(removed.id);
     setForms((current) => current.slice(0, -1));
   };
 
@@ -318,6 +322,10 @@ export function createFakeGlobalForms(options: FakeControllerOptions = {}): Fake
     errorFor: (formID: string) => {
       const error = lastActionError();
       return error?.formID === formID ? error.message : undefined;
+    },
+    answerFor: (formID: string) => answers.get(formID),
+    saveAnswer: (formID: string, answer: FormAnswer) => {
+      answers.set(formID, answer);
     },
     loading,
     loadError,
