@@ -99,6 +99,9 @@ async function addAnnotation(body: string): Promise<void> {
   }, block);
   await $(".annotation-selection-action button").waitForClickable();
   await $(".annotation-selection-action button").click();
+  await $('textarea[placeholder="Write a question or note…"]').waitForDisplayed({
+    timeout: TIMEOUT,
+  });
   await $('textarea[placeholder="Write a question or note…"]').setValue(body);
   await browser.keys("Enter");
   await $(".annotation-popover").waitForExist({ reverse: true });
