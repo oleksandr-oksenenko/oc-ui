@@ -39,9 +39,16 @@ describe("backgroundProcessUpdate", () => {
     expect(update).toMatchObject({ label, status });
   });
 
-  it("keeps unfamiliar or mismatched payloads intact instead of dropping text", () => {
-    const text = message.text.replace('id="job-1"', 'id="other"');
-    expect(backgroundProcessUpdate({ ...message, text })).toMatchObject({ command, output: text });
+  it.each([
+    "Plain output without a shell envelope",
+    message.text.replace('id="job-1"', 'id="other"'),
+  ])("uses metadata for classification and job identity regardless of text: %s", (text) => {
+    expect(backgroundProcessUpdate({ ...message, text })).toMatchObject({
+      jobID: "job-1",
+      label: "Completed",
+      command,
+      output: text,
+    });
   });
 
   it("does not classify ordinary context, user shell notices, or unknown states as background updates", () => {

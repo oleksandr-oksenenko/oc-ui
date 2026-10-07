@@ -14,24 +14,26 @@ const decodeMetadata = Schema.decodeUnknownOption(
   }),
 );
 
-/** Shell notifications use unescaped, multiline attributes, not XML. */
+/** Identifies background shell updates from source, jobID, and state metadata. */
 export function backgroundProcessUpdate(message: SessionMessageSynthetic) {
   const metadata = Option.getOrUndefined(decodeMetadata(message.metadata));
   if (metadata === undefined || message.description === undefined) return undefined;
   const state = metadata.state;
   const command = message.description;
-  // The producer repeats the full command in description. Match that exact
-  // prefix so quotes, newlines and shell-like text in output stay lossless.
+  // Metadata above owns classification and job identity. This comparison only
+  // strips the display envelope; metadata has no separate output field.
+  // The producer repeats the full command in description, allowing an exact
+  // match despite unescaped quotes, newlines, and shell-like text in output.
   const prefix = `<shell id="${metadata.jobID}" state="${state}" command="${command}">\n`;
   const suffix = "\n</shell>";
-  const matches = message.text.startsWith(prefix) && message.text.endsWith(suffix);
+  const hasOutputEnvelope = message.text.startsWith(prefix) && message.text.endsWith(suffix);
   const failed =
     state === "error" ||
     metadata.timeout === true ||
     (state === "completed" && metadata.exit !== undefined && metadata.exit !== 0);
   return {
     command,
-    output: matches ? message.text.slice(prefix.length, -suffix.length) : message.text,
+    output: hasOutputEnvelope ? message.text.slice(prefix.length, -suffix.length) : message.text,
     jobID: metadata.jobID,
     label:
       state === "cancelled"
