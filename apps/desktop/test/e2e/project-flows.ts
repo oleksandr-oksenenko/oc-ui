@@ -59,6 +59,16 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   await $(".selection-option*=New worktree").click();
   await $('[aria-label^="Branch:"]').click();
   await $(".selection-option=main").click();
+  // The closing branch popover restores focus asynchronously. Opening another
+  // popover before that restoration can dismiss it as an outside focus change.
+  await $(".selection-popover:not(.composer-model-popover)").waitForExist({
+    reverse: true,
+    timeout: TIMEOUT,
+  });
+  await browser.waitUntil(() => $('[aria-label="Branch: main"]').isFocused(), {
+    timeout: TIMEOUT,
+    timeoutMsg: "The branch picker did not restore focus before model selection",
+  });
   const modelTrigger = $('[aria-label^="Model:"]');
   await modelTrigger.waitForClickable({ timeout: TIMEOUT });
   await modelTrigger.click();
