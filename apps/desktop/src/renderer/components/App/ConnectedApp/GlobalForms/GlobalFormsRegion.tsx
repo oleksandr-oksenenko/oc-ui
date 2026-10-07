@@ -78,7 +78,7 @@ export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
         ),
         () => {
           ownedDialogID = undefined;
-          restoreDialogFocusAfterClose(focusTarget);
+          restoreDialogFocusAfterClose(focusTarget, () => !disposed);
         },
       )
       .then(() => {

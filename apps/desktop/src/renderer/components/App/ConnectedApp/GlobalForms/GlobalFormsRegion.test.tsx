@@ -127,6 +127,24 @@ afterEach(() => {
 });
 
 describe("GlobalFormsRegion", () => {
+  it("does not look up fallback focus after the request launcher is disposed", async () => {
+    const mounted = mount(controller([form("one")]).value);
+    launcher(mounted.host).click();
+    await settle();
+    const lookup = vi.spyOn(document, "querySelector");
+    vi.useFakeTimers();
+    try {
+      mounted.dispose();
+      await vi.advanceTimersByTimeAsync(130);
+
+      expect(lookup).not.toHaveBeenCalledWith(".shell-session-sidebar .shell-server-selector");
+      expect(lookup).not.toHaveBeenCalledWith('.shell-titlebar [aria-label="Show sessions"]');
+    } finally {
+      lookup.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("shows the pending count, hides at zero, and keeps the complete server location in the dialog", async () => {
     const state = controller([form("one")]);
     const mounted = mount(state.value);
