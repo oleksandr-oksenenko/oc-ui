@@ -1190,30 +1190,25 @@ describe.sequential("production browser app", () => {
       location: { directory: await realpath(project) },
     });
     const text = "E2E_STREAM saved browser metadata\n\nCaptured browser context";
-    const metadata = browserAnnotationMetadata(text, [
+    const metadata = browserAnnotationMetadata("E2E_STREAM saved browser metadata", [
       {
-        text: "Captured browser context",
-        annotations: [
-          {
-            number: 1,
-            mode: "element",
-            body: "Give the heading more room",
-            url: "https://example.com",
-            title: "Example",
-            capturedAt: "2026-09-29T10:00:00Z",
-            fileIndex: 0,
-            selection: {
-              frameUrl: "https://example.com",
-              selector: "h1",
-              tag: "h1",
-              text: "Heading",
-              role: "heading",
-              label: "Heading",
-              topFrame: true,
-              bounds: { x: 0, y: 0, width: 100, height: 30 },
-            },
-          },
-        ],
+        number: 1,
+        mode: "element",
+        body: "Give the heading more room",
+        url: "https://example.com",
+        title: "Example",
+        capturedAt: "2026-09-29T10:00:00Z",
+        fileIndex: 0,
+        selection: {
+          frameUrl: "https://example.com",
+          selector: "h1",
+          tag: "h1",
+          text: "Heading",
+          role: "heading",
+          label: "Heading",
+          topFrame: true,
+          bounds: { x: 0, y: 0, width: 100, height: 30 },
+        },
       },
     ]);
     const screenshot = await page.evaluate(() => {

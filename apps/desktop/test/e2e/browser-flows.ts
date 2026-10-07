@@ -169,13 +169,16 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
   await browser.waitUntil(() => preview.isFocused(), { timeout: TIMEOUT });
   assert.match(await annotation.getValue(), /E2E_ANNOTATION/);
   await browser.saveScreenshot(join(artifacts, "browser-capture-card.png"));
+  const instruction = "Please fix the captured heading.";
+  await $('[aria-label="Prompt"]').setValue(instruction);
   await $("button=Add to composer").click();
+  const draftPill = $(".composer .attachment-pill-browser .attachment-pill-trigger");
   try {
     await browser.waitUntil(
       async () => {
         const failure = await annotationError();
         if (failure) throw new Error(`Annotation batch rejected: ${failure}`);
-        return (await composerText()).includes("E2E_ANNOTATION");
+        return draftPill.isDisplayed();
       },
       { timeout: TIMEOUT, timeoutMsg: "Annotations were not added to the composer" },
     );
@@ -185,13 +188,40 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
       { cause },
     );
   }
-  assert.match(await composerText(), /"tag": "h1"/);
+  assert.equal(await composerText(), instruction);
+  assert.equal(await draftPill.getText(), "Browser · 1");
+  await draftPill.click();
+  assert.match(
+    await $(".attachment-detail-popover").getText(),
+    /E2E_ANNOTATION: make this heading bolder/,
+  );
+  await browser.saveScreenshot(join(artifacts, "browser-annotation-draft.png"));
+  await $('.attachment-detail-popover [aria-label="Enlarge Browser annotation 1"]').click();
+  await $('[role="dialog"][aria-modal="true"] .image-preview-image').waitForDisplayed({
+    timeout: TIMEOUT,
+  });
+  await browser.waitUntil(
+    () =>
+      browser.execute(() => {
+        const image = document.querySelector<HTMLImageElement>(".image-preview-image");
+        return image?.complete === true && image.naturalWidth > 0;
+      }),
+    { timeout: TIMEOUT, timeoutMsg: "Draft annotation screenshot did not load" },
+  );
+  await browser.saveScreenshot(join(artifacts, "browser-annotation-preview.png"));
+  await browser.keys("Escape");
+  await browser.keys("Escape");
+  assert.equal(await composerText(), instruction);
   await $('[aria-label="Send"]').click();
   await browser.waitUntil(
     async () => {
       const state = await (await fetch(`${provider}/_state`)).json();
-      return state.requests.some((request: { prompt: string }) =>
-        request.prompt.includes("E2E_ANNOTATION: make this heading bolder"),
+      return state.requests.some(
+        (request: { prompt: string }) =>
+          request.prompt.includes("E2E_ANNOTATION: make this heading bolder") &&
+          request.prompt.includes(instruction) &&
+          request.prompt.includes('"tag": "h1"') &&
+          request.prompt.includes("untrusted page data"),
       );
     },
     { timeout: TIMEOUT, timeoutMsg: "Annotated message did not reach the provider" },

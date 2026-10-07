@@ -12,6 +12,11 @@ import {
   composerPasteProps,
 } from "./composer-fixtures.ts";
 import { previewImageFile } from "./image-fixtures.ts";
+import {
+  BrowserAnnotationComposerFixture,
+  createBrowserAnnotationPrompt,
+} from "./BrowserAnnotationComposerFixture.tsx";
+import { readBrowserAnnotationMetadata } from "../src/renderer/opencode/browser-annotation-metadata.ts";
 
 const meta = {
   title: "Composer/Composer",
@@ -186,6 +191,72 @@ export const PastedFiles: Story = {
     await expect(canvas.queryByRole("list", { name: "Images and files" })).toBeNull();
     await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
   },
+};
+
+export const BrowserAnnotations: Story = {
+  loaders: [() => ({ browserPrompt: createBrowserAnnotationPrompt() })],
+  render: (_args, { loaded }) => <BrowserAnnotationComposerFixture prompt={loaded.browserPrompt} />,
+  play: async ({ canvasElement, loaded, step }) => {
+    const browserPrompt: ReturnType<typeof createBrowserAnnotationPrompt> = loaded.browserPrompt;
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await expect(prompt).toHaveTextContent("");
+    await expect(canvas.getByRole("button", { name: "Send" })).toBeEnabled();
+    await expect(canvas.queryByRole("button", { name: "Enlarge Browser annotation 1" })).toBeNull();
+    await step("Inspect a batch with keyboard and return focus after Escape", async () => {
+      const pill = canvas.getByRole("button", { name: "Browser · 2" });
+      pill.focus();
+      await userEvent.keyboard("{Enter}");
+      await expect(await screen.findByText("3. Give heading 3 more room")).toBeVisible();
+      await userEvent.keyboard("{Escape}");
+      await expect(pill).toHaveFocus();
+    });
+    await step("Remove an individual annotation and its screenshot", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Browser · 2" }));
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Remove browser annotation 1" }),
+      );
+      await expect(canvas.queryByRole("button", { name: "Browser · 2" })).toBeNull();
+      await expect(canvas.getAllByRole("button", { name: "Browser · 1" })).toHaveLength(2);
+      await expect(prompt).toHaveFocus();
+      await userEvent.click(canvas.getAllByRole("button", { name: "Browser · 1" })[0]!);
+      await expect(await screen.findByText("3. Give heading 3 more room")).toBeVisible();
+      await expect(screen.queryByText("1. Give heading 1 more room")).toBeNull();
+      await userEvent.keyboard("{Escape}");
+    });
+    await step("Remove groups independently and send ordinary typed instruction", async () => {
+      await userEvent.type(prompt, "Please fix the spacing.");
+      await userEvent.click(
+        canvas.getAllByRole("button", { name: "Remove browser batch of 1 annotations" })[0]!,
+      );
+      await expect(canvas.getAllByRole("button", { name: "Browser · 1" })).toHaveLength(1);
+      await expect(canvas.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
+      await expect(prompt).toHaveTextContent("Please fix the spacing.");
+      await userEvent.click(canvas.getByRole("button", { name: "Send" }));
+      await expect(await canvas.findByRole("alert")).toHaveTextContent(
+        "Your draft has been restored",
+      );
+      await expect(prompt).toHaveTextContent("Please fix the spacing.");
+      await expect(canvas.getByRole("button", { name: "Browser · 1" })).toBeVisible();
+      const admitted = browserPrompt.mock.calls[0]![0];
+      await expect(admitted.text).toContain("Browser annotations.");
+      await expect(admitted.text).toContain('"selector": "main h1"');
+      await expect(admitted.text).not.toContain("Give heading 3 more room");
+      await expect(readBrowserAnnotationMetadata(admitted.metadata)).toMatchObject({
+        instruction: "Please fix the spacing.",
+        annotations: [{ number: 1, fileIndex: 1 }],
+      });
+      await userEvent.click(canvas.getByRole("button", { name: "Send" }));
+      await waitFor(() => expect(canvas.queryByRole("button", { name: "Browser · 1" })).toBeNull());
+      await expect(browserPrompt.mock.calls[1]![0]).toEqual(admitted);
+      await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
+    });
+  },
+};
+
+export const BrowserAnnotationsDark: Story = {
+  ...BrowserAnnotations,
+  globals: { theme: "dark" },
 };
 
 export const DroppedFiles: Story = {

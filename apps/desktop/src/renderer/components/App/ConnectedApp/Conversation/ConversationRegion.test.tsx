@@ -132,6 +132,8 @@ function setup(
     attachFiles: () => undefined,
     attachText: () => undefined,
     removeFile: () => undefined,
+    browserBatches: () => [],
+    removeBrowserBatch: () => undefined,
     appendBatch: () => undefined,
     value: () => "",
     disabled: () => false,

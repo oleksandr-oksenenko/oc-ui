@@ -108,21 +108,16 @@ export const browserMessage: SessionMessageUser = {
   type: "user",
   time: { created: 0 },
   text: formatBrowserAnnotations([browserAnnotation]),
-  metadata: browserAnnotationMetadata(formatBrowserAnnotations([browserAnnotation]), [
+  metadata: browserAnnotationMetadata("", [
     {
-      text: formatBrowserAnnotations([browserAnnotation]),
-      annotations: [
-        {
-          number: browserAnnotation.number,
-          mode: browserAnnotation.mode,
-          body: browserAnnotation.body,
-          url: browserAnnotation.tab.url,
-          title: browserAnnotation.tab.title,
-          capturedAt: browserAnnotation.capturedAt,
-          selection: browserAnnotation.selection,
-          fileIndex: 0,
-        },
-      ],
+      number: browserAnnotation.number,
+      mode: browserAnnotation.mode,
+      body: browserAnnotation.body,
+      url: browserAnnotation.tab.url,
+      title: browserAnnotation.tab.title,
+      capturedAt: browserAnnotation.capturedAt,
+      selection: browserAnnotation.selection,
+      fileIndex: 0,
     },
   ]),
   files: [{ ...files[0]!, name: browserAnnotation.image.name }],
@@ -135,26 +130,18 @@ export const mixedAttachmentMessage: SessionMessageUser = {
   files: [...files, ...browserMessage.files!],
   metadata: {
     ...attachmentMessage.metadata,
-    ...browserAnnotationMetadata(
-      `Please address this feedback and use the attached reference.\n\n${browserMessage.text}`,
-      [
-        {
-          text: browserMessage.text,
-          annotations: [
-            {
-              number: browserAnnotation.number,
-              mode: browserAnnotation.mode,
-              body: browserAnnotation.body,
-              url: browserAnnotation.tab.url,
-              title: browserAnnotation.tab.title,
-              capturedAt: browserAnnotation.capturedAt,
-              selection: browserAnnotation.selection,
-              fileIndex: files.length,
-            },
-          ],
-        },
-      ],
-    ),
+    ...browserAnnotationMetadata("Please address this feedback and use the attached reference.", [
+      {
+        number: browserAnnotation.number,
+        mode: browserAnnotation.mode,
+        body: browserAnnotation.body,
+        url: browserAnnotation.tab.url,
+        title: browserAnnotation.tab.title,
+        capturedAt: browserAnnotation.capturedAt,
+        selection: browserAnnotation.selection,
+        fileIndex: files.length,
+      },
+    ]),
   },
 };
 

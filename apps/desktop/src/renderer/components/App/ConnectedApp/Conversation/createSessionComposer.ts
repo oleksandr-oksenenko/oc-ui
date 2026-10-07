@@ -1,7 +1,10 @@
-import type { BrowserAnnotationDraft } from "../Browser/browser-annotations.ts";
+import {
+  formatBrowserAnnotations,
+  type BrowserAnnotationDraft,
+} from "../Browser/browser-annotations.ts";
 import {
   browserAnnotationMetadata,
-  type SentBrowserAnnotation,
+  type BrowserAnnotationBatch,
 } from "../../../../opencode/browser-annotation-metadata.ts";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect, Schema } from "effect";
@@ -164,12 +167,13 @@ export type SessionComposerController = {
    */
   readonly attachText: (text: string) => void;
   readonly removeFile: (file: File) => void;
-  /** Append annotation text and its screenshots together, or make no change. */
+  readonly browserBatches: Accessor<readonly BrowserAnnotationBatch[]>;
+  readonly removeBrowserBatch: (batch: BrowserAnnotationBatch) => void;
+  /** Attach structured annotations and their screenshots together, or make no change. */
   readonly appendBatch: (
     sessionID: string,
-    text: string,
     files: readonly File[],
-    annotations?: readonly BrowserAnnotationDraft[],
+    annotations: readonly BrowserAnnotationDraft[],
   ) => void;
   readonly disabled: Accessor<boolean>;
   readonly submitting: Accessor<boolean>;
@@ -187,19 +191,10 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   const { effects } = options;
   const drafts = createSessionDraftStore(effects);
   // Metadata belongs to the admitted screenshot objects, not their filenames.
-  const browserBatches = Atom.make<
-    Readonly<
-      Record<
-        string,
-        readonly {
-          readonly text: string;
-          readonly files: readonly File[];
-          readonly annotations: readonly SentBrowserAnnotation[];
-        }[]
-      >
-    >
-  >({});
+  const browserBatches = Atom.make<Readonly<Record<string, readonly BrowserAnnotationBatch[]>>>({});
   effects.mount(browserBatches);
+  const batchState = useAtomValue(() => browserBatches);
+  const selectedBatches = () => batchState()[options.selectedID() ?? ""] ?? [];
   const fileDrafts = Atom.make<Readonly<Record<string, readonly File[]>>>({});
   effects.mount(fileDrafts);
   const fileState = useAtomValue(() => fileDrafts);
@@ -210,8 +205,22 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     else current[sessionID] = next;
     effects.registry.set(fileDrafts, current);
     const batches = { ...effects.registry.get(browserBatches) };
-    const retained =
-      batches[sessionID]?.filter((batch) => batch.files.every((file) => next.includes(file))) ?? [];
+    const retained = (batches[sessionID] ?? []).flatMap((batch) => {
+      if (batch.files.every((file) => next.includes(file))) return [batch];
+      const retainedFiles = batch.files.filter((file) => next.includes(file));
+      if (retainedFiles.length === 0) return [];
+      return [
+        {
+          files: retainedFiles,
+          annotations: batch.annotations
+            .filter((item) => next.includes(batch.files[item.fileIndex]!))
+            .map((item) => ({
+              ...item,
+              fileIndex: retainedFiles.indexOf(batch.files[item.fileIndex]!),
+            })),
+        },
+      ];
+    });
     if (retained.length === 0) delete batches[sessionID];
     else batches[sessionID] = retained;
     effects.registry.set(browserBatches, batches);
@@ -270,47 +279,66 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   };
   const appendBatch = (
     sessionID: string,
-    text: string,
     incoming: readonly File[],
-    annotations: readonly BrowserAnnotationDraft[] = [],
+    annotations: readonly BrowserAnnotationDraft[],
   ) => {
-    const body = text.trim();
     if (!sessionID) throw new Error("Annotations need a target conversation.");
-    if (!body) throw new Error("Annotations need at least one comment.");
+    if (annotations.length === 0 || annotations.some((item) => !item.body.trim()))
+      throw new Error("Annotations need at least one comment.");
     if (incoming.length === 0) throw new Error("Annotations need at least one screenshot.");
-    const oversized = incoming.find((file) => file.size > MAX_ATTACHMENT_BYTES);
-    if (oversized) throw new Error(`"${oversized.name}" is larger than the attachment limit.`);
-    const current = drafts.get(sessionID);
-    drafts.set(
-      sessionID,
-      current ? `${current.trimEnd()}\n\n${body}` : body,
-      drafts.skills(sessionID),
-    );
+    if (annotations.length !== incoming.length)
+      throw new Error("Every annotation needs a screenshot.");
     const existing = effects.registry.get(fileDrafts)[sessionID] ?? [];
-    setFiles(sessionID, [...existing, ...incoming]);
-    if (annotations.length === incoming.length) {
-      const batches = effects.registry.get(browserBatches);
-      effects.registry.set(browserBatches, {
-        ...batches,
-        [sessionID]: [
-          ...(batches[sessionID] ?? []),
-          {
-            text: body,
-            files: incoming,
-            annotations: annotations.map((item, fileIndex) => ({
-              number: item.number,
-              mode: item.mode,
-              body: item.body,
-              url: item.tab.url,
-              title: item.tab.title,
-              capturedAt: item.capturedAt,
-              selection: item.selection,
-              fileIndex,
-            })),
-          },
-        ],
-      });
-    }
+    const { admitted, tooLarge, overBudget } = admitAttachments(existing, incoming);
+    if (tooLarge.length > 0) throw new Error(attachmentSizeMessage(tooLarge));
+    if (overBudget.length > 0) throw new Error(attachmentBudgetMessage(overBudget.length));
+    if (admitted.length !== incoming.length)
+      throw new Error("Every annotation needs its own new screenshot.");
+    const batch: BrowserAnnotationBatch = {
+      files: admitted,
+      annotations: annotations.map((item, fileIndex) => ({
+        number: item.number,
+        mode: item.mode,
+        body: item.body,
+        url: item.tab.url,
+        title: item.tab.title,
+        capturedAt: item.capturedAt,
+        selection: { ...item.selection, bounds: { ...item.selection.bounds } },
+        fileIndex,
+      })),
+    };
+    setFiles(sessionID, [...existing, ...admitted]);
+    const batches = effects.registry.get(browserBatches);
+    effects.registry.set(browserBatches, {
+      ...batches,
+      [sessionID]: [...(batches[sessionID] ?? []), batch],
+    });
+  };
+  const removeBrowserBatch = (batch: BrowserAnnotationBatch) => {
+    const sessionID = options.selectedID();
+    if (sessionID === undefined || !selectedBatches().includes(batch)) return;
+    setFiles(
+      sessionID,
+      files().filter((file) => !batch.files.includes(file)),
+    );
+    clearCommandAttachmentNotice(sessionID);
+    clearAttachmentNotice(sessionID);
+  };
+  const browserContext = (sessionID: string) =>
+    (effects.registry.get(browserBatches)[sessionID] ?? [])
+      .map((batch) =>
+        formatBrowserAnnotations(
+          batch.annotations.map((item) => ({
+            ...item,
+            tab: { url: item.url, title: item.title },
+            image: { name: batch.files[item.fileIndex]!.name },
+          })),
+        ),
+      )
+      .join("\n\n");
+  const withBrowserContext = (sessionID: string, text: string) => {
+    const context = browserContext(sessionID);
+    return context ? (text ? `${text.trimEnd()}\n\n${context}` : context) : text;
   };
   const admission = Atom.make<AdmissionState>({
     active: {},
@@ -515,7 +543,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
       kind: "command",
       sessionID,
       name: invocation.name,
-      arguments: invocation.arguments,
+      arguments: withBrowserContext(sessionID, invocation.arguments),
       text,
       skills,
       delivery,
@@ -553,20 +581,19 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
 
     const retry = failedRequest(sessionID);
     const basePrompt = createSessionPrompt({
-      instruction: text,
+      instruction: withBrowserContext(sessionID, text),
       reviewComments,
       annotations: annotationComments,
       skills,
     });
     const browserMetadata = browserAnnotationMetadata(
       reviewComments.length + annotationComments.length > 0 ? text.trim() : text,
-      (effects.registry.get(browserBatches)[sessionID] ?? []).map((batch) => ({
-        text: batch.text,
-        annotations: batch.annotations.map((item, index) => ({
+      (effects.registry.get(browserBatches)[sessionID] ?? []).flatMap((batch) =>
+        batch.annotations.map((item) => ({
           ...item,
-          fileIndex: attached.indexOf(batch.files[index]!),
+          fileIndex: attached.indexOf(batch.files[item.fileIndex]!),
         })),
-      })),
+      ),
     );
     const candidatePrompt =
       browserMetadata === undefined
@@ -662,6 +689,8 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     attachFiles,
     attachText,
     removeFile,
+    browserBatches: selectedBatches,
+    removeBrowserBatch,
     appendBatch,
     disabled,
     submitting,

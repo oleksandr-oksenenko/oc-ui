@@ -76,7 +76,15 @@ const MAX_CONTEXT_STRING = 2_000;
  * Comment text stays plain; page-authored fields go into a fenced block whose
  * fence length is derived from the content, so page text cannot close it.
  */
-export function formatBrowserAnnotations(items: readonly BrowserAnnotationDraft[]): string {
+export function formatBrowserAnnotations(
+  items: readonly (Pick<
+    BrowserAnnotationDraft,
+    "number" | "mode" | "body" | "capturedAt" | "selection"
+  > & {
+    readonly tab: Pick<BrowserAnnotationDraft["tab"], "url" | "title">;
+    readonly image: Pick<BrowserAnnotationDraft["image"], "name">;
+  })[],
+): string {
   if (items.length === 0) return "";
   // Page-authored title and URL stay inside the fenced context below.
   const header = [

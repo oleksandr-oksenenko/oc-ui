@@ -72,7 +72,6 @@ function setup(
       vi.fn<
         (
           sessionID: string,
-          text: string,
           files: readonly File[],
           annotations: readonly BrowserAnnotationDraft[],
         ) => void
@@ -443,14 +442,31 @@ describe("browser annotations", () => {
     fixture.controller.annotationBody(item!.id, "Make this heading larger");
     fixture.controller.addAnnotations();
     expect(fixture.onAnnotationBatch).toHaveBeenCalledTimes(1);
-    const [sessionID, text, files, annotations] = fixture.onAnnotationBatch.mock.calls[0]!;
+    const [sessionID, files, annotations] = fixture.onAnnotationBatch.mock.calls[0]!;
     expect(annotations[0]).toMatchObject({ body: "Make this heading larger", number: 1 });
     expect(sessionID).toBe("session-a");
-    expect(text).toContain("Make this heading larger");
-    expect(text).toContain('"selector": "h1"');
+    expect(annotations[0]?.selection.selector).toBe("h1");
     expect(files).toHaveLength(1);
     expect(files[0]?.name).toBe("annotation-1.png");
     expect(fixture.controller.annotations().items).toHaveLength(0);
+  });
+
+  it("retains captured annotations after composer rejection and clears them only after a successful retry", async () => {
+    const fixture = setup();
+    const bindingID = await connect(fixture);
+    await annotateAndCapture(fixture, bindingID);
+    const captured = fixture.controller.annotations().items;
+    fixture.onAnnotationBatch.mockImplementationOnce(() => {
+      throw new Error("Draft attachment budget exceeded");
+    });
+    fixture.controller.addAnnotations();
+    expect(fixture.controller.annotations().items).toBe(captured);
+    expect(fixture.controller.annotations().error).toContain("Draft attachment budget exceeded");
+    fixture.controller.addAnnotations();
+    expect(fixture.onAnnotationBatch).toHaveBeenCalledTimes(2);
+    expect(fixture.onAnnotationBatch.mock.calls[1]![2]).toBe(captured);
+    expect(fixture.controller.annotations().items).toEqual([]);
+    expect(fixture.controller.annotations().error).toBeUndefined();
   });
 
   it("keeps stable numbers with gaps and discards one annotation", async () => {

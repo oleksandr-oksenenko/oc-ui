@@ -20,7 +20,6 @@ import {
   annotationNumber,
   captureDraft,
   emptyAnnotations,
-  formatBrowserAnnotations,
   MAX_ANNOTATIONS,
   type SessionAnnotations,
 } from "./browser-annotations.ts";
@@ -49,7 +48,6 @@ export function createSessionBrowser(
   onFocus: (sessionID: string) => void,
   onAnnotationBatch: (
     sessionID: string,
-    text: string,
     files: readonly File[],
     annotations: readonly BrowserAnnotationDraft[],
   ) => void,
@@ -343,12 +341,7 @@ export function createSessionBrowser(
         return;
       }
       try {
-        onAnnotationBatch(
-          id,
-          formatBrowserAnnotations(current.items),
-          annotationFiles(current.items),
-          current.items,
-        );
+        onAnnotationBatch(id, annotationFiles(current.items), current.items);
         writeAnnotations(id, emptyAnnotations());
       } catch (cause) {
         writeAnnotations(id, {

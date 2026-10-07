@@ -392,6 +392,8 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               command={props.composer.command()}
               sessionID={props.workspace.selectedID()}
               files={props.composer.files()}
+              browserBatches={props.composer.browserBatches()}
+              onRemoveBrowserBatch={props.composer.removeBrowserBatch}
               onAttachFiles={props.composer.attachFiles}
               onAttachText={props.composer.attachText}
               onRemoveFile={props.composer.removeFile}

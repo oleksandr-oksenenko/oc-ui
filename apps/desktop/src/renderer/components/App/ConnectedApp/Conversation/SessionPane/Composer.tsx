@@ -28,6 +28,8 @@ import { VariantPicker } from "./Composer/VariantPicker.tsx";
 import type { VariantPickerOption } from "./Composer/VariantPicker.tsx";
 import { readPastedFiles, readPastedText } from "./Composer/pasteClipboard.ts";
 import { classifyPaste } from "./Composer/pasteRoute.ts";
+import { BrowserAttachments } from "./Composer/BrowserAttachments.tsx";
+import type { BrowserAnnotationBatch } from "../../../../../opencode/browser-annotation-metadata.ts";
 
 export type ComposerReview = {
   readonly comments: readonly SentReviewComment[];
@@ -67,6 +69,8 @@ export type ComposerProps = {
   readonly files?: readonly File[];
   readonly onAttachFiles?: (files: readonly File[]) => void;
   readonly onRemoveFile?: (file: File) => void;
+  readonly browserBatches?: readonly BrowserAnnotationBatch[];
+  readonly onRemoveBrowserBatch?: (batch: BrowserAnnotationBatch) => void;
   /**
    * The attachment owner's clipboard intent for a text paste too large to edit
    * inline.
@@ -258,10 +262,16 @@ export function Composer(props: ComposerProps) {
   const review = () => props.review;
   const attachments = () => ((props.attachments?.count ?? 0) > 0 ? props.attachments : undefined);
   const annotations = () => ((props.annotations?.count ?? 0) > 0 ? props.annotations : undefined);
+  const browserBatches = () => props.browserBatches ?? [];
+  const ordinaryFiles = () =>
+    (props.files ?? []).filter(
+      (file) => !browserBatches().some((batch) => batch.files.includes(file)),
+    );
   const sendable = () =>
     review() !== undefined ||
     annotations() !== undefined ||
     attachments() !== undefined ||
+    browserBatches().length > 0 ||
     props.value.trim() !== "" ||
     (props.files?.length ?? 0) > 0;
 
@@ -486,6 +496,7 @@ export function Composer(props: ComposerProps) {
           when={
             review() ||
             annotations() ||
+            browserBatches().length > 0 ||
             (props.files?.length ?? 0) > 0 ||
             attachments() !== undefined
           }
@@ -521,7 +532,14 @@ export function Composer(props: ComposerProps) {
                 />
               )}
             </Show>
-            <For each={props.files ?? []}>
+            <BrowserAttachments
+              batches={browserBatches()}
+              disabled={props.readOnly}
+              onRemoveBatch={props.onRemoveBrowserBatch}
+              onRemoveFile={props.onRemoveFile}
+              onRemoved={() => editor?.focus()}
+            />
+            <For each={ordinaryFiles()}>
               {(file) =>
                 isImageFile(file) ? (
                   <AttachmentImagePill
