@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-          cache: pnpm
+          package-manager-cache: false
 
       - name: Verify toolchain
         run: |
@@ -52,35 +52,20 @@ jobs:
 
       - name: Check, test, and build all targets (macOS)
         if: runner.os == 'macOS'
-        run: pnpm exec vp run --no-cache -w ready 2>&1 | tee "${RUNNER_TEMP}/ready.log"
+        run: pnpm exec vp run --no-cache -w ready
 
       - name: Check, test, and build browser targets (Linux)
         if: runner.os == 'Linux'
         # Desktop runtime staging and packaging currently support macOS arm64 only.
         run: |
-          {
-            pnpm check &&
-            pnpm exec vp run --no-cache -w test &&
-            pnpm build:web &&
-            pnpm exec vp run --no-cache -w build-storybook
-          } 2>&1 | tee "${RUNNER_TEMP}/ready.log"
+          pnpm check
+          pnpm exec vp run --no-cache -w test
+          pnpm build:web
+          pnpm exec vp run --no-cache -w build-storybook
 
       - name: Test packaged Electron app
         if: runner.os == 'macOS'
         env:
           # Keep the configured ad-hoc signature on PR builds; no certificate is used.
           CSC_FOR_PULL_REQUEST: "true"
-        run: pnpm test:acceptance:mac 2>&1 | tee "${RUNNER_TEMP}/packaged-acceptance.log"
-
-      - name: Upload failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-suite-failure-${{ matrix.os }}
-          retention-days: 7
-          if-no-files-found: ignore
-          path: |
-            ${{ runner.temp }}/ready.log
-            ${{ runner.temp }}/packaged-acceptance.log
-            ${{ runner.temp }}/ocui-packaged-e2e-*/artifacts/
-            apps/desktop/dist/web-artifacts/
+        run: pnpm test:acceptance:mac
