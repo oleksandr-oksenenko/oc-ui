@@ -1,3 +1,5 @@
+@import url("../../../../../ui/CommentPresentation.css");
+
 .context-panel {
   display: block;
   width: 100%;
@@ -286,17 +288,9 @@
 }
 
 .diff-review-text {
-  display: block;
   max-width: 100%;
-  padding: 0;
-  border: 0;
   color: inherit;
-  background: transparent;
   cursor: text;
-  font: inherit;
-  overflow-wrap: anywhere;
-  text-align: left;
-  white-space: pre-wrap;
 }
 
 .diff-review-remove[data-component="icon-button-v2"] {

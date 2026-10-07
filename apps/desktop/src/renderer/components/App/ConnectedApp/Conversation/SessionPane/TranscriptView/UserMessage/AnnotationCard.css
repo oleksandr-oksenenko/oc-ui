@@ -1,18 +1,7 @@
-.transcript-annotation-content {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
+@import url("../../../../../../../ui/CommentPresentation.css");
 
 .transcript-annotation-quote {
-  display: block;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: inherit;
-  font: inherit;
-  text-align: left;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
   cursor: pointer;
 }
 

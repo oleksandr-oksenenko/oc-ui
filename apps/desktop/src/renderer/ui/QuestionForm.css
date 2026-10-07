@@ -1,44 +1,13 @@
-/* Shared form surface used by session and global workflows. */
-.question-form-card {
-  width: min(620px, 100%);
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius-card);
-  background: var(--oc-surface-raised);
-  box-shadow: var(--oc-shadow-card);
-}
+@import url("./RequestCard.css");
 
-.question-form-card::before {
-  display: none;
+.question-form-card {
+  padding: 0;
 }
 
 .question-form {
   display: grid;
   gap: 8px 16px;
   padding: 10px 16px 12px;
-}
-
-.question-form-header {
-  display: grid;
-  gap: 4px;
-}
-
-.question-form-eyebrow {
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-label-size);
-  font-weight: var(--oc-type-label-weight);
-  line-height: var(--oc-type-label-line-height);
-}
-
-.question-form-header h2 {
-  margin: 0;
-  color: var(--oc-text-strong);
-  font-size: var(--oc-type-title-size);
-  font-weight: var(--oc-type-title-weight);
-  letter-spacing: -0.01em;
-  line-height: var(--oc-type-title-line-height);
-  overflow-wrap: anywhere;
 }
 
 .question-form-fields {

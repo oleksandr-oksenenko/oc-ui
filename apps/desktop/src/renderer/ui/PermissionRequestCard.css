@@ -1,44 +1,17 @@
+@import url("./RequestCard.css");
+
 .permission-request-entry {
   width: 100%;
 }
 
 .permission-request-card {
   display: grid;
-  width: min(620px, 100%);
   gap: 14px;
   padding: 12px 16px;
-  overflow: hidden;
-  border: 1px solid var(--oc-border-muted);
-  border-radius: var(--oc-radius-card);
-  background: var(--oc-surface-raised);
-  box-shadow: var(--oc-shadow-card);
-}
-
-.permission-request-card::before {
-  display: none;
 }
 
 .permission-request-header {
-  display: grid;
-  gap: 4px;
   min-width: 0;
-}
-
-.permission-request-eyebrow {
-  color: var(--oc-text-muted);
-  font-size: var(--oc-type-label-size);
-  font-weight: var(--oc-type-label-weight);
-  line-height: var(--oc-type-label-line-height);
-}
-
-.permission-request-header h2 {
-  margin: 0;
-  color: var(--oc-text-strong);
-  font-size: var(--oc-type-title-size);
-  font-weight: var(--oc-type-title-weight);
-  letter-spacing: -0.01em;
-  line-height: var(--oc-type-title-line-height);
-  overflow-wrap: anywhere;
 }
 
 .permission-request-message,

@@ -1,3 +1,5 @@
+@import url("./CommentPresentation.css");
+
 .attachment-pills {
   display: flex;
   flex-wrap: wrap;
@@ -109,11 +111,6 @@
 
 .attachment-pill-popover-body p {
   margin: 0 0 8px;
-}
-
-.attachment-pill-comment-body {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 .attachment-pill-browser-image.image-preview-thumbnail {

@@ -1,3 +1,5 @@
+@import url("../../../../../ui/CommentPresentation.css");
+
 .annotation-comment-quote {
   display: -webkit-box;
   overflow: hidden;
@@ -11,16 +13,8 @@
 }
 
 .annotation-comment-link {
-  display: block;
   width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--oc-text-strong);
-  font: inherit;
-  text-align: left;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
   cursor: pointer;
 }
 

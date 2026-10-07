@@ -1,0 +1,21 @@
+/* Body/source text preserves line breaks without imposing workflow geometry. */
+.attachment-pill-comment-body,
+.transcript-annotation-content,
+.transcript-annotation-quote,
+.annotation-comment-link,
+.diff-review-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Navigation and edit buttons retain their own color, width and hover behavior. */
+.transcript-annotation-quote,
+.annotation-comment-link,
+.diff-review-text {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
