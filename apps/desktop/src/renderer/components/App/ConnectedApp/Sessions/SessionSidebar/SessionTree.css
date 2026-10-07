@@ -15,11 +15,31 @@
 
 .shell-session-group h2 {
   margin: 0;
-  padding: 8px 7px 7px;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-label-size);
   font-weight: var(--oc-type-label-weight);
   line-height: var(--oc-type-label-line-height);
+}
+
+.shell-session-group .shell-session-group-toggle[data-slot="collapsible-trigger"] {
+  height: auto;
+  justify-content: space-between;
+  padding: 8px 7px 7px;
+  border: 0;
+  border-radius: var(--oc-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.shell-session-group .shell-session-group-toggle [data-slot="collapsible-arrow"] {
+  width: 16px;
+  height: 16px;
+  opacity: 1;
+}
+
+.shell-session-group-toggle:not(:disabled):hover {
+  background: var(--oc-surface-hover);
 }
 
 .shell-session-group-tree {
