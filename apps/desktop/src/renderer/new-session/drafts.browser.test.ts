@@ -8,6 +8,7 @@ import { makeWorkspaceOwner } from "../workspace-owner.ts";
 import { deferred } from "../test/deferred.ts";
 import { draftLockName, withBrowserLock } from "./locks.ts";
 import { sessionFixture } from "../test/session-fixture.ts";
+import { createOpenCodeEventSource } from "../opencode/event-source.ts";
 import { Storage, StorageError, makeStorage } from "../storage.ts";
 import {
   draftDatabase,
@@ -68,6 +69,7 @@ function controller(
     makeWorkspaceOwner(one.registry).pipe(Effect.provideService(Scope.Scope, scope)),
   );
   const pending = deferred();
+  const events = createOpenCodeEventSource();
   const projects = ["other", "project"].map((id) => ({
     id,
     canonical: `/srv/${id}`,
@@ -100,7 +102,7 @@ function controller(
     defaultLocation: choices.project.location,
     stream: { status: connection },
     data: {
-      on: () => () => undefined,
+      on: events.on,
       session: {
         create: vi.fn<Parameters<typeof createNewSessionDrafts>[0]["data"]["session"]["create"]>(),
         prompt: vi.fn<Parameters<typeof createNewSessionDrafts>[0]["data"]["session"]["prompt"]>(),
@@ -202,6 +204,7 @@ function controller(
       pending.resolve();
       dispose();
       await Effect.runPromise(Scope.close(scope, Exit.void));
+      events.close();
     });
     createComponent(RegistryContext.Provider, {
       value: one.registry,
@@ -226,7 +229,7 @@ function controller(
       },
     });
   });
-  return { adapter, select, pending, runtime, selectSession, setConnection, projects };
+  return { adapter, select, pending, runtime, selectSession, setConnection, projects, events };
 }
 
 describe("native draft persistence", () => {
@@ -495,6 +498,48 @@ describe("native draft persistence", () => {
         agent: "build",
         model: { id: "default-model" },
       }),
+    );
+  });
+
+  it("discovers draft defaults and variants at the selected project location", async () => {
+    const one = fixture();
+    const { adapter, runtime, pending } = controller(one);
+    const original = await runtime.api.model.default();
+    const first = { ...original.data!, variants: [{ id: "project-depth" }] };
+    const second = {
+      ...first,
+      id: "other-model",
+      name: "Other model",
+      variants: [{ id: "other-depth" }],
+    };
+    runtime.data.location.model.list = (target) => [
+      target?.directory === "/srv/other" ? second : first,
+    ];
+    runtime.api.model.default = vi.fn<typeof runtime.api.model.default>(async (input) => ({
+      ...original,
+      data: input?.location?.directory === "/srv/other" ? second : first,
+    }));
+    await vi.waitFor(() => expect(adapter.canCreate()).toBe(true));
+    adapter.create();
+    pending.resolve();
+    const id = adapter.selectedID()!;
+    await vi.waitFor(() => expect(adapter.current().catalogs).toBe("ready"));
+    expect(adapter.composer(id).modelSelection?.variants).toEqual([
+      { id: "project-depth", label: "project-depth" },
+    ]);
+    adapter.setup().onProjectChange("other");
+    await vi.waitFor(() =>
+      expect(one.service.get(id)?.value.choices.model?.id).toBe("other-model"),
+    );
+    expect(adapter.composer(id).modelSelection?.models.map((item) => item.label)).toEqual([
+      "Other model",
+    ]);
+    expect(adapter.composer(id).modelSelection?.variants).toEqual([
+      { id: "other-depth", label: "other-depth" },
+    ]);
+    expect(runtime.api.model.default).toHaveBeenLastCalledWith(
+      { location: { directory: "/srv/other", workspace: "logical" } },
+      { signal: expect.any(AbortSignal) },
     );
   });
 
@@ -1008,6 +1053,68 @@ async function submitting(one = fixture()) {
 }
 
 describe("durable new-session Send", () => {
+  it("keeps a draft editable through a failed background default refresh and recovers on retry", async () => {
+    const fake = await submitting();
+    const original = await fake.runtime.api.model.default();
+    const pending = deferred<Awaited<ReturnType<typeof fake.runtime.api.model.default>>>();
+    const settled = pending.promise.catch(() => undefined);
+    fake.runtime.api.model.default = vi
+      .fn<typeof fake.runtime.api.model.default>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue(original);
+    fake.events.emit({
+      type: "config.updated",
+      id: "event",
+      created: 0,
+      location: fake.one.service.get(fake.id)!.value.choices.project!.location,
+      data: {},
+    });
+    try {
+      await vi.waitFor(() => expect(fake.runtime.api.model.default).toHaveBeenCalledOnce());
+      expect(fake.adapter.composer(fake.id).disabled).toBe(false);
+      expect(fake.adapter.composer(fake.id).modelSelection.state).toBe("ready");
+      expect(fake.adapter.composer(fake.id).agentSelection.state).toBe("ready");
+      fake.adapter.composer(fake.id).onInput("Keep editing during refresh");
+    } finally {
+      pending.reject(new Error("Refresh failed"));
+      await settled;
+    }
+    await vi.waitFor(() =>
+      expect(fake.adapter.composer(fake.id).error).toContain("Models could not be loaded"),
+    );
+    expect(fake.adapter.composer(fake.id).disabled).toBe(false);
+    expect(fake.adapter.composer(fake.id).modelSelection.state).toBe("ready");
+    expect(fake.one.service.get(fake.id)?.value.text).toBe("Keep editing during refresh");
+    fake.adapter.retry();
+    await vi.waitFor(() => {
+      expect(fake.adapter.current().catalogs).toBe("ready");
+      expect(fake.adapter.composer(fake.id).error).toBeUndefined();
+    });
+  });
+
+  it("preserves and submits the server's default variant without requiring a named variant", async () => {
+    const fake = await submitting();
+    const entry = fake.one.service.get(fake.id)!;
+    fake.one.sync(
+      fake.one.service.edit(fake.id, {
+        choices: {
+          ...entry.value.choices,
+          model: { ...entry.value.choices.model!, variant: "default" },
+        },
+      }),
+    );
+    expect(fake.adapter.composer(fake.id).disabled).toBe(false);
+    expect(fake.adapter.composer(fake.id).error).toBeUndefined();
+    fake.adapter.submit(fake.id);
+    await vi.waitFor(() => expect(fake.one.service.get(fake.id)).toBeUndefined());
+    expect(fake.runtime.data.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { id: "default-model", providerID: "provider", variant: "default" },
+      }),
+    );
+    expect(fake.runtime.data.session.prompt).toHaveBeenCalledOnce();
+  });
+
   it("sends attachments when navigation happens before their pending save completes", async () => {
     let holdSave = false;
     const started = Deferred.makeUnsafe<void>();

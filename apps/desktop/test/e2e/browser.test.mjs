@@ -2388,6 +2388,109 @@ describe.sequential("production browser app", () => {
       expect(await readFile(join(worktree.location.directory, "branch.txt"), "utf8")).toBe(
         "Committed branch content\n",
       );
+      const worktreeConfig = {
+        model: "acceptance/worktree-only",
+        providers: {
+          acceptance: {
+            models: {
+              stream: {
+                name: "Worktree Stream",
+                limit: { context: 131072 },
+                variants: [{ id: "worktree-depth" }],
+              },
+              "worktree-only": {
+                name: "Worktree Custom",
+                capabilities: { tools: true, input: ["text"], output: ["text"] },
+                limit: { context: 65536, output: 2048 },
+                variants: [{ id: "worktree-depth" }],
+              },
+            },
+          },
+        },
+      };
+      await writeFile(
+        join(worktree.location.directory, "opencode.jsonc"),
+        JSON.stringify(worktreeConfig),
+      );
+      await page.getByLabel("Model: Worktree Stream", { exact: true }).waitFor();
+      await expect
+        .poll(() => page.locator(".composer-context-meter").getAttribute("aria-label"))
+        .toContain("131k tokens");
+      await page.getByLabel(/^Model:/u).click();
+      await page.getByPlaceholder("Search models").fill("Worktree Custom");
+      let releaseDefault;
+      let defaultRequested = false;
+      const defaultPaused = new Promise((resolve) => {
+        releaseDefault = resolve;
+      });
+      const defaultRoutes = [];
+      const holdDefault = (intercepted) => {
+        defaultRequested = true;
+        const handled = defaultPaused
+          .then(() => intercepted.continue())
+          .catch((error) => {
+            // Catalog event bursts cancel superseded default reads while their routes are held.
+            if (intercepted.request().failure()?.errorText !== "net::ERR_ABORTED") throw error;
+          });
+        defaultRoutes.push(handled);
+        return handled;
+      };
+      await page.route("**/api/model/default**", holdDefault);
+      try {
+        await writeFile(
+          join(worktree.location.directory, "opencode.jsonc"),
+          JSON.stringify({ ...worktreeConfig, model: "acceptance/stream" }),
+        );
+        await expect.poll(() => defaultRequested).toBe(true);
+        const search = page.getByPlaceholder("Search models");
+        expect(await search.inputValue()).toBe("Worktree Custom");
+        expect(await search.evaluate((element) => document.activeElement === element)).toBe(true);
+        expect(await page.locator(".composer-context-meter").getAttribute("aria-label")).toContain(
+          "131k tokens",
+        );
+      } finally {
+        releaseDefault();
+        try {
+          await Promise.all(defaultRoutes);
+        } finally {
+          await page.unroute("**/api/model/default**", holdDefault);
+        }
+      }
+      await page
+        .locator(".composer-model-option")
+        .getByText("Worktree Custom", { exact: true })
+        .click();
+      await page.getByLabel("Model: Worktree Custom", { exact: true }).waitFor();
+      await page.getByLabel(/^Variant:/u).click();
+      await page.getByRole("option", { name: "worktree-depth", exact: true }).click();
+      await page.getByLabel("Variant: worktree-depth", { exact: true }).waitFor();
+      await sendCompleted("E2E_WORKTREE_MODEL location-specific configuration");
+      expect(
+        (await providerState()).requests.some(
+          (request) =>
+            request.model === "worktree-only" && request.prompt.includes("E2E_WORKTREE_MODEL"),
+        ),
+      ).toBe(true);
+      await expect
+        .poll(() => page.locator(".composer-context-meter").getAttribute("aria-label"))
+        .toContain("66k tokens");
+      await selectSession("Browser fixture one");
+      await page.getByLabel(/^Model:/u).click();
+      await page.getByPlaceholder("Search models").fill("Worktree Custom");
+      expect(
+        await page
+          .locator(".composer-model-option")
+          .getByText("Worktree Custom", { exact: true })
+          .count(),
+      ).toBe(0);
+      await page.keyboard.press("Escape");
+      await selectSession("Background worktree admission");
+      await page.getByLabel("Model: Worktree Custom", { exact: true }).waitFor();
+      await page.reload();
+      await ensureConnected();
+      await selectSession("Background worktree admission");
+      await page.getByLabel("Model: Worktree Custom", { exact: true }).waitFor();
+      await page.getByLabel("Variant: worktree-depth", { exact: true }).waitFor();
       await api.session.remove({ sessionID: worktree.id });
       await api.worktree.remove({
         directory: worktree.location.directory,

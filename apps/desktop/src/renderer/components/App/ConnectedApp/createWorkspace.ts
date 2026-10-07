@@ -113,7 +113,7 @@ export function createWorkspaceModel(
     effects: runtime.effects,
     api: runtime.api,
     data: runtime.data,
-    defaultLocation: runtime.defaultLocation,
+    connected,
     selectedSession: sessions.selectedSession,
   });
   const agentSelection = createSessionAgentSelection({
