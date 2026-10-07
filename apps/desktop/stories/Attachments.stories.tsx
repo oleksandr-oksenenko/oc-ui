@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 import { AttachmentProposal } from "./attachments/AttachmentProposal.tsx";
 import { UserMessage } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/UserMessage.tsx";
+import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts";
 import {
   annotations,
   attachmentMessage,
@@ -39,6 +40,29 @@ export const CurrentInventory: Story = {
       <section class="attachment-study-example">
         <h2>Browser annotation: text and screenshot</h2>
         <UserMessage message={browserMessage} />
+      </section>
+      <section class="attachment-study-example">
+        <h2>Transcript annotation only</h2>
+        <UserMessage
+          message={{
+            id: "annotation-only",
+            type: "user",
+            time: { created: 0 },
+            ...createSessionPrompt({ instruction: "", reviewComments: [], annotations }),
+          }}
+        />
+      </section>
+      <section class="attachment-study-example">
+        <h2>Files and images only</h2>
+        <UserMessage
+          message={{
+            id: "files-only",
+            type: "user",
+            time: { created: 0 },
+            text: "",
+            files: attachmentMessage.files,
+          }}
+        />
       </section>
     </main>
   ),

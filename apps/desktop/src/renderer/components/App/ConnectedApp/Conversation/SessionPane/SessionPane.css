@@ -205,7 +205,7 @@
   flex: none;
 }
 
-.transcript-user-attachments {
+.transcript-user-attachments:not(:first-child) {
   margin-top: 6px;
 }
 
