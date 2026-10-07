@@ -59,8 +59,12 @@ export async function verifyProjectFlows(projectDirectory: string): Promise<void
   await $(".selection-option*=New worktree").click();
   await $('[aria-label^="Branch:"]').click();
   await $(".selection-option=main").click();
-  await $('[aria-label^="Model:"]').click();
-  await $(".composer-model-option=Acceptance Stream").click();
+  const modelTrigger = $('[aria-label^="Model:"]');
+  await modelTrigger.waitForClickable({ timeout: TIMEOUT });
+  await modelTrigger.click();
+  const modelOption = $(".composer-model-option=Acceptance Stream");
+  await modelOption.waitForClickable({ timeout: TIMEOUT });
+  await modelOption.click();
   await $('[aria-label^="Agent:"]').click();
   await $('[role="option"]=Build').click();
   await $('[aria-label="Prompt"]').setValue("Native new-session worktree admission");

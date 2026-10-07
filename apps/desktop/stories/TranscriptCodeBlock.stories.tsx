@@ -52,8 +52,10 @@ export const WorkerPool: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const code = () => canvasElement.querySelector("pre code");
-    await waitFor(() => expect(code()?.querySelector("span[style]")).not.toBeNull(), {
-      timeout: 5000,
+    // A cold worker loads Shiki and its grammar during the production ten-second
+    // response budget. The subsequent cached theme/update checks stay faster.
+    await waitFor(() => expect(code()?.querySelector("span[style]")).toBeTruthy(), {
+      timeout: 10_000,
     });
     await expect(code()?.textContent).toBe('const message = "Hello";\n\nconsole.log(message);\n');
     const color = code()?.querySelector<HTMLElement>("span")?.style.color;
@@ -69,7 +71,7 @@ export const WorkerPool: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Update snippet" }));
     await waitFor(
       async () => {
-        await expect(code()?.querySelector("span")).not.toBeNull();
+        await expect(code()?.querySelector("span")).toBeTruthy();
         await expect(code()?.textContent).toBe("const updated = true;\n");
       },
       { timeout: 5000 },

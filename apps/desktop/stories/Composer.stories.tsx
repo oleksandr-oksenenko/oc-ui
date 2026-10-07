@@ -319,13 +319,17 @@ export const ImageAttachment: Story = {
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
     await step("Enlarge the attached image and close the preview", async () => {
-      await userEvent.click(canvas.getByRole("button", { name: "Enlarge Screenshot.png" }));
+      const trigger = canvas.getByRole("button", { name: "Enlarge Screenshot.png" });
+      await userEvent.click(trigger);
       const dialog = await screen.findByRole("dialog", { name: "Preview of Screenshot.png" });
       await expect(dialog).toBeVisible();
+      await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
       await userEvent.keyboard("{Escape}");
-      await waitFor(() =>
-        expect(screen.queryByRole("dialog", { name: "Preview of Screenshot.png" })).toBeNull(),
-      );
+      await waitFor(async () => {
+        await expect(dialog).not.toBeInTheDocument();
+        await expect(trigger.closest('[aria-hidden="true"]')).toBeNull();
+        await expect(trigger).toHaveFocus();
+      });
     });
   },
 };
