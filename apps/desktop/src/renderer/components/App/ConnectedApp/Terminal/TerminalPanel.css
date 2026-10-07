@@ -1,0 +1,117 @@
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--oc-text-base);
+  background: var(--oc-surface-canvas);
+  font-size: var(--oc-type-control-size);
+}
+
+.terminal-panel[hidden] {
+  display: none;
+}
+
+.terminal-panel-tab-row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 32px;
+  min-width: 0;
+}
+
+.terminal-panel-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  margin-left: auto;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--oc-border-base);
+}
+
+.terminal-panel-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-panel-tabs .terminal-panel-tab-list {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  height: 32px;
+  overflow: auto hidden;
+}
+
+.terminal-panel-tab {
+  flex: none;
+  max-width: 280px;
+}
+
+.terminal-panel-tab [data-slot="tabs-trigger"] {
+  gap: 8px;
+  min-width: 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.terminal-panel-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-panel-tab-status {
+  flex: none;
+  color: var(--oc-text-muted);
+}
+
+.terminal-panel-status {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  color: var(--oc-text-muted);
+}
+
+.terminal-panel-error {
+  flex: none;
+  margin: 0;
+  padding: 4px 12px;
+  color: var(--oc-status-danger);
+  overflow-wrap: anywhere;
+}
+
+.terminal-panel-surfaces {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+  padding: 12px;
+  color: var(--oc-text-muted);
+  text-align: center;
+}
+
+.terminal-panel-empty p {
+  margin: 0;
+  color: var(--oc-text-base);
+}

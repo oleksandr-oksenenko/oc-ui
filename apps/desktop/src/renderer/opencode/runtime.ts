@@ -21,12 +21,14 @@ import type { VcsDiffStore } from "./vcs-diff";
 type RuntimeConnection = {
   readonly effects: WorkspaceOwner;
   readonly api: OpenCodeClient;
+  readonly serverUrl: string;
   readonly defaultLocation: LocationRef;
 };
 
 export type ConnectedRuntime = {
   readonly effects: WorkspaceOwner;
   readonly api: OpenCodeClient;
+  readonly serverUrl: string;
   readonly data: Data;
   readonly defaultLocation: LocationRef;
   readonly stream: {
@@ -124,6 +126,7 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
   return {
     effects: input.effects,
     api: input.api,
+    serverUrl: input.serverUrl,
     data,
     defaultLocation: input.defaultLocation,
     stream,

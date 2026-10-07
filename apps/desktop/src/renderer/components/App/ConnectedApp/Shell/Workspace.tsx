@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, type JSX } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount, type JSX } from "solid-js";
 
 import "./Workspace.css";
 
@@ -6,12 +6,14 @@ export type WorkspaceProps = {
   readonly sidebar?: JSX.Element;
   readonly main: JSX.Element;
   readonly context?: JSX.Element;
+  readonly bottom?: JSX.Element;
+  readonly bottomOpen?: boolean;
   readonly leftSidebarOpen: boolean;
   readonly rightPanelOpen: boolean;
   readonly mobile?: boolean;
 };
 
-type ResizeSide = "left" | "right";
+type ResizeSide = "left" | "right" | "bottom";
 
 const LEFT_MIN = 220;
 const LEFT_MAX = 420;
@@ -20,6 +22,10 @@ const RIGHT_MIN = 280;
 const RIGHT_MAX = 840;
 const RIGHT_DEFAULT = 360;
 const MAIN_MIN = 420;
+const BOTTOM_MIN = 120;
+const BOTTOM_MAX = 600;
+const BOTTOM_DEFAULT = 280;
+const MAIN_HEIGHT_MIN = 160;
 const KEYBOARD_STEP = 16;
 
 export function Workspace(props: WorkspaceProps) {
@@ -28,23 +34,41 @@ export function Workspace(props: WorkspaceProps) {
   const sidebar = props.sidebar;
   const main = props.main;
   const context = props.context;
+  const bottom = props.bottom;
   let workspace: HTMLDivElement | undefined;
   let drag:
     | {
         readonly pointerID: number;
         readonly side: ResizeSide;
-        readonly startX: number;
-        readonly startWidth: number;
+        readonly startPosition: number;
+        readonly startSize: number;
       }
     | undefined;
 
   const [leftWidth, setLeftWidth] = createSignal(LEFT_DEFAULT);
   const [rightWidth, setRightWidth] = createSignal(RIGHT_DEFAULT);
+  const [bottomHeight, setBottomHeight] = createSignal(BOTTOM_DEFAULT);
+  const [workspaceHeight, setWorkspaceHeight] = createSignal(0);
   const [resizing, setResizing] = createSignal<ResizeSide>();
   const sidebarPresent = sidebar != null;
   const contextOpen = () => context != null && props.rightPanelOpen;
+  const bottomOpen = () => bottom != null && props.bottomOpen === true;
   const mobileOverlayOpen = () =>
     props.mobile === true && ((props.leftSidebarOpen && sidebarPresent) || contextOpen());
+
+  createEffect(() => {
+    if (resizing() !== "bottom" || (bottomOpen() && !mobileOverlayOpen())) return;
+    drag = undefined;
+    setResizing(undefined);
+    removePointerListeners();
+  });
+
+  onMount(() => {
+    if (!workspace || !globalThis.ResizeObserver) return;
+    const observer = new ResizeObserver(() => setWorkspaceHeight(workspace?.clientHeight ?? 0));
+    observer.observe(workspace);
+    onCleanup(() => observer.disconnect());
+  });
 
   createEffect(() => {
     const overlay =
@@ -71,7 +95,12 @@ export function Workspace(props: WorkspaceProps) {
     window.removeEventListener("pointercancel", finishResize);
   }
 
-  const currentWidth = (side: ResizeSide) => {
+  const currentSize = (side: ResizeSide) => {
+    if (side === "bottom") {
+      return (
+        workspace?.querySelector<HTMLElement>(".shell-bottom-panel")?.offsetHeight || bottomHeight()
+      );
+    }
     const selector = side === "left" ? ".shell-left-sidebar" : ".shell-right-panel";
     return (
       workspace?.querySelector<HTMLElement>(selector)?.offsetWidth ||
@@ -79,16 +108,22 @@ export function Workspace(props: WorkspaceProps) {
     );
   };
 
-  const widthBounds = (side: ResizeSide) => {
+  const sizeBounds = (side: ResizeSide) => {
+    if (side === "bottom") {
+      const height = workspaceHeight() || workspace?.clientHeight || 0;
+      const maximum =
+        height > 0 ? Math.min(BOTTOM_MAX, Math.max(0, height - MAIN_HEIGHT_MIN)) : BOTTOM_MAX;
+      return { minimum: Math.min(BOTTOM_MIN, maximum), maximum };
+    }
     const minimum = side === "left" ? LEFT_MIN : RIGHT_MIN;
     const configuredMaximum = side === "left" ? LEFT_MAX : RIGHT_MAX;
     const otherWidth =
       side === "left"
         ? contextOpen()
-          ? currentWidth("right")
+          ? currentSize("right")
           : 0
         : props.leftSidebarOpen && sidebarPresent
-          ? currentWidth("left")
+          ? currentSize("left")
           : 0;
     const workspaceWidth = workspace?.clientWidth ?? 0;
     const availableMaximum =
@@ -99,27 +134,34 @@ export function Workspace(props: WorkspaceProps) {
     };
   };
 
-  const setWidth = (side: ResizeSide, nextWidth: number) => {
-    const { minimum, maximum } = widthBounds(side);
-    const width = Math.min(maximum, Math.max(minimum, nextWidth));
+  const setSize = (side: ResizeSide, nextSize: number) => {
+    const { minimum, maximum } = sizeBounds(side);
+    const size = Math.min(maximum, Math.max(minimum, nextSize));
     const shell = workspace?.closest<HTMLElement>(".app-shell-v2");
-    if (side === "left") {
-      setLeftWidth(width);
-      shell?.style.setProperty("--shell-left-sidebar-width", `${width}px`);
+    if (side === "bottom") {
+      setBottomHeight(size);
+      workspace?.style.setProperty("--shell-bottom-panel-height", `${size}px`);
+    } else if (side === "left") {
+      setLeftWidth(size);
+      shell?.style.setProperty("--shell-left-sidebar-width", `${size}px`);
     } else {
-      setRightWidth(width);
-      shell?.style.setProperty("--shell-right-panel-width", `${width}px`);
+      setRightWidth(size);
+      shell?.style.setProperty("--shell-right-panel-width", `${size}px`);
     }
   };
 
-  const beginResize = (side: ResizeSide, event: PointerEvent) => {
+  const beginResize = (
+    side: ResizeSide,
+    event: PointerEvent & { readonly currentTarget: HTMLDivElement },
+  ) => {
     if (event.button !== 0) return;
     event.preventDefault();
+    event.currentTarget.focus({ preventScroll: true });
     drag = {
       pointerID: event.pointerId,
       side,
-      startX: event.clientX,
-      startWidth: currentWidth(side),
+      startPosition: side === "bottom" ? event.clientY : event.clientX,
+      startSize: currentSize(side),
     };
     setResizing(side);
     removePointerListeners();
@@ -130,8 +172,8 @@ export function Workspace(props: WorkspaceProps) {
 
   function continueResize(event: PointerEvent) {
     if (!drag || drag.pointerID !== event.pointerId) return;
-    const movement = event.clientX - drag.startX;
-    setWidth(drag.side, drag.startWidth + (drag.side === "left" ? movement : -movement));
+    const movement = (drag.side === "bottom" ? event.clientY : event.clientX) - drag.startPosition;
+    setSize(drag.side, drag.startSize + (drag.side === "left" ? movement : -movement));
   }
 
   function finishResize(event: PointerEvent) {
@@ -144,20 +186,20 @@ export function Workspace(props: WorkspaceProps) {
   onCleanup(removePointerListeners);
 
   const resizeWithKeyboard = (side: ResizeSide, event: KeyboardEvent) => {
-    const width = currentWidth(side);
-    const direction = side === "left" ? 1 : -1;
-    if (event.key === "ArrowLeft") {
+    const size = currentSize(side);
+    const direction = side === "right" ? -1 : 1;
+    if (event.key === (side === "bottom" ? "ArrowDown" : "ArrowLeft")) {
       event.preventDefault();
-      setWidth(side, width - KEYBOARD_STEP * direction);
-    } else if (event.key === "ArrowRight") {
+      setSize(side, size - KEYBOARD_STEP * direction);
+    } else if (event.key === (side === "bottom" ? "ArrowUp" : "ArrowRight")) {
       event.preventDefault();
-      setWidth(side, width + KEYBOARD_STEP * direction);
+      setSize(side, size + KEYBOARD_STEP * direction);
     } else if (event.key === "Home") {
       event.preventDefault();
-      setWidth(side, widthBounds(side).minimum);
+      setSize(side, sizeBounds(side).minimum);
     } else if (event.key === "End") {
       event.preventDefault();
-      setWidth(side, widthBounds(side).maximum);
+      setSize(side, sizeBounds(side).maximum);
     }
   };
 
@@ -170,10 +212,12 @@ export function Workspace(props: WorkspaceProps) {
       classList={{
         "left-sidebar-open": props.leftSidebarOpen && sidebarPresent,
         "right-panel-open": contextOpen(),
+        "bottom-panel-open": bottomOpen(),
         mobile: props.mobile === true,
         resizing: resizing() !== undefined,
         "resizing-left": resizing() === "left",
         "resizing-right": resizing() === "right",
+        "resizing-bottom": resizing() === "bottom",
       }}
     >
       {props.leftSidebarOpen && sidebarPresent ? (
@@ -193,7 +237,7 @@ export function Workspace(props: WorkspaceProps) {
               aria-label="Resize sessions sidebar"
               aria-orientation="vertical"
               aria-valuemin={LEFT_MIN}
-              aria-valuemax={widthBounds("left").maximum}
+              aria-valuemax={sizeBounds("left").maximum}
               aria-valuenow={leftWidth()}
               tabIndex={0}
               onPointerDown={(event) => beginResize("left", event)}
@@ -218,7 +262,7 @@ export function Workspace(props: WorkspaceProps) {
               aria-label="Resize context sidebar"
               aria-orientation="vertical"
               aria-valuemin={RIGHT_MIN}
-              aria-valuemax={widthBounds("right").maximum}
+              aria-valuemax={sizeBounds("right").maximum}
               aria-valuenow={rightWidth()}
               tabIndex={0}
               onPointerDown={(event) => beginResize("right", event)}
@@ -234,6 +278,30 @@ export function Workspace(props: WorkspaceProps) {
             {context}
           </div>
         </>
+      ) : null}
+      {bottom != null ? (
+        <section
+          class="shell-bottom-panel"
+          hidden={!bottomOpen()}
+          aria-hidden={!bottomOpen() || mobileOverlayOpen() ? "true" : undefined}
+          inert={!bottomOpen() || mobileOverlayOpen()}
+        >
+          {bottom}
+        </section>
+      ) : null}
+      {bottomOpen() && !mobileOverlayOpen() ? (
+        <div
+          class="shell-resize-handle shell-bottom-resize-handle oc-focus-inset"
+          role="separator"
+          aria-label="Resize terminal panel"
+          aria-orientation="horizontal"
+          aria-valuemin={sizeBounds("bottom").minimum}
+          aria-valuemax={sizeBounds("bottom").maximum}
+          aria-valuenow={Math.min(bottomHeight(), sizeBounds("bottom").maximum)}
+          tabIndex={0}
+          onPointerDown={(event) => beginResize("bottom", event)}
+          onKeyDown={(event) => resizeWithKeyboard("bottom", event)}
+        />
       ) : null}
     </div>
   );

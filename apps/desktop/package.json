@@ -52,6 +52,7 @@
     "prosemirror-model": "catalog:",
     "prosemirror-state": "catalog:",
     "prosemirror-view": "catalog:",
+    "restty": "catalog:",
     "shiki": "catalog:",
     "solid-js": "catalog:"
   },

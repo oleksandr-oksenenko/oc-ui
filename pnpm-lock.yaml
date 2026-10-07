@@ -162,6 +162,9 @@ catalogs:
     prosemirror-view:
       specifier: 1.42.3
       version: 1.42.3
+    restty:
+      specifier: 0.3.0
+      version: 0.3.0
     shiki:
       specifier: 4.2.0
       version: 4.2.0
@@ -290,6 +293,9 @@ importers:
       prosemirror-view:
         specifier: 'catalog:'
         version: 1.42.3
+      restty:
+        specifier: 'catalog:'
+        version: 0.3.0
       shiki:
         specifier: 'catalog:'
         version: 4.2.0
@@ -7611,6 +7617,10 @@ packages:
   resq@1.11.0:
     resolution: {integrity: sha512-G10EBz+zAAy3zUd/CDoBbXRL6ia9kOo3xRHrMDsHljI0GDkhYlyjwoCx5+3eCC4swi1uCoZQhskuJkj7Gp57Bw==}
 
+  restty@0.3.0:
+    resolution: {integrity: sha512-ppNLeZRnJHmGMCJKHYkYzphi1DUSLWqiZbPHOOv0KT1j5wp2yfLDMXjQQmNgqb4evYhItab0D72HpYhdbNY6Fw==}
+    engines: {bun: '>=1.2.0'}
+
   ret@0.5.0:
     resolution: {integrity: sha512-I1XxrZSQ+oErkRR4jYbAyEEu2I0avBvvMM5JN+6EBprOGRCs63ENqZ3vjavq8fBw2+62G5LF5XelKwuJpcvcxw==}
     engines: {node: '>=10'}
@@ -8117,6 +8127,9 @@ packages:
 
   text-decoder@1.2.7:
     resolution: {integrity: sha512-vlLytXkeP4xvEq2otHeJfSQIRyWxo/oZGEbXrtEEF9Hnmrdly59sUbzZ/QgyWuLYHctCHxFF4tRQZNQ9k60ExQ==}
+
+  text-shaper@0.1.28:
+    resolution: {integrity: sha512-uwm6+tkgYJ4hsTV0wZVHkZeoXR1/mthLxDiJvfU9o/FiibNinpFRC8PAMTNx8SaOjaK/5ZjDG1XAkPbKlIe2Jg==}
 
   third-party-web@0.29.2:
     resolution: {integrity: sha512-fegtha91tq2DHphyoiBXVHjVi2YG9zFaRnboT9C28tO1en9Y3wJsfspuy40F+u5wl3hHVbw7cnd1b67kEGHb8g==}
@@ -17044,6 +17057,10 @@ snapshots:
     dependencies:
       fast-deep-equal: 2.0.1
 
+  restty@0.3.0:
+    dependencies:
+      text-shaper: 0.1.28
+
   ret@0.5.0: {}
 
   retry@0.12.0: {}
@@ -17692,6 +17709,8 @@ snapshots:
       b4a: 1.8.1
     transitivePeerDependencies:
       - react-native-b4a
+
+  text-shaper@0.1.28: {}
 
   third-party-web@0.29.2: {}
 

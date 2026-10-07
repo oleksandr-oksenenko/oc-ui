@@ -1,0 +1,85 @@
+.terminal-surface,
+.terminal-renderer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-surface[hidden] {
+  display: none;
+}
+
+.terminal-renderer > .pane,
+.terminal-renderer .pane-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-renderer > .pane {
+  position: relative;
+  background: var(--oc-surface-canvas);
+}
+
+.terminal-renderer-notice {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--oc-text-muted);
+  background: var(--oc-surface-canvas);
+  font-size: var(--oc-type-body-size);
+}
+
+/* Restty portals its controlled clipboard menu to document.body. */
+.pane-context-menu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  padding: 4px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-base);
+  background: var(--oc-surface-canvas);
+  box-shadow: var(--oc-shadow-floating);
+}
+
+.pane-context-menu[hidden] {
+  display: none;
+}
+
+.pane-context-menu-item {
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: var(--oc-type-body-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pane-context-menu-item:hover {
+  background: var(--oc-surface-hover);
+}
+
+.pane-context-menu-item:focus-visible {
+  border-color: var(--oc-focus-ring);
+}
+
+.pane-context-menu-item:disabled {
+  color: var(--oc-text-faint);
+  cursor: default;
+}

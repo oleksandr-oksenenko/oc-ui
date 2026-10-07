@@ -24,6 +24,9 @@ import { createSessionWorkspace } from "./Sessions/createSessionWorkspace.ts";
 import { createShellPanelState } from "./Shell/createShellPanelState.ts";
 import { createSessionPanelLayouts } from "./Shell/sessionPanelLayouts.ts";
 import { createConnectedLifecycle } from "./createConnectedLifecycle.ts";
+import { createSignal } from "solid-js";
+import { createTerminalSessions } from "../../../opencode/terminal-sessions.ts";
+import { createTerminalFonts } from "./Terminal/createTerminalFonts.ts";
 
 /** Construct once in the workspace's retained Solid root, independently of views. */
 export function createWorkspaceModel(
@@ -32,6 +35,18 @@ export function createWorkspaceModel(
   browserConnection?: { api: BrowserApi; serverUrl: string; password: string },
 ) {
   const connected = () => runtime.stream.status() === "connected";
+  const terminals = createTerminalSessions({
+    effects: runtime.effects,
+    api: runtime.api,
+    serverUrl: runtime.serverUrl,
+  });
+  const terminalFonts = createTerminalFonts(runtime.effects);
+  const [terminalOpen, setTerminalOpen] = createSignal(false);
+  const terminalPanel = {
+    open: terminalOpen,
+    setOpen: setTerminalOpen,
+    toggle: () => setTerminalOpen((open) => !open),
+  };
   const globalForms = createGlobalForms({
     effects: runtime.effects,
     runtime,
@@ -191,6 +206,9 @@ export function createWorkspaceModel(
   });
 
   return {
+    terminals,
+    terminalFonts,
+    terminalPanel,
     drafts,
     attentionForSession,
     browser,
