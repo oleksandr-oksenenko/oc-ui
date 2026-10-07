@@ -67,6 +67,9 @@ jobs:
 
       - name: Test packaged Electron app
         if: runner.os == 'macOS'
+        env:
+          # Keep the configured ad-hoc signature on PR builds; no certificate is used.
+          CSC_FOR_PULL_REQUEST: "true"
         run: pnpm test:acceptance:mac 2>&1 | tee "${RUNNER_TEMP}/packaged-acceptance.log"
 
       - name: Upload failure diagnostics
