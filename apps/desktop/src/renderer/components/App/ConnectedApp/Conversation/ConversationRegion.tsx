@@ -40,6 +40,7 @@ export type ConversationRegionProps = {
   readonly canCreate?: boolean;
   readonly onCreate?: () => void;
   readonly onBrowseSessions?: () => void;
+  readonly onOpenExternal?: (url: string) => void;
 };
 
 const formRenderKey = (form: { readonly sessionID: string; readonly id: string }): string =>
@@ -193,6 +194,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
         onAnswerChange={(answer) => props.forms.saveAnswer(form()!.sessionID, form()!.id, answer)}
         onSubmit={(answer) => void props.forms.reply(form()!.sessionID, form()!.id, answer)}
         onCancel={() => void props.forms.cancel(form()!.sessionID, form()!.id)}
+        onOpenExternal={props.onOpenExternal}
       />
     );
   };

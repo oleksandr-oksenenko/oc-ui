@@ -22,6 +22,7 @@ export type ConnectedAppProps = {
   readonly server: VerifiedServer;
   readonly model: WorkspaceModel;
   readonly onChangeServer: () => void;
+  readonly onOpenExternal: (url: string) => void;
 };
 
 /** Renders the model retained by the connection's workspace. */
@@ -124,7 +125,11 @@ export function ConnectedApp(props: ConnectedAppProps) {
             flows={flows}
             drafts={drafts}
             globalControls={
-              <GlobalFormsRegion controller={globalForms} visible={panels.leftSidebarOpen()} />
+              <GlobalFormsRegion
+                controller={globalForms}
+                visible={panels.leftSidebarOpen()}
+                onOpenExternal={props.onOpenExternal}
+              />
             }
             serverUrl={props.server.serverUrl}
             mobile={panels.mobile()}
@@ -152,6 +157,7 @@ export function ConnectedApp(props: ConnectedAppProps) {
                 canCreate={drafts.canCreate()}
                 onCreate={drafts.create}
                 onBrowseSessions={() => panels.setLeftSidebarOpen(true)}
+                onOpenExternal={props.onOpenExternal}
               />
             }
           >

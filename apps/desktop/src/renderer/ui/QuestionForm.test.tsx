@@ -64,6 +64,38 @@ function submit(host: HTMLElement): void {
 }
 
 describe("QuestionForm", () => {
+  it("acknowledges every external step only when Continue is submitted", () => {
+    const onOpenExternal = vi.fn<(url: string) => void>();
+    const onAnswerChange = vi.fn<(answer: FormAnswer) => void>();
+    const form = {
+      id: "frm_external_acknowledgement",
+      sessionID: "ses_test",
+      title: "Complete external setup",
+      fields: [
+        { key: "name", type: "string", default: "Preserved answer" },
+        { key: "docs", type: "external", title: "Documentation", url: "https://example.test/docs" },
+        { key: "setup", type: "external", title: "Setup", url: "https://example.test/setup" },
+      ],
+    } satisfies FormInfo;
+    const mounted = mount(form, { onOpenExternal, onAnswerChange });
+
+    mounted.host
+      .querySelector<HTMLButtonElement>('button[aria-label="Open Documentation"]')
+      ?.click();
+    expect(onOpenExternal).toHaveBeenCalledWith("https://example.test/docs");
+    expect(onAnswerChange).not.toHaveBeenCalled();
+    expect(mounted.onSubmit).not.toHaveBeenCalled();
+    expect(mounted.onCancel).not.toHaveBeenCalled();
+
+    submit(mounted.host);
+    expect(mounted.onSubmit).toHaveBeenCalledWith({
+      name: "Preserved answer",
+      docs: true,
+      setup: true,
+    });
+    mounted.dispose();
+  });
+
   it("edits and submits a custom answer inline while retaining its radio", async () => {
     const form = {
       id: "frm_custom_string",

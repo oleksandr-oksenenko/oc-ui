@@ -486,6 +486,169 @@ describe.sequential("production browser app", () => {
     await page.setViewportSize({ width: 1280, height: 860 });
   });
 
+  it.each(["global", "session"])(
+    "opens %s request links through the host boundary without answering the request",
+    async (scope) => {
+      await ensureConnected();
+      const session = await api.session.create({
+        title: `External actions ${scope}`,
+        location: { directory: await realpath(project) },
+      });
+      await selectSession(session.title);
+      const sessionID = scope === "global" ? "global" : session.id;
+      const url = "https://example.invalid/request?source=external-action";
+      const failureMessage =
+        "This link could not be opened. Copy the address and open it in your browser.";
+      const failure = page.getByText(failureMessage, { exact: true });
+      const form = await api.form.create({
+        sessionID,
+        title: `External request ${scope}`,
+        fields: [
+          { key: "answer", type: "string", title: "Request answer", required: true },
+          { key: "docs", type: "external", title: "Request documentation", url },
+        ],
+      });
+      let cancellationForm;
+      const openReview = async () => {
+        await page.getByRole("button", { name: "Review 1 request", exact: true }).click();
+        await page.getByRole("dialog").waitFor();
+      };
+      if (scope === "global") await openReview();
+      const request = page.locator(".question-form").filter({ hasText: form.title });
+      const open = request.getByRole("button", { name: "Open Request documentation", exact: true });
+      await page.evaluate(() => {
+        window.acceptanceExternalCalls = [];
+        window.acceptanceOpenFails = false;
+        window.acceptanceOriginalOpen = window.open;
+        window.open = (...args) => {
+          window.acceptanceExternalCalls.push(args);
+          if (window.acceptanceOpenFails) throw new Error("Host opener unavailable");
+          return null;
+        };
+      });
+      try {
+        await expect.poll(() => open.isEnabled()).toBe(true);
+        await request.getByRole("textbox", { name: "Request answer" }).fill("Preserved answer");
+        await open.click();
+        await open.press("Enter");
+        await expect
+          .poll(() => page.evaluate(() => window.acceptanceExternalCalls))
+          .toEqual([
+            [url, "_blank", "noopener,noreferrer"],
+            [url, "_blank", "noopener,noreferrer"],
+          ]);
+        expect(await api.form.state({ sessionID, formID: form.id })).toEqual({ status: "pending" });
+        expect(await open.evaluate((node) => node === document.activeElement)).toBe(true);
+
+        await failure.waitFor({ state: "hidden" });
+        await page.evaluate(() => {
+          window.acceptanceOpenFails = true;
+        });
+        await open.press("Space");
+        await expect
+          .poll(() => page.evaluate(() => window.acceptanceExternalCalls))
+          .toEqual(Array.from({ length: 3 }, () => [url, "_blank", "noopener,noreferrer"]));
+        await failure.waitFor();
+        expect(await open.evaluate((node) => node === document.activeElement)).toBe(true);
+        expect(await request.getByRole("textbox", { name: "Request answer" }).inputValue()).toBe(
+          "Preserved answer",
+        );
+        expect(await api.form.state({ sessionID, formID: form.id })).toEqual({ status: "pending" });
+        await page.evaluate(() => {
+          window.acceptanceOpenFails = false;
+        });
+
+        if (scope === "global") {
+          await page.getByRole("button", { name: "Keep pending", exact: true }).click();
+          await page.getByRole("dialog").waitFor({ state: "hidden" });
+          await openReview();
+          expect(await request.getByRole("textbox", { name: "Request answer" }).inputValue()).toBe(
+            "Preserved answer",
+          );
+        } else {
+          const other = await api.session.create({ title: "External action navigation" });
+          try {
+            await selectSession(other.title);
+            await selectSession(session.title);
+          } finally {
+            await api.session.remove({ sessionID: other.id });
+          }
+          expect(await request.getByRole("textbox", { name: "Request answer" }).inputValue()).toBe(
+            "Preserved answer",
+          );
+        }
+        await expect.poll(() => open.isEnabled()).toBe(true);
+        proxy.disconnect();
+        await expect.poll(() => open.isDisabled()).toBe(true);
+        proxy.reconnect();
+        await expect
+          .poll(() => page.locator(".shell-server-selector").getAttribute("aria-label"))
+          .toMatch(/Connected$/u);
+        await expect.poll(() => open.isEnabled()).toBe(true);
+        await open.click();
+        await expect.poll(() => page.evaluate(() => window.acceptanceExternalCalls.length)).toBe(4);
+
+        let release;
+        const held = new Promise((resolve) => {
+          release = resolve;
+        });
+        const replyUrl = `**/session/${sessionID}/form/${form.id}/reply`;
+        const holdReply = async (route) => {
+          await held;
+          await route.continue();
+        };
+        await page.route(replyUrl, holdReply);
+        try {
+          try {
+            await request.getByRole("button", { name: "Continue", exact: true }).click();
+            await expect.poll(() => open.isDisabled()).toBe(true);
+          } finally {
+            release();
+          }
+          await expect
+            .poll(() => api.form.state({ sessionID, formID: form.id }))
+            .toEqual({ status: "answered", answer: { answer: "Preserved answer", docs: true } });
+          await request.waitFor({ state: "hidden" });
+        } finally {
+          await page.unroute(replyUrl, holdReply);
+        }
+
+        cancellationForm = await api.form.create({
+          sessionID,
+          title: `Cancel external request ${scope}`,
+          fields: [{ key: "docs", type: "external", title: "Request documentation", url }],
+        });
+        const cancellation = page
+          .locator(".question-form")
+          .filter({ hasText: cancellationForm.title });
+        await cancellation.getByRole("button", { name: "Cancel", exact: true }).click();
+        await expect
+          .poll(() => api.form.state({ sessionID, formID: cancellationForm.id }))
+          .toEqual({ status: "cancelled" });
+        await cancellation.waitFor({ state: "hidden" });
+      } finally {
+        proxy.reconnect();
+        await page.evaluate(() => {
+          window.open = window.acceptanceOriginalOpen;
+          delete window.acceptanceOriginalOpen;
+          delete window.acceptanceExternalCalls;
+          delete window.acceptanceOpenFails;
+        });
+        for (const pending of [form, cancellationForm].filter(Boolean)) {
+          if ((await api.form.state({ sessionID, formID: pending.id })).status === "pending") {
+            await api.form.cancel({ sessionID, formID: pending.id });
+          }
+        }
+        if (scope === "global" && (await page.getByRole("dialog").count())) {
+          await page.getByRole("button", { name: "Keep pending", exact: true }).click();
+          await page.getByRole("dialog").waitFor({ state: "hidden" });
+        }
+        await failure.waitFor({ state: "hidden" });
+        await api.session.remove({ sessionID: session.id });
+      }
+    },
+  );
+
   it("uses the centered composer, directory dialog and independent persistent drafts", async () => {
     const opener = page.getByRole("button", { name: "Create session", exact: true });
     await opener.click();
