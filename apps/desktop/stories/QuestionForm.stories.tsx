@@ -6,19 +6,12 @@ import type {
   SessionMessageAssistant,
   SessionMessageUser,
 } from "@opencode/client";
-import { Button } from "@opencode/ui/button";
-import { Card, CardActions, CardDescription, CardTitle } from "@opencode/ui/card";
-import { Checkbox } from "@opencode/ui/checkbox";
-import { Field } from "@opencode/ui/field";
-import { RadioGroup, RadioItem } from "@opencode/ui/radio";
-import { TextInput } from "@opencode/ui/text-input";
 import { For, createSignal, type JSX } from "solid-js";
 import { expect, fn, userEvent } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import { QuestionForm } from "../src/renderer/ui/QuestionForm.tsx";
-import { AssistantMessage } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/AssistantMessage.tsx";
-import { UserMessage } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView/UserMessage.tsx";
+import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { workspaceQuestionForm } from "./question-form-fixtures.ts";
 
 import "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/SessionPane.css";
@@ -219,31 +212,6 @@ const narrowFrameStyle: JSX.CSSProperties = {
   padding: "12px",
 };
 
-const defaultsFrameStyle: JSX.CSSProperties = {
-  height: "100vh",
-  overflow: "auto",
-  padding: "32px",
-  background: "var(--oc-surface-subtle)",
-};
-
-const defaultsStackStyle: JSX.CSSProperties = {
-  display: "grid",
-  gap: "24px",
-  width: "min(620px, 100%)",
-};
-
-const defaultsGroupStyle: JSX.CSSProperties = {
-  display: "grid",
-  gap: "12px",
-};
-
-const defaultsActionsStyle: JSX.CSSProperties = {
-  display: "flex",
-  "align-items": "center",
-  "flex-wrap": "wrap",
-  gap: "8px",
-};
-
 const transcriptFrameStyle: JSX.CSSProperties = {
   height: "100vh",
   "min-height": "640px",
@@ -260,21 +228,12 @@ export const InTranscript: Story = {
   args: { form: fullForm },
   render: (args) => (
     <main style={transcriptFrameStyle}>
-      <section
-        class="transcript-view oc-scrollable"
-        aria-label="Transcript with a pending question form"
-      >
-        <div class="transcript-document">
-          <UserMessage message={transcriptUser} />
-          <AssistantMessage message={transcriptAssistant} sessionStatus="idle" />
-          <article
-            class="transcript-message transcript-assistant-message transcript-pending-interaction"
-            data-message-id="question-form-pending"
-          >
-            <QuestionForm {...args} />
-          </article>
-        </div>
-      </section>
+      <TranscriptView
+        sessionID="ses_oc_ui"
+        messages={[transcriptUser, transcriptAssistant]}
+        sessionStatus="idle"
+        pendingInteraction={<QuestionForm {...args} />}
+      />
     </main>
   ),
 };
@@ -288,118 +247,32 @@ export const MultiplePendingInTranscript: Story = {
 
     return (
       <main style={transcriptFrameStyle}>
-        <section
-          class="transcript-view oc-scrollable"
-          aria-label="Transcript with pending question forms"
-        >
-          <div class="transcript-document">
-            <UserMessage message={transcriptUser} />
-            <AssistantMessage message={transcriptAssistant} sessionStatus="idle" />
-            <article
-              class="transcript-message transcript-assistant-message transcript-pending-interaction"
-              data-message-id="question-forms-pending"
-            >
-              <For each={forms()}>
-                {(form) => (
-                  <QuestionForm
-                    {...args}
-                    form={form}
-                    onSubmit={(answer) => {
-                      args.onSubmit(answer);
-                      settle(form.id);
-                    }}
-                    onCancel={() => {
-                      args.onCancel?.();
-                      settle(form.id);
-                    }}
-                  />
-                )}
-              </For>
-            </article>
-          </div>
-        </section>
+        <TranscriptView
+          sessionID="ses_oc_ui"
+          messages={[transcriptUser, transcriptAssistant]}
+          sessionStatus="idle"
+          pendingInteraction={
+            <For each={forms()}>
+              {(form) => (
+                <QuestionForm
+                  {...args}
+                  form={form}
+                  onSubmit={(answer) => {
+                    args.onSubmit(answer);
+                    settle(form.id);
+                  }}
+                  onCancel={() => {
+                    args.onCancel?.();
+                    settle(form.id);
+                  }}
+                />
+              )}
+            </For>
+          }
+        />
       </main>
     );
   },
-};
-
-export const OpenCodeDefaults: Story = {
-  parameters: { controls: { disable: true } },
-  render: () => (
-    <main style={defaultsFrameStyle}>
-      <section aria-label="Default OpenCode form controls" style={defaultsStackStyle}>
-        <Card>
-          <CardTitle icon={false}>Default OpenCode card</CardTitle>
-          <CardDescription>No local QuestionForm styles are applied in this story.</CardDescription>
-        </Card>
-
-        <Field>
-          <Field.Label tooltip="Shown in the deployment history.">Release name</Field.Label>
-          <Field.Control>
-            <TextInput placeholder="Question forms" />
-          </Field.Control>
-        </Field>
-
-        <RadioGroup
-          label="Target environment"
-          description="These are default OpenCode radio items."
-          defaultValue="preview"
-        >
-          <RadioItem
-            value="preview"
-            label="Preview"
-            description="Build and inspect without publishing."
-          />
-          <RadioItem
-            value="production"
-            label="Production"
-            description="Prepare the live release settings."
-          />
-        </RadioGroup>
-
-        <div style={defaultsGroupStyle}>
-          <Checkbox defaultChecked description="Keyboard, focus, labels, and zoom.">
-            Accessibility
-          </Checkbox>
-          <Checkbox description="Spacing, density, responsive states, and polish.">
-            Visual QA
-          </Checkbox>
-          <Checkbox description="Electron and server behavior in the packaged path.">
-            Runtime
-          </Checkbox>
-        </div>
-
-        <Field>
-          <Field.Label tooltip="How many times should a transient failure retry?">
-            Retry attempts
-          </Field.Label>
-          <Field.Control>
-            <TextInput type="number" value="2" numeric />
-          </Field.Control>
-        </Field>
-
-        <RadioGroup label="Notify the team when the preview is ready?" defaultValue="false">
-          <RadioItem value="true" label="Yes" />
-          <RadioItem value="false" label="No" />
-        </RadioGroup>
-
-        <Card>
-          <CardTitle icon={false}>Release notes template</CardTitle>
-          <CardDescription>Open the team template before you continue.</CardDescription>
-          <CardActions>
-            <Button icon="square-arrow-top-right">Open</Button>
-          </CardActions>
-        </Card>
-
-        <div style={defaultsActionsStyle}>
-          <Button>Default button</Button>
-          <Button variant="outline">Outline button</Button>
-          <Button variant="contrast">Contrast button</Button>
-          <Button variant="ghost-muted">Ghost muted button</Button>
-        </div>
-      </section>
-    </main>
-  ),
 };
 
 export const ValidationErrors: Story = {

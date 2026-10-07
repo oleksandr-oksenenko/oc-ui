@@ -15,7 +15,6 @@ import { onCleanup } from "solid-js";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { createAnnotatorCard } from "../../src/preload/browser-annotator-card.ts";
-import { CatalogCard, CatalogPage } from "./StoryLayout";
 
 const meta = {
   title: "Design System/Focus",
@@ -39,44 +38,31 @@ async function ring(element: Element, offset = "0px") {
 
 export const SharedTreatment: StoryObj = {
   render: () => (
-    <CatalogPage
-      title="Focus"
-      intro="Focus stays neutral and flush across themes. Tab through the examples; compound editors draw one ring on their frame, and edge controls use inset placement."
-    >
-      <CatalogCard
-        title="Shared controls"
-        description="The same outline across upstream control families and local compound fields."
-      >
-        <div class="design-system-control-column">
-          <Button>Start focus tour</Button>
-          <IconButton icon={<Icon name="close" />} aria-label="Focus icon" />
-          <TextInput
-            aria-label="Focus filter"
-            value="Session"
-            leadingIcon={<Icon name="magnifying-glass" />}
-            showClearButton
-            clearLabel="Clear focus filter"
-          />
-          <Textarea aria-label="Focus notes" />
-          <InlineInput aria-label="Focus inline input" value="Inline value" />
-          <Select aria-label="Focus select" options={["One", "Two"]} current="One" />
-          <Checkbox>Focus checkbox</Checkbox>
-          <Switch>Focus switch</Switch>
-          <RadioGroup label="Focus radio group" defaultValue="one">
-            <RadioItem value="one" label="Focus radio" />
-          </RadioGroup>
-          <div class="oc-focus-container design-system-focus-compound" data-testid="compound-frame">
-            <textarea class="oc-focus-delegate" aria-label="Focus compound editor" />
-          </div>
-          <div class="design-system-focus-clipped">
-            <Button class="oc-focus-inset">Focus edge action</Button>
-          </div>
-          <TextInput aria-label="Focus invalid field" invalid value="Invalid" />
-          <TextInput aria-label="Focus disabled field" disabled />
-          <Button disabled>Focus disabled action</Button>
-        </div>
-      </CatalogCard>
-    </CatalogPage>
+    <div style={{ display: "grid", gap: "12px", width: "min(360px, 100%)", padding: "16px" }}>
+      <Button>Start focus tour</Button>
+      <IconButton icon={<Icon name="close" />} aria-label="Focus icon" />
+      <TextInput
+        aria-label="Focus filter"
+        value="Session"
+        leadingIcon={<Icon name="magnifying-glass" />}
+        showClearButton
+        clearLabel="Clear focus filter"
+      />
+      <Textarea aria-label="Focus notes" />
+      <InlineInput aria-label="Focus inline input" value="Inline value" />
+      <Select aria-label="Focus select" options={["One", "Two"]} current="One" />
+      <Checkbox>Focus checkbox</Checkbox>
+      <Switch>Focus switch</Switch>
+      <RadioGroup label="Focus radio group" defaultValue="one">
+        <RadioItem value="one" label="Focus radio" />
+      </RadioGroup>
+      <div style={{ overflow: "hidden" }}>
+        <Button class="oc-focus-inset">Focus edge action</Button>
+      </div>
+      <TextInput aria-label="Focus invalid field" invalid value="Invalid" />
+      <TextInput aria-label="Focus disabled field" disabled />
+      <Button disabled>Focus disabled action</Button>
+    </div>
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -119,11 +105,6 @@ export const SharedTreatment: StoryObj = {
     await userEvent.tab();
     await ring(slot("radio-v2-item-control"));
     await userEvent.tab();
-    await ring(canvas.getByTestId("compound-frame"));
-    await expect(
-      getComputedStyle(canvas.getByRole("textbox", { name: "Focus compound editor" })).outlineStyle,
-    ).toBe("none");
-    await userEvent.tab();
     await ring(canvas.getByRole("button", { name: "Focus edge action" }), "-1px");
     await userEvent.tab();
     const invalid = canvas.getByRole("textbox", { name: "Focus invalid field" });
@@ -154,14 +135,11 @@ export const EmbeddedAnnotationCard: StoryObj = {
     const card = createAnnotatorCard(() => undefined, { shadowRootMode: "open" });
     onCleanup(() => card.close());
     return (
-      <CatalogPage
-        title="Embedded annotation focus"
-        intro="The in-page card owns an isolated shadow root and uses neutral focus even on pages without app styles."
-      >
+      <div style={{ padding: "16px" }}>
         <Button onClick={() => card.open({ left: 24, top: 100, width: 100, height: 24 })}>
           Open embedded annotation card
         </Button>
-      </CatalogPage>
+      </div>
     );
   },
   play: async ({ canvasElement }) => {

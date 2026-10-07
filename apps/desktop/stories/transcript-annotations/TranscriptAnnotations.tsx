@@ -20,7 +20,6 @@ import {
   composerModelSelection,
   composerPasteProps,
 } from "../composer-fixtures.ts";
-import "./transcript-annotations.css";
 
 const sourceText =
   "We can keep this review focused: the transcript stays readable when annotation drafts remain above the composer, and source jumps return to the original assistant message.";
@@ -225,89 +224,87 @@ function TranscriptAnnotationsContent(
   const count = () => drafts.get(selectedID()).length;
 
   return (
-    <main
-      class="transcript-annotation-stage"
-      classList={{ "transcript-annotation-stage--narrow": props.narrow }}
+    <div
+      style={{
+        padding: "16px",
+        width: props.narrow ? "min(390px, 100%)" : "min(820px, 100%)",
+        margin: "0 auto",
+        "box-sizing": "border-box",
+      }}
     >
-      <div class="transcript-annotation-shell">
-        <header class="annotation-exploration-header">
-          <h1>Transcript annotations</h1>
-          <p>Production components with simulated sending. Select text or click a highlight.</p>
-          <div class="annotation-story-controls">
-            <Button
-              variant="ghost-muted"
-              onClick={() => {
-                ui.close();
-                setRunning(!running());
-              }}
-            >
-              {running() ? "Finish turn" : "Simulate running"}
-            </Button>
-            <Button
-              variant="ghost-muted"
-              onClick={() => {
-                ui.close();
-                setSelectedID(selectedID() === sessionID ? "other" : sessionID);
-              }}
-            >
-              Switch conversation
-            </Button>
-            <Button
-              variant="ghost-muted"
-              aria-pressed={failNext()}
-              onClick={() => setFailNext(!failNext())}
-            >
-              Fail next send
-            </Button>
-          </div>
-        </header>
-        <div class="annotation-story-transcript">
-          <TranscriptView
-            sessionID={selectedID()}
-            messages={currentMessages()}
-            sessionStatus={running() ? "running" : "idle"}
-            annotationRootRef={ui.attach}
-            onOpenAnnotation={ui.openSent}
-          />
-        </div>
-        <div class="annotation-story-composer">
-          <Composer
-            {...composerPasteProps}
-            value={composer.value()}
-            action={running() ? "running" : composer.submitting() ? "sending" : "send"}
-            disabled={running() ? false : composer.disabled()}
-            error={composer.error()}
-            annotations={
-              count()
-                ? {
-                    count: count(),
-                    onOpen: ui.toggleDrafts,
-                    expanded: ui.draftsOpen(),
-                    controls: ui.popupID,
-                    onDiscard: ui.discard,
-                  }
-                : undefined
-            }
-            modelSelection={composerModelSelection({
-              selectedModelID: modelID(),
-              selectedVariantID: variantID(),
-              onSelectModel: setModelID,
-              onSelectVariant: setVariantID,
-            })}
-            agentSelection={composerAgentSelection({
-              selectedAgentID: agentID(),
-              onSelectAgent: setAgentID,
-            })}
-            onInput={composer.input}
-            onSubmit={() => {
-              ui.close();
-              void composer.submit();
-            }}
-            onStop={() => setRunning(false)}
-          />
-        </div>
-        <AnnotationPopover controller={ui} />
+      <div style={{ display: "flex", "flex-wrap": "wrap", gap: "4px" }}>
+        <Button
+          variant="ghost-muted"
+          onClick={() => {
+            ui.close();
+            setRunning(!running());
+          }}
+        >
+          {running() ? "Finish turn" : "Simulate running"}
+        </Button>
+        <Button
+          variant="ghost-muted"
+          onClick={() => {
+            ui.close();
+            setSelectedID(selectedID() === sessionID ? "other" : sessionID);
+          }}
+        >
+          Switch conversation
+        </Button>
+        <Button
+          variant="ghost-muted"
+          aria-pressed={failNext()}
+          onClick={() => setFailNext(!failNext())}
+        >
+          Fail next send
+        </Button>
       </div>
-    </main>
+      <div style={{ height: "380px", display: "flex", "min-height": "0" }}>
+        <TranscriptView
+          sessionID={selectedID()}
+          messages={currentMessages()}
+          sessionStatus={running() ? "running" : "idle"}
+          annotationRootRef={ui.attach}
+          onOpenAnnotation={ui.openSent}
+        />
+      </div>
+      <div style={{ "margin-top": "28px" }}>
+        <Composer
+          {...composerPasteProps}
+          value={composer.value()}
+          action={running() ? "running" : composer.submitting() ? "sending" : "send"}
+          disabled={running() ? false : composer.disabled()}
+          error={composer.error()}
+          annotations={
+            count()
+              ? {
+                  count: count(),
+                  onOpen: ui.toggleDrafts,
+                  expanded: ui.draftsOpen(),
+                  controls: ui.popupID,
+                  onDiscard: ui.discard,
+                }
+              : undefined
+          }
+          modelSelection={composerModelSelection({
+            selectedModelID: modelID(),
+            selectedVariantID: variantID(),
+            onSelectModel: setModelID,
+            onSelectVariant: setVariantID,
+          })}
+          agentSelection={composerAgentSelection({
+            selectedAgentID: agentID(),
+            onSelectAgent: setAgentID,
+          })}
+          onInput={composer.input}
+          onSubmit={() => {
+            ui.close();
+            void composer.submit();
+          }}
+          onStop={() => setRunning(false)}
+        />
+      </div>
+      <AnnotationPopover controller={ui} />
+    </div>
   );
 }

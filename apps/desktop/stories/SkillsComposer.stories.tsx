@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/async-function */
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import type { PromptSkillAttachment } from "@opencode/client";
-import { createSignal, Show } from "solid-js";
+import { createSignal } from "solid-js";
 import { expect, fireEvent, fn, userEvent, within, waitFor } from "storybook/test";
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import {
@@ -9,7 +9,6 @@ import {
   composerModelSelection,
   composerPasteProps,
 } from "./composer-fixtures.ts";
-import "./SkillsComposer.css";
 
 const commands = [
   { name: "init", description: "Guided AGENTS.md setup." },
@@ -73,10 +72,8 @@ function ComposerSuggestionsFixture(props: {
   const [selected, setSelected] = createSignal<readonly PromptSkillAttachment[]>([]);
   const [commandState, setCommandState] = createSignal(props.commandState ?? "ready");
   const [skillState, setSkillState] = createSignal(props.skillState ?? "ready");
-  const [sent, setSent] = createSignal("");
   return (
-    <div class="skills-story-frame">
-      <p class="skills-story-intro">Type / to run a command or add a skill to your message.</p>
+    <div style={{ width: "min(760px, calc(100vw - 32px))", "padding-top": "300px" }}>
       <Composer
         {...composerPasteProps}
         value={value()}
@@ -130,17 +127,10 @@ function ComposerSuggestionsFixture(props: {
         }}
         onSubmit={() => {
           props.onSubmit?.(value(), selected());
-          setSent(value());
           setValue("");
           setSelected([]);
         }}
       />
-      <Show when={sent()}>
-        <div class="skills-story-preview" role="status">
-          <span>Preview of submitted message</span>
-          <p>{sent()}</p>
-        </div>
-      </Show>
     </div>
   );
 }
@@ -365,7 +355,7 @@ export const UndoRedoAndEditing: Story = {
     await userEvent.type(prompt, "Please ", { skipClick: true });
     await expect(canvas.getByRole("button", { name: "Remove review skill" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-    await expect(canvas.getByRole("status")).toHaveTextContent("review");
+    await expect(prompt).toHaveTextContent("");
     // The trailing space is written as a character reference so the draft
     // still holds it when parsed again.
     await expect(args.onSubmit).toHaveBeenCalledWith("Please Use review&#x20;", [

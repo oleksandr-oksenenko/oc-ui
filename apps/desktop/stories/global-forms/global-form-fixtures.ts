@@ -1,6 +1,6 @@
 import type { FormAnswer, LocationRef } from "@opencode/client";
 import type { FormWithLocation } from "@opencode/client/solid";
-import { createSignal, type Accessor } from "solid-js";
+import { createSignal } from "solid-js";
 
 import type { GlobalFormsController } from "../../src/renderer/components/App/ConnectedApp/GlobalForms/createGlobalForms.ts";
 
@@ -197,8 +197,6 @@ export const hostileContentForm: FormWithLocation = {
   ],
 };
 
-export const emptyForms: readonly FormWithLocation[] = [];
-
 export type FakeControllerOptions = {
   readonly forms?: readonly FormWithLocation[];
   readonly connected?: boolean;
@@ -208,14 +206,7 @@ export type FakeControllerOptions = {
   readonly replyFailures?: Readonly<Record<string, number>>;
 };
 
-export type FakeGlobalForms = {
-  readonly controller: GlobalFormsController;
-  readonly forms: Accessor<readonly FormWithLocation[]>;
-  readonly addForm: () => FormWithLocation;
-  readonly removeLastForm: () => void;
-};
-
-export function createFakeGlobalForms(options: FakeControllerOptions = {}): FakeGlobalForms {
+export function createFakeGlobalForms(options: FakeControllerOptions = {}): GlobalFormsController {
   const [forms, setForms] = createSignal<readonly FormWithLocation[]>(
     options.forms ?? defaultForms,
   );
@@ -240,7 +231,6 @@ export function createFakeGlobalForms(options: FakeControllerOptions = {}): Fake
   const actionIDs = new Set<string>();
   const remainingFailures = new Map(Object.entries(options.replyFailures ?? {}));
   const answers = new Map<string, FormAnswer>();
-  let nextID = 1;
 
   // oxlint-disable-next-line effecttsgo/async-function -- Fake controller models a Promise API.
   const sync = async (): Promise<void> => {
@@ -286,33 +276,6 @@ export function createFakeGlobalForms(options: FakeControllerOptions = {}): Fake
     return true;
   };
 
-  const addForm = () => {
-    const created: FormWithLocation = {
-      id: `frm_live-${String(nextID++).padStart(2, "0")}`,
-      sessionID: "global",
-      title: "Live workspace check",
-      metadata: { source: "storybook-live-queue" },
-      location: GLOBAL_FORM_LOCATION,
-      fields: [
-        {
-          key: "check",
-          type: "string",
-          title: "What should the workspace check?",
-          default: "Confirm the new form is visible",
-          required: true,
-        },
-      ],
-    };
-    setForms((current) => [...current, created]);
-    return created;
-  };
-
-  const removeLastForm = () => {
-    const removed = forms().at(-1);
-    if (removed) answers.delete(removed.id);
-    setForms((current) => current.slice(0, -1));
-  };
-
   const controller = {
     location: GLOBAL_FORM_LOCATION,
     forms,
@@ -340,5 +303,5 @@ export function createFakeGlobalForms(options: FakeControllerOptions = {}): Fake
     },
   } satisfies GlobalFormsController;
 
-  return { controller, forms, addForm, removeLastForm };
+  return controller;
 }

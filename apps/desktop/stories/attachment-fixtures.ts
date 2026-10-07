@@ -5,7 +5,7 @@ import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts"
 import { formatBrowserAnnotations } from "../src/renderer/components/App/ConnectedApp/Browser/browser-annotations.ts";
 import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 
-export const reviewComments = [
+const reviewComments = [
   {
     path: "apps/desktop/src/renderer/components/Composer.tsx",
     body: "Keep the draft when sending fails, so I can retry without losing my changes.",
@@ -35,7 +35,7 @@ export const annotations = [
   },
 ];
 
-export const browserAnnotation = {
+const browserAnnotation = {
   id: "browser-annotation-1",
   number: 1,
   mode: "element" as const,
@@ -67,7 +67,7 @@ export const browserAnnotation = {
   body: "Give this button more breathing room.",
 };
 
-export const files: NonNullable<SessionMessageUser["files"]> = [
+const files: NonNullable<SessionMessageUser["files"]> = [
   {
     name: "composer-reference.png",
     mime: previewImageMime,
@@ -90,7 +90,7 @@ export const files: NonNullable<SessionMessageUser["files"]> = [
 ];
 
 export const attachmentMessage: SessionMessageUser = {
-  id: "attachment-proposal",
+  id: "attachment-message",
   type: "user",
   time: { created: 0 },
   ...createSessionPrompt({
@@ -152,15 +152,3 @@ export const inlineSkillMessage: SessionMessageUser = {
   text: "Use review to check the changes.",
   skills: [{ id: "review-skill", name: "review", mention: { start: 4, end: 10, text: "review" } }],
 };
-
-/** File objects for the real composer's controlled attachment input. */
-export function attachmentFiles(): File[] {
-  return files.map(
-    (file) =>
-      new File(
-        [Uint8Array.from(atob(file.data), (value) => value.charCodeAt(0))],
-        file.name ?? "attachment",
-        { type: file.mime },
-      ),
-  );
-}
