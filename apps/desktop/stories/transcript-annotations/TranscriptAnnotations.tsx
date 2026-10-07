@@ -265,6 +265,7 @@ function TranscriptAnnotationsContent(
           messages={currentMessages()}
           sessionStatus={running() ? "running" : "idle"}
           annotationRootRef={ui.attach}
+          onLayoutScroll={ui.handleLayoutScroll}
           onOpenAnnotation={ui.openSent}
         />
       </div>

@@ -71,6 +71,8 @@ export type TranscriptViewProps = {
   /** Filesystem root of the session; tool path parameters inside it are shown relative. */
   readonly directory?: string;
   readonly annotationRootRef?: (element: HTMLDivElement) => (() => void) | void;
+  /** Refresh anchored UI after a viewport layout adjustment, before its scroll event. */
+  readonly onLayoutScroll?: () => void;
   readonly onOpenAnnotation?: UserMessageProps["onOpenAnnotation"];
   readonly messages: readonly SessionMessageInfo[];
   /** Reader disclosure choices survive transcript remounts during navigation. */
@@ -88,6 +90,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   let detachAnnotations: (() => void) | void;
   let detachWheel: (() => void) | undefined;
   let viewport: HTMLDivElement | undefined;
+  let viewportHeight: number | undefined;
   let resumeFrame: number | undefined;
   let scrollIntentBaseline: number | undefined;
   let scrollIntentTimer: number | undefined;
@@ -156,10 +159,10 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     return element !== undefined && element.scrollHeight - element.clientHeight > 1;
   };
 
-  const nearBottom = () => {
+  const nearBottom = (height?: number) => {
     const element = viewport;
     if (element === undefined) return false;
-    return element.scrollHeight - element.clientHeight - element.scrollTop < 10;
+    return element.scrollHeight - (height ?? element.clientHeight) - element.scrollTop < 10;
   };
 
   // A deliberate downward gesture resumes immediately when there is no scroll
@@ -292,6 +295,27 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   // Created before the upstream hook's observer so a paused view can latch the
   // follow state before the hook's resize callback runs.
   const pauseObserver = new ResizeObserver(() => {
+    const element = viewport;
+    const height = element?.clientHeight;
+    // Composer growth changes the viewport, not necessarily the document the
+    // upstream hook observes. Preserve a bottom position before paint even
+    // when idle or annotating, without resuming paused content/materialization.
+    // Check the old height as well so simultaneous content growth cannot pull
+    // a reader away from their passage.
+    if (
+      element !== undefined &&
+      viewportHeight !== undefined &&
+      height !== viewportHeight &&
+      positioningSettled() &&
+      atLatest() &&
+      nearBottom(viewportHeight) &&
+      (readerPaused() || !userScrolled())
+    ) {
+      if (readerPaused()) element.scrollTop = element.scrollHeight;
+      else forceScrollToBottom();
+      props.onLayoutScroll?.();
+    }
+    viewportHeight = height;
     readGeometry(true);
     if (!readerPaused()) return;
     untrack(() => {
@@ -320,10 +344,11 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     if (canScroll() && nearBottom()) resumeAtBottom();
   };
 
-  const { contentRef, handleScroll, pause, resume, scrollRef, userScrolled } = createAutoScroll({
-    working: autoScrollActive,
-    onUserInteracted: relinquishPositioning,
-  });
+  const { contentRef, forceScrollToBottom, handleScroll, pause, resume, scrollRef, userScrolled } =
+    createAutoScroll({
+      working: autoScrollActive,
+      onUserInteracted: relinquishPositioning,
+    });
 
   // One operation owns a selection's claim on the transcript: it cancels
   // placement and scroll intent, holds materialization, and stops following.

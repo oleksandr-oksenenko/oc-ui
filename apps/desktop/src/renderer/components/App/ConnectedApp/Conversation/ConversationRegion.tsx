@@ -358,6 +358,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               readFileImage={readFileImage()}
               directory={props.workspace.selectedSession()?.location.directory}
               annotationRootRef={annotationUI.attach}
+              onLayoutScroll={annotationUI.handleLayoutScroll}
               onOpenAnnotation={annotationUI.openSent}
               messages={visibleTranscript()}
               activityOpen={activityOpen}

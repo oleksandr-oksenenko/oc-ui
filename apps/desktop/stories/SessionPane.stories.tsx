@@ -142,3 +142,56 @@ export const ReturnToLatestAboveComposer: Story = {
     await expect(buttonRect.bottom).toBeGreaterThan(view.getBoundingClientRect().bottom - 48);
   },
 };
+
+export const ComposerGrowth: Story = {
+  render: ReturnToLatestAboveComposer.render,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    const composer = canvasElement.querySelector<HTMLElement>(".composer")!;
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await waitFor(async () => {
+      await expect(canvasElement.querySelectorAll("[data-message-id]")).toHaveLength(
+        longTranscript.length,
+      );
+      await expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(2);
+    });
+    const bottom = view.getBoundingClientRect().bottom;
+    await userEvent.click(prompt);
+    await userEvent.keyboard("{Shift>}{Enter}{/Shift}More detail".repeat(5));
+    await waitFor(async () => {
+      await expect(view.getBoundingClientRect().bottom).toBeLessThan(bottom - 40);
+      await expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(2);
+      const latest = canvasElement.querySelector(".transcript-document > :last-child")!;
+      await expect(latest.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        composer.getBoundingClientRect().top,
+      );
+      await expect(canvas.queryByRole("button", { name: "Scroll to bottom" })).toBeNull();
+    });
+
+    await userEvent.clear(prompt);
+    await waitFor(async () => {
+      await expect(view.getBoundingClientRect().bottom).toBe(bottom);
+      await expect(view.scrollHeight - view.clientHeight - view.scrollTop).toBeLessThan(2);
+    });
+    view.scrollTop = 200;
+    view.dispatchEvent(new Event("scroll"));
+    await userEvent.click(prompt);
+    await userEvent.keyboard("{Shift>}{Enter}{/Shift}More detail".repeat(5));
+    await waitFor(async () => {
+      await expect(view.getBoundingClientRect().bottom).toBeLessThan(bottom - 40);
+      await expect(view.scrollTop).toBe(200);
+      await expect(canvas.getByRole("button", { name: "Scroll to bottom" })).toBeVisible();
+    });
+  },
+};
+
+export const ComposerGrowthNarrow: Story = {
+  ...ComposerGrowth,
+  globals: { viewport: { value: "narrow", isRotated: false } },
+};
+
+export const ComposerGrowthMobile: Story = {
+  ...ComposerGrowth,
+  globals: { viewport: { value: "mobile", isRotated: false } },
+};

@@ -36,7 +36,7 @@ type Interaction =
   | {
       readonly kind: "comments";
       readonly keys: readonly string[];
-      readonly anchor: DOMRect;
+      readonly anchor: Accessor<DOMRect>;
       readonly editingID?: string;
     };
 
@@ -50,7 +50,12 @@ export function createTranscriptAnnotations(input: {
   readonly enabled: Accessor<boolean>;
   readonly fallbackFocus?: () => HTMLElement | undefined;
 }) {
-  const [interaction, setInteraction] = createSignal<Interaction>({ kind: "closed" });
+  // Layout refreshes remeasure live anchors without replacing the identity that
+  // a pending digest uses to recognize its opening operation.
+  const [interaction, setInteraction] = createSignal<Interaction>(
+    { kind: "closed" },
+    { equals: false },
+  );
   let sessionID = input.sessionID();
   let opener: HTMLElement | undefined;
   let draftTrigger: HTMLButtonElement | undefined;
@@ -83,7 +88,7 @@ export function createTranscriptAnnotations(input: {
       case "comments":
         return {
           kind: "comments" as const,
-          anchor: current.anchor,
+          anchor: current.anchor(),
           editingID: current.editingID,
           comments: comments().filter((item) => current.keys.includes(item.key)),
         };
@@ -106,7 +111,7 @@ export function createTranscriptAnnotations(input: {
       if (current.kind === "comments") current.keys.forEach(removeEmpty);
     });
   }
-  function openComments(keys: readonly string[], target: HTMLElement, anchor: DOMRect) {
+  function openComments(keys: readonly string[], target: HTMLElement, anchor: Accessor<DOMRect>) {
     if (!keys.length) return;
     close();
     highlights.suppressPendingScroll();
@@ -239,7 +244,7 @@ export function createTranscriptAnnotations(input: {
       const current = interaction();
       return current.kind === "selected" || current.kind === "opening"
         ? {
-            anchor: current.selection.anchor,
+            anchor: current.selection.anchor(),
             pending: current.kind === "opening",
             error: current.error,
           }
@@ -262,6 +267,10 @@ export function createTranscriptAnnotations(input: {
       ),
     close,
     attach: highlights.attach,
+    handleLayoutScroll: () => {
+      highlights.suppressPendingScroll();
+      setInteraction(interaction());
+    },
     openCandidate,
     jumpTo: (key: string) => {
       const current = interaction();
@@ -307,7 +316,7 @@ export function createTranscriptAnnotations(input: {
           .filter((item) => !item.readonly)
           .map((item) => item.key),
         target,
-        target.getBoundingClientRect(),
+        () => target.getBoundingClientRect(),
       );
     },
     openSent: (messageID: string, annotationID: string, target: HTMLElement) =>
@@ -316,7 +325,7 @@ export function createTranscriptAnnotations(input: {
           .filter((item) => item.key === JSON.stringify([messageID, annotationID]))
           .map((item) => item.key),
         target,
-        target.getBoundingClientRect(),
+        () => target.getBoundingClientRect(),
       ),
   };
 }
