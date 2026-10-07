@@ -69,3 +69,14 @@ jobs:
           # Keep the configured ad-hoc signature on PR builds; no certificate is used.
           CSC_FOR_PULL_REQUEST: "true"
         run: pnpm test:acceptance:mac
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development, unknown
