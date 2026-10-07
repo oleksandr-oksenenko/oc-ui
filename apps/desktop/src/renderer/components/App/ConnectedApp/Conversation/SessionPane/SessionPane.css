@@ -55,10 +55,10 @@
 }
 
 .transcript-document {
-  width: min(100%, 820px);
+  width: min(100%, 868px);
   min-height: 100%;
   margin: 0 auto;
-  padding: 12px 24px 24px;
+  padding: 12px 8px 24px;
 }
 
 /* Keeps the return-to-latest control at the transcript's bottom edge, directly
@@ -759,10 +759,4 @@
 
 :is(.transcript-tool-header, .transcript-context-trigger):focus-visible {
   color: var(--oc-text-strong);
-}
-
-@media (width <= 600px) {
-  .transcript-document {
-    padding: 12px 16px 24px;
-  }
 }
