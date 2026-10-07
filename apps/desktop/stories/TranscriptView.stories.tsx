@@ -56,7 +56,15 @@ const renderConstrainedTranscript = (args: TranscriptViewProps) => (
 
 // A narrow column stresses metadata and image rows at their tightest.
 const renderNarrowTranscript = (args: TranscriptViewProps) => (
-  <div style={{ width: "260px", height: "100vh", background: "var(--oc-surface-canvas)" }}>
+  <div
+    style={{
+      width: "260px",
+      height: "100vh",
+      display: "grid",
+      "grid-template-rows": "minmax(0, 1fr)",
+      background: "var(--oc-surface-canvas)",
+    }}
+  >
     <TranscriptView {...args} />
   </div>
 );
