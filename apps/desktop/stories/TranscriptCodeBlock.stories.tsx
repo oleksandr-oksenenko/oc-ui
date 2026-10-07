@@ -52,8 +52,10 @@ export const WorkerPool: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const code = () => canvasElement.querySelector("pre code");
+    // A cold worker loads Shiki and its grammar during the production ten-second
+    // response budget. The subsequent cached theme/update checks stay faster.
     await waitFor(() => expect(code()?.querySelector("span[style]")).not.toBeNull(), {
-      timeout: 5000,
+      timeout: 10_000,
     });
     await expect(code()?.textContent).toBe('const message = "Hello";\n\nconsole.log(message);\n');
     const color = code()?.querySelector<HTMLElement>("span")?.style.color;
