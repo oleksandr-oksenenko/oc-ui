@@ -184,7 +184,8 @@ beforeAll(async () => {
   page.on("pageerror", (error) => errors.push(error.message));
   page.setDefaultTimeout(30_000);
   await mkdir(artifacts, { recursive: true });
-});
+  // Cold production and pinned-server builds share the machine with other test projects.
+}, 180_000);
 
 afterAll(async () => {
   const cleanup = await Promise.allSettled([
