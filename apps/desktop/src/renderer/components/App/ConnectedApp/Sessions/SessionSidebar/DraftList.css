@@ -3,6 +3,10 @@
   padding: 0 5px 12px;
 }
 
+.session-drafts h2 {
+  padding: 8px 7px 7px;
+}
+
 .session-drafts-count {
   margin-left: 4px;
   color: var(--oc-text-faint);

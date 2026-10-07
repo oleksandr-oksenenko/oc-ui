@@ -486,6 +486,40 @@ describe.sequential("production browser app", () => {
     await page.setViewportSize({ width: 1280, height: 860 });
   });
 
+  it("collapses time groups without losing selection and reveals filtered sessions", async () => {
+    await ensureConnected();
+    const session = await api.session.create({
+      title: "Time group disclosure",
+      location: { directory: await realpath(project) },
+    });
+    try {
+      await selectSession(session.title);
+      const sidebar = page.getByRole("complementary", { name: "Sessions", exact: true });
+      const today = () => sidebar.getByRole("button", { name: "Today", exact: true });
+      const row = () => sidebar.getByRole("button", { name: /^Time group disclosure,/u });
+      await today().click();
+      await expect.poll(() => today().getAttribute("aria-expanded")).toBe("false");
+      await row().waitFor({ state: "hidden" });
+      await page.getByRole("button", { name: "Hide sessions", exact: true }).click();
+      await page.getByRole("button", { name: "Show sessions", exact: true }).click();
+      expect(await today().getAttribute("aria-expanded")).toBe("false");
+
+      const filter = page.getByLabel("Filter sessions", { exact: true });
+      await filter.fill(session.title);
+      await row().waitFor();
+      expect(await row().getAttribute("aria-current")).toBe("page");
+      expect(await today().getAttribute("aria-expanded")).toBe("true");
+      await filter.fill("");
+      await row().waitFor({ state: "hidden" });
+      await today().press("Enter");
+      await row().waitFor();
+      expect(await row().getAttribute("aria-current")).toBe("page");
+    } finally {
+      await page.getByLabel("Filter sessions", { exact: true }).fill("");
+      await api.session.remove({ sessionID: session.id });
+    }
+  });
+
   it.each(["global", "session"])(
     "opens %s request links through the host boundary without answering the request",
     async (scope) => {

@@ -1,7 +1,8 @@
 import type { SessionAttention } from "../createSessionAttention.ts";
 import type { SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
-import { For, Show, createMemo } from "solid-js";
+import { Collapsible } from "@opencode/ui/collapsible";
+import { For, Show, createMemo, createSignal } from "solid-js";
 
 import { rollupSessionAttention, type SessionAttentionState } from "../session-attention-rollup.ts";
 import { projectSessionTree, type SessionTreeNode } from "../session-tree-projection.ts";
@@ -26,6 +27,7 @@ export type SessionTreeProps = {
 };
 
 export function SessionTree(props: SessionTreeProps) {
+  const [collapsedGroups, setCollapsedGroups] = createSignal<readonly string[]>([]);
   const isExpanded = (id: string) => props.expandedIDs.includes(id);
   const query = createMemo(() => props.query?.trim().toLowerCase() ?? "");
   const projection = createMemo(() => projectSessionTree(props.sessions, query(), props.now));
@@ -90,8 +92,30 @@ export function SessionTree(props: SessionTreeProps) {
               class="shell-session-group"
               aria-labelledby={`shell-session-group-${group.id}`}
             >
-              <h2 id={`shell-session-group-${group.id}`}>{group.label}</h2>
-              <div class="shell-session-group-tree">{renderSessions(group.roots)}</div>
+              <Collapsible
+                variant="ghost"
+                open={query().length > 0 || !collapsedGroups().includes(group.id)}
+                onOpenChange={(open) => {
+                  if (query().length > 0) return;
+                  setCollapsedGroups((current) =>
+                    open ? current.filter((id) => id !== group.id) : [...current, group.id],
+                  );
+                }}
+              >
+                <h2 id={`shell-session-group-${group.id}`}>
+                  <Collapsible.Trigger
+                    class="shell-session-group-toggle oc-focus-inset"
+                    type="button"
+                    disabled={query().length > 0}
+                  >
+                    <span>{group.label}</span>
+                    <Collapsible.Arrow aria-hidden="true" />
+                  </Collapsible.Trigger>
+                </h2>
+                <Collapsible.Content class="shell-session-group-tree">
+                  {renderSessions(group.roots)}
+                </Collapsible.Content>
+              </Collapsible>
             </section>
           )}
         </For>

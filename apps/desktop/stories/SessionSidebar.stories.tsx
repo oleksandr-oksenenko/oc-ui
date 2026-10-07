@@ -186,6 +186,51 @@ export const FlatProductionList = {
   render: () => interactiveSidebar(flatSessions, { runningIDs: ["two"] }),
 };
 
+export const CollapsibleTimeGroups = {
+  render: () =>
+    interactiveSidebar(hierarchySessions, {
+      selectedID: "level-4",
+      expandedIDs: ["level-1", "level-2", "level-3"],
+    }),
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    const today = () => canvas.getByRole("button", { name: "Today" });
+    const earlier = () => canvas.getByRole("button", { name: "Earlier" });
+    const selected = () => canvas.getByRole("button", { name: "Review the implementation, Idle" });
+    await expect(today()).toHaveAttribute("aria-expanded", "true");
+    await expect(earlier()).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(earlier());
+    await expect(earlier()).toHaveAttribute("aria-expanded", "false");
+    await expect(canvas.queryByRole("button", { name: "Earlier investigation, Idle" })).toBeNull();
+    await expect(selected()).toHaveAttribute("aria-current", "page");
+
+    today().focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(today()).toHaveFocus();
+    await expect(today()).toHaveAttribute("aria-expanded", "false");
+    await expect(canvas.queryByRole("button", { name: "Workspace migration, Idle" })).toBeNull();
+    await userEvent.keyboard(" ");
+    await expect(today()).toHaveAttribute("aria-expanded", "true");
+    await expect(selected()).toHaveAttribute("aria-current", "page");
+    await expect(
+      canvas.getByRole("button", { name: "Collapse Implement the plan" }),
+    ).toHaveAttribute("aria-expanded", "true");
+
+    const filter = canvas.getByRole("textbox", { name: "Filter sessions" });
+    await userEvent.type(filter, "Earlier investigation");
+    await expect(earlier()).toHaveAttribute("aria-expanded", "true");
+    await expect(canvas.getByRole("button", { name: "Earlier investigation, Idle" })).toBeVisible();
+    await userEvent.clear(filter);
+    await expect(earlier()).toHaveAttribute("aria-expanded", "false");
+    await expect(selected()).toHaveAttribute("aria-current", "page");
+  },
+};
+
+export const CollapsibleTimeGroupsDark = {
+  ...CollapsibleTimeGroups,
+  globals: { theme: "dark" },
+};
+
 export const FourLevelHierarchy = {
   render: () => interactiveSidebar(hierarchySessions, { runningIDs: ["level-3"] }),
 };
