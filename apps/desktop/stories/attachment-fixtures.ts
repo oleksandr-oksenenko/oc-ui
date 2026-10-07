@@ -35,7 +35,7 @@ export const annotations = [
   },
 ];
 
-const browserAnnotation = {
+export const browserAnnotation = {
   id: "browser-annotation-1",
   number: 1,
   mode: "element" as const,
