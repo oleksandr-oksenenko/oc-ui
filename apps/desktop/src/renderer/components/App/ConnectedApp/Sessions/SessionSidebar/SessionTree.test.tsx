@@ -431,6 +431,68 @@ describe("SessionTree", () => {
     dispose();
   });
 
+  it.each(["title", "delete"])(
+    "keeps an unrelated focused %s control mounted across running status changes",
+    (control) => {
+      const [running, setRunning] = createSignal(false);
+      const { host, dispose } = mount(() => (
+        <SessionSidebar
+          {...sidebarProps({
+            now: fixedNow,
+            sessions: [
+              session("idle", "Idle today", undefined, fixedNow),
+              session("other", "Other today", undefined, fixedNow),
+              session("old", "Old session"),
+            ],
+          })}
+          statusForSession={(id) => (id !== "idle" && running() ? "running" : "idle")}
+        />
+      ));
+      const selector =
+        control === "title"
+          ? '[aria-label="Idle today, Idle"]'
+          : '[aria-label="Delete Idle today"]';
+      const button = host.querySelector<HTMLButtonElement>(selector)!;
+      const today = host.querySelector("#shell-session-group-today")!.parentElement;
+      button.focus();
+      expect(document.activeElement).toBe(button);
+
+      for (const status of [true, false]) {
+        setRunning(status);
+        expect(host.querySelector("#shell-session-group-today")!.parentElement).toBe(today);
+        expect(host.querySelector(selector)).toBe(button);
+        expect(button.isConnected).toBe(true);
+        expect(document.activeElement).toBe(button);
+      }
+      dispose();
+    },
+  );
+
+  it("updates retained rows and child lists when session data changes", () => {
+    const [sessions, setSessions] = createSignal([
+      session("root", "Original", undefined, fixedNow),
+      session("child", "Child", "root", fixedNow),
+    ]);
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({ now: fixedNow, expandedIDs: ["root"] })}
+        sessions={sessions()}
+      />
+    ));
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Original, Idle"]')!;
+    setSessions([
+      session("root", "Renamed", undefined, fixedNow),
+      session("child", "Renamed child", "root", fixedNow),
+    ]);
+    expect(host.querySelector('[aria-label="Renamed, Idle"]')).toBe(button);
+    expect(host.querySelector('[aria-label="Renamed child, Idle"]')).not.toBeNull();
+    setSessions([session("root", "Renamed", undefined, fixedNow)]);
+    expect(host.querySelector('[aria-label="Renamed, Idle"]')).toBe(button);
+    expect(host.querySelector(".shell-session-children")).toBeNull();
+    expect(host.querySelector(".shell-session-disclosure")).toBeNull();
+    dispose();
+  });
+
   it("shows runtime status without an expansion control for leaf titles", () => {
     const host = document.createElement("div");
     const dispose = render(

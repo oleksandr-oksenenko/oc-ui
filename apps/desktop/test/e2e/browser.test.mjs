@@ -1095,11 +1095,27 @@ describe.sequential("production browser app", () => {
       await expect.poll(async () => (await todayTitles())[0]).toBe("Browser fixture one");
       await selectSession("Browser fixture one");
       await expect.poll(async () => (await todayTitles())[0]).toBe("Browser fixture one");
+      const idleDelete = page.getByRole("button", {
+        name: `Delete ${newerIdle.title}`,
+        exact: true,
+      });
+      await idleDelete.focus();
+      const focusedControl = await idleDelete.elementHandle();
+      try {
+        // Dispatch the Stop action without moving focus away from the unrelated row.
+        await page.getByRole("button", { name: "Stop", exact: true }).dispatchEvent("click");
+        await idle();
+        await expect
+          .poll(() =>
+            focusedControl.evaluate((node) => node.isConnected && document.activeElement === node),
+          )
+          .toBe(true);
+      } finally {
+        await focusedControl.dispose();
+      }
     } finally {
       await api.session.remove({ sessionID: newerIdle.id });
     }
-    await page.getByRole("button", { name: "Stop", exact: true }).click();
-    await idle();
     await expect
       .poll(async () => (await (await fetch(`${provider.url}/_state`)).json()).cancelledStreams)
       .toBeGreaterThan(previousCancelled);
