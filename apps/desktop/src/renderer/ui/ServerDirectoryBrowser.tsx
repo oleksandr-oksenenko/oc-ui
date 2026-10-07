@@ -23,11 +23,11 @@ export type ServerDirectoryBrowserProps = {
   readonly validationError?: string;
   readonly onBrowserReady?: (element: HTMLElement) => void;
   readonly onLoadingChange?: (loading: boolean) => void;
-  readonly onDirectoryChange: (location: LocationRef) => void;
+  readonly onDirectoryChange: (location: LocationRef | undefined) => void;
 };
 
 type DirectoryState = {
-  readonly location: LocationRef;
+  readonly location?: LocationRef;
   readonly requestedLocation: LocationRef;
   readonly directories: readonly string[];
   readonly loading: boolean;
@@ -39,20 +39,18 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
   const initialLocation = createMemo(() => props.initialLocation);
   const { effects } = props;
   const state = Atom.make<DirectoryState>({
-    location: props.initialLocation,
     requestedLocation: props.initialLocation,
     directories: [],
     loading: true,
   });
   onCleanup(effects.registry.mount(state));
   const snapshot = useAtomValue(() => state);
-  const location = () => snapshot().location;
+  const location = () => snapshot().requestedLocation;
   const directories = () => snapshot().directories;
   const loading = () => snapshot().loading;
   const error = () => snapshot().error;
   let browserElement: HTMLElement | undefined;
   let entriesList: HTMLUListElement | undefined;
-  let hasResolvedDirectory = false;
   let requestLocation = props.requestLocation;
   const request = effects.latest();
   onCleanup(request.cancel);
@@ -60,7 +58,11 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
   const focusStableControl = (): void => {
     queueMicrotask(() => {
       const target =
-        browserElement?.querySelector<HTMLElement>("button:not([disabled])") ?? browserElement;
+        browserElement?.querySelector<HTMLElement>(
+          ".server-directory-listing-error button:not([disabled])",
+        ) ??
+        browserElement?.querySelector<HTMLElement>("button:not([disabled])") ??
+        browserElement;
       target?.focus();
     });
   };
@@ -86,19 +88,19 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
         workspaceID === undefined
           ? { directory: requestedLocation.directory }
           : { directory: requestedLocation.directory, workspaceID };
+      const hadResolvedDirectory = effects.registry.get(state).location !== undefined;
       effects.registry.set(state, {
         location: resolvedLocation,
-        requestedLocation,
+        requestedLocation: resolvedLocation,
         directories: response.directories,
         loading: false,
       });
       props.onLoadingChange?.(false);
       if (entriesList) entriesList.scrollTop = 0;
       props.onDirectoryChange(resolvedLocation);
-      if (hasResolvedDirectory || browserElement?.contains(document.activeElement)) {
+      if (hadResolvedDirectory || browserElement?.contains(document.activeElement)) {
         focusStableControl();
       }
-      hasResolvedDirectory = true;
     },
     Effect.catchTag("WorkspaceRequestError", ({ cause }) =>
       Effect.sync(() => {
@@ -108,6 +110,7 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
           error: errorMessage(cause),
         }));
         props.onLoadingChange?.(false);
+        props.onDirectoryChange(undefined);
         focusStableControl();
       }),
     ),
@@ -147,7 +150,40 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
         aria-invalid={props.validationError ? "true" : undefined}
       >
         <header class="server-directory-browser-header">
+          <Button
+            type="button"
+            size="small"
+            variant="ghost-muted"
+            disabled={navigationDisabled() || parentDirectory() === location().directory}
+            aria-describedby={props.validationError ? validationErrorId : undefined}
+            aria-label="Go to parent directory"
+            onClick={() => loadDirectory({ ...location(), directory: parentDirectory() })}
+          >
+            <Icon name="folder" />
+            <span>..</span>
+          </Button>
           <span class="server-directory-browser-path">{location().directory}</span>
+          <Show when={loading() || error()}>
+            <span class="server-directory-browser-status">
+              {loading() ? "Listing…" : "Not listed"}
+            </span>
+          </Show>
+          <Show when={error() ? snapshot().location : undefined}>
+            {(previousLocation) => (
+              <Button
+                type="button"
+                size="small"
+                variant="ghost-muted"
+                disabled={navigationDisabled()}
+                aria-label="Back to previous successfully listed directory"
+                title={previousLocation().directory}
+                onClick={() => loadDirectory(previousLocation())}
+              >
+                <Icon name="arrow-left" />
+                <span>Back</span>
+              </Button>
+            )}
+          </Show>
         </header>
 
         <Show when={loading()}>
@@ -160,7 +196,9 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
         <Show when={!loading() && error()}>
           {(listingError) => (
             <div class="server-directory-state server-directory-listing-error" role="alert">
-              {listingError()}
+              <span>
+                Could not list {location().directory}. {listingError()}
+              </span>
               <Button
                 type="button"
                 size="small"
@@ -182,20 +220,6 @@ export function ServerDirectoryBrowser(props: ServerDirectoryBrowserProps) {
             class="server-directory-entries oc-scrollable"
             aria-label="Directories"
           >
-            <li>
-              <Button
-                type="button"
-                size="small"
-                variant="ghost-muted"
-                disabled={navigationDisabled() || parentDirectory() === location().directory}
-                aria-describedby={props.validationError ? validationErrorId : undefined}
-                aria-label="Go to parent directory"
-                onClick={() => loadDirectory({ ...location(), directory: parentDirectory() })}
-              >
-                <Icon name="folder" />
-                <span>..</span>
-              </Button>
-            </li>
             <For each={directories()}>
               {(directoryName) => (
                 <li>

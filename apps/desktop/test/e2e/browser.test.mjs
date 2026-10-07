@@ -494,10 +494,67 @@ describe.sequential("production browser app", () => {
     await page.getByRole("button", { name: "Add project…", exact: true }).click();
     const directory = page.locator(".server-directory-browser-path");
     await expect.poll(() => directory.textContent()).toBe(await realpath(project));
+    const failedTarget = join(await realpath(project), "folder-00");
+    const listingRoute = /\/api\/fs\/list(?:\?|$)/u;
+    const failedListings = [];
+    await page.route(listingRoute, async (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get("path") !== failedTarget) return route.continue();
+      failedListings.push({
+        directory: url.searchParams.get("location[directory]"),
+        workspace: url.searchParams.get("location[workspace]"),
+      });
+      return route.abort("failed");
+    });
+    try {
+      await page.getByRole("button", { name: "Browse directory folder-00/", exact: true }).click();
+      await page.getByText("Not listed", { exact: true }).waitFor();
+      expect(await directory.textContent()).toBe(failedTarget);
+      expect(await page.getByRole("alert").textContent()).toContain(
+        `Could not list ${failedTarget}.`,
+      );
+      expect(
+        await page.getByRole("button", { name: "Add project", exact: true }).isDisabled(),
+      ).toBe(true);
+      const retry = page.getByRole("button", { name: "Retry", exact: true });
+      await expect.poll(() => retry.evaluate((node) => node === document.activeElement)).toBe(true);
+      await page.keyboard.press("Enter");
+      await expect.poll(() => failedListings.length).toBe(2);
+      await page.getByText("Not listed", { exact: true }).waitFor();
+      expect(failedListings[0].directory).toBe(await realpath(project));
+      expect(failedListings[1]).toEqual(failedListings[0]);
+      const restored = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === "/api/fs/list" &&
+          new URL(response.url()).searchParams.get("path") !== failedTarget &&
+          response.request().method() === "GET",
+      );
+      await page
+        .getByRole("button", { name: "Back to previous successfully listed directory" })
+        .click();
+      const restoredResponse = await restored;
+      expect(restoredResponse.ok()).toBe(true);
+      const restoredUrl = new URL(restoredResponse.url());
+      expect({
+        directory: restoredUrl.searchParams.get("location[directory]"),
+        workspace: restoredUrl.searchParams.get("location[workspace]"),
+      }).toEqual(failedListings[0]);
+      await page
+        .getByRole("button", { name: "Browse directory folder-00/", exact: true })
+        .waitFor();
+      expect(await directory.textContent()).toBe(await realpath(project));
+      expect(await page.getByRole("alert").count()).toBe(0);
+      expect(await page.getByRole("button", { name: "Add project", exact: true }).isEnabled()).toBe(
+        true,
+      );
+    } finally {
+      await page.unroute(listingRoute);
+    }
     await page.getByRole("button", { name: "Browse directory folder-00/", exact: true }).click();
     await page.getByText("No child directories.", { exact: true }).waitFor();
     await page.getByLabel("Go to parent directory").click();
     await expect.poll(() => directory.textContent()).toBe(await realpath(project));
+    await page.getByRole("button", { name: "Browse directory folder-00/", exact: true }).waitFor();
     await page.setViewportSize({ width: 430, height: 600 });
     await page.locator('[aria-label="Directories"]').evaluate((node) => {
       node.scrollTop = node.scrollHeight;
