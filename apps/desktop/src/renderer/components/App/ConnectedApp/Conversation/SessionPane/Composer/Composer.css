@@ -226,6 +226,13 @@
   background: var(--oc-surface-control);
 }
 
+.composer-model-list.selection-list [data-slot="list-header"] {
+  color: var(--oc-text-strong);
+  font-size: var(--oc-type-tab-size);
+  font-weight: var(--oc-type-tab-weight);
+  line-height: var(--oc-type-tab-line-height);
+}
+
 .composer-picker > [data-component="select-v2-root"] {
   min-width: 0;
   max-width: 100%;
