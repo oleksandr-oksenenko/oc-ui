@@ -8,6 +8,7 @@ import { browserIpcResult } from "../src/main/browser/ipc.ts";
 import { createAppQuitHandler } from "../src/main/shutdown.ts";
 import { createProfile } from "./e2e/profile.mjs";
 import { startServer } from "./e2e/browser-fixture.mjs";
+import { prepareProjectFixture } from "./e2e/project-fixture.ts";
 
 // The real server, SDK and attachment lifetime run here; native Electron resources are substitutes.
 const nativeBrowser = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ vi.mock("../src/main/browser/network.ts", () => ({
 
 it("settles browser attachments before stopping OpenCode on Quit without a transport error", async () => {
   const profile = await createProfile("ocui-browser-shutdown-");
+  await prepareProjectFixture(profile.paths.app);
   const server = await startServer(profile, profile.paths.app, "https://runner.example");
   const logs = [];
   const runtime = ManagedRuntime.make(

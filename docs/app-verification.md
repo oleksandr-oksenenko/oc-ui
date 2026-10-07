@@ -70,7 +70,8 @@ when you intentionally need a separately managed server or project.
 
 ## Run checks without repeated supervision
 
-Use a focused existing project while fixing a failure, for example
+Use `pnpm test:local` for package and desktop unit tests during local development;
+it does not require Chromium. Use a focused existing project while fixing a failure, for example
 `pnpm --filter desktop exec vp test run --project=unit <test-file>` or
 `pnpm --filter desktop exec vp test run --project=web`. Run the required root gates
 on the completed candidate. Preserve full logs locally and return a bounded tail
@@ -86,6 +87,11 @@ printf '\nVerification exit: %s; full log: %s\n' "$verification_status" "$verifi
 ```
 
 If `check` fails, this sequence does not run `test`. Report that distinction.
+GitHub CI runs all test projects and browser/Storybook builds on Linux x64 and
+macOS arm64 for every pull request and push to `main`. The macOS job also builds
+the desktop app and runs `pnpm test:acceptance:mac`; native staging and packaging
+currently require macOS arm64. The local subset does not replace the completion
+gates below.
 Use a 30–60 second completion-aware tool wait and retain its process/session ID
 while a command runs. Avoid one-second polling or restarting a quiet command.
 Read targeted failure lines from the full log if the tail is insufficient. Once

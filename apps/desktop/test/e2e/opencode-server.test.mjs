@@ -11,6 +11,7 @@ import { ensureOpenCodeServerBundle } from "../../scripts/opencode-server-build.
 import { OPENCODE_VERSION } from "../../src/shared/desktop-api.ts";
 import { startServer } from "./browser-fixture.mjs";
 import { createProfile } from "./profile.mjs";
+import { prepareProjectFixture } from "./project-fixture.ts";
 
 const origin = "https://runner.example";
 const startingLine = /^server starting$/u;
@@ -101,6 +102,8 @@ describe.sequential("standalone OpenCode server runner", () => {
 
   beforeAll(async () => {
     profile = await createProfile("ocui-server-runner-");
+    // Keep location discovery inside an owned Git project on every platform.
+    await prepareProjectFixture(profile.paths.app);
     serverScript = await ensureOpenCodeServerBundle();
   });
 

@@ -29,7 +29,8 @@
     "test:acceptance:mac": "pnpm run package:mac && node test/e2e/run-packaged.mjs startup",
     "test:acceptance:chat:mac": "pnpm run package:mac && node test/e2e/run-packaged.mjs chat",
     "test:acceptance:mac:wdio": "wdio run wdio.conf.ts",
-    "test": "vp test run --passWithNoTests"
+    "test": "vp test run --passWithNoTests",
+    "test:unit": "vp test run --project=unit"
   },
   "dependencies": {
     "@effect/atom-solid": "catalog:",
