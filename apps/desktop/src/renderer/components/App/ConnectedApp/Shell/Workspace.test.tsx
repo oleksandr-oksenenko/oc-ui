@@ -7,12 +7,18 @@ import { Workspace } from "./Workspace.tsx";
 
 function pointerEvent(
   type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
-  options: { readonly pointerID: number; readonly clientX: number; readonly button?: number },
+  options: {
+    readonly pointerID: number;
+    readonly clientX?: number;
+    readonly clientY?: number;
+    readonly button?: number;
+  },
 ): MouseEvent {
   const event = new MouseEvent(type, {
     bubbles: true,
     button: options.button ?? 0,
     clientX: options.clientX,
+    clientY: options.clientY,
   });
   Object.defineProperty(event, "pointerId", { value: options.pointerID });
   return event;
@@ -22,7 +28,7 @@ describe("Workspace", () => {
   it("resolves each live content slot once", () => {
     const host = document.createElement("div");
     const [version, setVersion] = createSignal("first");
-    const resolutions = { sidebar: 0, main: 0, context: 0 };
+    const resolutions = { sidebar: 0, main: 0, context: 0, bottom: 0 };
     const slot = (name: keyof typeof resolutions) => {
       resolutions[name] += 1;
       return <div>{version()}</div>;
@@ -35,15 +41,16 @@ describe("Workspace", () => {
           sidebar={slot("sidebar")}
           main={slot("main")}
           context={slot("context")}
+          bottom={slot("bottom")}
         />
       ),
       host,
     );
 
-    expect(resolutions).toEqual({ sidebar: 1, main: 1, context: 1 });
+    expect(resolutions).toEqual({ sidebar: 1, main: 1, context: 1, bottom: 1 });
     setVersion("second");
-    expect(host.textContent).toBe("secondsecondsecond");
-    expect(resolutions).toEqual({ sidebar: 1, main: 1, context: 1 });
+    expect(host.textContent).toBe("secondsecondsecondsecond");
+    expect(resolutions).toEqual({ sidebar: 1, main: 1, context: 1, bottom: 1 });
 
     dispose();
   });
@@ -229,5 +236,74 @@ describe("Workspace", () => {
     expect(host.querySelector(".shell-right-panel [autofocus]")).toBe(document.activeElement);
 
     dispose();
+  });
+
+  it("retains bottom content across hide/show and makes it inert behind mobile overlays", () => {
+    const [open, setOpen] = createSignal(true);
+    const [sidebarOpen, setSidebarOpen] = createSignal(false);
+    const { host, dispose } = mount(() => (
+      <Workspace
+        mobile
+        leftSidebarOpen={sidebarOpen()}
+        rightPanelOpen={false}
+        sidebar={<button>Sessions</button>}
+        main={<div>Chat</div>}
+        bottomOpen={open()}
+        bottom={<input aria-label="Terminal command" />}
+      />
+    ));
+    const bottom = host.querySelector<HTMLElement>(".shell-bottom-panel")!;
+    const input = bottom.querySelector("input")!;
+    input.value = "pnpm dev";
+    setOpen(false);
+    expect(bottom.hidden).toBe(true);
+    expect(bottom.inert).toBe(true);
+    expect(host.querySelector(".shell-bottom-resize-handle")).toBeNull();
+    setOpen(true);
+    expect(bottom.hidden).toBe(false);
+    expect(bottom.inert).toBe(false);
+    expect(bottom.querySelector("input")).toBe(input);
+    expect(input.value).toBe("pnpm dev");
+    setSidebarOpen(true);
+    expect(bottom.inert).toBe(true);
+    expect(bottom.getAttribute("aria-hidden")).toBe("true");
+    expect(host.querySelector(".shell-bottom-resize-handle")).toBeNull();
+    dispose();
+  });
+
+  it("resizes the bottom with keyboard and pointer while preserving minimum chat height", () => {
+    const { host, dispose } = mount(() => (
+      <Workspace
+        leftSidebarOpen={false}
+        rightPanelOpen={false}
+        main={<div>Chat</div>}
+        bottomOpen
+        bottom={<div>Terminal</div>}
+      />
+    ));
+    const workspace = host.querySelector<HTMLElement>(".shell-workspace")!;
+    const bottom = host.querySelector<HTMLElement>(".shell-bottom-panel")!;
+    const handle = host.querySelector<HTMLElement>(".shell-bottom-resize-handle")!;
+    Object.defineProperty(workspace, "clientHeight", { configurable: true, value: 500 });
+    expect(handle.getAttribute("aria-orientation")).toBe("horizontal");
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    expect(handle.getAttribute("aria-valuenow")).toBe("296");
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(handle.getAttribute("aria-valuenow")).toBe("280");
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    expect(handle.getAttribute("aria-valuenow")).toBe("340");
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    expect(handle.getAttribute("aria-valuenow")).toBe("120");
+    Object.defineProperty(bottom, "offsetHeight", { configurable: true, value: 200 });
+    handle.dispatchEvent(pointerEvent("pointerdown", { pointerID: 1, clientY: 300 }));
+    window.dispatchEvent(pointerEvent("pointermove", { pointerID: 2, clientY: 290 }));
+    expect(handle.getAttribute("aria-valuenow")).toBe("120");
+    window.dispatchEvent(pointerEvent("pointermove", { pointerID: 1, clientY: 250 }));
+    expect(workspace.style.getPropertyValue("--shell-bottom-panel-height")).toBe("250px");
+    window.dispatchEvent(pointerEvent("pointercancel", { pointerID: 1, clientY: 250 }));
+    expect(workspace.classList.contains("resizing")).toBe(false);
+    dispose();
+    window.dispatchEvent(pointerEvent("pointermove", { pointerID: 1, clientY: 200 }));
+    expect(workspace.style.getPropertyValue("--shell-bottom-panel-height")).toBe("250px");
   });
 });

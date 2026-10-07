@@ -6,12 +6,18 @@ import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import type { ComposerReview } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
+import type { ComposerProps } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import {
   composerAgentSelection,
   composerModelSelection,
   composerPasteProps,
 } from "./composer-fixtures.ts";
 import { previewImageFile } from "./image-fixtures.ts";
+import {
+  BrowserAnnotationComposerFixture,
+  createBrowserAnnotationPrompt,
+} from "./BrowserAnnotationComposerFixture.tsx";
+import { readBrowserAnnotationMetadata } from "../src/renderer/opencode/browser-annotation-metadata.ts";
 
 const meta = {
   title: "Composer/Composer",
@@ -103,6 +109,9 @@ export const Idle: Story = {
       const modelPicker = within(modelDialog);
       const search = await modelPicker.findByPlaceholderText("Search models");
       await expect(search).toHaveFocus();
+      const current = modelPicker.getByRole("button", { name: "GPT-5" });
+      await expect(current).toHaveAttribute("data-selected", "true");
+      await expect(current.querySelector('[data-slot="list-item-selected-icon"]')).not.toBeNull();
 
       await userEvent.type(search, "mini");
       await expect(modelPicker.getByText("GPT-5 Mini", { exact: true })).toBeVisible();
@@ -121,11 +130,27 @@ export const Idle: Story = {
       const modelList = modelDialog.querySelector<HTMLElement>('[data-component="list"]');
       if (!modelList) throw new Error("Model picker list did not render");
       await expect(within(modelList).getByText("GPT-5", { exact: true })).toBeVisible();
-      await userEvent.keyboard("{ArrowDown}{Enter}");
+      await userEvent.keyboard("{ArrowDown}");
+      await expect(modelPicker.getByRole("button", { name: "GPT-5 Mini" })).toHaveAttribute(
+        "data-active",
+        "true",
+      );
+      await expect(modelPicker.getByRole("button", { name: "GPT-5" })).toHaveAttribute(
+        "data-selected",
+        "true",
+      );
+      await userEvent.keyboard("{Enter}");
       await expect(idleOnSelectModel).toHaveBeenCalledWith("openai/gpt-5-mini");
       await expect(canvas.getByRole("button", { name: "Model: GPT-5 Mini" })).toHaveTextContent(
         "GPT-5 Mini",
       );
+      await userEvent.click(canvas.getByRole("button", { name: "Model: GPT-5 Mini" }));
+      const reopened = within(await screen.findByRole("dialog", { name: "Models" }));
+      await expect(reopened.getByRole("button", { name: "GPT-5 Mini" })).toHaveAttribute(
+        "data-selected",
+        "true",
+      );
+      await userEvent.keyboard("{Escape}");
     });
   },
 };
@@ -167,6 +192,72 @@ export const PastedFiles: Story = {
     await expect(canvas.queryByRole("list", { name: "Images and files" })).toBeNull();
     await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
   },
+};
+
+export const BrowserAnnotations: Story = {
+  loaders: [() => ({ browserPrompt: createBrowserAnnotationPrompt() })],
+  render: (_args, { loaded }) => <BrowserAnnotationComposerFixture prompt={loaded.browserPrompt} />,
+  play: async ({ canvasElement, loaded, step }) => {
+    const browserPrompt: ReturnType<typeof createBrowserAnnotationPrompt> = loaded.browserPrompt;
+    const canvas = within(canvasElement);
+    const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    await expect(prompt).toHaveTextContent("");
+    await expect(canvas.getByRole("button", { name: "Send" })).toBeEnabled();
+    await expect(canvas.queryByRole("button", { name: "Enlarge Browser annotation 1" })).toBeNull();
+    await step("Inspect a batch with keyboard and return focus after Escape", async () => {
+      const pill = canvas.getByRole("button", { name: "Browser · 2" });
+      pill.focus();
+      await userEvent.keyboard("{Enter}");
+      await expect(await screen.findByText("3. Give heading 3 more room")).toBeVisible();
+      await userEvent.keyboard("{Escape}");
+      await expect(pill).toHaveFocus();
+    });
+    await step("Remove an individual annotation and its screenshot", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Browser · 2" }));
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Remove browser annotation 1" }),
+      );
+      await expect(canvas.queryByRole("button", { name: "Browser · 2" })).toBeNull();
+      await expect(canvas.getAllByRole("button", { name: "Browser · 1" })).toHaveLength(2);
+      await expect(prompt).toHaveFocus();
+      await userEvent.click(canvas.getAllByRole("button", { name: "Browser · 1" })[0]!);
+      await expect(await screen.findByText("3. Give heading 3 more room")).toBeVisible();
+      await expect(screen.queryByText("1. Give heading 1 more room")).toBeNull();
+      await userEvent.keyboard("{Escape}");
+    });
+    await step("Remove groups independently and send ordinary typed instruction", async () => {
+      await userEvent.type(prompt, "Please fix the spacing.");
+      await userEvent.click(
+        canvas.getAllByRole("button", { name: "Remove browser batch of 1 annotations" })[0]!,
+      );
+      await expect(canvas.getAllByRole("button", { name: "Browser · 1" })).toHaveLength(1);
+      await expect(canvas.getByRole("button", { name: "Remove notes.txt" })).toBeVisible();
+      await expect(prompt).toHaveTextContent("Please fix the spacing.");
+      await userEvent.click(canvas.getByRole("button", { name: "Send" }));
+      await expect(await canvas.findByRole("alert")).toHaveTextContent(
+        "Your draft has been restored",
+      );
+      await expect(prompt).toHaveTextContent("Please fix the spacing.");
+      await expect(canvas.getByRole("button", { name: "Browser · 1" })).toBeVisible();
+      const admitted = browserPrompt.mock.calls[0]![0];
+      await expect(admitted.text).toContain("Browser annotations.");
+      await expect(admitted.text).toContain('"selector": "main h1"');
+      await expect(admitted.text).not.toContain("Give heading 3 more room");
+      await expect(readBrowserAnnotationMetadata(admitted.metadata)).toMatchObject({
+        instruction: "Please fix the spacing.",
+        annotations: [{ number: 1, fileIndex: 1 }],
+      });
+      await userEvent.click(canvas.getByRole("button", { name: "Send" }));
+      await waitFor(() => expect(canvas.queryByRole("button", { name: "Browser · 1" })).toBeNull());
+      await expect(browserPrompt.mock.calls[1]![0]).toEqual(admitted);
+      await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
+    });
+  },
+};
+
+export const BrowserAnnotationsDark: Story = {
+  ...BrowserAnnotations,
+  globals: { theme: "dark" },
 };
 
 export const DroppedFiles: Story = {
@@ -349,6 +440,156 @@ export const LoadingPickers: Story = {
         onSubmit={() => setValue("")}
       />
     );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Loading models…")).toBeVisible();
+    await expect(canvas.queryByText("No models", { exact: true })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: /models/i })).not.toBeInTheDocument();
+  },
+};
+
+function modelStateComposer(
+  selection: () => ComposerProps["modelSelection"],
+  agents: () => ComposerProps["agentSelection"] = () => composerAgentSelection(),
+) {
+  return (
+    <Composer
+      {...composerPasteProps}
+      value=""
+      disabled
+      action="send"
+      modelSelection={selection()}
+      agentSelection={agents()}
+      onInput={() => undefined}
+      onSubmit={() => undefined}
+    />
+  );
+}
+
+export const EmptyModels: Story = {
+  render: () =>
+    modelStateComposer(() =>
+      composerModelSelection({ models: [], variants: [], selectedModelID: undefined }),
+    ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("No models", { exact: true })).toBeVisible();
+    await expect(canvas.getByRole("status")).toHaveTextContent(
+      "Configure or enable a model in OpenCode on the connected server.",
+    );
+    await expect(canvas.queryByRole("button", { name: /models/i })).not.toBeInTheDocument();
+  },
+};
+
+export const ModelCatalogRecovery: Story = {
+  render: () => {
+    const [state, setState] = createSignal<ComposerProps["modelSelection"]["state"]>("failed");
+    const [models, setModels] = createSignal<ComposerProps["modelSelection"]["models"]>([]);
+    return modelStateComposer(() =>
+      composerModelSelection({
+        state: state(),
+        models: models(),
+        variants: [],
+        selectedModelID: undefined,
+        onRetry: () => {
+          if (state() === "failed") setState("ready");
+          else setModels(composerModelSelection().models);
+        },
+      }),
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Models could not be loaded.");
+    await expect(canvas.queryByText("No models", { exact: true })).not.toBeInTheDocument();
+    const retry = canvas.getByRole("button", { name: "Retry models" });
+    retry.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByText("No models", { exact: true })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Refresh models" }));
+    await expect(canvas.getByRole("button", { name: "Model: Select model" })).toBeEnabled();
+    await expect(canvas.queryByRole("status")).not.toBeInTheDocument();
+  },
+};
+
+export const MissingModel: Story = {
+  render: () => {
+    const [selectedModelID, setSelectedModelID] = createSignal("missing");
+    return modelStateComposer(() =>
+      composerModelSelection({
+        selectedModelID: selectedModelID(),
+        variants: [],
+        selectedVariantID: undefined,
+        onSelectModel: setSelectedModelID,
+      }),
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("status")).toHaveTextContent("Choose another model.");
+    await userEvent.click(canvas.getByRole("button", { name: "Model: Model unavailable" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Models" }));
+    await userEvent.click(dialog.getByText("GPT-5", { exact: true }));
+    await expect(canvas.getByRole("button", { name: "Model: GPT-5" })).toBeVisible();
+    await expect(canvas.queryByRole("status")).not.toBeInTheDocument();
+  },
+};
+
+export const MissingModelEmptyCatalog: Story = {
+  render: () => modelStateComposer(() => composerModelSelection({ models: [], variants: [] })),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Model unavailable", { exact: true })).toBeVisible();
+    await expect(canvas.getByRole("status")).toHaveTextContent(
+      "The selected model is unavailable.",
+    );
+  },
+};
+
+export const ModelRecoveryDisabled: Story = {
+  render: () =>
+    modelStateComposer(() =>
+      composerModelSelection({ state: "failed", disabled: true, onRetry: fn() }),
+    ),
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole("button", { name: "Retry models" }),
+    ).toBeDisabled();
+  },
+};
+
+export const AgentCatalogRecovery: Story = {
+  render: () => {
+    const [state, setState] = createSignal<ComposerProps["agentSelection"]["state"]>("failed");
+    return modelStateComposer(
+      () => composerModelSelection(),
+      () => composerAgentSelection({ state: state(), onRetry: () => setState("ready") }),
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Agents could not be loaded.");
+    await expect(canvas.getByRole("button", { name: "Model: GPT-5" })).toBeVisible();
+    const retry = canvas.getByRole("button", { name: "Retry agents" });
+    retry.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("button", { name: /^Agent: Build/ })).toBeVisible();
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Retry agents" })).not.toBeInTheDocument();
+  },
+};
+
+export const AgentRecoveryDisabled: Story = {
+  render: () =>
+    modelStateComposer(
+      () => composerModelSelection(),
+      () => composerAgentSelection({ state: "failed", disabled: true, onRetry: fn() }),
+    ),
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole("button", { name: "Retry agents" }),
+    ).toBeDisabled();
   },
 };
 

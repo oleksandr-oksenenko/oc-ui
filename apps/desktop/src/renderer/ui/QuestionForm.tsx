@@ -553,7 +553,11 @@ export function QuestionForm(props: QuestionFormProps) {
 
     const visibleAnswer: FormAnswer = {};
     for (const field of visibleFields()) {
-      if (field.type === "external") continue;
+      if (field.type === "external") {
+        // Continue acknowledges external steps; opening a link alone never replies.
+        visibleAnswer[field.key] = true;
+        continue;
+      }
       const value = answer()[field.key];
       if (value !== undefined) visibleAnswer[field.key] = value;
     }

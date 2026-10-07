@@ -53,8 +53,8 @@ function openComposer(
       action="send"
       onAttachFiles={options.onAttachFiles}
       files={options.files}
-      modelSelection={unavailableSelection}
-      agentSelection={unavailableAgentSelection}
+      modelSelection={{ ...unavailableSelection, state: "loading" }}
+      agentSelection={{ ...unavailableAgentSelection, state: "loading" }}
       onAttachText={options.onAttachText ?? (() => undefined)}
       onInput={(text) => {
         input(text);

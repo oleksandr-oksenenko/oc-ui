@@ -16,6 +16,15 @@
   color: var(--oc-status-danger);
 }
 
+.server-directory-listing-error > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.server-directory-listing-error > button {
+  flex-shrink: 0;
+}
+
 .server-directory-entries button {
   width: 100%;
   min-width: 0;
@@ -50,6 +59,12 @@
   font-family: var(--oc-font-mono);
   font-size: var(--oc-type-metadata-size);
   line-height: var(--oc-type-metadata-line-height);
+  color: var(--oc-text-muted);
+}
+
+.server-directory-browser-status {
+  flex-shrink: 0;
+  font-size: var(--oc-type-metadata-size);
   color: var(--oc-text-muted);
 }
 

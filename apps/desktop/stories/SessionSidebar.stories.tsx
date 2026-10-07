@@ -294,6 +294,24 @@ export const Loading = {
 
 export const Empty = {
   render: () => interactiveSidebar([]),
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    const canvas = within(canvasElement);
+    const create = canvas.getByRole("button", { name: "New session" });
+    create.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("button", { name: "Untitled session, Idle" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(canvas.queryByText("No sessions yet.")).not.toBeInTheDocument();
+  },
+};
+
+export const EmptyDisabled = {
+  render: () => interactiveSidebar([], { canCreate: false, showHeader: false }),
+  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+    await expect(within(canvasElement).getByRole("button", { name: "New session" })).toBeDisabled();
+  },
 };
 
 export const Error = {

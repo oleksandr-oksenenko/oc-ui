@@ -78,7 +78,13 @@ flow does not create a second mutable session-location model.
 
 ## Storybook coverage
 
-Stories cover server browsing, loading and listing/add-project failures; project
-loading, failure and empty states; Git and non-Git direct choices; the worktree
-choice without directory or name inputs; both mutation phases; validation; worktree failure; direct
-session failure; and session failure after a worktree exists.
+`AddProjectDialog` stories cover server browsing, loading, validation, and
+listing/add-project failures. `Conversation/NewSessionScreen` mounts the production
+screen and Composer with controlled project, location, and branch choices;
+loading/empty/preparing/error/interrupted states; Git/non-Git projects;
+unavailable-project retry; and draft/file preservation through picker changes.
+
+Mutation ordering, worktree/session creation failures, and partial-failure recovery
+belong to the existing controller and real-server browser acceptance tests. The
+removed showcase no longer simulates those workflows. See the
+[Storybook inventory](storybook-inventory.md) for the authoritative coverage map.

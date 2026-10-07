@@ -1,6 +1,8 @@
 import { AddProjectRegion } from "./ConnectedApp/Sessions/AddProjectRegion.tsx";
 import { NewSessionDraftRegion } from "./ConnectedApp/Conversation/NewSessionDraftRegion.tsx";
 import { Show } from "solid-js";
+import { Icon } from "@opencode/ui/icon";
+import { IconButton } from "@opencode/ui/icon-button";
 
 import { useServerRuntime, type VerifiedServer } from "../../opencode/index.ts";
 import { BrowserRegion } from "./ConnectedApp/Browser/BrowserRegion.tsx";
@@ -14,11 +16,13 @@ import { SessionActionsRegion } from "./ConnectedApp/Sessions/SessionActionsRegi
 import { SessionsRegion } from "./ConnectedApp/Sessions/SessionsRegion.tsx";
 import { ShellRegion } from "./ConnectedApp/Shell/ShellRegion.tsx";
 import type { WorkspaceModel } from "./ConnectedApp/createWorkspace.ts";
+import { TerminalRegion } from "./ConnectedApp/Terminal/TerminalRegion.tsx";
 
 export type ConnectedAppProps = {
   readonly server: VerifiedServer;
   readonly model: WorkspaceModel;
   readonly onChangeServer: () => void;
+  readonly onOpenExternal: (url: string) => void;
 };
 
 /** Renders the model retained by the connection's workspace. */
@@ -42,6 +46,9 @@ export function ConnectedApp(props: ConnectedAppProps) {
     composer,
     inbox,
     flows,
+    terminals,
+    terminalFonts,
+    terminalPanel,
   } = props.model;
 
   const closeLeftSidebarOnMobile = (): void => {
@@ -49,11 +56,48 @@ export function ConnectedApp(props: ConnectedAppProps) {
   };
   const closeRightPanel = (): void => panels.setRightPanelOpen(false);
   const changesTabsId = "connected-workspace-context";
+  let terminalToggle: HTMLButtonElement | undefined;
+  const hideTerminal = () => {
+    terminalPanel.setOpen(false);
+    terminalToggle?.focus({ preventScroll: true });
+  };
 
   return (
     <>
       <ShellRegion
         panels={panels}
+        bottomOpen={terminalPanel.open()}
+        terminalControls={
+          <IconButton
+            ref={(element) => {
+              terminalToggle = element;
+            }}
+            size="normal"
+            variant="ghost-muted"
+            icon={<Icon name="terminal" />}
+            aria-label={terminalPanel.open() ? "Hide terminal panel" : "Show terminal"}
+            data-terminal-focus
+            title={terminalPanel.open() ? "Hide terminal panel" : "Show terminal"}
+            aria-pressed={terminalPanel.open()}
+            onClick={terminalPanel.toggle}
+          />
+        }
+        bottom={
+          <TerminalRegion
+            controller={terminals}
+            fonts={terminalFonts}
+            effects={runtime.effects}
+            serverUrl={props.server.serverUrl}
+            location={
+              sessions.selectedDraftID()
+                ? undefined
+                : (sessions.selectedSession()?.location ?? runtime.defaultLocation)
+            }
+            open={terminalPanel.open()}
+            connected={connected()}
+            onHide={hideTerminal}
+          />
+        }
         rightPanelAvailable={sessions.selectedDraftID() === undefined}
         selectedTitle={() =>
           sessions.selectedDraftID()
@@ -81,7 +125,11 @@ export function ConnectedApp(props: ConnectedAppProps) {
             flows={flows}
             drafts={drafts}
             globalControls={
-              <GlobalFormsRegion controller={globalForms} visible={panels.leftSidebarOpen()} />
+              <GlobalFormsRegion
+                controller={globalForms}
+                visible={panels.leftSidebarOpen()}
+                onOpenExternal={props.onOpenExternal}
+              />
             }
             serverUrl={props.server.serverUrl}
             mobile={panels.mobile()}
@@ -106,6 +154,10 @@ export function ConnectedApp(props: ConnectedAppProps) {
                 forms={forms}
                 permissions={permissions}
                 connected={connected}
+                canCreate={drafts.canCreate()}
+                onCreate={drafts.create}
+                onBrowseSessions={() => panels.setLeftSidebarOpen(true)}
+                onOpenExternal={props.onOpenExternal}
               />
             }
           >

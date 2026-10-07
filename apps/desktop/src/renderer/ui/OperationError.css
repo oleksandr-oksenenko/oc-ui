@@ -1,0 +1,17 @@
+.server-flow-operation-error,
+.delete-session-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--oc-status-danger-border);
+  border-radius: var(--oc-radius);
+  background: var(--oc-status-danger-surface);
+  color: var(--oc-status-danger);
+}
+
+.server-flow-operation-error > [data-slot="icon-svg"],
+.delete-session-error svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}

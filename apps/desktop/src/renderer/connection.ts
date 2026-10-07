@@ -139,6 +139,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
                   untrack(() => {
                     runtime = createConnectedRuntime({
                       api: server.api,
+                      serverUrl: server.serverUrl,
                       defaultLocation: server.location,
                       effects: owner,
                     });

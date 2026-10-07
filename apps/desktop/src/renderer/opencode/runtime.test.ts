@@ -42,6 +42,7 @@ const setup = () =>
     runtime: createConnectedRuntime({
       effects,
       api: OpenCode.make({ baseUrl: "http://runtime.test" }),
+      serverUrl: "http://runtime.test",
       defaultLocation: { directory: "/workspace" },
     }),
   }));

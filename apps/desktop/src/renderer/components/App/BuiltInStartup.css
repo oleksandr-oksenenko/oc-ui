@@ -36,6 +36,7 @@
 .built-in-startup-description,
 .built-in-startup-error {
   font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-body-weight);
   line-height: var(--oc-type-body-line-height);
 }
 

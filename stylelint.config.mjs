@@ -1,7 +1,7 @@
 // Product roles plus local layout inputs and the component contracts we use.
 // Upstream design tokens belong only in foundations and its selector adapter.
 export const appCustomPropertyPattern =
-  /^(?:oc-[a-z0-9-]+|shell-(?:left-sidebar|right-panel)-width|permissions-dialog-max-height|ds-token|kb-popper-anchor-width|checkbox-(?:align|offset))$/;
+  /^(?:oc-[a-z0-9-]+|shell-(?:(?:left-sidebar|right-panel)-width|bottom-(?:panel-height|size))|permissions-dialog-max-height|ds-token|kb-popper-anchor-width|checkbox-(?:align|offset))$/;
 
 export const appDesignRules = {
   "no-unknown-custom-properties": true,

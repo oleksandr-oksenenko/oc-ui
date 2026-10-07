@@ -3,14 +3,16 @@ import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import type { WorkspaceOwner } from "../workspace-owner.ts";
 import type { Data } from "@opencode/client/solid";
-import type {
-  LocationRef,
-  ModelInfo,
-  ModelRef,
-  OpenCodeClient,
-  SessionInfo,
-} from "@opencode/client";
-import { createMemo } from "solid-js";
+import type { ModelRef, OpenCodeClient, SessionInfo } from "@opencode/client";
+import { createEffect, createMemo, on, onCleanup } from "solid-js";
+import { createModelCatalog } from "./model-catalog.ts";
+import {
+  modelChoiceID,
+  modelChoices,
+  modelVariantAvailable,
+  resolveModel,
+  variantChoices,
+} from "./model-choices.ts";
 
 type ModelSelectionChoice = {
   readonly id: string;
@@ -39,63 +41,70 @@ type ModelSelectionInput = {
   readonly effects: WorkspaceOwner;
   readonly api: {
     readonly model: Pick<OpenCodeClient["model"], "default">;
+    readonly plugin: Pick<OpenCodeClient["plugin"], "awaitActivation">;
     readonly session: Pick<OpenCodeClient["session"], "switchModel">;
   };
   readonly data: {
+    readonly on: Data["on"];
     readonly location: {
       readonly model: Pick<Data["location"]["model"], "list" | "sync" | "invalidate">;
     };
-    readonly session: Pick<Data["session"], "sync">;
+    readonly session: Pick<Data["session"], "get" | "sync" | "invalidate">;
   };
-  readonly defaultLocation: LocationRef;
+  readonly connected: () => boolean;
   readonly selectedSession: () => SessionInfo | undefined;
 };
 
 /** Owns the server-backed model and variant selection policy for the selected session. */
 export function createModelSelection(input: ModelSelectionInput): ModelSelection {
   const { effects } = input;
+  const catalog = createModelCatalog({
+    ...input,
+    location: () => input.selectedSession()?.location,
+  });
   const status = Atom.make<{
-    state: ModelSelectionState;
-    serverDefault?: ModelInfo;
-    loadError?: string;
     switchError?: { sessionID: string; message: string };
     switchingIDs: ReadonlySet<string>;
-  }>({ state: "loading", switchingIDs: new Set<string>() });
+  }>({ switchingIDs: new Set<string>() });
   effects.mount(status);
   const current = useAtomValue(() => status);
   const update = (patch: Partial<Atom.Type<typeof status>>) => {
     effects.registry.set(status, { ...effects.registry.get(status), ...patch });
   };
 
-  const models = createMemo(() =>
-    (input.data.location.model.list(input.defaultLocation) ?? []).filter((model) => model.enabled),
+  let selection: object | undefined = {};
+  createEffect(
+    on(
+      () => {
+        const session = input.selectedSession();
+        return session
+          ? JSON.stringify([session.id, session.location.directory, session.location.workspaceID])
+          : undefined;
+      },
+      () => {
+        selection = {};
+        update({ switchError: undefined });
+      },
+    ),
   );
-  const choices = createMemo<readonly ModelSelectionChoice[]>(() =>
-    models().map((model) => ({
-      id: modelChoiceID(model),
-      label: model.name,
-      group: model.providerID,
-    })),
-  );
-  const selectedModel = createMemo(() => {
-    const sessionModel = input.selectedSession()?.model;
-    if (sessionModel) return models().find((model) => sameModel(model, sessionModel));
-    const fallback = current().serverDefault;
-    return fallback?.enabled ? models().find((model) => sameModel(model, fallback)) : undefined;
+  onCleanup(() => {
+    selection = undefined;
   });
+  const models = catalog.models;
+  const choices = createMemo<readonly ModelSelectionChoice[]>(() => modelChoices(models()));
+  const reference = () => input.selectedSession()?.model ?? catalog.defaultRef();
+  const selectedModel = createMemo(() => resolveModel(models(), reference()));
   const selectedModelID = createMemo(() => {
-    const model = selectedModel();
+    const model = reference();
     return model ? modelChoiceID(model) : undefined;
   });
   const contextLimit = () => selectedModel()?.limit.context;
   const variants = createMemo<readonly ModelSelectionChoice[]>(() =>
-    (selectedModel()?.variants ?? []).map((variant) => ({ id: variant.id, label: variant.id })),
+    variantChoices(selectedModel()),
   );
   const selectedVariantID = createMemo(() => {
-    const variantID = input.selectedSession()?.model?.variant;
-    return variantID && variants().some((variant) => variant.id === variantID)
-      ? variantID
-      : undefined;
+    const variantID = reference()?.variant;
+    return variantID === "default" ? undefined : variantID;
   });
   const switching = createMemo(() => {
     const sessionID = input.selectedSession()?.id;
@@ -103,70 +112,75 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
   });
   const error = createMemo(() => {
     const value = current();
-    if (value.state === "failed") return value.loadError;
-    return value.switchError?.sessionID === input.selectedSession()?.id
-      ? value.switchError?.message
-      : undefined;
+    const loadError = catalog.error();
+    if (loadError || catalog.state() === "failed") return loadError;
+    if (value.switchError?.sessionID === input.selectedSession()?.id)
+      return value.switchError?.message;
+    if (catalog.state() !== "ready") return undefined;
+    if (reference() && !selectedModel())
+      return "The selected model is unavailable at this location. Choose a model.";
+    const model = selectedModel();
+    if (model && !modelVariantAvailable(model, reference()?.variant))
+      return "The selected model variant is unavailable at this location. Choose a variant.";
+    return undefined;
   });
-
-  const refresh = Effect.fn("modelSelection.refresh")(function* () {
-    update({ state: "loading", loadError: undefined });
-    const location = input.defaultLocation;
-    input.data.location.model.invalidate(location);
-    const [, fallback] = yield* Effect.all(
-      [
-        effects.request(() => input.data.location.model.sync(location)),
-        effects.request((signal) => input.api.model.default({ location }, { signal })),
-      ],
-      { concurrency: "unbounded" },
-    ).pipe(
-      Effect.tapError(() =>
-        Effect.sync(() =>
-          update({
-            serverDefault: undefined,
-            state: "failed",
-            loadError: "Models could not be loaded. Check the connection and try again.",
-          }),
-        ),
-      ),
-    );
-    update({ serverDefault: fallback.data ?? undefined, state: "ready" });
-  });
-  const sharedRefresh = effects.runSync(Effect.cachedWithTTL(refresh(), 0));
-  const sync = (): Promise<void> => effects.runPromise(sharedRefresh);
 
   const switchSelection = Effect.fn("modelSelection.switch")(function* (
     model: ModelRef,
     failureMessage: string,
   ) {
     const session = input.selectedSession();
-    if (!session || effects.registry.get(status).switchingIDs.has(session.id)) return;
+    const initiatingSelection = selection;
+    if (
+      !session ||
+      !initiatingSelection ||
+      !input.connected() ||
+      effects.registry.get(status).switchingIDs.has(session.id)
+    )
+      return;
+    const sessionID = session.id;
     update({
       switchError: undefined,
-      switchingIDs: new Set(effects.registry.get(status).switchingIDs).add(session.id),
+      switchingIDs: new Set(effects.registry.get(status).switchingIDs).add(sessionID),
     });
-    const report = (message: string) => update({ switchError: { sessionID: session.id, message } });
+    const report = (message: string) => {
+      if (selection === initiatingSelection && input.connected())
+        update({ switchError: { sessionID, message } });
+    };
     yield* Effect.gen(function* () {
       const switched = yield* effects
-        .request((signal) =>
-          input.api.session.switchModel({ sessionID: session.id, model }, { signal }),
-        )
+        .request((signal) => input.api.session.switchModel({ sessionID, model }, { signal }))
         .pipe(
           Effect.match({
             onSuccess: () => true,
-            onFailure: () => {
-              report(failureMessage);
-              return false;
-            },
+            onFailure: () => false,
           }),
         );
-      if (!switched) return;
       yield* effects
-        .request(() => input.data.session.sync(session.id))
+        .request(() => {
+          input.data.session.invalidate(sessionID);
+          return input.data.session.sync(sessionID);
+        })
         .pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              const selected = input.data.session.get(sessionID)?.model;
+              if (
+                !switched &&
+                (selected?.id !== model.id ||
+                  selected.providerID !== model.providerID ||
+                  (selected.variant ?? "default") !== (model.variant ?? "default"))
+              )
+                report(failureMessage);
+            }),
+          ),
           Effect.catch(() =>
             Effect.sync(() =>
-              report("The selection changed, but its current value could not be refreshed."),
+              report(
+                switched
+                  ? "The selection changed, but its current value could not be refreshed."
+                  : "The selection could not be confirmed. Refresh before trying again.",
+              ),
             ),
           ),
         );
@@ -174,7 +188,7 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
       Effect.ensuring(
         Effect.sync(() => {
           const next = new Set(effects.registry.get(status).switchingIDs);
-          next.delete(session.id);
+          next.delete(sessionID);
           update({ switchingIDs: next });
         }),
       ),
@@ -182,7 +196,7 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
   });
 
   return {
-    state: () => current().state,
+    state: catalog.state,
     error,
     switching,
     models: choices,
@@ -190,10 +204,10 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
     contextLimit,
     variants,
     selectedVariantID,
-    sync,
+    sync: catalog.sync,
     selectModel: (choiceID) => {
       const model = models().find((candidate) => modelChoiceID(candidate) === choiceID);
-      if (!model) return Promise.resolve();
+      if (!model || catalog.state() !== "ready") return Promise.resolve();
       return effects.runPromise(
         switchSelection(
           { id: model.id, providerID: model.providerID },
@@ -203,7 +217,11 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
     },
     selectVariant: (variantID) => {
       const model = selectedModel();
-      if (!model || !variants().some((variant) => variant.id === variantID))
+      if (
+        !model ||
+        catalog.state() !== "ready" ||
+        !variants().some((variant) => variant.id === variantID)
+      )
         return Promise.resolve();
       return effects.runPromise(
         switchSelection(
@@ -213,15 +231,4 @@ export function createModelSelection(input: ModelSelectionInput): ModelSelection
       );
     },
   };
-}
-
-export function modelChoiceID(model: Pick<ModelInfo, "id" | "providerID">): string {
-  return JSON.stringify([model.providerID, model.id]);
-}
-
-function sameModel(
-  model: Pick<ModelInfo, "id" | "providerID">,
-  reference: Pick<ModelRef, "id" | "providerID">,
-): boolean {
-  return model.id === reference.id && model.providerID === reference.providerID;
 }

@@ -9,6 +9,7 @@ import { Markdown } from "../src/renderer/components/App/ConnectedApp/Conversati
 import { SyntaxHighlight } from "../src/renderer/syntax-highlight.ts";
 import { SyntaxHighlightProvider } from "../src/renderer/ui/SyntaxHighlightProvider.tsx";
 import { useTheme } from "../src/renderer/ui/ThemeProvider.tsx";
+import { Button } from "@opencode/ui/button";
 
 function HighlightedMarkdown() {
   const runtime = ManagedRuntime.make(SyntaxHighlight.layer);
@@ -31,10 +32,10 @@ function HighlightedMarkdown() {
       }
     >
       <div style={{ padding: "16px", "max-width": "680px" }}>
-        <button onClick={() => setText("```ts\nconst updated = true;\n```")}>Update snippet</button>
-        <button onClick={() => onChange?.(theme() === "light" ? "dark" : "light")}>
+        <Button onClick={() => setText("```ts\nconst updated = true;\n```")}>Update snippet</Button>
+        <Button onClick={() => onChange?.(theme() === "light" ? "dark" : "light")}>
           Switch theme
-        </button>
+        </Button>
         <Markdown text={text()} />
         <Markdown text={"```unknown-language\nplain <text>\n```\n\nInline `code` stays plain."} />
       </div>

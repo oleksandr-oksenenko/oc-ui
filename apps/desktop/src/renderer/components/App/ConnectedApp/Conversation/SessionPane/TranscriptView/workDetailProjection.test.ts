@@ -75,7 +75,8 @@ describe("projectTranscriptRows", () => {
     ]);
     expect(ids(rows)).toEqual([
       ["user-1", []],
-      ["assistant-1", ["shell-ok", "skill", "context"]],
+      ["assistant-1", ["shell-ok", "skill"]],
+      ["context", []],
       ["outside", []],
       ["user-2", []],
     ]);
@@ -100,7 +101,8 @@ describe("projectTranscriptRows", () => {
       { id: "system", type: "system", time, text: "User-facing context" },
     ]);
     expect(ids(rows)).toEqual([
-      ["assistant", ["shell-ok", "shell-failed", "context"]],
+      ["assistant", ["shell-ok", "shell-failed"]],
+      ["context", []],
       ["compaction-running", []],
       ["location", []],
       ["system", []],
@@ -127,6 +129,27 @@ describe("projectTranscriptRows", () => {
       ["next-turn", []],
     ]);
     expect(rows.filter((row) => row.activityGroup).map((row) => row.message.id)).toEqual(["skill"]);
+  });
+
+  it("exposes context between work runs and breaks assistant activity chaining", () => {
+    const activity = (id: string): SessionMessageAssistant => ({
+      ...assistant(id),
+      content: [{ type: "reasoning", text: id }],
+    });
+    const rows = projectTranscriptRows([
+      activity("before"),
+      { id: "context", type: "synthetic", time, text: "Continuing after restart" },
+      shell("after-context", 0),
+      activity("after"),
+    ]);
+    expect(ids(rows)).toEqual([
+      ["before", []],
+      ["context", []],
+      ["after-context", ["after-context"]],
+      ["after", []],
+    ]);
+    expect(rows.filter((row) => row.chainedTo)).toHaveLength(0);
+    expect(rows[0]?.continuations).toEqual([]);
   });
 
   it("does not let an exposed event start a turn outside one", () => {

@@ -10,6 +10,7 @@ import {
 } from "../opencode/create-session-worktree.ts";
 import { runServerShell, shellArgument } from "../opencode/server-shell.ts";
 import { parseSessionCommand } from "../opencode/session-command.ts";
+import { modelVariantAvailable, resolveModel } from "../opencode/model-choices.ts";
 import { createSessionPrompt } from "../opencode/session-prompt.ts";
 import { submitSessionInput, SessionAttachmentError } from "../opencode/submit-session-input.ts";
 import { draftLockName, withBrowserLock } from "./locks.ts";
@@ -76,18 +77,8 @@ export function createDraftSubmission(
       { concurrency: "unbounded" },
     );
     const choices = entry.value.choices;
-    const model = data.location.model
-      .list(location)
-      ?.find(
-        (item) =>
-          item.enabled &&
-          item.id === choices.model?.id &&
-          item.providerID === choices.model.providerID,
-      );
-    if (
-      !model ||
-      (choices.model?.variant && !model.variants.some((item) => item.id === choices.model?.variant))
-    ) {
+    const model = resolveModel(data.location.model.list(location) ?? [], choices.model);
+    if (!model || !modelVariantAvailable(model, choices.model?.variant)) {
       return yield* new DraftSubmissionError({
         message: "The saved model or variant is unavailable at this location.",
       });

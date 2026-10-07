@@ -56,7 +56,15 @@ const renderConstrainedTranscript = (args: TranscriptViewProps) => (
 
 // A narrow column stresses metadata and image rows at their tightest.
 const renderNarrowTranscript = (args: TranscriptViewProps) => (
-  <div style={{ width: "260px", height: "100vh", background: "var(--oc-surface-canvas)" }}>
+  <div
+    style={{
+      width: "260px",
+      height: "100vh",
+      display: "grid",
+      "grid-template-rows": "minmax(0, 1fr)",
+      background: "var(--oc-surface-canvas)",
+    }}
+  >
     <TranscriptView {...args} />
   </div>
 );
@@ -174,6 +182,59 @@ export const ContextLongDescription: Story = {
     ],
   },
   render: renderTranscript,
+};
+
+export const ContextOutsideActivity: Story = {
+  args: {
+    sessionStatus: "running",
+    messages: [
+      {
+        ...assistant("before-context"),
+        time: { created: 1, completed: 2 },
+        content: [{ type: "reasoning", text: "The first cycle has finished." }],
+      },
+      {
+        id: "restart-context",
+        type: "synthetic",
+        time: { created: 2 },
+        description: "Continuing after restart",
+        text: "The previous work is preserved. Continue from the last step.",
+      },
+      {
+        ...assistant("after-context"),
+        time: { created: 3 },
+        finish: undefined,
+        content: [{ type: "reasoning", text: "Continuing with the next cycle." }],
+      },
+    ],
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const context = canvas.getByRole("button", { name: "Context Continuing after restart" });
+    await expect(context).toBeVisible();
+    await expect(context.closest(".transcript-activity")).toBeNull();
+    await expect(
+      [...canvasElement.querySelectorAll<HTMLElement>(".transcript-document > *")].map(
+        (element) => element.dataset.messageId,
+      ),
+    ).toEqual(["before-context", "restart-context", "after-context"]);
+    await expect(
+      [...canvasElement.querySelectorAll(".transcript-activity-title")].map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(["Thought", "Thinking"]);
+    for (const activity of canvasElement.querySelectorAll(".transcript-activity-trigger")) {
+      await expect(activity).toHaveAttribute("aria-expanded", "false");
+    }
+    context.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByText(/The previous work is preserved/)).toBeVisible();
+    await userEvent.keyboard(" ");
+    await expect(context).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(context);
+    await expect(canvas.getByText(/The previous work is preserved/)).toBeVisible();
+  },
 };
 
 export const ImagePreviews: Story = {
@@ -441,7 +502,7 @@ export const ActivityReasoning: Story = {
   render: renderTranscript,
   play: async ({ canvasElement }) => {
     const header = canvasElement.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
-    await expect(header.textContent).toBe("Read 1 file");
+    await expect(header.textContent).toBe("Read 1 file, thinking");
     await expect(header.querySelector(".transcript-activity-pulse")).toBeVisible();
   },
 };
@@ -457,8 +518,7 @@ export const ActivityStreamingNarrow: Story = {
 
     canvas.getByRole("button", { name: "Finish turn" }).click();
     const title = canvasElement.querySelector<HTMLElement>(".transcript-activity-title")!;
-    await waitFor(() => expect(title.textContent).toContain("Read 9 files"));
-    await expect(title.textContent).toContain("ran 5 searches");
+    await waitFor(() => expect(title.textContent).toBe("Read 9 files, ran 5 searches, thought"));
     await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth + 1);
     await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
   },
@@ -471,7 +531,8 @@ export const ActivityStreamingBehavior: Story = {
     const activity = canvasElement.querySelector<HTMLElement>(".transcript-activity")!;
     const header = activity.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     await expect(header).toHaveAttribute("aria-expanded", "false");
-    await expect(header).toHaveTextContent("Read 9 files and ran 5 searches");
+    await expect(header).toHaveTextContent("Read 9 files, ran 5 searches, thought");
+    await expect(header.querySelector(".transcript-activity-pulse")).toBeVisible();
     header.click();
     const panel = activity.querySelector<HTMLElement>(".transcript-activity-content")!;
     await expect(header).toHaveAttribute("aria-expanded", "true");
@@ -492,6 +553,7 @@ export const ActivityStreamingBehavior: Story = {
     );
     await expect(headers).toHaveLength(1);
     await expect(headers[0]).toBe(header);
+    await expect(header.querySelector(".transcript-activity-pulse")).toBeVisible();
     await expect(header).toHaveAttribute("aria-expanded", "true");
     header.click();
     canvas.getByRole("button", { name: "Add activity step" }).click();
@@ -499,7 +561,8 @@ export const ActivityStreamingBehavior: Story = {
 
     canvas.getByRole("button", { name: "Finish turn" }).click();
     await waitFor(() => expect(header).toHaveAttribute("aria-expanded", "false"));
-    await expect(header).toHaveTextContent("Read 11 files and ran 6 searches");
+    await expect(header.querySelector(".transcript-activity-pulse")).toBeNull();
+    await expect(header).toHaveTextContent("Read 11 files, ran 6 searches, thought");
     await expect(
       canvas.getByText("I checked the changed modules and found no blocking issue."),
     ).toBeVisible();
@@ -548,11 +611,9 @@ export const ActivityWithPendingRequest: Story = {
   render: () => <TranscriptActivityFixture pending />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("button", { name: /^Read 9 files/ })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-    await expect(canvasElement.querySelector(".transcript-pending-interaction")).not.toBeNull();
+    await expect(
+      canvas.getByRole("button", { name: "Read 9 files, ran 5 searches, thought" }),
+    ).toHaveAttribute("aria-expanded", "false");
     await expect(canvasElement.querySelector("[data-permission-request-id]")).not.toBeNull();
   },
 };
@@ -727,7 +788,7 @@ export const ActivityStates: Story = {
   play: async ({ canvasElement }) => {
     // The transcript mounts its newest rows first and materializes the rest.
     await waitFor(() =>
-      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(25),
+      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(29),
     );
     const headers = [
       ...canvasElement.querySelectorAll<HTMLElement>(".transcript-activity-trigger"),
@@ -745,19 +806,23 @@ export const ActivityStates: Story = {
       "Loaded 1 skill",
       "Asked 1 question",
       "Used 2 other tools",
-      "Read 2 files, updated 1 file and ran 3 searches",
+      "Read 6 files, ran 1 search, 3 commands, started 2 commands, delegated 2 tasks, loaded 1 skill, asked 1 question, used 1 other tool",
       "Used 1 other tool",
-      "Read 1 file and used 1 other tool",
+      "Read 1 file, used 1 other tool",
       "Used 2 other tools",
       "Read 1 file",
       "Started 1 command",
       "Ran 1 command",
       "Ran 1 command",
-      "Activity",
-      "Activity",
+      "Thought for 1 s",
       "Ran 2 commands",
       "Read 1 file",
-      "Shell · pnpm watch",
+      "Thought for 3 s",
+      "Read 1 file, thought for 3 s",
+      "Thought",
+      "Running",
+      "Running",
+      "Running",
     ]);
     const canvas = within(canvasElement);
     for (const activity of canvasElement.querySelectorAll<HTMLButtonElement>(
@@ -791,15 +856,20 @@ export const ActivityStatesNarrow: Story = {
   play: async ({ canvasElement }) => {
     const view = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
     await waitFor(() =>
-      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(25),
+      expect(canvasElement.querySelectorAll(".transcript-activity-trigger")).toHaveLength(29),
     );
     await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
-    // The longest label wraps inside the column instead of clipping.
+    // A run spanning many kinds of work stays on one line, with the complete
+    // summary available on hover when the narrow column clips it.
     const label = [
       ...canvasElement.querySelectorAll<HTMLElement>(".transcript-activity-title"),
-    ].find((title) => title.textContent?.startsWith("Read 2 files"));
-    if (!label) throw new Error("The long label is missing");
-    await expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth + 1);
+    ].find((title) => title.textContent?.startsWith("Read 6 files, ran 1 search, 3 commands"));
+    if (!label) throw new Error("The mixed activity label is missing");
+    await expect(label.scrollWidth).toBeGreaterThan(label.clientWidth);
+    await expect(label.getAttribute("title")).toBe(label.textContent);
+    await expect(contentRect(label).height).toBeLessThanOrEqual(
+      Number.parseFloat(getComputedStyle(label).lineHeight) + 1,
+    );
   },
 };
 export const CompactionStates: Story = {
@@ -849,37 +919,6 @@ export const PendingRequestsFailure: Story = {
         <TranscriptPendingFixture error="The reply could not be sent. Try again." />
       ),
     }),
-};
-export const PendingSubagentRequests: Story = {
-  args: { messages: [], sessionStatus: "idle" },
-  render: (args) =>
-    renderNarrowTranscript({
-      ...args,
-      pendingInteraction: <TranscriptPendingFixture subagent />,
-    }),
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(
-      canvas.getByRole("heading", { name: "Subagent: Explore auth" }),
-    ).toBeInTheDocument();
-    const group = canvasElement.querySelector<HTMLElement>(".transcript-pending-subagent");
-    if (!group) throw new Error("Subagent group did not render");
-    await expect(group.querySelectorAll("[data-permission-request-id]").length).toBe(1);
-    await expect(group.querySelectorAll(".question-form-card").length).toBe(1);
-
-    const article = canvasElement.querySelector<HTMLElement>(".transcript-pending-interaction");
-    if (!article) throw new Error("Pending interaction area did not render");
-    for (const node of [
-      article,
-      group,
-      ...group.querySelectorAll<HTMLElement>(".permission-request-card, .question-form-card"),
-    ]) {
-      await expect(node.scrollWidth).toBeLessThanOrEqual(node.clientWidth + 1);
-    }
-    await expect(group.getBoundingClientRect().width).toBeLessThanOrEqual(
-      article.getBoundingClientRect().width + 1,
-    );
-  },
 };
 export const Refreshing: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: true },

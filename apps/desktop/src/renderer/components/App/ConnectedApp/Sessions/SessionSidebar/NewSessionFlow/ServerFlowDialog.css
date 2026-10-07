@@ -1,3 +1,5 @@
+@import url("../../../../../../ui/OperationError.css");
+
 [data-component="dialog-v2"][data-size="large"]
   > [data-slot="dialog-container"].server-flow-dialog {
   width: min(640px, calc(100vw - 32px));
@@ -55,22 +57,6 @@
 
 .server-flow-dialog [data-slot="dialog-footer"] {
   border-top: 1px solid var(--oc-border-base);
-}
-
-.server-flow-operation-error {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--oc-status-danger-border);
-  border-radius: var(--oc-radius);
-  background: var(--oc-status-danger-surface);
-  color: var(--oc-status-danger);
-}
-
-.server-flow-operation-error > [data-slot="icon-svg"] {
-  flex: 0 0 auto;
-  margin-top: 2px;
 }
 
 .server-flow-operation-error > div {

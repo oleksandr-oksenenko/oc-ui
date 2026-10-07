@@ -16,7 +16,8 @@ export function restoreDialogFocusAfterClose(
   shouldRestore: () => boolean = () => true,
 ): void {
   window.setTimeout(() => {
+    if (!shouldRestore()) return;
     const element = target();
-    if (shouldRestore() && canRestoreFocus(element)) element.focus({ preventScroll: true });
+    if (canRestoreFocus(element)) element.focus({ preventScroll: true });
   }, dialogCloseDurationMs + 10);
 }

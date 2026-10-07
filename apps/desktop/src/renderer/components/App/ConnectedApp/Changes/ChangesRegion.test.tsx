@@ -123,7 +123,10 @@ describe("ChangesRegion", () => {
     const key = root.changes.reviewKey()!;
     const commentID = root.reviewDrafts.begin(key, "src/example.ts", reviewSelection, "new\n");
     // The editor reaching the DOM proves the review prop reached the view.
-    await vi.waitFor(() => expect(root.host.querySelector(".diff-review-editor")).not.toBeNull());
+    // CodeView renders on a frame and highlights asynchronously, as in its component tests.
+    await vi.waitFor(() => expect(root.host.querySelector(".diff-review-editor")).not.toBeNull(), {
+      timeout: 5_000,
+    });
     const editor = root.host.querySelector(".diff-review-editor");
 
     root.reviewDrafts.updateBody(key, commentID, "first");

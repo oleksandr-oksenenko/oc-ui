@@ -51,7 +51,7 @@ export function UserMessage(props: UserMessageProps): JSX.Element {
     const browserMetadata = browser();
     if (browserMetadata) return browserMetadata.instruction || undefined;
     const value = prompt();
-    return value === undefined ? props.message.text : value.instruction || undefined;
+    return (value === undefined ? props.message.text : value.instruction) || undefined;
   });
   const reviewComments = () => prompt()?.reviewComments ?? [];
   const annotations = () => prompt()?.annotations ?? [];

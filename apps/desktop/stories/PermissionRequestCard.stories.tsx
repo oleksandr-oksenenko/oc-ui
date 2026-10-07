@@ -1,8 +1,6 @@
 /* oxlint-disable effecttsgo/async-function */
 
 import type { PermissionReply, PermissionRequest } from "@opencode/client";
-import { Button } from "@opencode/ui/button";
-import { Loader } from "@opencode/ui/loader";
 import { type JSX } from "solid-js";
 import { expect, fn, userEvent, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
@@ -40,13 +38,6 @@ const narrowFrameStyle: JSX.CSSProperties = {
   width: "390px",
   height: "760px",
   padding: "12px",
-};
-
-const stateStyle: JSX.CSSProperties = {
-  display: "flex",
-  "align-items": "center",
-  gap: "8px",
-  color: "var(--oc-text-base)",
 };
 
 const meta = {
@@ -95,16 +86,6 @@ export const MissingSavePatterns: Story = {
   },
 };
 
-export const Loading: Story = {
-  render: () => (
-    <main style={frameStyle}>
-      <output style={stateStyle} aria-live="polite">
-        <Loader width={18} height={18} aria-hidden="true" /> Loading permissions
-      </output>
-    </main>
-  ),
-};
-
 export const Disconnected: Story = {
   args: { disabled: true },
 };
@@ -115,19 +96,6 @@ export const Submitting: Story = {
 
 export const ReplyFailure: Story = {
   args: { error: "The permission response could not be sent. Try again." },
-};
-
-export const RefreshFailureWithoutRequest: Story = {
-  render: () => (
-    <main style={frameStyle}>
-      <div style={{ ...stateStyle, "flex-direction": "column" }} role="alert">
-        <p>Permissions could not be refreshed. Try again.</p>
-        <Button type="button" size="small" variant="outline">
-          Retry permissions
-        </Button>
-      </div>
-    </main>
-  ),
 };
 
 export const KeyboardAndEscape: Story = {

@@ -6,7 +6,7 @@ import { AtomRegistry } from "effect/unstable/reactivity";
 import { onCleanup } from "solid-js";
 import { makeWorkspaceOwner } from "../src/renderer/workspace-owner.ts";
 import type { FileListOutput, LocationRef, OpenCodeClient } from "@opencode/client";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import {
@@ -135,7 +135,7 @@ export const BrowseServerProjects: Story = {
       const browser = browserShell.querySelector<HTMLElement>(".server-directory-browser");
       if (!browser) throw new Error("Project directory browser did not render");
       const addProject = dialogCanvas.getByRole("button", { name: "Add project" });
-      await expect(dialogCanvas.getByText("/srv/projects")).toBeVisible();
+      await expect(dialogCanvas.getByText("/srv/projects/oc-ui")).toBeVisible();
       await expect(browser).toHaveAttribute("aria-busy", "true");
       await expect(addProject).toBeDisabled();
       await expect(
@@ -178,11 +178,175 @@ export const LoadingDirectory = {
   render: () => dialog({ listDirectory: loadingListDirectory }),
 };
 
-export const DirectoryListingFailure = {
+export const DirectoryListingFailure: Story = {
   render: () =>
     dialog({
       listDirectory: () => Promise.reject(new Error("The directory could not be loaded.")),
     }),
+  play: async () => {
+    const currentDialog = await screen.findByRole("dialog", { name: "Add project" });
+    const canvas = within(currentDialog);
+    const retry = await canvas.findByRole("button", { name: "Retry" });
+    await expect(canvas.getByText("/srv/projects", { exact: true })).toBeVisible();
+    await expect(canvas.getByText("Not listed")).toBeVisible();
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Could not list /srv/projects.");
+    await expect(canvas.getByRole("button", { name: "Add project" })).toBeDisabled();
+    await expect(
+      canvas.queryByRole("button", { name: "Back to previous successfully listed directory" }),
+    ).toBeNull();
+    await userEvent.tab();
+    await expect(canvas.getByRole("button", { name: "Go to parent directory" })).toHaveFocus();
+    await userEvent.tab();
+    await expect(retry).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    await canvas.findByText("Not listed");
+    await expect(canvas.getByRole("button", { name: "Add project" })).toBeDisabled();
+  },
+};
+
+const recoveryOnAddProject = fn<(location: LocationRef) => void>();
+
+export const NavigationFailureRecovery: Story = {
+  render: () => {
+    let childAttempts = 0;
+    return dialog({
+      initialLocation: { directory: "/srv/projects", workspaceID: "workspace-1" },
+      listDirectory: (input) => {
+        if (input?.path === "/srv/projects/oc-ui" && ++childAttempts <= 2) {
+          return Promise.reject(new Error("Directory unavailable."));
+        }
+        return listDirectory(input);
+      },
+      onAddProject: recoveryOnAddProject,
+    });
+  },
+  play: async ({ step }) => {
+    recoveryOnAddProject.mockClear();
+    const currentDialog = await screen.findByRole("dialog", { name: "Add project" });
+    const canvas = within(currentDialog);
+    const parent = canvas.getByRole("button", { name: "Go to parent directory" });
+    await step("Identify the failed child and retry it with keyboard focus", async () => {
+      await userEvent.click(await canvas.findByRole("button", { name: "Browse directory oc-ui" }));
+      const retry = await canvas.findByRole("button", { name: "Retry" });
+      await expect(canvas.getByText("/srv/projects/oc-ui", { exact: true })).toBeVisible();
+      await expect(canvas.getByRole("alert")).toHaveTextContent(
+        "Could not list /srv/projects/oc-ui.",
+      );
+      await expect(canvas.getByRole("button", { name: "Add project" })).toBeDisabled();
+      await expect(parent).toBeEnabled();
+      await waitFor(() => expect(retry).toHaveFocus());
+      await userEvent.keyboard("{Enter}");
+      await canvas.findByText("Not listed");
+    });
+    await step("Back re-lists the previous directory and restores browsing", async () => {
+      const back = canvas.getByRole("button", {
+        name: "Back to previous successfully listed directory",
+      });
+      await userEvent.tab({ shift: true });
+      await expect(back).toHaveFocus();
+      await userEvent.keyboard("{Enter}");
+      await canvas.findByRole("button", { name: "Browse directory oc-ui" });
+      await expect(canvas.getByText("/srv/projects", { exact: true })).toBeVisible();
+      await expect(canvas.queryByRole("alert")).toBeNull();
+      await waitFor(() => expect(parent).toHaveFocus());
+    });
+    await step("A subsequent child listing succeeds and submits its full location", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Browse directory oc-ui" }));
+      await canvas.findByText("No child directories.");
+      await userEvent.click(canvas.getByRole("button", { name: "Add project" }));
+      await expect(recoveryOnAddProject).toHaveBeenCalledWith({
+        directory: "/srv/projects/oc-ui",
+        workspaceID: "workspace-1",
+      });
+    });
+  },
+};
+
+export const NavigationFailure: Story = {
+  render: NavigationFailureRecovery.render,
+  play: async () => {
+    const currentDialog = await screen.findByRole("dialog", { name: "Add project" });
+    const canvas = within(currentDialog);
+    await userEvent.click(await canvas.findByRole("button", { name: "Browse directory oc-ui" }));
+    await canvas.findByText("Not listed");
+  },
+};
+
+const longFailedDirectory = `/srv/${"x".repeat(240)}`;
+const longDirectoryList = fn<OpenCodeClient["file"]["list"]>(() =>
+  Promise.reject(new Error("Directory unavailable.")),
+);
+
+export const LongDirectoryListingFailure: Story = {
+  globals: { theme: "light", viewport: { value: "mobile", isRotated: false } },
+  render: () => {
+    longDirectoryList.mockClear();
+    return dialog({
+      initialLocation: { directory: longFailedDirectory, workspaceID: "workspace-1" },
+      listDirectory: longDirectoryList,
+    });
+  },
+  play: async ({ step }) => {
+    const currentDialog = await screen.findByRole("dialog", { name: "Add project" });
+    const canvas = within(currentDialog);
+    const retry = await canvas.findByRole("button", { name: "Retry" });
+    const browser = canvas
+      .getByRole("region", { name: "Project directory" })
+      .querySelector<HTMLElement>(".server-directory-browser");
+    if (!browser) throw new Error("Project directory browser did not render");
+
+    await step("Keep Retry visible and reachable beside a long failed target", async () => {
+      await expect(canvas.getByText(longFailedDirectory, { exact: true })).toBeVisible();
+      await expect(canvas.getByRole("alert")).toHaveTextContent(longFailedDirectory);
+      await expect(canvas.getByRole("button", { name: "Add project" })).toBeDisabled();
+      await expect(
+        canvas.queryByRole("button", { name: "Back to previous successfully listed directory" }),
+      ).toBeNull();
+      await waitFor(async () => {
+        const bounds = browser.getBoundingClientRect();
+        const control = retry.getBoundingClientRect();
+        const path = canvas.getByText(longFailedDirectory, { exact: true }).getBoundingClientRect();
+        await expect(browser.scrollWidth).toBeLessThanOrEqual(browser.clientWidth);
+        await expect(path.left).toBeGreaterThanOrEqual(bounds.left);
+        await expect(path.right).toBeLessThanOrEqual(bounds.right);
+        await expect(control.left).toBeGreaterThanOrEqual(bounds.left);
+        await expect(control.right).toBeLessThanOrEqual(bounds.right);
+        await expect(control.top).toBeGreaterThanOrEqual(bounds.top);
+        await expect(control.bottom).toBeLessThanOrEqual(bounds.bottom);
+        await expect(
+          retry.contains(
+            document.elementFromPoint(
+              control.left + control.width / 2,
+              control.top + control.height / 2,
+            ),
+          ),
+        ).toBe(true);
+      });
+    });
+
+    await step("Retry the same unlisted location with pointer and keyboard", async () => {
+      await userEvent.click(retry);
+      const pointerRetry = await canvas.findByRole("button", { name: "Retry" });
+      await expect(pointerRetry).not.toBe(retry);
+      await waitFor(() => expect(pointerRetry).toHaveFocus());
+      await userEvent.keyboard("{Enter}");
+      await canvas.findByText("Not listed");
+      await expect(longDirectoryList).toHaveBeenCalledTimes(3);
+      await expect(longDirectoryList).toHaveBeenLastCalledWith(
+        {
+          location: { directory: longFailedDirectory, workspace: "workspace-1" },
+          path: longFailedDirectory,
+        },
+        { signal: expect.any(AbortSignal) },
+      );
+      await expect(canvas.getByRole("button", { name: "Add project" })).toBeDisabled();
+    });
+  },
+};
+
+export const LongDirectoryListingFailureDark: Story = {
+  ...LongDirectoryListingFailure,
+  globals: { theme: "dark", viewport: { value: "mobile", isRotated: false } },
 };
 
 export const ValidationFailure = {

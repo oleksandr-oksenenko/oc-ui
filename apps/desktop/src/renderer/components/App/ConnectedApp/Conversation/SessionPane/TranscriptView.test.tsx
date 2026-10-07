@@ -178,6 +178,42 @@ function stubAnimationFrames() {
 }
 
 describe("TranscriptView", () => {
+  it.each(["status", "idle marker", "next user", "prose"] as const)(
+    "keeps completed activity live until %s ends it",
+    (ending) => {
+      stubResizeObserver();
+      const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+        toolAssistantMessage("response", "completed-tool"),
+      ]);
+      const [status, setStatus] = createSignal<"running" | "idle">("running");
+      const { host, dispose } = mount(() => (
+        <TranscriptView sessionID="session" messages={messages} sessionStatus={status()} />
+      ));
+      const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+      expect(activity.textContent).toBe("Used 1 other tool");
+      expect(activity.querySelector(".transcript-activity-pulse")).not.toBeNull();
+      setMessages(1, textAssistantMessage("next-cycle", "   "));
+      expect(activity.querySelector(".transcript-activity-pulse")).not.toBeNull();
+      switch (ending) {
+        case "status":
+          setStatus("idle");
+          break;
+        case "idle marker":
+          setMessages(2, { id: "idle", type: "idle", time: base, outcome: "succeeded" });
+          break;
+        case "next user":
+          setMessages(2, { id: "user", type: "user", time: base, text: "Continue" });
+          break;
+        case "prose":
+          setMessages(1, textAssistantMessage("next-cycle", "Here is the result."));
+          break;
+      }
+      expect(activity.querySelector(".transcript-activity-pulse")).toBeNull();
+      dispose();
+      vi.unstubAllGlobals();
+    },
+  );
+
   it("updates shell rows from background work to a visible command failure without resetting output", () => {
     stubResizeObserver();
     const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
@@ -203,6 +239,8 @@ describe("TranscriptView", () => {
       <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(activity.textContent).toBe("Started 1 command");
+    expect(activity.querySelector(".transcript-activity-pulse")).not.toBeNull();
     activity.click();
     const tool = host.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
     expect(tool.querySelector(".transcript-tool-status")?.textContent).toBe("Running");
@@ -216,6 +254,7 @@ describe("TranscriptView", () => {
       metadata: { status: "completed", exit: 1 },
     });
     expect(activity.textContent).toBe("Ran 1 command");
+    expect(activity.querySelector(".transcript-activity-pulse")).not.toBeNull();
     expect(host.querySelector(".transcript-tool-header")).toBe(tool);
     expect(tool.getAttribute("aria-expanded")).toBe("true");
     expect(tool.querySelector(".transcript-tool-status")?.textContent).toBe("Failed");
@@ -229,7 +268,7 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
-  it("updates live activity summaries and failures without moving prose or resetting expansion", () => {
+  it("updates activity counts and failures without moving prose or resetting expansion", () => {
     stubResizeObserver();
     const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
       {
@@ -246,7 +285,8 @@ describe("TranscriptView", () => {
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     expect(activity.textContent).not.toContain("Working");
-    expect(activity.textContent).toContain("check");
+    expect(activity.textContent).toBe("Running");
+    expect(activity.querySelector(".transcript-activity-pulse")).not.toBeNull();
     expect(activity.getAttribute("aria-expanded")).toBe("false");
     activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("true");
@@ -258,13 +298,17 @@ describe("TranscriptView", () => {
     expect(activity.textContent).not.toContain("Working");
     expect(host.querySelector(".transcript-tool-call")).not.toBeNull();
     setMessages(0, "content", 1, assistant("first", "error"));
-    expect(activity.textContent).toBe("Used 1 other tool");
+    expect(activity.textContent).toBe("Used 1 other tool, thinking");
+    expect(activity.querySelector(".transcript-activity-pulse")).not.toBeNull();
     const tool = host.querySelector<HTMLButtonElement>(".transcript-tool-header")!;
     tool.click();
     setMessages(0, "content", 3, { type: "text", text: "After" });
+    expect(activity.textContent).toBe("Used 1 other tool, thought");
     setMessages(0, "content", 4, assistant("second", "completed"));
     const groups = host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger");
     expect(groups).toHaveLength(2);
+    expect(activity.querySelector(".transcript-activity-pulse")).toBeNull();
+    expect(groups[1]!.querySelector(".transcript-activity-pulse")).not.toBeNull();
     expect(groups[0]).toBe(activity);
     expect(activity.getAttribute("aria-expanded")).toBe("true");
     expect(groups[1]!.getAttribute("aria-expanded")).toBe("false");
@@ -281,6 +325,125 @@ describe("TranscriptView", () => {
     expect(
       host.querySelector(".transcript-reasoning-summary")?.getAttribute("data-annotation-block"),
     ).toBe('["content",2,"reasoning"]');
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a background launch historical after its completion notification", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      {
+        ...toolAssistantMessage("launch", "shell"),
+        time: { created: 1, completed: 2 },
+        content: [
+          {
+            type: "tool",
+            id: "shell-tool",
+            name: "shell",
+            time: { created: 1, completed: 2 },
+            state: {
+              status: "completed",
+              input: { command: "pnpm watch" },
+              metadata: { status: "running", shellID: "background" },
+              content: [{ type: "text", text: "Command moved to the background" }],
+            },
+          },
+        ],
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+    ));
+    const header = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(header.textContent).toBe("Started 1 command");
+    expect(header.querySelector(".transcript-activity-pulse")).toBeNull();
+    setMessages(1, {
+      id: "completion",
+      type: "synthetic",
+      time: { created: 3 },
+      description: "pnpm watch",
+      text: "Command completed with exit code 0",
+      metadata: { shellID: "background", state: "completed" },
+    });
+    expect(host.querySelector(".transcript-activity-trigger")).toBe(header);
+    expect(header.textContent).toBe("Started 1 command");
+    expect(header.querySelector(".transcript-activity-pulse")).toBeNull();
+    expect(
+      host.querySelector('[data-message-id="completion"]')?.closest(".transcript-activity"),
+    ).toBeNull();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("settles untimed reasoning before context while the next cycle keeps the turn active", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      {
+        ...toolAssistantMessage("first-cycle", "read"),
+        time: { created: 1 },
+        content: [{ type: "reasoning", text: "First thought" }],
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const first = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(first.textContent).toBe("Thinking");
+    first.click();
+    setMessages(0, "time", { created: 1, completed: 2 });
+    expect(first.textContent).toBe("Thought");
+    expect(first.querySelector(".transcript-activity-pulse")).not.toBeNull();
+    expect(first.getAttribute("aria-expanded")).toBe("true");
+    setMessages(1, {
+      id: "context",
+      type: "synthetic",
+      time: base,
+      text: "Continuing after restart",
+    });
+    setMessages(2, {
+      ...toolAssistantMessage("next-cycle", "read"),
+      time: { created: 3 },
+      content: [{ type: "reasoning", text: "Next thought" }],
+    });
+    const headers = host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger");
+    expect(headers).toHaveLength(2);
+    expect(headers[0]).toBe(first);
+    expect(headers[0]!.textContent).toBe("Thought");
+    expect(headers[1]!.textContent).toBe("Thinking");
+    expect(first.getAttribute("aria-expanded")).toBe("true");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("lets the latest chained cycle own reasoning completion without collapsing the turn", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageAssistant[]>([
+      {
+        ...toolAssistantMessage("first-cycle", "read"),
+        time: { created: 1, completed: 2 },
+        content: [{ type: "reasoning", text: "First thought" }],
+      },
+      {
+        ...toolAssistantMessage("next-cycle", "read"),
+        time: { created: 3 },
+        content: [{ type: "reasoning", text: "Next thought" }],
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const header = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
+    expect(host.querySelectorAll(".transcript-activity-trigger")).toHaveLength(1);
+    expect(header.textContent).toBe("Thought, thinking");
+    header.click();
+    setMessages(1, "content", []);
+    expect(header.textContent).toBe("Thought");
+    setMessages(1, "content", [{ type: "reasoning", text: "Next thought" }]);
+    expect(header.textContent).toBe("Thought, thinking");
+    setMessages(1, "time", "completed", 3);
+    expect(header.textContent).toBe("Thought");
+    expect(header.querySelector(".transcript-activity-pulse")).not.toBeNull();
+    expect(header.getAttribute("aria-expanded")).toBe("true");
     dispose();
     vi.unstubAllGlobals();
   });
@@ -308,6 +471,7 @@ describe("TranscriptView", () => {
     ));
     const first = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     expect(first.getAttribute("aria-expanded")).toBe("false");
+    expect(first.querySelector(".transcript-activity-pulse")).not.toBeNull();
     setResponses(0, "content", 1, { type: "reasoning", text: "Checking another path" });
     expect(first.textContent).toContain("Used 1 other tool");
     expect(first.getAttribute("aria-expanded")).toBe("false");
@@ -315,12 +479,14 @@ describe("TranscriptView", () => {
     first.click();
     setResponses(0, "time", "completed", 2);
     setResponses(0, "finish", "tool-calls");
+    expect(first.querySelector(".transcript-activity-pulse")).not.toBeNull();
     setResponses(1, toolAssistantMessage("second-cycle", "write"));
     const panels = host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger");
     expect(panels).toHaveLength(1);
     expect(panels[0]).toBe(first);
     expect(first.getAttribute("aria-expanded")).toBe("true");
     expect(first.textContent).toContain("Used 2 other tools");
+    expect(first.querySelector(".transcript-activity-pulse")).not.toBeNull();
 
     const secondTool = host.querySelector<HTMLButtonElement>(
       '.transcript-activity-continuation[data-message-id="second-cycle"] .transcript-tool-header',
@@ -340,6 +506,7 @@ describe("TranscriptView", () => {
       "second-cycle",
     );
     setResponses(1, "content", 2, { type: "text", text: "Done" });
+    expect(first.querySelector(".transcript-activity-pulse")).toBeNull();
     expect(host.querySelector(".transcript-activity-continuation .transcript-tool-header")).toBe(
       secondTool,
     );
@@ -351,6 +518,7 @@ describe("TranscriptView", () => {
     expect(host.querySelectorAll(".transcript-activity-trigger")).toHaveLength(2);
     setEnded(true);
     setStatus("idle");
+    expect(host.querySelector(".transcript-activity-pulse")).toBeNull();
     expect(first.textContent).toContain("Used 2 other tools");
     expect(first.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(first);
@@ -644,8 +812,8 @@ describe("TranscriptView", () => {
     );
     expect(host.textContent).toContain("Before");
     expect(host.textContent).toContain("After");
-    expect(host.textContent).toContain("Activity");
-    expect(host.textContent).toContain("Ran 1 command and loaded 1 skill");
+    expect(host.textContent).toContain("Thought");
+    expect(host.textContent).toContain("Ran 1 command, loaded 1 skill");
     expect(host.textContent).not.toContain("echo hi");
     host.querySelectorAll<HTMLButtonElement>(".transcript-activity-trigger")[1]!.click();
     expect(host.textContent).toContain("echo hi");
@@ -946,7 +1114,8 @@ describe("TranscriptView", () => {
     ));
     const activity = host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!;
     expect(activity.getAttribute("aria-expanded")).toBe("false");
-    expect(activity.textContent).toContain("Shell · pnpm test");
+    expect(activity.textContent).toBe("Running");
+    expect(activity.querySelector(".transcript-activity-pulse")).not.toBeNull();
     activity.click();
     activity.click();
     expect(activity.getAttribute("aria-expanded")).toBe("false");

@@ -200,30 +200,11 @@ describe("packaged owned OpenCode", () => {
     const secondPid = await recordWorker();
     assert.notEqual(secondPid, firstPid);
     await verifyHealth(secondPid);
-    const terminalPid = await browser.execute(async (directory) => {
-      const result = await window.desktop.localOpenCode.connect();
-      if (result.status !== "connected") throw new Error(result.message);
-      const endpoint = new URL("/api/pty", result.connection.serverUrl);
-      endpoint.searchParams.set("location[directory]", directory);
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${btoa(`opencode:${result.connection.password}`)}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          command: "/bin/sh",
-          args: ["-c", "read remaining"],
-          cwd: directory,
-        }),
-      });
-      if (response.status !== 200) throw new Error(`Native PTY failed: ${response.status}`);
-      return (await response.json()).data.pid;
-    }, userDataPath);
-    assert.ok(Number.isSafeInteger(terminalPid) && terminalPid > 0);
-    terminalPids.push(terminalPid);
-    globalThis.process.kill(terminalPid, 0);
     await browser.saveScreenshot(join(artifactDirectory, "owned-runtime-connected.png"));
+  });
+
+  it("runs the packaged terminal with bundled fonts and owns its processes through quit", async () => {
+    await verifyBundledTerminal();
   });
 
   after(async () => {
@@ -238,6 +219,115 @@ describe("packaged owned OpenCode", () => {
     for (const pid of terminalPids) await waitForProcessExit(pid);
   });
 });
+
+/** Exercise packaged assets and real UI input, then leave a UI-owned PTY for quit. */
+async function verifyBundledTerminal(): Promise<void> {
+  await $(".shell-session-title=Native fixture one").waitForClickable();
+  await $(".shell-session-title=Native fixture one").click();
+  const result = await browser.execute(() => window.desktop.localOpenCode.connect());
+  if (result.status !== "connected") throw new Error(result.message);
+  const api = OpenCode.make({
+    baseUrl: result.connection.serverUrl,
+    headers: {
+      Authorization: `Basic ${Buffer.from(`opencode:${result.connection.password}`).toString("base64")}`,
+    },
+  });
+  const location = { directory: await realpath(projectDirectory) };
+  await $('[aria-label="Show terminal"]').waitForClickable();
+  await $('[aria-label="Show terminal"]').click();
+  const create = async () => {
+    const existing = new Set((await api.pty.list({ location })).data.map((pty) => pty.id));
+    await $('[aria-label="New terminal"]').waitForClickable();
+    await $('[aria-label="New terminal"]').click();
+    await browser.waitUntil(
+      async () => {
+        const surface = $(".terminal-surface:not([hidden])");
+        if (!(await surface.isExisting())) return false;
+        const id = await surface.getAttribute("data-terminal-id");
+        return id !== null && !existing.has(id);
+      },
+      { timeout: STARTUP_TIMEOUT_MS },
+    );
+    await $('.terminal-surface:not([hidden])[data-ready="true"]').waitForDisplayed({
+      timeout: STARTUP_TIMEOUT_MS,
+    });
+    await browser.waitUntil(
+      async () =>
+        (await $('.terminal-panel-tab [role="tab"][aria-selected="true"]').getAttribute(
+          "data-status",
+        )) === "connected",
+      { timeout: STARTUP_TIMEOUT_MS, timeoutMsg: "Packaged terminal did not connect" },
+    );
+    const id = await $(".terminal-surface:not([hidden])").getAttribute("data-terminal-id");
+    assert.ok(id);
+    const info = (await api.pty.get({ ptyID: id, location })).data;
+    assert.equal(info.cwd, location.directory);
+    assert.equal(info.status, "running");
+    assert.ok(Number.isSafeInteger(info.pid) && info.pid > 0);
+    terminalPids.push(info.pid);
+    globalThis.process.kill(info.pid, 0);
+    return info;
+  };
+  const terminal = await create();
+  // Readiness and real input require the packaged WASM parser to initialize.
+  // Also establish that its bundled font is delivered, rather than a fallback.
+  // Chromium does not expose file-scheme fetches in Resource Timing. Resolve
+  // the shipped asset through Electron's ASAR-aware filesystem instead.
+  const font = await browser.electron.execute((electron) => {
+    const fs = process.getBuiltinModule("node:fs");
+    const path = process.getBuiltinModule("node:path");
+    const directory = path.join(electron.app.getAppPath(), "out", "renderer", "assets");
+    const names: string[] = fs.readdirSync(directory);
+    const name = names.find((entry) => /^JetBrainsMonoNerdFontMono-Regular.*\.ttf$/u.test(entry));
+    if (!name) throw new Error("Packaged terminal font is missing");
+    return Array.from(fs.readFileSync(path.join(directory, name)).subarray(0, 4));
+  });
+  assert.deepEqual(font, [0, 1, 0, 0]);
+  await $('.terminal-surface:not([hidden]) [aria-label="Terminal output"]').click();
+  await browser.waitUntil(
+    async () =>
+      (await browser.execute(() => document.activeElement?.getAttribute("aria-label"))) ===
+      "Terminal input",
+  );
+  await browser.keys(
+    "pwd -P > .git/packaged-terminal-cwd.txt; printf 'packaged-terminal\\n' > .git/packaged-terminal-input.txt",
+  );
+  await browser.keys("Enter");
+  await browser.waitUntil(
+    async () =>
+      (await readFile(join(projectDirectory, ".git", "packaged-terminal-input.txt"), "utf8").catch(
+        () => "",
+      )) === "packaged-terminal\n",
+    {
+      timeout: STARTUP_TIMEOUT_MS,
+      timeoutMsg: "Packaged terminal keyboard input did not reach the bundled server",
+    },
+  );
+  assert.equal(
+    await readFile(join(projectDirectory, ".git", "packaged-terminal-cwd.txt"), "utf8"),
+    `${location.directory}\n`,
+  );
+  await browser.saveScreenshot(join(artifactDirectory, "packaged-terminal.png"));
+  const title = await $('.terminal-panel-tab [role="tab"][aria-selected="true"]').getAttribute(
+    "aria-label",
+  );
+  await $(`[aria-label="Close terminal ${title}"]`).click();
+  await browser.waitUntil(
+    async () => !(await api.pty.list({ location })).data.some((pty) => pty.id === terminal.id),
+    {
+      timeout: STARTUP_TIMEOUT_MS,
+      timeoutMsg: "Closing the packaged terminal left its server PTY behind",
+    },
+  );
+  await waitForProcessExit(terminal.pid);
+  const remaining = await create();
+  assert.notEqual(remaining.id, terminal.id);
+  await $('.terminal-surface:not([hidden]) [aria-label="Terminal output"]').click();
+  await browser.keys("exec /bin/sh -c 'read remaining'");
+  await browser.keys("Enter");
+  // after() verifies this live terminal and the bundled worker both exit on quit.
+  globalThis.process.kill(remaining.pid, 0);
+}
 
 /** Supply the two sessions needed by later native-boundary checks. */
 async function createBundledSessions(): Promise<void> {

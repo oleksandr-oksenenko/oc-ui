@@ -14,7 +14,8 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-const snippet = { code: 'const x = "hello";\n\n', language: "ts", theme: "light" as const };
+// The renderer resolves aliases before dispatching canonical IDs to the tokenizer.
+const snippet = { code: 'const x = "hello";\n\n', language: "typescript", theme: "light" as const };
 const create = () => createHighlighter({ themes: Object.values(syntaxThemes), langs: [] });
 function runtime(factory = create) {
   return ManagedRuntime.make(Layer.effect(SyntaxHighlight, makeSyntaxTokenizer(factory)));
@@ -34,9 +35,7 @@ describe("SyntaxTokenizer", () => {
       expect(first?.map((line) => line.map((token) => token.content).join("")).join("\n")).toBe(
         snippet.code,
       );
-      expect(await owner.runPromise(highlight({ ...snippet, language: "typescript" }))).toEqual(
-        first,
-      );
+      expect(await owner.runPromise(highlight())).toEqual(first);
       const dark = await owner.runPromise(highlight({ ...snippet, theme: "dark" }));
       expect(dark?.[0]?.[0]?.color).not.toBe(first?.[0]?.[0]?.color);
       expect(factory).toHaveBeenCalledTimes(1);

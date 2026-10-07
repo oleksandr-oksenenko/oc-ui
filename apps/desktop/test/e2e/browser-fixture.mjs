@@ -130,6 +130,35 @@ export async function startTlsProxy(tls, upstream) {
     outgoing.on("close", () => forwarded.destroy());
     incoming.pipe(forwarded);
   });
+  // Forward the real PTY upgrade, preserving its Origin and single-use ticket.
+  server.on("upgrade", (incoming, socket, head) => {
+    if (unavailable) {
+      socket.destroy();
+      return;
+    }
+    const forwarded = request(new URL(incoming.url, upstream), {
+      method: incoming.method,
+      headers: incoming.headers,
+    });
+    forwarded.on("error", () => socket.destroy());
+    socket.on("error", () => forwarded.destroy());
+    socket.once("close", () => forwarded.destroy());
+    forwarded.once("response", () => socket.destroy());
+    forwarded.once("upgrade", (response, remote, remoteHead) => {
+      remote.on("error", () => socket.destroy());
+      remote.once("close", () => socket.destroy());
+      socket.once("close", () => remote.destroy());
+      socket.write(`HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n`);
+      for (let index = 0; index < response.rawHeaders.length; index += 2)
+        socket.write(`${response.rawHeaders[index]}: ${response.rawHeaders[index + 1]}\r\n`);
+      socket.write("\r\n");
+      if (remoteHead.length) socket.write(remoteHead);
+      if (head.length) remote.write(head);
+      remote.pipe(socket);
+      socket.pipe(remote);
+    });
+    forwarded.end();
+  });
   server.on("connection", (socket) => {
     connections.add(socket);
     socket.once("close", () => connections.delete(socket));
@@ -146,6 +175,7 @@ export async function startTlsProxy(tls, upstream) {
     },
     close: () =>
       new Promise((resolve) => {
+        for (const socket of connections) socket.destroy();
         server.close(resolve);
         server.closeAllConnections();
       }),

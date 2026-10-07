@@ -29,6 +29,12 @@ let failed = false;
 let permissionRequestNumber = 0;
 const errors = [];
 const artifacts = new URL("../../dist/web-artifacts/", import.meta.url).pathname;
+const modelRoute = (url) => url.pathname === "/api/model";
+const modelDefaultRoute = (url) => url.pathname === "/api/model/default";
+const agentRoute = (url) => url.pathname === "/api/agent";
+const failCatalog = (route) =>
+  route.fulfill({ status: 503, json: { message: "Catalog unavailable" } });
+const failFont = (route) => route.fulfill({ status: 503, body: "Temporary font failure" });
 
 // A 1×1 PNG so the resolved server file decodes as a real image.
 const acceptancePng = Buffer.from(
@@ -178,7 +184,8 @@ beforeAll(async () => {
   page.on("pageerror", (error) => errors.push(error.message));
   page.setDefaultTimeout(30_000);
   await mkdir(artifacts, { recursive: true });
-});
+  // Cold production and pinned-server builds share the machine with other test projects.
+}, 180_000);
 
 afterAll(async () => {
   const cleanup = await Promise.allSettled([
@@ -456,6 +463,192 @@ describe.sequential("production browser app", () => {
     await connect();
   });
 
+  it("opens session drafts from both empty states and browses a hidden sidebar", async () => {
+    const empty = page.getByRole("region", { name: "Session", exact: true });
+    await empty.getByRole("heading", { name: "No session selected" }).waitFor();
+    const sidebar = page.getByRole("complementary", { name: "Sessions", exact: true });
+    await sidebar.getByText("No sessions yet.", { exact: true }).waitFor();
+    expect((await api.session.list({ limit: 100 })).data).toHaveLength(0);
+    await page.getByRole("button", { name: "Hide sessions", exact: true }).click();
+    await empty.getByRole("button", { name: "Browse sessions" }).click();
+    await sidebar.getByRole("button", { name: "New session", exact: true }).waitFor();
+    await empty.getByRole("button", { name: "New session", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("region", { name: "New session", exact: true }).waitFor();
+    await page.reload();
+    await connect();
+    await empty.getByRole("heading", { name: "No session selected" }).waitFor();
+    await page.setViewportSize({ width: 430, height: 760 });
+    await empty.getByRole("button", { name: "Browse sessions" }).click();
+    await sidebar.getByRole("button", { name: "New session", exact: true }).click();
+    await page.getByRole("region", { name: "New session", exact: true }).waitFor();
+    expect((await api.session.list({ limit: 100 })).data).toHaveLength(0);
+    await page.setViewportSize({ width: 1280, height: 860 });
+  });
+
+  it.each(["global", "session"])(
+    "opens %s request links through the host boundary without answering the request",
+    async (scope) => {
+      await ensureConnected();
+      const session = await api.session.create({
+        title: `External actions ${scope}`,
+        location: { directory: await realpath(project) },
+      });
+      await selectSession(session.title);
+      const sessionID = scope === "global" ? "global" : session.id;
+      const url = "https://example.invalid/request?source=external-action";
+      const failureMessage =
+        "This link could not be opened. Copy the address and open it in your browser.";
+      const failure = page.getByText(failureMessage, { exact: true });
+      const form = await api.form.create({
+        sessionID,
+        title: `External request ${scope}`,
+        fields: [
+          { key: "answer", type: "string", title: "Request answer", required: true },
+          { key: "docs", type: "external", title: "Request documentation", url },
+        ],
+      });
+      let cancellationForm;
+      const openReview = async () => {
+        await page.getByRole("button", { name: "Review 1 request", exact: true }).click();
+        await page.getByRole("dialog").waitFor();
+      };
+      if (scope === "global") await openReview();
+      const request = page.locator(".question-form").filter({ hasText: form.title });
+      const open = request.getByRole("button", { name: "Open Request documentation", exact: true });
+      await page.evaluate(() => {
+        window.acceptanceExternalCalls = [];
+        window.acceptanceOpenFails = false;
+        window.acceptanceOriginalOpen = window.open;
+        window.open = (...args) => {
+          window.acceptanceExternalCalls.push(args);
+          if (window.acceptanceOpenFails) throw new Error("Host opener unavailable");
+          return null;
+        };
+      });
+      try {
+        await expect.poll(() => open.isEnabled()).toBe(true);
+        await request.getByRole("textbox", { name: "Request answer" }).fill("Preserved answer");
+        await open.click();
+        await open.press("Enter");
+        await expect
+          .poll(() => page.evaluate(() => window.acceptanceExternalCalls))
+          .toEqual([
+            [url, "_blank", "noopener,noreferrer"],
+            [url, "_blank", "noopener,noreferrer"],
+          ]);
+        expect(await api.form.state({ sessionID, formID: form.id })).toEqual({ status: "pending" });
+        expect(await open.evaluate((node) => node === document.activeElement)).toBe(true);
+
+        await failure.waitFor({ state: "hidden" });
+        await page.evaluate(() => {
+          window.acceptanceOpenFails = true;
+        });
+        await open.press("Space");
+        await expect
+          .poll(() => page.evaluate(() => window.acceptanceExternalCalls))
+          .toEqual(Array.from({ length: 3 }, () => [url, "_blank", "noopener,noreferrer"]));
+        await failure.waitFor();
+        expect(await open.evaluate((node) => node === document.activeElement)).toBe(true);
+        expect(await request.getByRole("textbox", { name: "Request answer" }).inputValue()).toBe(
+          "Preserved answer",
+        );
+        expect(await api.form.state({ sessionID, formID: form.id })).toEqual({ status: "pending" });
+        await page.evaluate(() => {
+          window.acceptanceOpenFails = false;
+        });
+
+        if (scope === "global") {
+          await page.getByRole("button", { name: "Keep pending", exact: true }).click();
+          await page.getByRole("dialog").waitFor({ state: "hidden" });
+          await openReview();
+          expect(await request.getByRole("textbox", { name: "Request answer" }).inputValue()).toBe(
+            "Preserved answer",
+          );
+        } else {
+          const other = await api.session.create({ title: "External action navigation" });
+          try {
+            await selectSession(other.title);
+            await selectSession(session.title);
+          } finally {
+            await api.session.remove({ sessionID: other.id });
+          }
+          expect(await request.getByRole("textbox", { name: "Request answer" }).inputValue()).toBe(
+            "Preserved answer",
+          );
+        }
+        await expect.poll(() => open.isEnabled()).toBe(true);
+        proxy.disconnect();
+        await expect.poll(() => open.isDisabled()).toBe(true);
+        proxy.reconnect();
+        await expect
+          .poll(() => page.locator(".shell-server-selector").getAttribute("aria-label"))
+          .toMatch(/Connected$/u);
+        await expect.poll(() => open.isEnabled()).toBe(true);
+        await open.click();
+        await expect.poll(() => page.evaluate(() => window.acceptanceExternalCalls.length)).toBe(4);
+
+        let release;
+        const held = new Promise((resolve) => {
+          release = resolve;
+        });
+        const replyUrl = `**/session/${sessionID}/form/${form.id}/reply`;
+        const holdReply = async (route) => {
+          await held;
+          await route.continue();
+        };
+        await page.route(replyUrl, holdReply);
+        try {
+          try {
+            await request.getByRole("button", { name: "Continue", exact: true }).click();
+            await expect.poll(() => open.isDisabled()).toBe(true);
+          } finally {
+            release();
+          }
+          await expect
+            .poll(() => api.form.state({ sessionID, formID: form.id }))
+            .toEqual({ status: "answered", answer: { answer: "Preserved answer", docs: true } });
+          await request.waitFor({ state: "hidden" });
+        } finally {
+          await page.unroute(replyUrl, holdReply);
+        }
+
+        cancellationForm = await api.form.create({
+          sessionID,
+          title: `Cancel external request ${scope}`,
+          fields: [{ key: "docs", type: "external", title: "Request documentation", url }],
+        });
+        const cancellation = page
+          .locator(".question-form")
+          .filter({ hasText: cancellationForm.title });
+        await cancellation.getByRole("button", { name: "Cancel", exact: true }).click();
+        await expect
+          .poll(() => api.form.state({ sessionID, formID: cancellationForm.id }))
+          .toEqual({ status: "cancelled" });
+        await cancellation.waitFor({ state: "hidden" });
+      } finally {
+        proxy.reconnect();
+        await page.evaluate(() => {
+          window.open = window.acceptanceOriginalOpen;
+          delete window.acceptanceOriginalOpen;
+          delete window.acceptanceExternalCalls;
+          delete window.acceptanceOpenFails;
+        });
+        for (const pending of [form, cancellationForm].filter(Boolean)) {
+          if ((await api.form.state({ sessionID, formID: pending.id })).status === "pending") {
+            await api.form.cancel({ sessionID, formID: pending.id });
+          }
+        }
+        if (scope === "global" && (await page.getByRole("dialog").count())) {
+          await page.getByRole("button", { name: "Keep pending", exact: true }).click();
+          await page.getByRole("dialog").waitFor({ state: "hidden" });
+        }
+        await failure.waitFor({ state: "hidden" });
+        await api.session.remove({ sessionID: session.id });
+      }
+    },
+  );
+
   it("uses the centered composer, directory dialog and independent persistent drafts", async () => {
     const opener = page.getByRole("button", { name: "Create session", exact: true });
     await opener.click();
@@ -466,10 +659,67 @@ describe.sequential("production browser app", () => {
     await page.getByRole("button", { name: "Add project…", exact: true }).click();
     const directory = page.locator(".server-directory-browser-path");
     await expect.poll(() => directory.textContent()).toBe(await realpath(project));
+    const failedTarget = join(await realpath(project), "folder-00");
+    const listingRoute = /\/api\/fs\/list(?:\?|$)/u;
+    const failedListings = [];
+    await page.route(listingRoute, async (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get("path") !== failedTarget) return route.continue();
+      failedListings.push({
+        directory: url.searchParams.get("location[directory]"),
+        workspace: url.searchParams.get("location[workspace]"),
+      });
+      return route.abort("failed");
+    });
+    try {
+      await page.getByRole("button", { name: "Browse directory folder-00/", exact: true }).click();
+      await page.getByText("Not listed", { exact: true }).waitFor();
+      expect(await directory.textContent()).toBe(failedTarget);
+      expect(await page.getByRole("alert").textContent()).toContain(
+        `Could not list ${failedTarget}.`,
+      );
+      expect(
+        await page.getByRole("button", { name: "Add project", exact: true }).isDisabled(),
+      ).toBe(true);
+      const retry = page.getByRole("button", { name: "Retry", exact: true });
+      await expect.poll(() => retry.evaluate((node) => node === document.activeElement)).toBe(true);
+      await page.keyboard.press("Enter");
+      await expect.poll(() => failedListings.length).toBe(2);
+      await page.getByText("Not listed", { exact: true }).waitFor();
+      expect(failedListings[0].directory).toBe(await realpath(project));
+      expect(failedListings[1]).toEqual(failedListings[0]);
+      const restored = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === "/api/fs/list" &&
+          new URL(response.url()).searchParams.get("path") !== failedTarget &&
+          response.request().method() === "GET",
+      );
+      await page
+        .getByRole("button", { name: "Back to previous successfully listed directory" })
+        .click();
+      const restoredResponse = await restored;
+      expect(restoredResponse.ok()).toBe(true);
+      const restoredUrl = new URL(restoredResponse.url());
+      expect({
+        directory: restoredUrl.searchParams.get("location[directory]"),
+        workspace: restoredUrl.searchParams.get("location[workspace]"),
+      }).toEqual(failedListings[0]);
+      await page
+        .getByRole("button", { name: "Browse directory folder-00/", exact: true })
+        .waitFor();
+      expect(await directory.textContent()).toBe(await realpath(project));
+      expect(await page.getByRole("alert").count()).toBe(0);
+      expect(await page.getByRole("button", { name: "Add project", exact: true }).isEnabled()).toBe(
+        true,
+      );
+    } finally {
+      await page.unroute(listingRoute);
+    }
     await page.getByRole("button", { name: "Browse directory folder-00/", exact: true }).click();
     await page.getByText("No child directories.", { exact: true }).waitFor();
     await page.getByLabel("Go to parent directory").click();
     await expect.poll(() => directory.textContent()).toBe(await realpath(project));
+    await page.getByRole("button", { name: "Browse directory folder-00/", exact: true }).waitFor();
     await page.setViewportSize({ width: 430, height: 600 });
     await page.locator('[aria-label="Directories"]').evaluate((node) => {
       node.scrollTop = node.scrollHeight;
@@ -587,6 +837,91 @@ describe.sequential("production browser app", () => {
     expect(await page.evaluate(() => document.documentElement.dataset.host)).toBe("browser");
   });
 
+  it("recovers the session model catalog without losing the draft", async () => {
+    // Controlled catalog responses exercise rare failure/empty states; recovery
+    // returns to the authenticated pinned server's real catalog.
+    let catalogState = "failed";
+    const routeCatalog = async (route) => {
+      if (catalogState === "failed") {
+        await route.fulfill({ status: 503, json: { message: "Catalog unavailable" } });
+        return;
+      }
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), data: [] } });
+    };
+    await page.route(modelRoute, routeCatalog);
+    try {
+      await page.reload();
+      await connect();
+      await selectSession("Browser fixture two");
+      await page.getByRole("button", { name: "Retry models" }).waitFor();
+      await page.getByLabel("Prompt", { exact: true }).fill("Catalog recovery draft");
+      expect(await page.getByText("No models", { exact: true }).count()).toBe(0);
+      catalogState = "empty";
+      await page.getByRole("button", { name: "Retry models" }).click();
+      await page.getByRole("status").filter({ hasText: "No enabled models" }).waitFor();
+      await page.unroute(modelRoute, routeCatalog);
+      await page.getByRole("button", { name: "Refresh models" }).click();
+      await page.getByRole("button", { name: /^Model: Acceptance/u }).waitFor();
+      expect(await page.getByLabel("Prompt", { exact: true }).textContent()).toBe(
+        "Catalog recovery draft",
+      );
+      await selectSession("Browser fixture one");
+      await page.getByLabel("Prompt", { exact: true }).fill("Independent draft");
+    } finally {
+      await page.unroute(modelRoute, routeCatalog);
+    }
+  });
+
+  it("retries session agents and shared draft choices while retaining selections and text", async () => {
+    const directory = await realpath(secondaryProject);
+    const source = await api.session.create({
+      title: "Catalog recovery source",
+      agent: "acceptance-agent",
+      model: { providerID: "acceptance", id: "alternate", variant: "high" },
+      location: { directory },
+    });
+    await page.route(agentRoute, failCatalog);
+    try {
+      await selectSession("Catalog recovery source");
+      await page.getByRole("button", { name: "Retry agents" }).waitFor();
+      const prompt = page.getByLabel("Prompt", { exact: true });
+      await prompt.fill("Retained session draft");
+      await page.unroute(agentRoute, failCatalog);
+      await page.getByRole("button", { name: "Retry agents" }).click();
+      await page.getByLabel("Agent: acceptance-agent", { exact: true }).waitFor();
+      expect(await prompt.textContent()).toBe("Retained session draft");
+      expect((await api.session.get({ sessionID: source.id })).agent).toBe("acceptance-agent");
+      await page.route(modelDefaultRoute, failCatalog);
+      await page.getByLabel("Create session", { exact: true }).click();
+      await page.getByRole("button", { name: "Retry models" }).waitFor();
+      await prompt.fill("Retained new-session draft");
+      await page.unroute(modelDefaultRoute, failCatalog);
+      // Draft model/agent choices share one existing catalog owner: either
+      // recovery action reloads that location's choices without editing them.
+      await page.getByRole("button", { name: "Retry agents" }).click();
+      for (const label of [
+        "Agent: acceptance-agent",
+        "Model: Acceptance Alternate",
+        "Variant: high",
+      ])
+        await page.getByLabel(label, { exact: true }).waitFor();
+      expect(await prompt.textContent()).toBe("Retained new-session draft");
+      const draft = page
+        .locator(".session-drafts .shell-session-row")
+        .filter({ hasText: "Retained new-session draft" });
+      await draft.hover();
+      await draft.getByRole("button", { name: "Delete draft: Retained new-session draft" }).click();
+      await selectSession("Catalog recovery source");
+      expect(await prompt.textContent()).toBe("Retained session draft");
+      await selectSession("Browser fixture one");
+    } finally {
+      await page.unroute(agentRoute, failCatalog);
+      await page.unroute(modelDefaultRoute, failCatalog);
+      await api.session.remove({ sessionID: source.id });
+    }
+  });
+
   it("switches palettes without replacing the workspace and restores the choice after reload", async () => {
     const expectNeutralComposerFocus = async (color) => {
       await page.getByLabel("Prompt", { exact: true }).click();
@@ -647,12 +982,34 @@ describe.sequential("production browser app", () => {
     await idle();
     await send("E2E_QUESTION browser");
     await page.locator(".question-form").waitFor();
+    const questionActivity = page.locator(".transcript-activity-trigger").last();
+    await expect.poll(() => questionActivity.locator(".transcript-activity-pulse").count()).toBe(1);
+    expect(await questionActivity.textContent()).toBe("Running");
     await expect
       .poll(() => page.locator('.shell-session-row.selected [data-status="question"]').count())
       .toBe(1);
     await page.locator(".question-form label").filter({ hasText: "Alpha" }).click();
+    await selectSession("Browser fixture two");
+    await page.locator(".question-form").waitFor({ state: "hidden" });
+    await selectSession("Browser fixture one");
+    await expect
+      .poll(() => page.locator('.question-form input[value="option:0"]').isChecked())
+      .toBe(true);
+    await page.route(
+      "**/api/session/*/form/*/reply",
+      (route) => route.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
+      { times: 1 },
+    );
+    await page.locator('.question-form button[type="submit"]').click();
+    await page.getByRole("alert").filter({ hasText: "The form could not be submitted" }).waitFor();
+    await selectSession("Browser fixture two");
+    await selectSession("Browser fixture one");
+    await expect
+      .poll(() => page.locator('.question-form input[value="option:0"]').isChecked())
+      .toBe(true);
     await page.locator('.question-form button[type="submit"]').click();
     await transcript("Acceptance question resolved:");
+    await expect.poll(() => questionActivity.locator(".transcript-activity-pulse").count()).toBe(0);
     await expect
       .poll(() => page.locator(".shell-session-row.selected .shell-session-attention-dot").count())
       .toBe(0);
@@ -1183,30 +1540,25 @@ describe.sequential("production browser app", () => {
       location: { directory: await realpath(project) },
     });
     const text = "E2E_STREAM saved browser metadata\n\nCaptured browser context";
-    const metadata = browserAnnotationMetadata(text, [
+    const metadata = browserAnnotationMetadata("E2E_STREAM saved browser metadata", [
       {
-        text: "Captured browser context",
-        annotations: [
-          {
-            number: 1,
-            mode: "element",
-            body: "Give the heading more room",
-            url: "https://example.com",
-            title: "Example",
-            capturedAt: "2026-09-29T10:00:00Z",
-            fileIndex: 0,
-            selection: {
-              frameUrl: "https://example.com",
-              selector: "h1",
-              tag: "h1",
-              text: "Heading",
-              role: "heading",
-              label: "Heading",
-              topFrame: true,
-              bounds: { x: 0, y: 0, width: 100, height: 30 },
-            },
-          },
-        ],
+        number: 1,
+        mode: "element",
+        body: "Give the heading more room",
+        url: "https://example.com",
+        title: "Example",
+        capturedAt: "2026-09-29T10:00:00Z",
+        fileIndex: 0,
+        selection: {
+          frameUrl: "https://example.com",
+          selector: "h1",
+          tag: "h1",
+          text: "Heading",
+          role: "heading",
+          label: "Heading",
+          topFrame: true,
+          bounds: { x: 0, y: 0, width: 100, height: 30 },
+        },
       },
     ]);
     const screenshot = await page.evaluate(() => {
@@ -2051,6 +2403,109 @@ describe.sequential("production browser app", () => {
       expect(await readFile(join(worktree.location.directory, "branch.txt"), "utf8")).toBe(
         "Committed branch content\n",
       );
+      const worktreeConfig = {
+        model: "acceptance/worktree-only",
+        providers: {
+          acceptance: {
+            models: {
+              stream: {
+                name: "Worktree Stream",
+                limit: { context: 131072 },
+                variants: [{ id: "worktree-depth" }],
+              },
+              "worktree-only": {
+                name: "Worktree Custom",
+                capabilities: { tools: true, input: ["text"], output: ["text"] },
+                limit: { context: 65536, output: 2048 },
+                variants: [{ id: "worktree-depth" }],
+              },
+            },
+          },
+        },
+      };
+      await writeFile(
+        join(worktree.location.directory, "opencode.jsonc"),
+        JSON.stringify(worktreeConfig),
+      );
+      await page.getByLabel("Model: Worktree Stream", { exact: true }).waitFor();
+      await expect
+        .poll(() => page.locator(".composer-context-meter").getAttribute("aria-label"))
+        .toContain("131k tokens");
+      await page.getByLabel(/^Model:/u).click();
+      await page.getByPlaceholder("Search models").fill("Worktree Custom");
+      let releaseDefault;
+      let defaultRequested = false;
+      const defaultPaused = new Promise((resolve) => {
+        releaseDefault = resolve;
+      });
+      const defaultRoutes = [];
+      const holdDefault = (intercepted) => {
+        defaultRequested = true;
+        const handled = defaultPaused
+          .then(() => intercepted.continue())
+          .catch((error) => {
+            // Catalog event bursts cancel superseded default reads while their routes are held.
+            if (intercepted.request().failure()?.errorText !== "net::ERR_ABORTED") throw error;
+          });
+        defaultRoutes.push(handled);
+        return handled;
+      };
+      await page.route("**/api/model/default**", holdDefault);
+      try {
+        await writeFile(
+          join(worktree.location.directory, "opencode.jsonc"),
+          JSON.stringify({ ...worktreeConfig, model: "acceptance/stream" }),
+        );
+        await expect.poll(() => defaultRequested).toBe(true);
+        const search = page.getByPlaceholder("Search models");
+        expect(await search.inputValue()).toBe("Worktree Custom");
+        expect(await search.evaluate((element) => document.activeElement === element)).toBe(true);
+        expect(await page.locator(".composer-context-meter").getAttribute("aria-label")).toContain(
+          "131k tokens",
+        );
+      } finally {
+        releaseDefault();
+        try {
+          await Promise.all(defaultRoutes);
+        } finally {
+          await page.unroute("**/api/model/default**", holdDefault);
+        }
+      }
+      await page
+        .locator(".composer-model-option")
+        .getByText("Worktree Custom", { exact: true })
+        .click();
+      await page.getByLabel("Model: Worktree Custom", { exact: true }).waitFor();
+      await page.getByLabel(/^Variant:/u).click();
+      await page.getByRole("option", { name: "worktree-depth", exact: true }).click();
+      await page.getByLabel("Variant: worktree-depth", { exact: true }).waitFor();
+      await sendCompleted("E2E_WORKTREE_MODEL location-specific configuration");
+      expect(
+        (await providerState()).requests.some(
+          (request) =>
+            request.model === "worktree-only" && request.prompt.includes("E2E_WORKTREE_MODEL"),
+        ),
+      ).toBe(true);
+      await expect
+        .poll(() => page.locator(".composer-context-meter").getAttribute("aria-label"))
+        .toContain("66k tokens");
+      await selectSession("Browser fixture one");
+      await page.getByLabel(/^Model:/u).click();
+      await page.getByPlaceholder("Search models").fill("Worktree Custom");
+      expect(
+        await page
+          .locator(".composer-model-option")
+          .getByText("Worktree Custom", { exact: true })
+          .count(),
+      ).toBe(0);
+      await page.keyboard.press("Escape");
+      await selectSession("Background worktree admission");
+      await page.getByLabel("Model: Worktree Custom", { exact: true }).waitFor();
+      await page.reload();
+      await ensureConnected();
+      await selectSession("Background worktree admission");
+      await page.getByLabel("Model: Worktree Custom", { exact: true }).waitFor();
+      await page.getByLabel("Variant: worktree-depth", { exact: true }).waitFor();
       await api.session.remove({ sessionID: worktree.id });
       await api.worktree.remove({
         directory: worktree.location.directory,
@@ -2146,6 +2601,343 @@ describe.sequential("production browser app", () => {
     await expect.poll(() => unavailable.isEnabled()).toBe(true);
     await page.keyboard.press("Escape");
     await selectSession("Permission acceptance");
+  });
+
+  it("retains real terminal processes across hiding, session navigation and WSS recovery", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const session = await api.session.create({ title: "Terminal acceptance", location });
+    const neighbor = await api.session.create({ title: "Terminal same location", location });
+    const elsewhere = await api.session.create({
+      title: "Terminal other location",
+      location: { directory: await realpath(secondaryProject) },
+    });
+    await selectSession(session.title);
+    // A small real input application exercises alternate-screen and composed
+    // text without depending on the user's shell configuration or installed TUI.
+    await writeFile(
+      join(project, ".git", "terminal-acceptance.sh"),
+      `printf 'TERMINAL_READY\\n'
+while IFS= read -r line; do
+  case "$line" in
+    SIZE) stty size > .git/terminal-size.txt ;;
+    CLIPBOARD) printf '\\033]52;c;'; sleep 0.05; printf '?\\007'; printf '\\033\\033]52;c;?\\007]52;c;?\\007'; printf '\\302\\2350;title\\033]52;c;?\\007CLIPBOARD_DONE\\n' ;;
+    FLOOD) for ((i=0; i<2000; i++)); do printf 'flood-%04d abcdefghijklmnopqrstuvwxyz\\n' "$i"; done; printf 'FLOOD_DONE\\n' ;;
+    ALT) printf '\\033[?1049h\\033[2J\\033[HALTERNATE_READY\\n'; IFS= read -r line; printf '%s' "$line" > .git/terminal-alt.txt; printf '\\033[?1049lALTERNATE_DONE\\n' ;;
+    *) printf '%s' "$line" > .git/terminal-input.txt; printf 'REPLY:%s\\n' "$line" ;;
+  esac
+done
+`,
+    );
+    const sockets = [];
+    const output = [];
+    const sent = [];
+    const resizes = [];
+    const observeResize = (request) => {
+      if (request.method() === "PUT" && /\/api\/pty\//u.test(request.url()))
+        resizes.push({ url: request.url(), size: request.postDataJSON()?.size });
+    };
+    page.on("request", observeResize);
+    const observeSocket = (socket) => {
+      if (!/\/api\/pty\/[^/]+\/connect/u.test(socket.url())) return;
+      sockets.push(socket.url());
+      socket.on("framesent", ({ payload }) => sent.push(payload.toString()));
+      socket.on("framereceived", ({ payload }) => {
+        const text = payload.toString();
+        if (!text.startsWith("\0")) output.push(text);
+      });
+    };
+    page.on("websocket", observeSocket);
+    const disk = (name) => readFile(join(project, ".git", name), "utf8").catch(() => "");
+    const surface = () => page.locator(".terminal-surface[data-terminal-id]:visible");
+    const input = () => surface().getByLabel("Terminal input", { exact: true });
+    const type = async (text) => {
+      await input().focus();
+      await page.keyboard.type(text);
+      await page.keyboard.press("Enter");
+    };
+    const fontPattern = "**/assets/JetBrainsMonoNerdFontMono-Regular*.ttf";
+    await page.route(fontPattern, failFont);
+    let retryFont = true;
+    const create = async () => {
+      const existing = new Set((await api.pty.list({ location })).data.map((pty) => pty.id));
+      await page.getByRole("button", { name: "New terminal", exact: true }).click();
+      if (retryFont) {
+        const retry = page.getByRole("button", { name: "Retry terminal renderer", exact: true });
+        await retry.waitFor();
+        const id = await surface().getAttribute("data-terminal-id");
+        await page.unroute(fontPattern, failFont);
+        let releaseFont;
+        const heldFont = new Promise((resolve) => {
+          releaseFont = resolve;
+        });
+        const holdFont = async (route) => {
+          await heldFont;
+          await route.continue();
+        };
+        await page.route(fontPattern, holdFont);
+        try {
+          const requested = page.waitForRequest(fontPattern);
+          await retry.click();
+          await requested;
+          await page.getByRole("button", { name: "Hide terminal", exact: true }).click();
+          releaseFont();
+          const hidden = page.locator(`.terminal-surface[data-terminal-id="${id}"]`);
+          await expect.poll(() => hidden.getAttribute("data-ready")).toBe("true");
+          expect(sockets).toHaveLength(0);
+          expect(resizes.filter((request) => request.url.includes(id))).toEqual([]);
+          await page.getByRole("button", { name: "Show terminal", exact: true }).click();
+        } finally {
+          releaseFont();
+          await page.unroute(fontPattern, holdFont);
+        }
+        await expect.poll(() => surface().getAttribute("data-ready")).toBe("true");
+        expect(await surface().getAttribute("data-terminal-id")).toBe(id);
+        expect(
+          (await api.pty.list({ location })).data.filter((pty) => !existing.has(pty.id)),
+        ).toHaveLength(1);
+        retryFont = false;
+      }
+      await expect
+        .poll(async () => {
+          if ((await surface().count()) !== 1) return "No single visible surface";
+          const id = await surface().getAttribute("data-terminal-id");
+          const ready =
+            id !== null &&
+            !existing.has(id) &&
+            (await surface().getAttribute("data-ready")) === "true";
+          return ready
+            ? true
+            : page.locator(".terminal-surface").evaluateAll((nodes) =>
+                nodes.map((node) => ({
+                  id: node.getAttribute("data-terminal-id"),
+                  ready: node.getAttribute("data-ready"),
+                  hidden: node.hidden,
+                })),
+              );
+        })
+        .toBe(true);
+      await expect
+        .poll(() => page.getByRole("tab", { selected: true }).getAttribute("data-status"))
+        .toBe("connected");
+      const id = await surface().getAttribute("data-terminal-id");
+      const info = (await api.pty.get({ ptyID: id, location })).data;
+      expect(info.cwd).toBe(location.directory);
+      expect(info.status).toBe("running");
+      const title = await page.getByRole("tab", { selected: true }).getAttribute("aria-label");
+      return { id, title, node: await surface().elementHandle() };
+    };
+    const close = async (terminal) => {
+      // Use the public tab title rather than the server's opaque PTY title.
+      await page
+        .getByRole("button", { name: `Close terminal ${terminal.title}`, exact: true })
+        .click();
+      await expect
+        .poll(async () =>
+          (await api.pty.list({ location })).data.some((pty) => pty.id === terminal.id),
+        )
+        .toBe(false);
+      await expect.poll(() => terminal.node.evaluate((node) => node.isConnected)).toBe(false);
+    };
+    try {
+      await page.getByRole("button", { name: "Show terminal", exact: true }).click();
+      const first = await create();
+      await expect.poll(() => resizes.some((request) => request.url.includes(first.id))).toBe(true);
+      expect(
+        resizes
+          .filter((request) => request.url.includes(first.id))
+          .every(({ size }) => size.cols > 1 && size.rows > 1),
+      ).toBe(true);
+      expect(
+        await surface().getByLabel("Terminal output", { exact: true }).getAttribute("tabindex"),
+      ).toBe("0");
+      await type("exec /bin/bash .git/terminal-acceptance.sh");
+      await expect.poll(() => output.join("")).toContain("TERMINAL_READY\r\n");
+      const unicode = "👩🏽‍💻 e\u0301 中文";
+      await input().focus();
+      // Chromium's IME path generates real composition/input events; do not call
+      // the widget's write/input implementation or synthesize DOM events.
+      const ime = await context.newCDPSession(page);
+      try {
+        await ime.send("Input.imeSetComposition", {
+          text: unicode,
+          selectionStart: unicode.length,
+          selectionEnd: unicode.length,
+        });
+        await ime.send("Input.insertText", { text: unicode });
+      } finally {
+        await ime.detach();
+      }
+      await page.keyboard.press("Enter");
+      await expect.poll(() => disk("terminal-input.txt")).toBe(unicode);
+      await expect.poll(() => output.join("")).toContain(`REPLY:${unicode}\r\n`);
+      await page.getByRole("button", { name: "Switch to dark theme" }).click();
+      await expect
+        .poll(() =>
+          page
+            .getByRole("button", { name: "Switch to light theme" })
+            .evaluate((node) => node === document.activeElement),
+        )
+        .toBe(true);
+      expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
+      await page.screenshot({ path: join(artifacts, "browser-terminal-dark.png") });
+      await page.getByRole("button", { name: "Switch to light theme" }).click();
+      await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: uiUrl });
+      await page.evaluate(() => {
+        const read = navigator.clipboard.readText.bind(navigator.clipboard);
+        document.documentElement.dataset.terminalClipboardReads = "0";
+        navigator.clipboard.readText = () => {
+          const node = document.documentElement;
+          node.dataset.terminalClipboardReads = String(
+            Number(node.dataset.terminalClipboardReads) + 1,
+          );
+          return read();
+        };
+        return navigator.clipboard.writeText("host clipboard private sentinel");
+      });
+      await type("CLIPBOARD");
+      await expect.poll(() => output.join("")).toContain("CLIPBOARD_DONE\r\n");
+      expect(
+        await page.evaluate(() => document.documentElement.dataset.terminalClipboardReads),
+      ).toBe("0");
+      expect(sent.join("")).not.toContain(
+        Buffer.from("host clipboard private sentinel").toString("base64"),
+      );
+      await page.evaluate(() => navigator.clipboard.writeText("clipboard terminal input"));
+      await surface().getByLabel("Terminal output", { exact: true }).click({ button: "right" });
+      const clipboardMenu = page.locator(".pane-context-menu:visible");
+      expect(await clipboardMenu.getByRole("button").allTextContents()).toEqual(["Copy", "Paste"]);
+      await clipboardMenu.getByRole("button", { name: "Paste", exact: true }).click();
+      await expect.poll(() => output.join("")).toContain("clipboard terminal input");
+      await input().focus();
+      await page.keyboard.press("Enter");
+      await expect.poll(() => disk("terminal-input.txt")).toBe("clipboard terminal input");
+      await page.getByRole("button", { name: "Hide terminal", exact: true }).click();
+      expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
+      expect((await api.pty.get({ ptyID: first.id, location })).data.status).toBe("running");
+      await selectSession(neighbor.title);
+      expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
+      await selectSession(session.title);
+      await page.getByRole("button", { name: "Show terminal", exact: true }).click();
+      await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(first.id);
+      await selectSession(neighbor.title);
+      await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(first.id);
+      await selectSession(elsewhere.title);
+      expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
+      await expect
+        .poll(() => page.locator(`.terminal-surface[data-terminal-id="${first.id}"]`).isVisible())
+        .toBe(false);
+      await selectSession(session.title);
+      await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(first.id);
+      const second = await create();
+      expect(second.id).not.toBe(first.id);
+      expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
+      expect(
+        await page.locator(`.terminal-surface[data-terminal-id="${first.id}"]`).isVisible(),
+      ).toBe(false);
+      const third = await create();
+      await page.getByRole("tab", { name: first.title, exact: true }).focus();
+      for (const terminal of [second, third]) {
+        await page.keyboard.press("ArrowRight");
+        await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(terminal.id);
+        expect(
+          await page
+            .getByRole("tab", { name: terminal.title, exact: true })
+            .evaluate((node) => node === document.activeElement),
+        ).toBe(true);
+      }
+      await close(third);
+      await close(second);
+      await page.getByRole("tab", { name: first.title, exact: true }).click();
+      await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(first.id);
+
+      await type("SIZE");
+      await expect.poll(() => disk("terminal-size.txt")).toMatch(/^\d+ \d+\n$/u);
+      const before = (await disk("terminal-size.txt")).trim().split(" ").map(Number);
+      const taller = page.waitForResponse((response) => {
+        if (
+          !response.url().includes(`/api/pty/${first.id}`) ||
+          response.request().method() !== "PUT"
+        )
+          return false;
+        return response.request().postDataJSON()?.size?.rows > before[0] && response.ok();
+      });
+      await page.getByRole("separator", { name: "Resize terminal panel" }).focus();
+      for (let index = 0; index < 4; index += 1) await page.keyboard.press("ArrowUp");
+      await taller;
+      await type("SIZE");
+      await expect
+        .poll(async () => Number((await disk("terminal-size.txt")).trim().split(" ")[0]))
+        .toBeGreaterThan(before[0]);
+      const resized = page.waitForResponse((response) => {
+        if (
+          !response.url().includes(`/api/pty/${first.id}`) ||
+          response.request().method() !== "PUT"
+        )
+          return false;
+        return response.request().postDataJSON()?.size?.cols < before[1] && response.ok();
+      });
+      await page.setViewportSize({ width: 1000, height: 760 });
+      await resized;
+      await type("SIZE");
+      await expect
+        .poll(async () => Number((await disk("terminal-size.txt")).trim().split(" ")[1]))
+        .toBeLessThan(before[1]);
+      await type("ALT");
+      await expect.poll(() => output.join("")).toContain("ALTERNATE_READY\r\n");
+      await type("alternate keyboard input");
+      await expect.poll(() => disk("terminal-alt.txt")).toBe("alternate keyboard input");
+      await expect.poll(() => output.join("")).toContain("ALTERNATE_DONE\r\n");
+      await type("FLOOD");
+      await expect
+        .poll(() => output.join(""))
+        .toContain("flood-1999 abcdefghijklmnopqrstuvwxyz\r\n");
+      await expect.poll(() => output.join("")).toContain("FLOOD_DONE\r\n");
+
+      const attachments = sockets.length;
+      proxy.disconnect();
+      try {
+        await page.getByRole("button", { name: /Select server, .*Reconnecting/u }).waitFor();
+      } finally {
+        proxy.reconnect();
+      }
+      await page.getByRole("button", { name: /Select server, .*Connected/u }).waitFor();
+      await expect
+        .poll(() => page.getByRole("tab", { selected: true }).getAttribute("data-status"))
+        .toBe("connected");
+      await expect.poll(() => sockets.length).toBeGreaterThan(attachments);
+      expect(sockets.every((url) => url.startsWith("wss:"))).toBe(true);
+      expect((await api.pty.get({ ptyID: first.id, location })).data.status).toBe("running");
+      await type("after-reconnect");
+      await expect.poll(() => disk("terminal-input.txt")).toBe("after-reconnect");
+      await input().focus();
+      const finalUnicode = `final ${unicode}`;
+      await page.keyboard.insertText(finalUnicode);
+      await page.keyboard.press("Enter");
+      await expect.poll(() => disk("terminal-input.txt")).toBe(finalUnicode);
+      await expect.poll(() => output.join("")).toContain(`REPLY:${finalUnicode}\r\n`);
+      await close(first);
+
+      // Closing after rendering combining/ZWJ output must leave a fresh emulator
+      // usable; protect against the close/recreate grapheme-state regression.
+      const recreated = await create();
+      await type("printf 'recreated\\n' > .git/terminal-recreated.txt");
+      await expect.poll(() => disk("terminal-recreated.txt")).toBe("recreated\n");
+      await type(`printf 'recreated ${unicode}\\n'`);
+      await expect.poll(() => output.join("")).toContain(`recreated ${unicode}\r\n`);
+      await page.screenshot({ path: join(artifacts, "browser-terminal.png") });
+      await close(recreated);
+      expect(errors).toEqual([]);
+    } finally {
+      proxy.reconnect();
+      await page.unroute(fontPattern, failFont);
+      await page.evaluate(() => {
+        delete navigator.clipboard.readText;
+      });
+      page.off("websocket", observeSocket);
+      page.off("request", observeResize);
+      await page.setViewportSize({ width: 1280, height: 860 });
+    }
   });
 
   it("recovers from browser navigation and unavailable storage without stopping the server", async () => {

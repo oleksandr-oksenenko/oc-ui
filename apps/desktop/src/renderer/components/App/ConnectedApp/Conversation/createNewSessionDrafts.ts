@@ -6,7 +6,14 @@ import { getFilename } from "@opencode/util/path";
 import type { LocationRef } from "@opencode/client";
 import { createEffect, createMemo, on, onCleanup } from "solid-js";
 import type { ConnectedRuntime } from "../../../../opencode/runtime.ts";
-import { modelChoiceID } from "../../../../opencode/model-selection.ts";
+import { createModelCatalog } from "../../../../opencode/model-catalog.ts";
+import {
+  modelChoiceID,
+  modelChoices,
+  modelVariantAvailable,
+  resolveModel,
+  variantChoices,
+} from "../../../../opencode/model-choices.ts";
 import {
   createDraftSubmission,
   type DraftSubmissionRuntime,
@@ -62,7 +69,6 @@ export function createNewSessionDrafts(
     branches: readonly string[];
     currentBranch?: string;
     defaultBranch?: string;
-    defaultModel?: DraftChoices["model"];
     catalogLocationKey?: string;
     error?: string;
     adding?: boolean;
@@ -239,6 +245,18 @@ export function createNewSessionDrafts(
     const value = location();
     return value ? JSON.stringify([value.directory, value.workspaceID]) : undefined;
   });
+  const modelCatalog = createModelCatalog({
+    effects,
+    api: runtime.api,
+    data: runtime.data,
+    location: () => (current().catalogLocationKey === locationKey() ? location() : undefined),
+    connected: () => runtime.stream.status() === "connected",
+  });
+  const catalogsState = createMemo(() =>
+    current().catalogs === "ready" && runtime.stream.status() === "connected"
+      ? modelCatalog.state()
+      : current().catalogs,
+  );
   const refreshCatalogs = () => {
     if (runtime.stream.status() !== "connected") {
       read.cancel();
@@ -253,7 +271,6 @@ export function createNewSessionDrafts(
       error: undefined,
       currentBranch: undefined,
       defaultBranch: undefined,
-      defaultModel: undefined,
       catalogLocationKey: undefined,
     });
     if (current().projects === "loading") {
@@ -280,9 +297,9 @@ export function createNewSessionDrafts(
               }),
           ),
         );
-        const [, , vcs, branches, model] = yield* Effect.all(
+        update({ catalogLocationKey: locationKey() });
+        const [, vcs, branches] = yield* Effect.all(
           [
-            effects.request(() => runtime.data.location.model.sync(target)),
             effects.request(() => runtime.data.location.agent.sync(target)),
             git
               ? effects.request((signal) =>
@@ -295,12 +312,6 @@ export function createNewSessionDrafts(
             git
               ? readLocalBranches(effects, runtime.api, target)
               : Effect.succeed<readonly string[]>([]),
-            effects.request((signal) =>
-              runtime.api.model.default(
-                { location: { directory: target.directory, workspace: target.workspaceID } },
-                { signal },
-              ),
-            ),
           ],
           { concurrency: "unbounded" },
         );
@@ -309,9 +320,6 @@ export function createNewSessionDrafts(
           branches,
           currentBranch: vcs?.data.branch.current,
           defaultBranch: vcs?.data.branch.default,
-          defaultModel: model.data?.enabled
-            ? { id: model.data.id, providerID: model.data.providerID }
-            : undefined,
           catalogLocationKey: locationKey(),
         });
       }).pipe(
@@ -335,10 +343,20 @@ export function createNewSessionDrafts(
       ),
     );
   };
+  const reloadCatalogs = () => {
+    const target = location();
+    if (!target || runtime.stream.status() !== "connected") return;
+    runtime.data.location.model.invalidate(target);
+    runtime.data.location.agent.invalidate(target);
+    refreshCatalogs();
+  };
+  createEffect(on(() => [locationKey(), selectedID(), projectsState()], refreshCatalogs));
   createEffect(
     on(
-      () => [locationKey(), selectedID(), projectsState(), runtime.stream.status()],
-      refreshCatalogs,
+      () => runtime.stream.status(),
+      (connection) => {
+        if (connection !== "connected") read.cancel();
+      },
     ),
   );
   createEffect(() => {
@@ -354,7 +372,7 @@ export function createNewSessionDrafts(
       entry.loading ||
       lockedDraft(entry) ||
       entry.conflict ||
-      catalogs.catalogs !== "ready" ||
+      catalogsState() !== "ready" ||
       catalogs.catalogLocationKey !== locationKey()
     )
       return;
@@ -374,7 +392,7 @@ export function createNewSessionDrafts(
       next.agent = runtime.data.location.agent
         .list(target)
         ?.find((agent) => agent.mode !== "subagent" && !agent.hidden)?.id;
-    if (!choices.model) next.model = catalogs.defaultModel;
+    if (!choices.model) next.model = modelCatalog.defaultRef();
     if (
       (["mode", "branch", "branchSource", "agent", "model"] as const).some(
         (field) => next[field] !== choices[field],
@@ -434,10 +452,7 @@ export function createNewSessionDrafts(
       if (id) update({ addDraftID: id, addError: undefined });
     },
   });
-  const models = () =>
-    (location() ? runtime.data.location.model.list(location()) : [])?.filter(
-      (model) => model.enabled,
-    ) ?? [];
+  const models = modelCatalog.models;
 
   const agents = () =>
     (location() ? runtime.data.location.agent.list(location()) : [])?.filter(
@@ -448,16 +463,16 @@ export function createNewSessionDrafts(
     const choices = selected()?.value.choices;
     if (!choices) return undefined;
     if (choices.project && !project()) return "The saved project is unavailable. Choose a project.";
-    if (current().catalogs !== "ready") return undefined;
+    if (catalogsState() !== "ready") return undefined;
     if (choices.branch?.kind === "new" && !choices.branch.name.trim())
       return "Enter a branch name.";
     if (choices.branch?.kind === "existing" && !current().branches.includes(choices.branch.name))
       return "The saved branch is unavailable. Choose a branch.";
     const reference = choices.model;
     if (reference) {
-      const model = models().find((item) => modelChoiceID(item) === modelChoiceID(reference));
+      const model = resolveModel(models(), reference);
       if (!model) return "The saved model is unavailable. Choose a model.";
-      if (reference.variant && !model.variants.some((variant) => variant.id === reference.variant))
+      if (!modelVariantAvailable(model, reference.variant))
         return "The saved model variant is unavailable. Choose a variant.";
     }
     if (choices.agent && !agents().some((agent) => agent.id === choices.agent))
@@ -471,39 +486,35 @@ export function createNewSessionDrafts(
   const modelSelection = (id: string): ComposerProps["modelSelection"] => {
     const entry = entries().get(id);
     const reference = entry?.value.choices.model;
-    const selectedModel = models().find(
-      (option) => reference && modelChoiceID(option) === modelChoiceID(reference),
-    );
+    const selectedModel = resolveModel(models(), reference);
     return {
-      state: current().catalogs,
+      state: catalogsState(),
       switching: false,
       disabled: lockedDraft(entry) || entry?.loading === true,
-      models: models().map((option) => ({
-        id: modelChoiceID(option),
-        label: option.name,
-        group: option.providerID,
-      })),
+      models: modelChoices(models()),
       selectedModelID: reference ? modelChoiceID(reference) : undefined,
-      variants:
-        selectedModel?.variants.map((variant) => ({ id: variant.id, label: variant.id })) ?? [],
-      selectedVariantID: reference?.variant,
+      variants: variantChoices(selectedModel),
+      selectedVariantID: reference?.variant === "default" ? undefined : reference?.variant,
+      onRetry: runtime.stream.status() === "connected" && project() ? reloadCatalogs : undefined,
       onSelectModel: (choiceID) => {
         const chosen = models().find((option) => modelChoiceID(option) === choiceID);
         if (chosen) editChoices(id, { model: { id: chosen.id, providerID: chosen.providerID } });
       },
       onSelectVariant: (variant) => {
-        if (reference) editChoices(id, { model: { ...reference, variant } });
+        if (reference && selectedModel?.variants.some((item) => item.id === variant))
+          editChoices(id, { model: { ...reference, variant } });
       },
     };
   };
   const agentSelection = (id: string): ComposerProps["agentSelection"] => {
     const entry = entries().get(id);
     return {
-      state: current().catalogs,
+      state: catalogsState(),
       switching: false,
       disabled: lockedDraft(entry) || entry?.loading === true,
       agents: agents().map((option) => ({ id: option.id, label: option.name })),
       selectedAgentID: entry?.value.choices.agent,
+      onRetry: runtime.stream.status() === "connected" && project() ? reloadCatalogs : undefined,
       onSelectAgent: (agent) => editChoices(id, { agent }),
     };
   };
@@ -519,14 +530,17 @@ export function createNewSessionDrafts(
     )
       return true;
     const attempt = entry.value.attempt;
-    if (!attempt) return current().catalogs !== "ready" || !!savedChoiceError();
+    if (!attempt) return catalogsState() !== "ready" || !!savedChoiceError();
     return (
       (attempt.phase === "creating" && !attempt.confirmed) ||
       (attempt.phase === "sending" && attempt.request.kind === "command")
     );
   };
   const serverError = () =>
-    current().error ?? storage().get(serverKey)?.error ?? current().projectsError;
+    current().error ??
+    modelCatalog.error() ??
+    storage().get(serverKey)?.error ??
+    current().projectsError;
   const composer = (id: string): ComposerProps => {
     const entry = entries().get(id);
     return {
@@ -623,7 +637,7 @@ export function createNewSessionDrafts(
     composer,
     flushSelected,
     addProject,
-    current,
+    current: () => ({ ...current(), catalogs: catalogsState() }),
     canCreate: () => current().projects !== "loading" && !storage().get(serverKey)?.loading,
     retry: () => {
       const id = selectedID();

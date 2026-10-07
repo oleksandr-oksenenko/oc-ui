@@ -48,7 +48,7 @@ function mount(
     readonly validationError?: string;
   } = {},
 ) {
-  const onDirectoryChange = vi.fn<(location: LocationRef) => void>();
+  const onDirectoryChange = vi.fn<(location: LocationRef | undefined) => void>();
   const effects = withTestWorkspace((owner) => owner);
   const { host, dispose } = mountView(() => (
     <RegistryContext.Provider value={effects.registry}>
@@ -255,7 +255,7 @@ describe("ServerDirectoryBrowser", () => {
   it("ignores stale responses from an older directory request", async () => {
     const queued = queuedApi();
     const [initialDirectory, setInitialDirectory] = createSignal("/srv/first");
-    const onDirectoryChange = vi.fn<(location: LocationRef) => void>();
+    const onDirectoryChange = vi.fn<(location: LocationRef | undefined) => void>();
     const effects = withTestWorkspace((owner) => owner);
     const { host: mountedHost, dispose } = mountView(() => (
       <RegistryContext.Provider value={effects.registry}>
@@ -287,24 +287,94 @@ describe("ServerDirectoryBrowser", () => {
     dispose();
   });
 
-  it("keeps the last resolved directory when navigation fails", async () => {
+  it("identifies the failed target and retries before listing the previous location again", async () => {
     const queued = queuedApi();
-    const mounted = mount(queued.list);
+    const mounted = mount(queued.list, {
+      requestLocation: { directory: "/srv/context", workspaceID: "workspace-1" },
+      initialLocation: { directory: "/srv/projects", workspaceID: "workspace-1" },
+    });
     await flush();
-    queued.requests[0]?.resolve(response("/srv/projects", [{ path: "oc-ui", type: "directory" }]));
+    queued.requests[0]?.resolve(
+      response("/srv/context", [{ path: "oc-ui", type: "directory" }], "workspace-2"),
+    );
     await flush();
 
+    const header = mounted.host.querySelector(".server-directory-browser-header");
+    const parent = mounted.host.querySelector<HTMLButtonElement>(
+      '[aria-label="Go to parent directory"]',
+    );
     mounted.host.querySelector<HTMLButtonElement>('[aria-label="Browse directory oc-ui"]')?.click();
+    expect(parent?.disabled).toBe(true);
     queued.requests[1]?.reject(new Error("Directory unavailable."));
     await flush();
 
     expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(
-      "/srv/projects",
+      "/srv/projects/oc-ui",
+    );
+    expect(mounted.host.textContent).toContain("Not listed");
+    expect(mounted.host.querySelector('[role="alert"]')?.textContent).toContain(
+      "Could not list /srv/projects/oc-ui.",
     );
     expect(mounted.host.querySelector('[role="alert"]')?.textContent).toContain(
       "Directory unavailable.",
     );
-    expect(mounted.onDirectoryChange).toHaveBeenCalledOnce();
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith(undefined);
+    expect(mounted.host.querySelector(".server-directory-browser-header")).toBe(header);
+    expect(parent?.isConnected).toBe(true);
+    expect(parent?.disabled).toBe(false);
+    const retry = mounted.host.querySelector<HTMLButtonElement>(
+      ".server-directory-listing-error button",
+    );
+    expect(document.activeElement).toBe(retry);
+    retry?.click();
+    expect(queued.list).toHaveBeenLastCalledWith(
+      {
+        location: { directory: "/srv/context", workspace: "workspace-2" },
+        path: "/srv/projects/oc-ui",
+      },
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(mounted.host.querySelector('[aria-busy="true"]')).not.toBeNull();
+    queued.requests[2]?.reject(new Error("Still unavailable."));
+    await flush();
+    mounted.host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Back to previous successfully listed directory"]',
+      )
+      ?.click();
+    expect(queued.list).toHaveBeenLastCalledWith(
+      {
+        location: { directory: "/srv/context", workspace: "workspace-2" },
+        path: "/srv/projects",
+      },
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith(undefined);
+    queued.requests[3]?.reject(new Error("Previous directory temporarily unavailable."));
+    await flush();
+    expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(
+      "/srv/projects",
+    );
+    expect(mounted.host.textContent).toContain("Not listed");
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith(undefined);
+    mounted.host
+      .querySelector<HTMLButtonElement>(".server-directory-listing-error button")
+      ?.click();
+    expect(queued.list.mock.lastCall?.[0]?.path).toBe("/srv/projects");
+    queued.requests[4]?.resolve(
+      response("/srv/context", [{ path: "opencode", type: "directory" }], "workspace-3"),
+    );
+    await flush();
+    expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(
+      "/srv/projects",
+    );
+    expect(mounted.host.querySelector('[role="alert"]')).toBeNull();
+    expect(mounted.host.querySelector('[aria-label="Browse directory opencode"]')).not.toBeNull();
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith({
+      directory: "/srv/projects",
+      workspaceID: "workspace-3",
+    });
+    expect(document.activeElement).toBe(parent);
     mounted.dispose();
   });
 
@@ -315,7 +385,15 @@ describe("ServerDirectoryBrowser", () => {
     queued.requests[0]?.reject(new Error("Directory unavailable."));
     await flush();
 
-    mounted.host.querySelector<HTMLButtonElement>("button:not([disabled])")?.click();
+    expect(mounted.onDirectoryChange).toHaveBeenCalledOnce();
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith(undefined);
+    expect(mounted.host.textContent).toContain("Not listed");
+    expect(
+      mounted.host.querySelector('[aria-label="Back to previous successfully listed directory"]'),
+    ).toBeNull();
+    mounted.host
+      .querySelector<HTMLButtonElement>(".server-directory-listing-error button")
+      ?.click();
     await flush();
     expect(queued.list).toHaveBeenLastCalledWith(
       {
@@ -332,6 +410,119 @@ describe("ServerDirectoryBrowser", () => {
     expect(mounted.host.textContent).toContain("No child directories.");
     mounted.dispose();
   });
+
+  it.each([
+    ["/srv/projects", "/srv/projects/child", "/srv"],
+    ["C:\\projects", "C:\\projects\\child", "C:\\"],
+    ["\\\\server\\share\\projects", "\\\\server\\share\\projects\\child", "\\\\server\\share"],
+  ])("recovers child and parent failures using server paths at %s", async (base, child, parent) => {
+    const queued = queuedApi();
+    const mounted = mount(queued.list, {
+      initialLocation: { directory: base, workspaceID: "workspace-1" },
+    });
+    await flush();
+    queued.requests[0]?.resolve(
+      response(base, [{ path: "child", type: "directory" }], "workspace-1"),
+    );
+    await flush();
+    mounted.host.querySelector<HTMLButtonElement>('[aria-label="Browse directory child"]')?.click();
+    expect(queued.list.mock.lastCall?.[0]?.path).toBe(child);
+    queued.requests[1]?.reject(new Error("Child unavailable."));
+    await flush();
+    mounted.host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Back to previous successfully listed directory"]',
+      )
+      ?.click();
+    expect(queued.list.mock.lastCall?.[0]?.path).toBe(base);
+    queued.requests[2]?.resolve(response(base, [], "workspace-1"));
+    await flush();
+    mounted.host.querySelector<HTMLButtonElement>('[aria-label="Go to parent directory"]')?.click();
+    expect(queued.list.mock.lastCall?.[0]?.path).toBe(parent);
+    queued.requests[3]?.reject(new Error("Parent unavailable."));
+    await flush();
+    expect(mounted.host.querySelector(".server-directory-browser-path")?.textContent).toBe(parent);
+    mounted.host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Back to previous successfully listed directory"]',
+      )
+      ?.click();
+    expect(queued.list).toHaveBeenLastCalledWith(
+      { location: { directory: base, workspace: "workspace-1" }, path: base },
+      { signal: expect.any(AbortSignal) },
+    );
+    queued.requests[4]?.resolve(response(base, [], "workspace-1"));
+    await flush();
+    expect(mounted.onDirectoryChange).toHaveBeenLastCalledWith({
+      directory: base,
+      workspaceID: "workspace-1",
+    });
+    mounted.dispose();
+  });
+
+  it.each(["resolve", "reject"] as const)(
+    "ignores a slow obsolete retry that later %ss after recovery",
+    async (settlement) => {
+      const queued = queuedApi();
+      const [initialLocation, setInitialLocation] = createSignal<LocationRef>({
+        directory: "/srv/projects",
+        workspaceID: "workspace-1",
+      });
+      const onDirectoryChange = vi.fn<(location: LocationRef | undefined) => void>();
+      const effects = withTestWorkspace((owner) => owner);
+      const { host, dispose } = mountView(() => (
+        <RegistryContext.Provider value={effects.registry}>
+          <ServerDirectoryBrowser
+            effects={effects}
+            listDirectory={queued.list}
+            requestLocation={{ directory: "/srv/context", workspaceID: "workspace-1" }}
+            label="Project directory"
+            initialLocation={initialLocation()}
+            onDirectoryChange={onDirectoryChange}
+          />
+        </RegistryContext.Provider>
+      ));
+      await flush();
+      queued.requests[0]?.resolve(
+        response("/srv/context", [{ path: "child", type: "directory" }], "workspace-1"),
+      );
+      await flush();
+      host.querySelector<HTMLButtonElement>('[aria-label="Browse directory child"]')?.click();
+      queued.requests[1]?.reject(new Error("Unavailable."));
+      await flush();
+      host.querySelector<HTMLButtonElement>(".server-directory-listing-error button")?.click();
+      await flush();
+      setInitialLocation({ directory: "/srv/recovered", workspaceID: "workspace-1" });
+      await flush();
+      expect(queued.list.mock.calls[2]?.[1]?.signal?.aborted).toBe(true);
+      queued.requests[3]?.resolve(response("/srv/context", [], "workspace-2"));
+      await flush();
+      if (settlement === "resolve") {
+        queued.requests[2]?.resolve(response("/stale/context", [], "stale-workspace"));
+      } else {
+        queued.requests[2]?.reject(new Error("Stale failure."));
+      }
+      await flush();
+      expect(host.querySelector(".server-directory-browser-path")?.textContent).toBe(
+        "/srv/recovered",
+      );
+      expect(host.querySelector('[role="alert"]')).toBeNull();
+      expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+      expect(onDirectoryChange).toHaveBeenCalledTimes(3);
+      expect(onDirectoryChange).toHaveBeenLastCalledWith({
+        directory: "/srv/recovered",
+        workspaceID: "workspace-2",
+      });
+      host.querySelector<HTMLButtonElement>('[aria-label="Go to parent directory"]')?.click();
+      expect(queued.list).toHaveBeenLastCalledWith(
+        { location: { directory: "/srv/context", workspace: "workspace-2" }, path: "/srv" },
+        { signal: expect.any(AbortSignal) },
+      );
+      queued.requests[4]?.resolve(response("/srv/context", [], "workspace-2"));
+      await flush();
+      dispose();
+    },
+  );
 
   it("renders loading, error, empty, and parent states accessibly", async () => {
     const queued = queuedApi();
@@ -362,7 +553,7 @@ describe("ServerDirectoryBrowser", () => {
     queued.requests[0]?.resolve(response("/srv/projects", [{ path: "oc-ui", type: "directory" }]));
     await flush();
     const button = mounted.host.querySelector<HTMLButtonElement>(
-      ".server-directory-entries button",
+      '[aria-label="Go to parent directory"]',
     );
     expect(button?.disabled).toBe(true);
     button?.click();

@@ -2,11 +2,11 @@ import { IconButton } from "@opencode/ui/icon-button";
 import { Icon } from "@opencode/ui/icon";
 import { Tooltip } from "@opencode/ui/tooltip";
 import { useDialog } from "@opencode/ui/context/dialog";
-import { Show, createEffect, onCleanup, type JSX } from "solid-js";
+import { Show, onCleanup, type JSX } from "solid-js";
 
 import { restoreDialogFocusAfterClose } from "../../../../ui/restoreDialogFocusAfterClose.ts";
 import type { GlobalFormsController } from "./createGlobalForms.ts";
-import { ReviewDialog, type AnswerStore } from "./ReviewDialog.tsx";
+import { ReviewDialog } from "./ReviewDialog.tsx";
 
 import "./GlobalFormsRegion.css";
 
@@ -18,16 +18,11 @@ export type GlobalFormsRegionProps = {
 
 export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
   const dialog = useDialog();
-  const answers: AnswerStore = new Map();
   let launcher: HTMLButtonElement | undefined;
   let ownedDialogID: string | undefined;
   let openingDialog = false;
   let disposed = false;
 
-  createEffect(() => {
-    const ids = new Set(props.controller.forms().map((form) => form.id));
-    for (const id of answers.keys()) if (!ids.has(id)) answers.delete(id);
-  });
   onCleanup(() => {
     disposed = true;
     if (ownedDialogID && dialog.active?.id === ownedDialogID) dialog.close();
@@ -77,15 +72,13 @@ export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
         () => (
           <ReviewDialog
             controller={props.controller}
-            answers={answers}
-            onAnswerChange={(formID, answer) => answers.set(formID, answer)}
             onOpenExternal={props.onOpenExternal}
             initialFormID={first?.id}
           />
         ),
         () => {
           ownedDialogID = undefined;
-          restoreDialogFocusAfterClose(focusTarget);
+          restoreDialogFocusAfterClose(focusTarget, () => !disposed);
         },
       )
       .then(() => {

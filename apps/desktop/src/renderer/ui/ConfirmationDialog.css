@@ -1,0 +1,15 @@
+.delete-session-dialog form,
+.code-review-removal-dialog form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+}
+
+.delete-session-dialog-body,
+.code-review-removal-dialog-body {
+  padding: 0 16px 4px;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-body-size);
+  line-height: var(--oc-type-body-line-height);
+}

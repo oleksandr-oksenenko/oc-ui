@@ -5,10 +5,7 @@ import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode/clie
  * keeps a future SDK message kind from silently becoming routine work, and
  * leaves the remaining details as top-level transcript rows.
  */
-export type ActivityDetailInfo = Extract<
-  SessionMessageInfo,
-  { readonly type: "shell" | "skill" | "synthetic" }
->;
+export type ActivityDetailInfo = Extract<SessionMessageInfo, { readonly type: "shell" | "skill" }>;
 
 type RenderableMessage = Exclude<SessionMessageInfo, { readonly type: "idle" }>;
 
@@ -42,13 +39,19 @@ function isActivityOnly(message: SessionMessageAssistant): boolean {
  * message kind matches neither this predicate nor ActivityDetailInfo, so it
  * fails to compile here instead of silently joining an Activity run.
  */
-function isExposedEvent(
-  message: RenderableMessage,
-): message is Extract<
+function isExposedEvent(message: RenderableMessage): message is Extract<
   RenderableMessage,
-  { readonly type: "compaction" | "agent-switched" | "model-switched" | "location-switched" }
+  {
+    readonly type:
+      | "synthetic"
+      | "compaction"
+      | "agent-switched"
+      | "model-switched"
+      | "location-switched";
+  }
 > {
   switch (message.type) {
+    case "synthetic":
     case "compaction":
     case "agent-switched":
     case "model-switched":

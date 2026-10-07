@@ -10,7 +10,6 @@ import {
   composerModelSelection,
   composerPasteProps,
 } from "../composer-fixtures.ts";
-import "./queueing-steering.css";
 
 export const queuedMessage = (
   id: string,
@@ -18,7 +17,7 @@ export const queuedMessage = (
   delivery: SessionInboxUser["delivery"] = "queue",
 ): SessionInboxUser => ({
   id,
-  sessionID: "prototype",
+  sessionID: "queue-story",
   timeCreated: 1,
   type: "user",
   delivery,
@@ -81,13 +80,13 @@ export function QueueingSteering(props: {
   ];
 
   return (
-    <div class="queue-prototype">
+    <div style={{ height: "100vh" }}>
       <SessionPane
         selected
         title="Composer layout"
         transcript={
           <TranscriptView
-            sessionID="prototype"
+            sessionID="queue-story"
             messages={transcript()}
             sessionStatus={running() ? "running" : "idle"}
             loading={false}

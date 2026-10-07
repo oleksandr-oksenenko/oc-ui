@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
 import { createSignal } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
-import { expect, waitFor } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/Composer.tsx";
 import { SessionPane } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane.tsx";
@@ -30,7 +30,28 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const NoSelection: Story = {
-  args: { selected: false },
+  args: { selected: false, canCreate: true, onCreate: fn(), onBrowseSessions: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const create = canvas.getByRole("button", { name: "New session" });
+    create.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onCreate).toHaveBeenCalledOnce();
+    await userEvent.click(canvas.getByRole("button", { name: "Browse sessions" }));
+    await expect(args.onBrowseSessions).toHaveBeenCalledOnce();
+  },
+};
+
+export const NoSelectionDisabled: Story = {
+  args: { selected: false, canCreate: false, onCreate: fn(), onBrowseSessions: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const create = canvas.getByRole("button", { name: "New session" });
+    await expect(create).toBeDisabled();
+    await userEvent.click(create);
+    await expect(args.onCreate).not.toHaveBeenCalled();
+    await expect(canvas.getByRole("button", { name: "Browse sessions" })).toBeEnabled();
+  },
 };
 
 export const SelectedPlacement: Story = {

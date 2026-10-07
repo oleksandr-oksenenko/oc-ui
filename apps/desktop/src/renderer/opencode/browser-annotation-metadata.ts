@@ -16,7 +16,7 @@ const SentBrowserAnnotationSchema = Schema.Struct({
 });
 export type SentBrowserAnnotation = typeof SentBrowserAnnotationSchema.Type;
 export type BrowserAnnotationBatch = {
-  readonly text: string;
+  readonly files: readonly File[];
   readonly annotations: readonly SentBrowserAnnotation[];
 };
 
@@ -27,24 +27,16 @@ const BrowserMetadataSchema = Schema.Struct({
 });
 const decode = Schema.decodeUnknownSync(BrowserMetadataSchema, { onExcessProperty: "error" });
 
-/** Only fold a captured block while its exact generated text is still intact. */
+/** Presentation metadata supplements the model-visible prompt text. */
 export function browserAnnotationMetadata(
   instruction: string,
-  batches: readonly BrowserAnnotationBatch[],
+  annotations: readonly SentBrowserAnnotation[],
 ) {
-  let visible = instruction;
-  const annotations: SentBrowserAnnotation[] = [];
-  for (const batch of batches) {
-    const start = visible.indexOf(batch.text);
-    if (!batch.text || start < 0 || batch.annotations.length === 0) continue;
-    visible = visible.slice(0, start) + visible.slice(start + batch.text.length);
-    annotations.push(...batch.annotations);
-  }
   if (annotations.length === 0) return undefined;
   return {
     [BROWSER_ANNOTATIONS_METADATA_KEY]: {
       version: 1,
-      instruction: visible.trimEnd(),
+      instruction: instruction.trimEnd(),
       annotations: annotations.map((annotation) => ({
         ...annotation,
         selection: { ...annotation.selection, bounds: { ...annotation.selection.bounds } },

@@ -14,6 +14,7 @@ export type AssistantMessageProps = {
   readonly sessionID?: string;
   readonly sessionStatus: DataSessionStatus;
   readonly turnActive?: boolean;
+  readonly activityLive?: boolean;
   readonly activityOpen?: Map<string, boolean>;
   readonly workDetails?: readonly ActivityDetailInfo[];
   readonly continuations?: readonly ActivityContinuation[];
@@ -59,6 +60,7 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
             start={0}
             workDetails={props.workDetails}
             active={props.turnActive === true}
+            live={props.activityLive === true}
             disclosureKey={
               props.sessionID === undefined
                 ? undefined
@@ -108,6 +110,11 @@ function renderContent(
           <ActivityBlock
             content={props.message.content}
             start={index()}
+            messageCompleted={
+              props.message.time.completed !== undefined ||
+              props.message.finish !== undefined ||
+              props.message.error !== undefined
+            }
             workDetails={
               props.message.content.slice(index()).some((part) => part.type === "text")
                 ? undefined
@@ -119,6 +126,7 @@ function renderContent(
                 : props.continuations
             }
             active={props.turnActive === true}
+            live={props.activityLive === true}
             disclosureKey={
               props.sessionID === undefined
                 ? undefined

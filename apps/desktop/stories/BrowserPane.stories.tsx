@@ -60,12 +60,6 @@ export const Connected: Story = {
       bindingID: "fixture",
       browser: { tabs: [tab], focusedTabID: tab.id },
     },
-    viewport: (
-      <div class="browser-viewport" style={{ color: "var(--oc-text-base)", padding: "20px" }}>
-        <h2>Development preview</h2>
-        <p>The native page appears here in Electron.</p>
-      </div>
-    ),
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);

@@ -64,6 +64,7 @@ catalog:
   prosemirror-schema-list: 1.5.1
   prosemirror-state: 1.4.4
   prosemirror-view: 1.42.3
+  restty: 0.3.0
   shiki: 4.2.0
 
 overrides:

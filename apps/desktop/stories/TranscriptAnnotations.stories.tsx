@@ -23,15 +23,14 @@ const select = (element: Element) => {
   document.dispatchEvent(new Event("selectionchange"));
 };
 
-export const Comparison: Story = {
-  name: "Interactive",
+export const Interactive: Story = {
   args: {},
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
     const source = canvasElement.querySelector(
       '[data-message-id="assistant-annotations"] .transcript-markdown',
     );
-    const header = canvas.getByRole("heading", { name: "Transcript annotations" });
+    const outsideSource = canvas.getByRole("button", { name: "Simulate running" });
     if (!source) throw new Error("Missing source passage");
 
     await step("Clear the saved passage when selection leaves the source", async () => {
@@ -45,7 +44,7 @@ export const Comparison: Story = {
         const gap = range.getBoundingClientRect().top - container.getBoundingClientRect().bottom;
         return expect(Math.abs(gap - 6)).toBeLessThanOrEqual(1);
       });
-      select(header);
+      select(outsideSource);
       await expect(canvas.queryByRole("button", { name: "Add note" })).toBeNull();
       window.getSelection()?.removeAllRanges();
       document.dispatchEvent(new Event("selectionchange"));

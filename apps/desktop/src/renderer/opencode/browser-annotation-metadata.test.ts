@@ -27,32 +27,29 @@ const annotation: SentBrowserAnnotation = {
 };
 
 describe("browser annotation metadata", () => {
-  it("round-trips captured context and hides only intact generated blocks", () => {
-    const metadata = browserAnnotationMetadata(
-      "Please fix this.\n\nCaptured context\n\nAlso check contrast.",
-      [{ text: "Captured context", annotations: [annotation] }],
-    );
+  it("round-trips captured context independently of instruction edits", () => {
+    const metadata = browserAnnotationMetadata("Please fix this.\n\nAlso check contrast.", [
+      annotation,
+    ]);
     expect(readBrowserAnnotationMetadata(metadata)).toEqual({
       version: 1,
-      instruction: "Please fix this.\n\n\n\nAlso check contrast.",
+      instruction: "Please fix this.\n\nAlso check contrast.",
       annotations: [annotation],
     });
     expect(
-      browserAnnotationMetadata("Captured EDITED context", [
-        { text: "Captured context", annotations: [annotation] },
-      ]),
-    ).toBeUndefined();
+      readBrowserAnnotationMetadata(browserAnnotationMetadata("Edited instruction", [annotation]))
+        ?.instruction,
+    ).toBe("Edited instruction");
   });
   it("preserves leading instruction offsets used by inline skill mentions", () => {
-    const metadata = browserAnnotationMetadata("  review this\n\nCaptured context", [
-      { text: "Captured context", annotations: [annotation] },
-    ]);
+    const metadata = browserAnnotationMetadata("  review this", [annotation]);
     expect(readBrowserAnnotationMetadata(metadata)?.instruction).toBe("  review this");
+    expect(
+      readBrowserAnnotationMetadata(browserAnnotationMetadata(" \n ", [annotation]))?.instruction,
+    ).toBe("");
   });
   it("rejects unknown versions, negative and duplicate screenshot references", () => {
-    const metadata = browserAnnotationMetadata("Captured context", [
-      { text: "Captured context", annotations: [annotation] },
-    ])!;
+    const metadata = browserAnnotationMetadata("", [annotation])!;
     const value = metadata[BROWSER_ANNOTATIONS_METADATA_KEY];
     for (const invalid of [
       { ...value, version: 2 },

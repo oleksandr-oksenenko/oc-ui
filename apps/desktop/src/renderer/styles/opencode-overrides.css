@@ -16,12 +16,6 @@
   border-radius: var(--oc-radius);
 }
 
-/* Floating surfaces step up to the panel radius. */
-:root [data-component="menu-v2-content"][data-slot="select-v2-content"],
-:root [data-component="dialog-v2"] [data-slot="dialog-container"] {
-  border-radius: var(--oc-radius-panel);
-}
-
 /* The toast is upstream's only borderless floating surface, so it owns its
  * edge now that the floating shadow no longer draws a hairline ring. */
 :root .toast-v2 {
@@ -34,7 +28,6 @@
 :root [data-component="icon-button-v2"][data-variant="contrast"] {
   background-color: var(--oc-selection);
   background-image: none;
-  box-shadow: 0 0 0 1px var(--oc-selection-hover) inset;
 }
 
 :root [data-component="button-v2"][data-variant="contrast"]:hover:not(:disabled),
@@ -105,6 +98,24 @@
   padding: 0;
 }
 
+/* One highlight for searchable lists and portalled select menus. Scope foreground
+ * roles to the active row so descriptions and selection indicators remain legible. */
+:root
+  [data-component="list"]
+  [data-slot="list-items"]
+  [data-slot="list-item"][data-active="true"]:not(:disabled, [data-disabled]),
+:root [data-component="menu-v2-item"][data-highlighted]:not([data-disabled]) {
+  --oc-text-muted: var(--oc-text-on-selection);
+  --icon-strong-base: var(--oc-text-on-selection);
+  --menu-v2-fg: var(--oc-text-on-selection);
+  --menu-v2-fg-muted: var(--oc-text-on-selection);
+  --menu-v2-fg-subtle: var(--oc-text-on-selection);
+  --menu-v2-icon: var(--oc-text-on-selection);
+
+  color: var(--oc-text-on-selection);
+  background: var(--oc-selection);
+}
+
 :root
   [data-slot="radio-v2-item"]:not([data-disabled], [data-checked])
   [data-slot="radio-v2-item-control"] {
@@ -114,7 +125,8 @@
 :root
   :is(
     [data-component="dialog-v2"] [data-slot="dialog-container"],
-    [data-component="popover-content"]
+    [data-component="popover-content"],
+    [data-component="menu-v2-content"][data-slot="select-v2-content"]
   ) {
   border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius-panel);
@@ -124,12 +136,63 @@
 
 :root
   [data-component="dialog-v2"]
+  [data-slot="dialog-container"]
+  [data-slot="dialog-content"]
   [data-slot="dialog-header"]
   :is([data-slot="dialog-header-title"], [data-slot="dialog-title"]) {
   color: var(--oc-text-strong);
   font-size: var(--oc-type-title-size);
   font-weight: var(--oc-type-title-weight);
   line-height: var(--oc-type-title-line-height);
+  letter-spacing: normal;
+}
+
+/* The package hardcodes type independently of its palette tokens. Apply our
+ * existing roles here; size props continue to own control geometry. */
+:root [data-component="button-v2"][data-variant],
+:root [data-component="select-v2"][data-appearance] [data-slot="select-v2-value-text"] {
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-control-size);
+  font-weight: var(--oc-type-control-weight);
+  line-height: var(--oc-type-control-line-height);
+  letter-spacing: normal;
+}
+
+:root [data-component="text-input-v2"] [data-slot="text-input-v2-input"],
+:root [data-component="textarea-v2"] [data-slot="textarea-v2-textarea"],
+:root [data-component="input"][data-variant] [data-slot="input-input"],
+:root [data-component="dialog-v2"] [data-slot="dialog-content"],
+:root
+  [data-component="dialog-v2"]
+  [data-slot="dialog-container"]
+  [data-slot="dialog-content"]
+  [data-slot="dialog-header"]
+  [data-slot="dialog-description"] {
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-body-weight);
+  line-height: var(--oc-type-body-line-height);
+  letter-spacing: normal;
+}
+
+:root [data-component="field-v2"] [data-slot="field-v2-label"],
+:root [data-component="input"][data-variant] [data-slot="input-label"] {
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-label-size);
+  font-weight: var(--oc-type-label-weight);
+  line-height: var(--oc-type-label-line-height);
+  letter-spacing: normal;
+}
+
+:root [data-component="field-v2"] :is([data-slot="field-v2-prefix"], [data-slot="field-v2-suffix"]),
+:root
+  [data-component="input"][data-variant]
+  :is([data-slot="input-description"], [data-slot="input-error"]) {
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-caption-size);
+  font-weight: var(--oc-type-caption-weight);
+  line-height: var(--oc-type-caption-line-height);
+  letter-spacing: normal;
 }
 
 :root :is([data-component="button-v2"], [data-component="icon-button-v2"]):disabled {
@@ -139,10 +202,6 @@
   box-shadow: none;
   opacity: 1;
   cursor: not-allowed;
-}
-
-:root[data-color-scheme="dark"] [data-component="menu-v2-content"][data-slot="select-v2-content"] {
-  border: 1px solid var(--oc-border-base);
 }
 
 /* Pierre writes syntax-theme neutrals on its shadow host. */

@@ -12,9 +12,12 @@ export type ShellRegionProps = {
   readonly selectedTitle: Accessor<string | undefined>;
   readonly sidebarActions?: JSX.Element;
   readonly rightControls?: JSX.Element;
+  readonly terminalControls?: JSX.Element;
   readonly sidebar?: JSX.Element;
   readonly main: JSX.Element;
   readonly context?: JSX.Element;
+  readonly bottom?: JSX.Element;
+  readonly bottomOpen?: boolean;
   readonly rightPanelAvailable?: boolean;
 };
 
@@ -25,6 +28,7 @@ export function ShellRegion(props: ShellRegionProps): JSX.Element {
   const sidebar = props.sidebar;
   const main = props.main;
   const context = props.context;
+  const bottom = props.bottom;
   const leftSidebarOpen = () => props.panels.leftSidebarOpen() && sidebar != null;
   const rightPanelOpen = () =>
     props.rightPanelAvailable !== false && props.panels.rightPanelOpen() && context != null;
@@ -35,6 +39,7 @@ export function ShellRegion(props: ShellRegionProps): JSX.Element {
         <Titlebar
           selectedTitle={props.selectedTitle()}
           sidebarActions={props.sidebarActions}
+          globalControls={props.terminalControls}
           leftSidebarOpen={leftSidebarOpen()}
           rightPanelOpen={rightPanelOpen()}
           rightPanelAvailable={props.rightPanelAvailable !== false}
@@ -52,6 +57,8 @@ export function ShellRegion(props: ShellRegionProps): JSX.Element {
           sidebar={sidebar}
           main={main}
           context={context}
+          bottom={bottom}
+          bottomOpen={props.bottomOpen}
         />
       }
     />

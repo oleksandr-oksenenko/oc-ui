@@ -1,3 +1,5 @@
+@import url("../../../../../ui/CommentPresentation.css");
+
 .context-panel {
   display: block;
   width: 100%;
@@ -63,6 +65,7 @@
   padding: 16px;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
   line-height: var(--oc-type-metadata-line-height);
   text-align: center;
 }
@@ -70,7 +73,6 @@
 .context-state p {
   margin: 0;
   color: var(--oc-text-base);
-  font-weight: var(--oc-type-heading-weight);
 }
 
 .context-state.error-state {
@@ -97,6 +99,8 @@
   color: var(--oc-text-muted);
   font-family: var(--oc-font-mono);
   font-size: var(--oc-type-diff-stat-size);
+  font-weight: var(--oc-type-diff-stat-weight);
+  line-height: var(--oc-type-diff-stat-line-height);
 }
 
 .diff-refresh-state {
@@ -108,6 +112,8 @@
   padding: 8px 10px;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-caption-size);
+  font-weight: var(--oc-type-caption-weight);
+  line-height: var(--oc-type-caption-line-height);
 }
 
 .diff-refresh-state.error-state {
@@ -177,6 +183,8 @@
   color: var(--oc-text-base);
   background: var(--oc-surface-subtle);
   font-size: var(--oc-type-control-size);
+  font-weight: var(--oc-type-control-weight);
+  line-height: var(--oc-type-control-line-height);
 }
 
 .diff-file-toggle {
@@ -280,17 +288,9 @@
 }
 
 .diff-review-text {
-  display: block;
   max-width: 100%;
-  padding: 0;
-  border: 0;
   color: inherit;
-  background: transparent;
   cursor: text;
-  font: inherit;
-  overflow-wrap: anywhere;
-  text-align: left;
-  white-space: pre-wrap;
 }
 
 .diff-review-remove[data-component="icon-button-v2"] {

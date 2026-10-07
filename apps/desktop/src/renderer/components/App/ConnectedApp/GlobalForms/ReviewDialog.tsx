@@ -16,12 +16,8 @@ import { QuestionForm } from "../../../../ui/QuestionForm.tsx";
 import { useServerFlowDismissBlock } from "../../../../ui/ServerFlowDialogProvider.tsx";
 import type { GlobalFormsController } from "./createGlobalForms.ts";
 
-export type AnswerStore = Map<string, FormAnswer>;
-
 export type ReviewDialogProps = {
   readonly controller: GlobalFormsController;
-  readonly answers: AnswerStore;
-  readonly onAnswerChange: (formID: string, answer: FormAnswer) => void;
   readonly onOpenExternal?: (url: string) => void;
   readonly initialFormID?: string;
 };
@@ -155,6 +151,7 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
                 <p>{props.controller.loadError()}</p>
                 <Button
                   type="button"
+                  size="small"
                   variant="outline"
                   disabled={disconnected()}
                   onClick={() => void props.controller.refresh()}
@@ -169,6 +166,7 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
                 <p>{props.controller.loadError()}</p>
                 <Button
                   type="button"
+                  size="small"
                   variant="outline"
                   disabled={disconnected()}
                   onClick={() => void props.controller.refresh()}
@@ -244,8 +242,10 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
                           disabled={disconnected() || selectedPending()}
                           submitting={selectedPending()}
                           error={actionError()}
-                          initialAnswer={props.answers.get(current().id)}
-                          onAnswerChange={(answer) => props.onAnswerChange(current().id, answer)}
+                          initialAnswer={props.controller.answerFor(current().id)}
+                          onAnswerChange={(answer) =>
+                            props.controller.saveAnswer(current().id, answer)
+                          }
                           onSubmit={(answer) => void settle("reply", answer)}
                           onCancel={() => void settle("cancel")}
                           onOpenExternal={props.onOpenExternal}
@@ -266,6 +266,7 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
         </span>
         <Button
           type="button"
+          size="normal"
           variant="outline"
           disabled={props.controller.pending()}
           onClick={() => dialog.close()}

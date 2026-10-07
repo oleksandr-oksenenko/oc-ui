@@ -4,6 +4,7 @@ import { RemoveButton } from "../../../../ui/RemoveButton.tsx";
 import { BrowserAnnotationThumbnail } from "./BrowserAnnotations/BrowserAnnotationThumbnail.tsx";
 import { MAX_ANNOTATIONS, type BrowserAnnotationDraft } from "./browser-annotations.ts";
 import type { SessionBrowser, SessionBrowserState } from "./createSessionBrowser.ts";
+import "./BrowserAnnotations.css";
 
 export type BrowserAnnotationsController = Pick<
   SessionBrowser,
@@ -32,8 +33,11 @@ export function BrowserAnnotations(props: BrowserAnnotationsProps) {
   const items = () => annotation().items;
   const sendable = () => items().length > 0 && items().every((item) => item.body.trim().length > 0);
   const stale = (item: BrowserAnnotationDraft) => {
-    const current = tab();
-    return item.tab.generation !== current?.generation || item.tab.url !== current?.url;
+    const capturedTab = props.state.browser.tabs.find((entry) => entry.id === item.tab.id);
+    return (
+      capturedTab !== undefined &&
+      (item.tab.generation !== capturedTab.generation || item.tab.url !== capturedTab.url)
+    );
   };
   return (
     <section class="browser-annotations" aria-label="Browser annotations">
@@ -73,16 +77,28 @@ export function BrowserAnnotations(props: BrowserAnnotationsProps) {
                 <li class="browser-annotation-card">
                   <div class="browser-annotation-card-head">
                     <span class="browser-annotation-number">{item().number}</span>
-                    <BrowserAnnotationThumbnail image={item().image} />
+                    <BrowserAnnotationThumbnail image={item().image} number={item().number} />
                     <div class="browser-annotation-meta">
                       <span class="browser-annotation-target">
                         {item().mode === "area"
                           ? "Selected area"
                           : item().selection.selector || item().selection.tag}
                       </span>
+                      <span
+                        class="browser-annotation-page"
+                        title={`${item().tab.title}\n${item().tab.url}`}
+                      >
+                        {item().tab.title ? `${item().tab.title} · ` : ""}
+                        {item().tab.url}
+                      </span>
                       <Show when={!item().selection.topFrame}>
                         <span class="browser-annotation-warning" role="status">
                           Frame selection — comment here; the screenshot has no outline.
+                        </span>
+                      </Show>
+                      <Show when={item().tab.id !== tab()?.id}>
+                        <span class="browser-annotation-status" role="status">
+                          Captured in another tab.
                         </span>
                       </Show>
                       <Show when={stale(item())}>

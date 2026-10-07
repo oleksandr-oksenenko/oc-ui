@@ -3,7 +3,7 @@
 /* oxlint-disable effecttsgo/new-promise -- Storybook interaction tests wait on frames and timers. */
 import { createMemo, createSignal } from "solid-js";
 import type { Decorator, Meta, StoryObj } from "storybook-solidjs-vite";
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type { SelectedLineRange } from "@pierre/diffs";
 
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
@@ -371,35 +371,14 @@ export const VirtualizedList: Story = {
   },
 };
 
+const onGutterSelection = fn<NonNullable<DiffReviewView["onBeginComment"]>>();
 export const GutterRangeSelection: Story = {
   args: {
     ...panelProps({ files: gutterFiles, loading: false }),
-  },
-  render: () => {
-    const [selection, setSelection] = createSignal("");
-    return (
-      <div
-        style={{ display: "flex", "flex-direction": "column", height: "100%", "min-height": "0" }}
-      >
-        <output data-testid="gutter-selection" style={{ flex: "0 0 auto", padding: "4px" }}>
-          {selection()}
-        </output>
-        <div style={{ flex: "1 1 auto", "min-height": "0" }}>
-          <ContextPanel
-            {...panelProps({ files: gutterFiles, loading: false })}
-            review={{
-              comments: [],
-              onBeginComment: (_path, range) =>
-                setSelection(
-                  `${range.start}:${range.side}-${range.end}:${range.endSide ?? range.side}`,
-                ),
-            }}
-          />
-        </div>
-      </div>
-    );
+    review: { comments: [], onBeginComment: onGutterSelection },
   },
   play: async ({ canvasElement, step }) => {
+    onGutterSelection.mockClear();
     type LineType = "change-addition" | "change-deletion";
     const item = (name: string) =>
       [...canvasElement.querySelectorAll("diffs-container")].find((container) =>
@@ -413,8 +392,10 @@ export const GutterRangeSelection: Story = {
       );
     const utility = (name: string) =>
       item(name)?.shadowRoot?.querySelector<HTMLElement>("[data-utility-button]");
-    const captured = () =>
-      canvasElement.querySelector('[data-testid="gutter-selection"]')?.textContent;
+    const captured = () => {
+      const range = onGutterSelection.mock.calls.at(-1)?.[1];
+      return range && `${range.start}:${range.side}-${range.end}:${range.endSide ?? range.side}`;
+    };
 
     /**
      * Worker highlighting replaces the item's shadow contents after the first

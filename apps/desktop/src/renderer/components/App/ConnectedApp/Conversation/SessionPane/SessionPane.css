@@ -35,6 +35,13 @@
   font-weight: var(--oc-type-heading-weight);
 }
 
+.session-pane-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
 .session-pane-empty p {
   max-width: 420px;
   margin: 0;
@@ -48,10 +55,10 @@
 }
 
 .transcript-document {
-  width: min(100%, 820px);
+  width: min(100%, 868px);
   min-height: 100%;
   margin: 0 auto;
-  padding: 12px 24px 24px;
+  padding: 12px 8px 24px;
 }
 
 /* Keeps the return-to-latest control at the transcript's bottom edge, directly
@@ -103,6 +110,8 @@
   padding: 16px;
   color: var(--oc-text-base);
   font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-body-weight);
+  line-height: var(--oc-type-body-line-height);
   text-align: center;
 }
 
@@ -196,7 +205,7 @@
   flex: none;
 }
 
-.transcript-user-attachments {
+.transcript-user-attachments:not(:first-child) {
   margin-top: 6px;
 }
 
@@ -257,7 +266,7 @@
 }
 
 .transcript-markdown :is(h1, h2, h3, h4, h5, h6) {
-  margin: 16px 0 8px;
+  margin: 8px 0;
   line-height: 1.25;
 }
 
@@ -269,7 +278,11 @@
   font-size: 1.2em;
 }
 
-.transcript-markdown :is(h3, h4, h5, h6) {
+.transcript-markdown h3 {
+  font-size: 1.15em;
+}
+
+.transcript-markdown :is(h4, h5, h6) {
   font-size: 1.05em;
 }
 
@@ -746,10 +759,4 @@
 
 :is(.transcript-tool-header, .transcript-context-trigger):focus-visible {
   color: var(--oc-text-strong);
-}
-
-@media (width <= 600px) {
-  .transcript-document {
-    padding: 12px 16px 24px;
-  }
 }

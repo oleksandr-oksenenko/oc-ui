@@ -93,6 +93,29 @@ function setup(
 }
 
 describe("createSessionAgentSelection", () => {
+  it("retries a failed catalog without replacing the selected agent or mutating the session", async () => {
+    const syncAgents = vi
+      .fn<SelectionData["location"]["agent"]["sync"]>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(undefined);
+    const fixture = setup({
+      selected: session("one", location, "primary"),
+      listed: [agent("primary")],
+      syncAgents,
+    });
+    await vi.waitFor(() => expect(fixture.selection.state()).toBe("failed"));
+    expect(fixture.selection.selectedAgentID()).toBe("primary");
+    expect(fixture.selection.error()).toContain("Agents could not be loaded.");
+    await fixture.selection.sync();
+    expect(fixture.selection.state()).toBe("ready");
+    expect(fixture.selection.error()).toBeUndefined();
+    expect(fixture.selection.selectedAgentID()).toBe("primary");
+    expect(syncAgents).toHaveBeenCalledTimes(2);
+    expect(fixture.switchAgent).not.toHaveBeenCalled();
+    expect(fixture.syncSession).not.toHaveBeenCalled();
+    fixture.dispose();
+  });
+
   it("syncs the complete selected location and lets lifecycle refresh after reconnect", async () => {
     const fixture = setup({ selected: session("one", location), listed: [agent("primary")] });
 

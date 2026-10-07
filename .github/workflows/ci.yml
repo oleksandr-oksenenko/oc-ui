@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  full-suite:
+    name: Full suite (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Verify toolchain
+        run: |
+          test "$(node --version)" = "v$(cat .node-version)"
+          node --version
+          pnpm --version
+          echo "TMPDIR=${RUNNER_TEMP}/" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter desktop exec playwright install --with-deps chromium
+
+      - name: Check, test, and build all targets (macOS)
+        if: runner.os == 'macOS'
+        run: pnpm exec vp run --no-cache -w ready
+
+      - name: Check, test, and build browser targets (Linux)
+        if: runner.os == 'Linux'
+        # Desktop runtime staging and packaging currently support macOS arm64 only.
+        run: |
+          pnpm check
+          pnpm exec vp run --no-cache -w test
+          pnpm build:web
+          pnpm exec vp run --no-cache -w build-storybook
+
+      - name: Test packaged Electron app
+        if: runner.os == 'macOS'
+        env:
+          # Keep the configured ad-hoc signature on PR builds; no certificate is used.
+          CSC_FOR_PULL_REQUEST: "true"
+        run: pnpm test:acceptance:mac
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development, unknown

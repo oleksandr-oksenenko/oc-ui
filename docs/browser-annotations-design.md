@@ -466,7 +466,17 @@ actionable message until the user clears or sends.
 
 ### Delivery
 
-`Add to composer` builds the whole message in one operation:
+`Add to composer` admits a structured batch and its screenshot `File` objects
+in annotation order. The draft shows an inspectable/removable `Browser · N`
+attachment pill for each batch; generated context never enters the editable
+instruction. Removing one annotation removes its screenshot and context;
+removing a batch leaves other batches and ordinary files intact.
+Batch admission uses the shared per-file, attachment-count, and aggregate-byte
+limits against the owning session's current files. The whole batch is refused
+if any screenshot cannot be admitted; the tray retains its captures for retry.
+
+Send admission builds the model-visible message from the typed instruction and
+the retained batches:
 
 - Text: one section per annotation with the comment as plain text, then the
   page-derived fields in a fenced "untrusted page data" block (URL, title,
@@ -480,10 +490,16 @@ actionable message until the user clears or sends.
 - The text tells the model that selectors are hints and that it should take a
   fresh browser snapshot before acting.
 
-The insertion appends text once and adds all files in one state update. The
-tray is cleared only after the insertion resolves; on failure the tray is kept
-and the error is shown. The insertion targets the session that owned the
-annotations, not whatever session is selected at click time.
+The composer owns batches and files for the workspace lifetime, keyed by session.
+The tray is cleared only after admission succeeds; on failure the tray is kept
+and the error is shown. Admission targets the session that owned the annotations.
+The send snapshots formatted text, screenshot order, and version-1
+`oc-ui/browser-annotations` presentation metadata together. Metadata supplements
+the model-visible text. Editing the instruction does not invalidate a batch.
+Failed sends retain the draft; unchanged retries reuse the admitted request ID.
+Late confirmation removes only submitted screenshot objects and unchanged
+instruction. Workspace-owned work survives composer remounts and navigation;
+shutdown interrupts owned work and awaits its existing settlement/cleanup.
 
 ### Lifecycle and cancellation
 

@@ -1,0 +1,131 @@
+.browser-annotations {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  max-height: 45%;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+  padding: 6px;
+  border-bottom: 1px solid var(--oc-border-base);
+}
+
+.browser-annotation-actions {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.browser-annotation-status {
+  min-width: 0;
+  color: var(--oc-text-muted);
+  font-size: var(--oc-type-caption-size);
+}
+
+.browser-annotation-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browser-annotation-card {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  background: var(--oc-surface-raised);
+}
+
+.browser-annotation-card-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.browser-annotation-number {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--oc-radius-full);
+  color: var(--oc-text-strong);
+  background: var(--oc-surface-control);
+  font-size: var(--oc-type-caption-size);
+}
+
+.browser-annotation-preview {
+  width: 48px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.browser-annotation-preview .browser-annotation-thumb {
+  object-fit: cover;
+  object-position: top left;
+}
+
+.browser-annotation-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.browser-annotation-target,
+.browser-annotation-page {
+  overflow: hidden;
+  font-size: var(--oc-type-caption-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-annotation-target {
+  color: var(--oc-text-base);
+  font-family: var(--oc-font-mono);
+}
+
+.browser-annotation-page {
+  color: var(--oc-text-muted);
+}
+
+.browser-annotation-warning {
+  color: var(--oc-status-warning);
+  font-size: var(--oc-type-caption-size);
+}
+
+.browser-annotation-card textarea {
+  width: 100%;
+  min-height: 44px;
+  resize: vertical;
+  padding: 4px 6px;
+  border: 1px solid var(--oc-border-base);
+  border-radius: var(--oc-radius);
+  color: var(--oc-text-base);
+  background: var(--oc-surface-subtle);
+  font-family: var(--oc-font-sans);
+  font-size: var(--oc-type-metadata-size);
+}
+
+.browser-annotation-error {
+  flex-shrink: 0;
+  margin: 0;
+  color: var(--oc-status-danger);
+  font-size: var(--oc-type-metadata-size);
+  overflow-wrap: anywhere;
+}

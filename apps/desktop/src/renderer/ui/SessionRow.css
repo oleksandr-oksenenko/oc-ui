@@ -69,7 +69,7 @@
   color: inherit;
 }
 
-.shell-session-row.selected .shell-session-main {
+.shell-session-row.selected .shell-session-main[data-component="button-v2"] {
   color: var(--oc-text-contrast);
   font-weight: var(--oc-type-title-weight);
 }

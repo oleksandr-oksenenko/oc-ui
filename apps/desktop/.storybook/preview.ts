@@ -51,7 +51,7 @@ const preview: Preview = {
   ],
   globalTypes: {
     theme: {
-      description: "Warm Paper appearance",
+      description: "Production appearance",
       toolbar: {
         dynamicTitle: true,
         items: [

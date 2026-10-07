@@ -4,7 +4,7 @@ A desktop and browser client for OpenCode.
 
 ## Requirements
 
-- Node.js 24 or newer
+- Node.js version pinned in [`.node-version`](.node-version)
 - pnpm 11.23.0
 
 ## Setup
@@ -77,6 +77,7 @@ pnpm dev:opencode       # Start the pinned OpenCode server library
 pnpm storybook          # Start the component catalog at http://localhost:6006
 pnpm build-storybook    # Build the static component catalog
 pnpm verify:browser     # Start an isolated app/server session for manual inspection
+pnpm test:local         # Run package and desktop unit tests for local development
 pnpm test               # Run unit, Storybook, browser, and session-tools tests
 pnpm ready              # Run checks, all tests, desktop/browser builds, and Storybook
 pnpm package:mac        # Build an unpacked macOS arm64 .app in apps/desktop/dist
@@ -90,6 +91,37 @@ See [App verification](docs/app-verification.md) for inspection, cleanup, and
 which automated checks to run for a change.
 
 Packaged macOS acceptance is separate from `pnpm test` and `pnpm ready`.
+
+### Local tests and CI
+
+Use `pnpm test:local` for the fast local loop. It runs both workspace packages and
+the desktop `unit` project, without needing Chromium. For a single desktop test:
+
+```sh
+pnpm --filter desktop exec vp test run --project=unit <test-file>
+```
+
+Run affected browser or Storybook projects when developing those features; see
+[App verification](docs/app-verification.md) for the focused commands. Before
+completing an implementation, run the root `pnpm check` and `pnpm test` gates.
+
+The [CI workflow](.github/workflows/ci.yml) runs on every pull request and push to
+`main`, and can also be started manually. Both Linux x64 (`ubuntu-24.04`) and macOS
+arm64 (`macos-15`) runners provision the pinned Node.js and pnpm versions and
+Chromium, then run all test projects:
+
+- Linux: `pnpm check`, `pnpm test`, `pnpm build:web`, and `pnpm build-storybook`.
+- macOS: `pnpm ready` (checks, all tests, and desktop/browser/Storybook builds),
+  followed by `pnpm test:acceptance:mac` (packaging and scripted-provider Electron
+  acceptance). Desktop runtime staging and packaging currently require macOS arm64.
+
+CI invokes the `test`, `ready`, and `build-storybook` scripts through
+`vp run --no-cache -w` so every run executes those tasks. GitHub Actions dependency
+caching is disabled, and CI does not upload artifacts. Build outputs and test
+diagnostics stay on the disposable runner; test output is available in the job logs.
+
+Packaged live-provider chat tests are opt-in and require credentials; CI uses the
+self-contained scripted provider.
 
 ## macOS packaging
 

@@ -107,10 +107,6 @@
   line-height: var(--oc-type-metadata-line-height);
 }
 
-.selection-list [data-slot="list-items"] [data-slot="list-item"][data-active="true"] {
-  background: var(--oc-surface-control);
-}
-
 .selection-list [data-slot="list-item-selected-icon"] {
   flex: 0 0 14px;
   width: 14px;

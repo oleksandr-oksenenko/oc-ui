@@ -2,6 +2,7 @@ import type { CommandInfo, PromptSkillAttachment, SkillInfo } from "@opencode/cl
 import { PromptEditor } from "./Composer/PromptEditor.tsx";
 import type { PromptEditorControl } from "./Composer/PromptEditor.tsx";
 import { Icon } from "@opencode/ui/icon";
+import { Button } from "@opencode/ui/button";
 import { IconButton } from "@opencode/ui/icon-button";
 import { Loader } from "@opencode/ui/loader";
 import { Tooltip } from "@opencode/ui/tooltip";
@@ -28,6 +29,8 @@ import { VariantPicker } from "./Composer/VariantPicker.tsx";
 import type { VariantPickerOption } from "./Composer/VariantPicker.tsx";
 import { readPastedFiles, readPastedText } from "./Composer/pasteClipboard.ts";
 import { classifyPaste } from "./Composer/pasteRoute.ts";
+import { BrowserAttachments } from "./Composer/BrowserAttachments.tsx";
+import type { BrowserAnnotationBatch } from "../../../../../opencode/browser-annotation-metadata.ts";
 
 export type ComposerReview = {
   readonly comments: readonly SentReviewComment[];
@@ -67,6 +70,8 @@ export type ComposerProps = {
   readonly files?: readonly File[];
   readonly onAttachFiles?: (files: readonly File[]) => void;
   readonly onRemoveFile?: (file: File) => void;
+  readonly browserBatches?: readonly BrowserAnnotationBatch[];
+  readonly onRemoveBrowserBatch?: (batch: BrowserAnnotationBatch) => void;
   /**
    * The attachment owner's clipboard intent for a text paste too large to edit
    * inline.
@@ -100,6 +105,7 @@ export type ComposerProps = {
     readonly error?: string;
     readonly onSelectModel: (id: string) => void;
     readonly onSelectVariant: (id: string) => void;
+    readonly onRetry?: () => void;
   };
   readonly agentSelection: {
     readonly state: "loading" | "ready" | "failed";
@@ -109,6 +115,7 @@ export type ComposerProps = {
     readonly selectedAgentID?: string;
     readonly error?: string;
     readonly onSelectAgent: (id: string) => void;
+    readonly onRetry?: () => void;
   };
   readonly onInput: (value: string, skills?: readonly PromptSkillAttachment[]) => void;
   readonly onSubmit: () => void;
@@ -195,8 +202,15 @@ function selectionControls(
 }
 
 function selectionStatus(
-  props: Pick<ComposerProps, "agentSelection" | "error" | "modelSelection">,
+  props: Pick<ComposerProps, "action" | "agentSelection" | "error" | "modelSelection">,
 ) {
+  const missingModel = () =>
+    props.modelSelection.selectedModelID !== undefined &&
+    !props.modelSelection.models.some((model) => model.id === props.modelSelection.selectedModelID);
+  const emptyModels = () =>
+    props.modelSelection.state === "ready" && props.modelSelection.models.length === 0;
+  const selectionBusy = () =>
+    props.modelSelection.switching || props.agentSelection.switching || props.action === "sending";
   return (
     <>
       {props.error ? (
@@ -219,11 +233,58 @@ function selectionStatus(
           {props.modelSelection.error}
         </p>
       ) : null}
+      <Show when={props.modelSelection.state === "failed" && !props.modelSelection.error}>
+        <p class="composer-status composer-status--error" role="alert">
+          Models could not be loaded. Check the connection and try again.
+        </p>
+      </Show>
+      <Show when={emptyModels() || (props.modelSelection.state === "ready" && missingModel())}>
+        <p class="composer-status" role="status">
+          {emptyModels()
+            ? `${missingModel() ? "The selected model is unavailable. " : ""}No enabled models are available from this server. Configure or enable a model in OpenCode on the connected server.`
+            : "The selected model is unavailable. Choose another model."}
+        </p>
+      </Show>
+      <Show
+        when={
+          props.modelSelection.onRetry && (emptyModels() || props.modelSelection.state === "failed")
+        }
+      >
+        <div class="composer-status">
+          <Button
+            type="button"
+            size="small"
+            variant="ghost-muted"
+            disabled={props.modelSelection.disabled || selectionBusy()}
+            onClick={props.modelSelection.onRetry}
+          >
+            {props.modelSelection.state === "failed" ? "Retry models" : "Refresh models"}
+          </Button>
+        </div>
+      </Show>
       {props.agentSelection.error ? (
         <p class="composer-status composer-status--error" role="alert">
           {props.agentSelection.error}
         </p>
       ) : null}
+      <Show when={props.agentSelection.state === "failed" && !props.agentSelection.error}>
+        <p class="composer-status composer-status--error" role="alert">
+          Agents could not be loaded. Check the connection and try again.
+        </p>
+      </Show>
+      <Show when={props.agentSelection.state === "failed" && props.agentSelection.onRetry}>
+        <div class="composer-status">
+          <Button
+            type="button"
+            size="small"
+            variant="ghost-muted"
+            disabled={props.agentSelection.disabled || selectionBusy()}
+            onClick={props.agentSelection.onRetry}
+          >
+            Retry agents
+          </Button>
+        </div>
+      </Show>
     </>
   );
 }
@@ -258,10 +319,16 @@ export function Composer(props: ComposerProps) {
   const review = () => props.review;
   const attachments = () => ((props.attachments?.count ?? 0) > 0 ? props.attachments : undefined);
   const annotations = () => ((props.annotations?.count ?? 0) > 0 ? props.annotations : undefined);
+  const browserBatches = () => props.browserBatches ?? [];
+  const ordinaryFiles = () =>
+    (props.files ?? []).filter(
+      (file) => !browserBatches().some((batch) => batch.files.includes(file)),
+    );
   const sendable = () =>
     review() !== undefined ||
     annotations() !== undefined ||
     attachments() !== undefined ||
+    browserBatches().length > 0 ||
     props.value.trim() !== "" ||
     (props.files?.length ?? 0) > 0;
 
@@ -486,6 +553,7 @@ export function Composer(props: ComposerProps) {
           when={
             review() ||
             annotations() ||
+            browserBatches().length > 0 ||
             (props.files?.length ?? 0) > 0 ||
             attachments() !== undefined
           }
@@ -521,7 +589,14 @@ export function Composer(props: ComposerProps) {
                 />
               )}
             </Show>
-            <For each={props.files ?? []}>
+            <BrowserAttachments
+              batches={browserBatches()}
+              disabled={props.readOnly}
+              onRemoveBatch={props.onRemoveBrowserBatch}
+              onRemoveFile={props.onRemoveFile}
+              onRemoved={() => editor?.focus()}
+            />
+            <For each={ordinaryFiles()}>
               {(file) =>
                 isImageFile(file) ? (
                   <AttachmentImagePill
