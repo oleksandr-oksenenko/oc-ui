@@ -116,12 +116,12 @@ Chromium, then run all test projects:
   acceptance). Desktop runtime staging and packaging currently require macOS arm64.
 
 CI invokes the `test`, `ready`, and `build-storybook` scripts through
-`vp run --no-cache -w` so every run executes those tasks; pnpm's dependency store
-is cached separately.
+`vp run --no-cache -w` so every run executes those tasks. GitHub Actions dependency
+caching is disabled, and CI does not upload artifacts. Build outputs and test
+diagnostics stay on the disposable runner; test output is available in the job logs.
 
-Failed runs upload suite logs and available browser/Electron artifacts for seven
-days. Packaged live-provider chat tests are opt-in and require credentials; CI uses
-the self-contained scripted provider.
+Packaged live-provider chat tests are opt-in and require credentials; CI uses the
+self-contained scripted provider.
 
 ## macOS packaging
 
