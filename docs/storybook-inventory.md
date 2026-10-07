@@ -42,6 +42,14 @@ that stories directory unless otherwise specified.
 
 ## Replacements using existing production components
 
+- `terminal-panel/TerminalPanel.stories.tsx` mounts production TerminalPanel and
+  ShellRegion with controlled terminal records and callbacks. It covers creation,
+  connection/recovery/exit states, accessible tab descriptions, retained child
+  identity, keyboard navigation, hiding/focus return, resizing and mobile overlays.
+  Slot content uses upstream Button and TextInput controls; no fake terminal
+  renderer or story-only stylesheet is included. Actual Restty rendering, fonts,
+  shell input and server resources are verified by browser and packaged acceptance.
+
 - `NewSessionScreen.stories.tsx` directly mounts NewSessionScreen/NewSessionSetup
   and Composer. It retains the useful showcase's project/location/branch choices,
   unavailable-project keyboard/retry behavior, draft/file preservation during
@@ -60,6 +68,8 @@ that stories directory unless otherwise specified.
 
 - `DialogStory.tsx`: pushes an actual dialog into the production provider and
   closes it on unmount; no visual wrapper.
+- `terminal-panel/TerminalPanelFixture.tsx`: controlled records and callbacks for
+  the production panel/shell, upstream slot controls and a viewport-height wrapper.
 - `attachment-fixtures.ts`, `composer-fixtures.ts`, `image-fixtures.ts`,
   `browser-annotation-fixtures.ts`,
   `question-form-fixtures.ts`, `session-fixtures.ts`, `transcript-fixtures.ts`, and

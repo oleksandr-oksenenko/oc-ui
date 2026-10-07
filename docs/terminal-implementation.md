@@ -142,8 +142,8 @@ Reuse the existing runtime, workspace owner, SDK authentication,
 ticket helper, icons, buttons, and acceptance fixtures. No terminal engine,
 native addon, local SSH manager, secondary server, or SDK cache mirror is needed.
 
-Production changes add 1,725 lines and remove 37 (net +1,688). The growth owns
-the new PTY lifecycle, renderer boundary, accessible panel, and bottom-panel
+Production/configuration changes add 1,714 lines and remove 37 (net +1,677).
+The growth owns the new PTY lifecycle, renderer boundary, accessible panel, and bottom-panel
 layout; the font loader handles the verified Electron asset boundary. There was
 no prior terminal coordinator to replace. The existing TLS acceptance fixture
 now owns WebSocket forwarding, and UI-driven packaged terminal checks replace
@@ -155,7 +155,7 @@ per-renderer attachment flag protect actual initialization and geometry rules.
 They replace unconditional focus/attachment and whole-drain resize error
 handling without adding another runtime, queue, timer, or state mirror.
 
-Tests, stories, and fixtures add 2,090 lines and remove 28 (net +2,062). The
+Tests, stories, and fixtures add 2,037 lines and remove 28 (net +2,009). The
 generated lockfile adds 19 lines; font license notices add 280 lines separately.
 Four full, unmodified font binaries add 21,546,904 bytes (20.55 MiB). They avoid
 the pinned WOFF2 decoder defect and provide offline Unicode coverage without
@@ -166,12 +166,13 @@ introducing a subsetting build pipeline.
 - Two fresh GPT-6.1 Sol / high reviews followed implementation of the original
   five findings. Round one found escape-synthesis/C1 clipboard bypasses and
   hidden-initialization geometry; both were fixed with regressions. Round two
-  reported **no P1/P2 findings** across the full candidate. The final root,
-  browser, package, and native evidence below is for that latest code.
+  reported **no P1/P2 findings** across the full candidate at that stage. The
+  later tab-row, quiet-status and accessibility refinements were covered by
+  root, browser and packaged verification during local-main integration.
 - Root `pnpm check` passed: formatting, lint/types, WDIO types, styles,
   component boundaries, and unused-code checks.
-- Root `VITEST_MAX_WORKERS=2 NODE_OPTIONS=--no-experimental-webstorage pnpm test`
-  passed: 167 desktop files / 1,621 tests, plus 67 tests in the other workspace
+- Root `VITEST_MAX_WORKERS=1 pnpm test` with pinned Node 24.20.0
+  passed: 155 desktop files / 1,650 tests, plus 67 tests in the other workspace
   suites. This includes
   all 11 terminal Storybook interaction/accessibility scenarios and the real
   authenticated HTTPS/WSS server flow.
@@ -179,11 +180,11 @@ introducing a subsetting build pipeline.
   close/recreate, chat and location navigation, hide/reopen, server resize,
   alternate-screen input, output floods, reconnect, and explicit PTY removal,
   plus the review-fix regressions above.
-- `pnpm package:mac` passed. The complete packaged startup suite executed and
-  passed all eight scenarios using the installed Node 24 launcher:
+- Root `pnpm test:acceptance:mac` rebuilt the application and passed all eight
+  packaged startup scenarios with pinned Node 24.20.0:
 
   ```sh
-  /etc/profiles/per-user/alex/bin/node apps/desktop/test/e2e/run-packaged.mjs startup
+  pnpm test:acceptance:mac
   ```
 
   Terminal checks establish packaged font delivery and WASM initialization,
@@ -209,3 +210,18 @@ Remote transport is verified against the real pinned server behind the TLS
 fixture, not a separate physical remote host. Remote shell persistence depends
 on that server's lifetime. Ordinary bounded replay does not guarantee exact
 screen restoration after long disconnections or reloads.
+
+## Local-main integration
+
+The feature was rebased onto main's UI, composer and session-state advances,
+preserving the newer composer attachment callback and session empty-state props.
+The browser-test conflict kept both catalog and font-failure helpers. A later
+Storybook cleanup was also incorporated: terminal fixtures now use production
+panel/shell components and upstream controls without a fake shell prompt or
+story-only stylesheet. Root checks, all 11 terminal stories and real-server
+browser acceptance passed after that reconciliation. The packaged result above
+predates only the story/documentation cleanup; application code was identical.
+
+The first post-cleanup root run encountered a Vite dependency-optimization reload
+that invalidated other Storybook module imports. The rerun passed with settled
+dependencies; no unrelated application repair was made.

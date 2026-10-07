@@ -1,5 +1,7 @@
 import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
+import { Button } from "@opencode/ui/button";
+import { TextInput } from "@opencode/ui/text-input";
 import { createSignal, For } from "solid-js";
 
 import { ShellRegion } from "../../src/renderer/components/App/ConnectedApp/Shell/ShellRegion.tsx";
@@ -8,8 +10,6 @@ import {
   TerminalPanel,
   type TerminalPanelProps,
 } from "../../src/renderer/components/App/ConnectedApp/Terminal/TerminalPanel.tsx";
-
-import "./TerminalPanelFixture.css";
 
 export function TerminalPanelFixture(props: {
   readonly tabs?: TerminalPanelProps["tabs"];
@@ -36,7 +36,7 @@ export function TerminalPanelFixture(props: {
   };
 
   return (
-    <div class="terminal-panel-fixture">
+    <div style={{ height: "100vh" }}>
       <ShellRegion
         panels={panels}
         selectedTitle={() => "Workspace migration"}
@@ -54,45 +54,18 @@ export function TerminalPanelFixture(props: {
           />
         }
         sidebar={
-          <aside class="terminal-fixture-sidebar" aria-label="Session list">
-            <button
-              autofocus
-              class="oc-focus-inset"
-              onClick={() => panels.setLeftSidebarOpen(false)}
-            >
-              Hide session list
-            </button>
-            <p>Workspace migration</p>
-            <p>API contract review</p>
-          </aside>
+          <Button autofocus onClick={() => panels.setLeftSidebarOpen(false)}>
+            Hide session list
+          </Button>
         }
         rightControls={
-          <button class="oc-focus-inset" onClick={() => panels.setRightPanelOpen(false)}>
-            Hide context
-          </button>
+          <Button onClick={() => panels.setRightPanelOpen(false)}>Hide context</Button>
         }
-        main={
-          <div class="terminal-fixture-chat">
-            <h1>Workspace migration</h1>
-            <p>Chat stays above the terminal.</p>
-            <label>
-              Message
-              <input class="oc-focus-inset" />
-            </label>
-          </div>
-        }
+        main={<TextInput aria-label="Message" />}
         context={
-          <aside class="terminal-fixture-context" aria-label="Context files">
-            <button
-              autofocus
-              class="oc-focus-inset"
-              onClick={() => panels.setRightPanelOpen(false)}
-            >
-              Close context
-            </button>
-            <p>src/Workspace.tsx</p>
-            <p>src/Workspace.css</p>
-          </aside>
+          <Button autofocus onClick={() => panels.setRightPanelOpen(false)}>
+            Close context
+          </Button>
         }
         bottomOpen={open()}
         bottom={
@@ -120,18 +93,8 @@ export function TerminalPanelFixture(props: {
           >
             <For each={tabs().map((tab) => tab.id)}>
               {(id) => (
-                <div
-                  class="terminal-fixture-surface"
-                  hidden={activeID() !== id}
-                  inert={activeID() !== id}
-                  data-terminal-id={id}
-                >
-                  <pre>alex@homie:~/projects/oc-ui $</pre>
-                  <textarea
-                    class="oc-focus-inset"
-                    aria-label={`Terminal ${id} input`}
-                    placeholder="Type a command (controlled fixture)"
-                  />
+                <div hidden={activeID() !== id} inert={activeID() !== id} data-terminal-id={id}>
+                  <TextInput aria-label={`Terminal ${id} input`} />
                 </div>
               )}
             </For>

@@ -49,6 +49,10 @@ App/
     Browser/
       BrowserPane.tsx
       BrowserAnnotations.tsx
+    Terminal/
+      TerminalPanel.tsx
+      TerminalRegion.tsx
+      TerminalRegion/TerminalSurface.tsx
     GlobalForms/
       GlobalFormsRegion.tsx
       ReviewDialog.tsx
@@ -77,6 +81,9 @@ ServerDirectoryBrowser, ThemeProvider and ServerFlowDialogProvider.
 - ChangesRegion/ContextPanel own change-review presentation. BrowserPane renders
   browser controls; Electron owns the native embedded page.
 - GlobalFormsRegion owns the request launcher and ReviewDialog presentation.
+- TerminalPanel owns controlled tab/action/status presentation; TerminalRegion
+  retains TerminalSurface renderers. The workspace terminal service owns server
+  PTYs, attachments, mutation ordering and recovery.
 - ServerDirectoryBrowser lists locations on the connected server. Shared
   `serverPath` owns POSIX, Windows-drive and UNC navigation; renderer code does not
   apply Electron host path rules to remote locations.
