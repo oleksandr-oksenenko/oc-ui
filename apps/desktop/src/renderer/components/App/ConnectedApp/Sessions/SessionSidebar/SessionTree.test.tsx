@@ -398,6 +398,39 @@ describe("SessionTree", () => {
     dispose();
   });
 
+  it("pins running trees above idle Today sessions and restores date groups when they finish", () => {
+    const [runningIDs, setRunningIDs] = createSignal(["old-running", "child"]);
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({
+          now: fixedNow,
+          sessions: [
+            session("today", "Idle today", undefined, fixedNow),
+            session("old-root", "Old root"),
+            session("child", "Running child", "old-root"),
+            session("old-running", "Old running"),
+          ],
+          expandedIDs: ["old-root"],
+        })}
+        statusForSession={(id) => (runningIDs().includes(id) ? "running" : "idle")}
+      />
+    ));
+    const titles = (group: string) =>
+      [...host.querySelectorAll(`#shell-session-group-${group} + div .shell-session-title`)].map(
+        (title) => title.textContent,
+      );
+
+    expect(titles("today")).toEqual(["Old root", "Running child", "Old running", "Idle today"]);
+    expect(titles("earlier")).toEqual([]);
+    setRunningIDs(["old-running"]);
+    expect(titles("today")).toEqual(["Old running", "Idle today"]);
+    expect(titles("earlier")).toEqual(["Old root", "Running child"]);
+    setRunningIDs([]);
+    expect(titles("today")).toEqual(["Idle today"]);
+    expect(titles("earlier")).toEqual(["Old root", "Running child", "Old running"]);
+    dispose();
+  });
+
   it("shows runtime status without an expansion control for leaf titles", () => {
     const host = document.createElement("div");
     const dispose = render(

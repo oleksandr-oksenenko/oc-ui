@@ -1086,6 +1086,18 @@ describe.sequential("production browser app", () => {
     const previousCancelled = (await providerState()).cancelledStreams;
     await send("E2E_STOP browser");
     await transcript("Acceptance stream is waiting for cancellation.");
+    const newerIdle = await api.session.create({ title: "Newer idle session while another runs" });
+    try {
+      const todayTitles = () =>
+        page.locator("#shell-session-group-today + div .shell-session-title").allTextContents();
+      await selectSession(newerIdle.title);
+      await expect.poll(todayTitles).toContain(newerIdle.title);
+      await expect.poll(async () => (await todayTitles())[0]).toBe("Browser fixture one");
+      await selectSession("Browser fixture one");
+      await expect.poll(async () => (await todayTitles())[0]).toBe("Browser fixture one");
+    } finally {
+      await api.session.remove({ sessionID: newerIdle.id });
+    }
     await page.getByRole("button", { name: "Stop", exact: true }).click();
     await idle();
     await expect

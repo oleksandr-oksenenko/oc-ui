@@ -30,7 +30,14 @@ export function SessionTree(props: SessionTreeProps) {
   const [collapsedGroups, setCollapsedGroups] = createSignal<readonly string[]>([]);
   const isExpanded = (id: string) => props.expandedIDs.includes(id);
   const query = createMemo(() => props.query?.trim().toLowerCase() ?? "");
-  const projection = createMemo(() => projectSessionTree(props.sessions, query(), props.now));
+  const projection = createMemo(() =>
+    projectSessionTree(
+      props.sessions,
+      query(),
+      props.now,
+      (id) => props.statusForSession(id) === "running",
+    ),
+  );
   // Attention covers the unfiltered tree so search cannot hide a blocked descendant.
   const fullProjection = createMemo(() => projectSessionTree(props.sessions, "", props.now));
   const attentionByID = createMemo<ReadonlyMap<string, SessionAttentionState>>(() => {
