@@ -503,7 +503,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
           <Icon class="transcript-state-icon" name="warning" aria-hidden="true" />
           <p>{props.error}</p>
           <Show when={props.onRetry !== undefined}>
-            <Button type="button" size="normal" variant="outline" onClick={() => props.onRetry?.()}>
+            <Button type="button" size="small" variant="outline" onClick={() => props.onRetry?.()}>
               Retry
             </Button>
           </Show>

@@ -29,7 +29,7 @@ export function BuiltInStartup(props: {
               <p class="built-in-startup-error" role="alert">
                 {error()}
               </p>
-              <Button size="normal" variant="outline" onClick={props.onRetry}>
+              <Button size="normal" variant="contrast" onClick={props.onRetry}>
                 {props.restart ? "Restart" : "Retry"}
               </Button>
             </>

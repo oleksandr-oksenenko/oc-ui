@@ -137,7 +137,7 @@ export function DiffView(props: DiffViewProps) {
             <p>{error()}</p>
             <Show when={props.presentation.onRetry}>
               <Button
-                size="normal"
+                size="small"
                 variant="outline"
                 type="button"
                 onClick={() => props.presentation.onRetry?.()}
@@ -183,7 +183,7 @@ export function DiffView(props: DiffViewProps) {
                 <span>{error()}</span>
                 <Show when={props.presentation.onRetry}>
                   <Button
-                    size="normal"
+                    size="small"
                     variant="outline"
                     type="button"
                     onClick={() => props.presentation.onRetry?.()}

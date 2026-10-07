@@ -229,8 +229,10 @@
   --v2-text-text-inverse: var(--oc-text-on-selection);
   --v2-elevation-raised: var(--oc-shadow-card);
   --v2-elevation-overlay: var(--oc-shadow-floating);
-  --v2-elevation-button-neutral: var(--oc-shadow-card);
-  --v2-elevation-button-contrast: var(--oc-shadow-card);
+
+  /* Controls need a resting edge in both themes, not content-card elevation. */
+  --v2-elevation-button-neutral: inset 0 0 0 1px var(--oc-border-base);
+  --v2-elevation-button-contrast: inset 0 0 0 1px var(--oc-selection-hover);
   --v2-elevation-elements: var(--oc-shadow-card);
   --v2-overlay-simple-overlay-scrim: var(--oc-scrim);
   --v2-grey-200: var(--oc-text-on-selection);

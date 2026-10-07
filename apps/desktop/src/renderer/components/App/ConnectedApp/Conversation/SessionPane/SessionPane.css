@@ -103,6 +103,8 @@
   padding: 16px;
   color: var(--oc-text-base);
   font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-body-weight);
+  line-height: var(--oc-type-body-line-height);
   text-align: center;
 }
 

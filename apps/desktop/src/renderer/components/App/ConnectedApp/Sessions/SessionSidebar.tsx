@@ -101,7 +101,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
               <Button
                 class="shell-sidebar-action oc-focus-inset"
                 type="button"
-                size="normal"
+                size="small"
                 variant="outline"
                 onClick={props.onRetry}
               >

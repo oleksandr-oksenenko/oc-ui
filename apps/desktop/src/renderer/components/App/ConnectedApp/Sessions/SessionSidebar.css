@@ -89,7 +89,7 @@
   min-width: 0;
 }
 
-.shell-server-selector[data-component="button-v2"][data-size="small"] {
+.shell-server-selector[data-component="button-v2"][data-size="small"][data-variant] {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) 14px;
   align-items: center;

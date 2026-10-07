@@ -165,7 +165,7 @@ export function ConnectionForm(props: ConnectionFormProps) {
               class="connection-form-submit"
               type={props.mode === "remote" ? "submit" : "button"}
               size="normal"
-              variant={props.busy ? "loading" : props.error ? "outline" : "contrast"}
+              variant={props.busy ? "loading" : "contrast"}
               disabled={props.busy}
               onClick={props.mode === "local" ? props.onUseBuiltInServer : undefined}
             >

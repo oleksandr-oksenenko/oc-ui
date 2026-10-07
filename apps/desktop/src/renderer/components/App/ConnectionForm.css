@@ -24,6 +24,7 @@
   color: var(--oc-text-muted);
   font-size: var(--oc-type-tab-size);
   font-weight: var(--oc-type-tab-weight);
+  line-height: var(--oc-type-tab-line-height);
   letter-spacing: normal;
   text-transform: none;
 }
@@ -39,6 +40,7 @@
 .connection-form-heading > p:last-child {
   color: var(--oc-text-muted);
   font-size: var(--oc-type-body-size);
+  font-weight: var(--oc-type-body-weight);
   line-height: var(--oc-type-body-line-height);
 }
 
@@ -53,6 +55,8 @@
   border-radius: var(--oc-radius);
   background: var(--oc-surface-control);
   font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
+  line-height: var(--oc-type-metadata-line-height);
 }
 
 .connection-form-saved span {
@@ -96,7 +100,9 @@
 }
 
 .connection-form-mode [data-slot="radio-v2-item-description"] {
-  line-height: 1.35;
+  font-size: var(--oc-type-caption-size);
+  font-weight: var(--oc-type-caption-weight);
+  line-height: var(--oc-type-caption-line-height);
 }
 
 .connection-form-fields {
@@ -111,6 +117,7 @@
 .connection-form-warning,
 .connection-form-error {
   font-size: var(--oc-type-caption-size);
+  font-weight: var(--oc-type-caption-weight);
   line-height: var(--oc-type-caption-line-height);
   user-select: text;
 }
@@ -129,6 +136,8 @@
   gap: 8px;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-status-size);
+  font-weight: var(--oc-type-status-weight);
+  line-height: var(--oc-type-status-line-height);
 }
 
 .connection-form-actions {
