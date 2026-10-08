@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { configureOpenCodeLaunch } from "./opencode-launch-settings.ts";
 
 const { resolve } = vi.hoisted(() => ({
-  resolve: vi.fn(() => "/runtime/native/bin/opencode-pty"),
+  resolve: vi.fn<(specifier: string) => string>(() => "/runtime/native/bin/opencode-pty"),
 }));
 
 vi.mock("@opencode/util/global", () => ({
