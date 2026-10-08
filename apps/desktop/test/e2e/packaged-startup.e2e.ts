@@ -227,6 +227,10 @@ describe("packaged owned OpenCode", () => {
   });
 
   after(async () => {
+    console.info("Owned worker PIDs before quit", {
+      recorded: workerPids,
+      current: await ownedWorkerPids().catch(() => undefined),
+    });
     // Quit no longer asks. Mock native dialogs so a stop failure cannot block the run.
     const dialogs = await browser.electron.mock("dialog", "showMessageBox");
     await dialogs.mockResolvedValue({ response: 0, checkboxChecked: false });
@@ -267,16 +271,8 @@ async function verifyBundledTerminal(): Promise<void> {
       },
       { timeout: STARTUP_TIMEOUT_MS },
     );
-    await $('.terminal-surface:not([hidden])[data-ready="true"]').waitForDisplayed({
-      timeout: STARTUP_TIMEOUT_MS,
-    });
-    await browser.waitUntil(
-      async () =>
-        (await $('.terminal-panel-tab [role="tab"][aria-selected="true"]').getAttribute(
-          "data-status",
-        )) === "connected",
-      { timeout: STARTUP_TIMEOUT_MS, timeoutMsg: "Packaged terminal did not connect" },
-    );
+    // Creation has already returned a surface ID. Establish native spawn separately
+    // from font/WASM/GPU initialization so a renderer failure cannot obscure it.
     const id = await $(".terminal-surface:not([hidden])").getAttribute("data-terminal-id");
     assert.ok(id);
     const info = (await api.pty.get({ ptyID: id, location })).data;
@@ -285,6 +281,43 @@ async function verifyBundledTerminal(): Promise<void> {
     assert.ok(Number.isSafeInteger(info.pid) && info.pid > 0);
     terminalPids.push(info.pid);
     globalThis.process.kill(info.pid, 0);
+    try {
+      await $('.terminal-surface:not([hidden])[data-ready="true"]').waitForDisplayed({
+        timeout: STARTUP_TIMEOUT_MS,
+      });
+    } catch (cause) {
+      // Only rendering state: never console logs, environment, credentials, or PTY output.
+      const renderer = await browser
+        .execute(() => {
+          const surface = document.querySelector<HTMLElement>(".terminal-surface:not([hidden])");
+          const canvas = document.createElement("canvas");
+          const gl = canvas.getContext("webgl2");
+          const webgl2 = gl !== null;
+          gl?.getExtension("WEBGL_lose_context")?.loseContext();
+          return {
+            ready: surface?.dataset.ready,
+            notice: surface?.querySelector(".terminal-renderer-notice span")?.textContent,
+            width: surface?.clientWidth,
+            height: surface?.clientHeight,
+            webgl2,
+          };
+        })
+        .catch(() => undefined);
+      const gpu = await browser.electron
+        .execute((electron) => electron.app.getGPUFeatureStatus())
+        .catch(() => undefined);
+      throw new Error(
+        `Packaged terminal renderer did not initialize: ${JSON.stringify({ renderer, gpu, pty: { pid: info.pid, status: info.status } })}`,
+        { cause },
+      );
+    }
+    await browser.waitUntil(
+      async () =>
+        (await $('.terminal-panel-tab [role="tab"][aria-selected="true"]').getAttribute(
+          "data-status",
+        )) === "connected",
+      { timeout: STARTUP_TIMEOUT_MS, timeoutMsg: "Packaged terminal did not connect" },
+    );
     return info;
   };
   const terminal = await create();
@@ -460,5 +493,11 @@ async function waitForProcessExit(pid: number): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Owned OpenCode process ${pid} survived app quit`);
+  const state =
+    globalThis.process.platform === "linux"
+      ? await readFile(`/proc/${pid}/status`, "utf8")
+          .then((status) => status.match(/^(?:State|PPid):.*$/gmu)?.join(", "))
+          .catch(() => "process status unavailable")
+      : undefined;
+  throw new Error(`Owned OpenCode process ${pid} survived app quit${state ? ` (${state})` : ""}`);
 }
