@@ -110,11 +110,14 @@ export const SharedTreatment: StoryObj = {
     const invalid = canvas.getByRole("textbox", { name: "Focus invalid field" });
     const invalidFrame = invalid.closest('[data-component="text-input-v2"]')!;
     await ring(invalidFrame);
-    await expect(getComputedStyle(invalidFrame).boxShadow).toContain(
-      document.documentElement.dataset.colorScheme === "dark"
-        ? "rgb(255, 93, 102)"
-        : "rgb(192, 37, 48)",
-    );
+    // The neutral outline settles before the upstream box-shadow transition.
+    await waitFor(async () => {
+      const color =
+        document.documentElement.dataset.colorScheme === "dark"
+          ? "rgb(255, 93, 102)"
+          : "rgb(192, 37, 48)";
+      await expect(getComputedStyle(invalidFrame).boxShadow).toBe(`${color} 0px 0px 0px 1px inset`);
+    });
     await expect(canvas.getByRole("textbox", { name: "Focus disabled field" })).toBeDisabled();
     await expect(canvas.getByRole("button", { name: "Focus disabled action" })).toBeDisabled();
 
