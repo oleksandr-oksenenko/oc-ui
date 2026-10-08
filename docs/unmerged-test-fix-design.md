@@ -15,15 +15,15 @@ unmerged/pending labels are superseded by this section.
 
 ### Repairs now integrated
 
-| Previous owner / repair | Current disposition |
-| --- | --- |
-| `hidden-falcon`: SDK inbox settlement/cancellation, focus ownership, transcript identity, tokenizer/highlighter tests, browser fixture cleanup | **Merged via PR #26**, main commit `fa59f33`. Reuse the committed SDK/UI patches. Its historical 1,717/1,718 failure remains evidence for Collapse All, not the current gate result. |
-| PR #19: Linux packaging, PTY resolver, display-aware resize | **Merged**, `b986d2a`. Follow-up headless terminal and process-exit fixes also **merged via PR #24**, `0761847`. |
-| `tidy-rocket`: stopped-session prompt placement | **Merged via PR #23**, `d66af48`. |
-| PR #22 and `misty-circuit` UI/layout/interaction changes | **Merged via PR #22/#25**, `fc549ee` / `9b91037`. Main also includes dialog-cleanup/long-answer fixture changes in `44ebf59`. |
-| ContextPanel Long Path Tooltip | **Merged via PR #18**, `20c8438`, preserving queued-render reproduction. This does not change Collapse All. |
-| ContextPanel Gutter Range Selection readiness | **Merged in PR #26**: the helper now asserts readiness instead of returning false successfully. Remove this from the open implementation list; historical causality remains unproven. |
-| Original dependency PR #6–10 installation failures | Newer runs passed CI. #6, #7, #9, #10 merged with scoped lockfile fixes. #8 is still open with passing checks at `c8c15c4`; its installation failure is historical. |
+| Previous owner / repair                                                                                                                        | Current disposition                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hidden-falcon`: SDK inbox settlement/cancellation, focus ownership, transcript identity, tokenizer/highlighter tests, browser fixture cleanup | **Merged via PR #26**, main commit `fa59f33`. Reuse the committed SDK/UI patches. Its historical 1,717/1,718 failure remains evidence for Collapse All, not the current gate result.  |
+| PR #19: Linux packaging, PTY resolver, display-aware resize                                                                                    | **Merged**, `b986d2a`. Follow-up headless terminal and process-exit fixes also **merged via PR #24**, `0761847`.                                                                      |
+| `tidy-rocket`: stopped-session prompt placement                                                                                                | **Merged via PR #23**, `d66af48`.                                                                                                                                                     |
+| PR #22 and `misty-circuit` UI/layout/interaction changes                                                                                       | **Merged via PR #22/#25**, `fc549ee` / `9b91037`. Main also includes dialog-cleanup/long-answer fixture changes in `44ebf59`.                                                         |
+| ContextPanel Long Path Tooltip                                                                                                                 | **Merged via PR #18**, `20c8438`, preserving queued-render reproduction. This does not change Collapse All.                                                                           |
+| ContextPanel Gutter Range Selection readiness                                                                                                  | **Merged in PR #26**: the helper now asserts readiness instead of returning false successfully. Remove this from the open implementation list; historical causality remains unproven. |
+| Original dependency PR #6–10 installation failures                                                                                             | Newer runs passed CI. #6, #7, #9, #10 merged with scoped lockfile fixes. #8 is still open with passing checks at `c8c15c4`; its installation failure is historical.                   |
 
 ### Remaining test investigation / fix list
 
@@ -31,18 +31,18 @@ The first item is a **new confirmed recent CI failure**. Items 2–10 are retain
 historical/intermittent cases with no established targeted correction; successful
 newer suites reduce urgency but do not prove their races were removed.
 
-| Priority | Scenario | Evidence and current status | Minimal next change |
-| --- | --- | --- | --- |
-| 1 | **External server image readiness** | Main `44ebf59`, CI run `37802742632`, macOS Integration: `browser.test.mjs:2628` gets a non-string (`null` is consistent with the API) from `getAttribute("src")` after the preceding decoded-width check passed. Failed before navigation; not evidence of navigation failure. Current main retains this assertion. | Assert blob source, decoded width, and completion in one sample of the same, specifically identified image. Preserve those checks after navigation and the unchanged server session location. Capture render/reader identity if readiness still fails; production repair requires that evidence. |
-| 2 | **ContextPanel Collapse All** | Initial missing disclosure and separate first-row top `126 → 62` observations. The original Collapse All story remains unchanged; latest completed component jobs pass. | Establish both file headers and layout readiness before measuring; assert settled viewport/header-plus-gap geometry. Preserve the 8px gap and collapse/expand contract. Detailed design E. |
-| 3 | **ContextPanel Virtualized List initial readiness** | Historical failure at the first `path(0)` assertion, before scrolling. No targeted initial-readiness change in current main. | Establish the specific file/viewport and real renderer readiness, then exercise bounded windowing, eviction, and return-to-start reuse. Design J. |
-| 4 | **Permission keyboard readiness** | Current code still calls `focus()` and Enter without checking enabled state or actual focus. Latest completed macOS browser run passes this flow. | Hold/release hydration in a regression; wait for enabled/focused state, activate once, observe the matching reply, and assert UI/server settlement. Design H. |
-| 5 | **Draft checkout-refresh barrier** | Historical Markdown hidden-agent refresh failure occurred before saved-agent validation. Submission refresh contract remains unchanged; latest completed browser run passes. | Capture required/observed `agent.updated`, checkout identity, and a read-only server agent snapshot; distinguish stale server state from missing notification. Preserve checkout/draft after partial failure. Design I. |
-| 6 | **Inspection startup before SIGINT** | Historical 30-second readiness failure happens before any signal. Test and acquisition boundaries remain unchanged. | Add phase evidence; separate bounded cold preparation from signal-after-readiness cleanup, retaining acquisition/late-cleanup ownership. Design F. |
-| 7 | **Occupied-port runner exit** | Historical 15-second child exit timeout; output was not drained into the failure report. Relevant fixture/runner remains unchanged. | Drain bounded child output and observe exit from spawn; distinguish pre-bind delay from finalizer hang while preserving blocker and child cleanup. Design G. |
-| 8 | **Terminal retention / WSS recovery** | Historical 180-second timeout has no stalled-stage evidence. Latest completed macOS browser run passes in 10,844 ms. Terminal scenario has no targeted checkpoint/cleanup repair. | Add stage checkpoints and owned PTY/session cleanup on early failure; correct a recovery boundary only if diagnostics establish it. Design B. |
-| 9 | **Packaged startup stale click** | Original PR #16 first-scenario click remains unidentified. Stable transcript identity and native startup repairs are now merged; latest completed native jobs pass on both platforms. Residual diagnostic lead, not a currently failing native job. | If reproduced, preserve the first stage-specific click/DOM evidence, refresh the target after actual settlement, and report dependent fixture failures as prerequisites. Design C. |
-| 10 | **Cold real syntax worker failure cause** | PR #26 landed observer headroom and highlighter/tokenizer regressions. Production request budget is unchanged; original nested `SyntaxHighlightError` cause was never established. Latest component jobs pass. Residual diagnostic lead after partial test repair. | Surface the actual nested cause/stage on recurrence; preserve production timeout, termination, replacement, and disposal checks. Do not add another observer timeout increase. Design A. |
+| Priority | Scenario                                            | Evidence and current status                                                                                                                                                                                                                                                                                          | Minimal next change                                                                                                                                                                                                                                                                              |
+| -------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1        | **External server image readiness**                 | Main `44ebf59`, CI run `37802742632`, macOS Integration: `browser.test.mjs:2628` gets a non-string (`null` is consistent with the API) from `getAttribute("src")` after the preceding decoded-width check passed. Failed before navigation; not evidence of navigation failure. Current main retains this assertion. | Assert blob source, decoded width, and completion in one sample of the same, specifically identified image. Preserve those checks after navigation and the unchanged server session location. Capture render/reader identity if readiness still fails; production repair requires that evidence. |
+| 2        | **ContextPanel Collapse All**                       | Initial missing disclosure and separate first-row top `126 → 62` observations. The original Collapse All story remains unchanged; latest completed component jobs pass.                                                                                                                                              | Establish both file headers and layout readiness before measuring; assert settled viewport/header-plus-gap geometry. Preserve the 8px gap and collapse/expand contract. Detailed design E.                                                                                                       |
+| 3        | **ContextPanel Virtualized List initial readiness** | Historical failure at the first `path(0)` assertion, before scrolling. No targeted initial-readiness change in current main.                                                                                                                                                                                         | Establish the specific file/viewport and real renderer readiness, then exercise bounded windowing, eviction, and return-to-start reuse. Design J.                                                                                                                                                |
+| 4        | **Permission keyboard readiness**                   | Current code still calls `focus()` and Enter without checking enabled state or actual focus. Latest completed macOS browser run passes this flow.                                                                                                                                                                    | Hold/release hydration in a regression; wait for enabled/focused state, activate once, observe the matching reply, and assert UI/server settlement. Design H.                                                                                                                                    |
+| 5        | **Draft checkout-refresh barrier**                  | Historical Markdown hidden-agent refresh failure occurred before saved-agent validation. Submission refresh contract remains unchanged; latest completed browser run passes.                                                                                                                                         | Capture required/observed `agent.updated`, checkout identity, and a read-only server agent snapshot; distinguish stale server state from missing notification. Preserve checkout/draft after partial failure. Design I.                                                                          |
+| 6        | **Inspection startup before SIGINT**                | Historical 30-second readiness failure happens before any signal. Test and acquisition boundaries remain unchanged.                                                                                                                                                                                                  | Add phase evidence; separate bounded cold preparation from signal-after-readiness cleanup, retaining acquisition/late-cleanup ownership. Design F.                                                                                                                                               |
+| 7        | **Occupied-port runner exit**                       | Historical 15-second child exit timeout; output was not drained into the failure report. Relevant fixture/runner remains unchanged.                                                                                                                                                                                  | Drain bounded child output and observe exit from spawn; distinguish pre-bind delay from finalizer hang while preserving blocker and child cleanup. Design G.                                                                                                                                     |
+| 8        | **Terminal retention / WSS recovery**               | Historical 180-second timeout has no stalled-stage evidence. Latest completed macOS browser run passes in 10,844 ms. Terminal scenario has no targeted checkpoint/cleanup repair.                                                                                                                                    | Add stage checkpoints and owned PTY/session cleanup on early failure; correct a recovery boundary only if diagnostics establish it. Design B.                                                                                                                                                    |
+| 9        | **Packaged startup stale click**                    | Original PR #16 first-scenario click remains unidentified. Stable transcript identity and native startup repairs are now merged; latest completed native jobs pass on both platforms. Residual diagnostic lead, not a currently failing native job.                                                                  | If reproduced, preserve the first stage-specific click/DOM evidence, refresh the target after actual settlement, and report dependent fixture failures as prerequisites. Design C.                                                                                                               |
+| 10       | **Cold real syntax worker failure cause**           | PR #26 landed observer headroom and highlighter/tokenizer regressions. Production request budget is unchanged; original nested `SyntaxHighlightError` cause was never established. Latest component jobs pass. Residual diagnostic lead after partial test repair.                                                   | Surface the actual nested cause/stage on recurrence; preserve production timeout, termination, replacement, and disposal checks. Do not add another observer timeout increase. Design A.                                                                                                         |
 
 ### Separate installation blocker
 
@@ -95,6 +95,162 @@ there is no established test failure to add from it.
 
 Refresh accounting: production, configuration, tests, generated code **+0/-0**;
 documentation only. No runtime abstractions or machinery added or removed.
+
+## Implementation design
+
+Requested after the refresh: design, Oracle review, and implementation. The
+candidate starts at `9c1fd1d`; no other worktree is edited. Use Node `24.20.0`
+through `mise exec node@24.20.0 -- …`. The frozen-lockfile installation succeeds
+on this branch, so the separate dependency PR requires its owner's scoped update.
+
+### Ownership and failure policy
+
+| Boundary                                  | Owner and lifetime                                                                 | Ordering, cancellation, and recovery                                                                                                                                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Image observation / permission activation | Existing browser acceptance scenario                                               | Observe image readiness atomically. Hold hydration before navigation, release it before one enabled/focused activation. Never retry a mutation.                                                                                        |
+| Diff initialization / geometry            | Story fixture and real Pierre renderer                                             | Prepare only layout fixtures' language/theme resources before mounting. Assert content-relative geometry and the existing collapsed gap; retain unpreloaded readiness coverage.                                                        |
+| Checkout / reload                         | Workspace submission, project mutation lock, pinned server watcher                 | Keep application-owned work alive across navigation. No notification or arbitrary catalog read can substitute for a checkout-generation acknowledgement. Retain the checkout/draft and fail closed when refresh cannot be established. |
+| Inspection acquisition / shutdown         | Inspection process, supervised by its test fixture                                 | Preparation has its own bounded owner. Signal requests retain ownership until acquisitions settle, then close resources before deleting the profile. Evidence distinguishes acquisition from post-ready shutdown.                      |
+| Runner exit                               | Existing child-process fixture                                                     | Drain bounded output and attach exit observation at spawn. Terminate and await only the owned child on failure; retain the blocker listener.                                                                                           |
+| Terminal faults / resources               | Scenario owns injected routes and its remote PTYs/sessions; workspace owns sockets | Restore faults, release held routes, reconcile only owned resources, attempt every cleanup and await settlement. Report primary and cleanup failures together.                                                                         |
+| Packaged startup prerequisites            | Existing packaged suite and app/profile runner                                     | Label single actions, retain acknowledged seed IDs and original failure, fail downstream dependencies promptly, and always quit/await owned processes.                                                                                 |
+| Syntax worker errors                      | Existing renderer pool/cache and reporting boundary                                | Preserve the nested error and stage, ten-second budget, failed-slot invalidation, same-key recovery, and awaited runtime disposal.                                                                                                     |
+
+### Review and verification
+
+Oracle reviewed the design and the pinned-server regression seam in session
+`ses_ee332a3e1ffesReMHQXrGZZKO4`. Accepted corrections:
+
+- Preload `github-light-high-contrast` and `github-dark-high-contrast`, not Pierre
+  defaults. Keep the unpreloaded Diff story's real body-readiness check; syntax
+  Worker Pool coverage is a different highlighter boundary.
+- Preserve first-row/content-start alignment as well as each collapsed item's
+  literal 30px header + 8px gap. Relative spacing alone misses bottom alignment.
+- The pinned agent plugin ignores a root-only supplementary-directory update
+  when Config entries stay unchanged. Reproduce with its actual plugin, Config
+  test layer, filesystem parser, and real Agent service; stub only Bus publication.
+- Correct complete location identity, but do not claim events acknowledge a
+  checkout generation. The API has no such contract.
+- Terminal cleanup must start before creation, preserve baseline PTYs, restore
+  faults before resource cleanup, detach individual socket listeners, and attempt
+  every cleanup. Keep original and cleanup errors together.
+
+### Implemented boundaries
+
+- Browser images: exact file-source locator and one sample of blob source,
+  completion and decoded dimensions before/after navigation.
+- Collapse/virtualization: actual-resource preparation and body readiness;
+  content-relative alignment, literal collapsed heights/gaps, and full windowing
+  contract. The ordinary Diff story retains unpreloaded initialization coverage.
+- Permissions: held matching hydration, disabled-state observation, enabled and
+  focused control, one Enter, exactly one successful reply and UI/server settlement.
+- Drafts: pinned-core root-invalidation patch, full location filtering, bounded
+  required/observed/pending metadata and cancellable agent-state diagnostics.
+  Missing confirmation still retains the checkout/draft and sends nothing.
+- Inspection: separate cold bundle preparation, named acquisition/teardown phases,
+  and controlled IPC tests holding the acquired result while a signal is handled.
+- Occupied port: drained output and spawn-owned exit observation, sanitized
+  diagnostics, original blocker probe and released-port check.
+- Terminal: fixture-owned IDs, bounded reads, fault restoration, all-attempted
+  remote cleanup and socket-listener disposal, stage/state diagnostics, forced
+  early-failure coverage and controlled recreated-shell Unicode input.
+- Packaged startup: labeled single actions, acknowledged fixture IDs, safe first
+  failure state, prerequisite failure for dependents, and unique screenshots.
+- Syntax worker: known failure stages and printable cause type without source/token
+  payloads; nested timeout, terminated slot, same-key replacement and disposal.
+
+Oracle's implementation review additionally corrected these ownership boundaries:
+
+- Terminal scenarios own disposable renderer pages: server deletion alone leaves
+  retained UI records. Fault restoration precedes a dynamically drained cleanup
+  list, including callbacks registered while restoration awaits. Ambiguous session
+  or PTY creation cannot be certified clean merely because a list is empty; it
+  reports unresolved isolation and stops dependent work. Baseline acquisition is
+  bounded/protected and cleanup failures retain the original failure.
+- The inspection gate initiates server acquisition and observes its rejection
+  immediately, then holds publication until the signal is handled and the parent
+  releases it. The late handle remains owned and is closed before profile removal.
+- Packaged clicks retain their prior/default action deadlines; only the original
+  New Session boundary explicitly uses the startup deadline.
+- Unrelated agent notifications assert no invocation of the delegated real
+  filesystem scan, in addition to unchanged agent state and reload count.
+
+The unpreloaded Diff story covers readiness, not guaranteed cold initialization:
+Pierre's singleton can already be warm. Syntax diagnostics expose the known stage
+and cause type at the production catch boundary, retaining the full internal cause;
+they do not claim tokenizer detail or universal redaction of every story console.
+
+The watcher regression fails on all four spellings before the patch and passes
+after it, including unrelated notifications, descendant notifications, root
+replacement, and awaited plugin-scope cleanup. The lockfile change is restricted
+to the core patch registration/hash and affected dependency references; frozen
+installation succeeds with the release-age policy intact.
+
+**Remaining uncertainty:** the patch establishes a real missed-invalidation bug,
+not which native notification sequence caused the historical run. Checkout
+generation acknowledgement remains absent. Terminal timeout, original stale-click
+remount, and cold-worker internal-stage causes remain historical diagnostic leads;
+their fixture/reporting boundaries are hardened rather than assigned speculative
+production repairs. PR #28's installation change belongs to its separate branch.
+
+Baseline focused local checks pass: ContextPanel and real-worker stories (23
+cases), server/inspection integration (11 cases), and image browser cases (4
+cases). These establish current execution surfaces, not that historical races
+are gone.
+
+### Candidate verification
+
+Follow-up cleanup review found and repaired a page-disposal race: terminal creation
+can start while the page is closing, so settlement is checked after closure and
+listeners are detached even if closure fails. Both paths have regression coverage.
+The disposable page now captures its own renderer errors; its redundant viewport
+and clipboard-method restoration is removed, while shared clipboard permissions
+are released. Resize response observers and actions are awaited together to retain
+early rejections. Refresh diagnostics derive observed events from required/pending
+state rather than maintaining another mutable set.
+
+Local evidence (Node `24.20.0`):
+
+- Root `pnpm check`: passes formatting, lint/types, WDIO types, styles, component
+  ownership checks and unused-code checks.
+- Root `pnpm test`: passes 1,575 cases across the three fast-tier projects after
+  rebasing onto `d768b3b` (the pre-rebase cleanup passed 1,548).
+- ContextPanel and real syntax-worker stories: 23 pass.
+- Draft storage/controller: 47 pass, including wrong-workspace filtering,
+  diagnostic cancellation, saved-agent revalidation and subscription cleanup.
+- Runner/inspection integration: 13 pass; the subsequently corrected
+  in-acquisition signal gate passes its four inspection cases.
+- Images and permission keyboard: five focused browser cases pass. Both
+  disposable-page terminal cases pass, including forced early failure, retained
+  baseline PTYs, renderer disposal and a usable succeeding scenario. Real draft
+  local/worktree flow passes with its prerequisite browser setup.
+
+PR preparation rebased onto `d768b3b`, preserving main's platform/artifact paths,
+Linux keyring checks and lint boundaries. Frozen installation, root checks/tests,
+and seven focused permission/image/terminal browser cases pass on this result.
+
+Full heavier component/integration/build/packaged CI evidence for this candidate
+is pending. Packaged native actions were type-checked; their changed diagnostics
+were not executed in a packaged app locally. No budget increase or repeated
+mutation is used as a repair.
+
+### Complexity accounting
+
+Production (including the underlying pinned-core patch): **+93/-37, net +56**.
+Configuration: **+9/-2, net +7**. Tests/stories/fixtures: **+1,418/-372, net +1,046**.
+Documentation for the complete PR (including the original report): **+854/-0,
+net +854**. Generated lockfile:
+**+5/-4, net +1**. Stored patch: **+15/-0**, including its diff envelope; the
+underlying core code is already included in the production count above.
+
+No new application runtime/service/coordinator is introduced. New test boundaries
+are the terminal fixture's owned resource ledger/page disposal, spawn-owned runner
+observation, named acquisition/action diagnostics, and small atomic-readiness
+helpers. Removed machinery is split image sampling, transient geometry anchoring,
+late child-exit registration, duplicated bare runner spawning and the terminal
+scenario's incomplete late `finally`. Remaining growth is concentrated in actual
+failure-mode regressions and deterministic ownership/cleanup; it is not a state
+mirror of the SDK's application behavior.
 
 ---
 
@@ -207,28 +363,28 @@ Native Ubuntu evidence is identified by its GitHub job, not by the log prefix.
 Paths abbreviated below are under
 `/Users/alex/.local/share/opencode/worktree/973cf2/`, unless stated otherwise.
 
-| Work/session | Source and status | Relevant ownership/overlap |
-| --- | --- | --- |
-| `hidden-falcon`; `ses_ee7cfae28ffeE5rA6vIhfUnPL2` | Dirty detached `41b208b`; `docs/test-reliability-investigation.md:556–714`, dependency patches and regression files | Broad reliability repair already implemented. Latest recorded root test fails only Collapse All geometry; 24 SDK cases, 36 browser cases, and rebuilt 8-case packaged acceptance pass. Root gate is still failed. |
-| `playful-river`; `ses_ee75cf7b3ffeApmCogzOxYDUyo` | PR #14, `968afe4`, merged as `9df86b8` | Tier infrastructure, tooltip settlement, and pending ModelPicker focus. Preserve these when reconciling PR19 workflow and hidden-falcon stories. |
-| `shiny-orchid`; `ses_ee4afa46fffeOzWDMqox0QlPdJ` | PR #18; original `0c30174`, later `72eaa89` merges current main | Frame-aligned Long Path Tooltip regression. Reuse original fix; current head's new verification is pending at snapshot. |
-| `brave-planet`; `ses_ee753d36effeI637Bno7iYVoDU` | PR #19; published original `68f3209`; local native repair `c22e3f4`, rebased to `f3085ce` at snapshot, with a further test-typing edit | Parent owns native CI and packaging. Linux PTY resolver and macOS display-aware resizing are fixed there pending combined verification/publication. Syntax worker is a different resource. |
-| `happy-moon`; `ses_ee7542084ffeD82j1DRnHWJisB` | PR #15; original `608a782`, rebased remote `bba3846` | Focus Shared Treatment waits for exact invalid-field shadow after transition. Existing focused/old full CI passes; new rebased checks pending. |
-| `silent-cactus`; `ses_ee7d08328ffeNdh6W8JdDtHVKM` | PR #13; local `1444292`, rebased remote `0df1d87` | Background process identity/rendering regression work. Its unrelated Long Path Tooltip failure is PR18's ownership. |
-| `clever-harbor`; `ses_ee7c35d74ffeDRHEL25MpHFW15` | PR #20; local `f74227e`, rebased remote `efbda0c` | Retry/status feature. Records Virtualized List, Gutter Range Selection, Worker Pool, and inspection-startup failures outside its change. |
-| `mighty-wizard`; `ses_ee4a04c6fffe5WLoUtxtZfvnWC` | PR #21, `6a94a3a` | External-image read roots, including drive/UNC casing. Failing-before feature regressions are corrected by this owner, not new flake work. |
-| Main/UI integration; `ses_ee4793c94ffeFPrcPkk3clWnGd` | PR #22, `a2294f2`; five rebased commits | Picker typography, provider heading, browser scrollbars, composer/transcript growth, project subtitles. Preserve its rendering/scroll changes when integrating stable transcript rows. |
-| `tidy-rocket`; `ses_ee4a0add8ffeJWeC735dV56DmH` | Dirty detached `612164c` | Idle/stopped-send placement, uncertain acknowledgement/retry ownership, continuous steering-flash browser regression. Overlaps hidden-falcon ConversationRegion and browser files; SDK patch is complementary. |
-| `misty-circuit`; `ses_ee7da36c4ffeuXagdLYDOkGbJB` | Large dirty CSS/UI/test change on `612164c` | Geometry, short panels/composers, pressed feedback, question-card wrapping, nested-list scrolling, suggestion popover. Owner already repairing its new red/green stories. Do not turn its development red logs into duplicate tasks. |
-| `curious-tiger` | Dirty detached `8ace437` | New-session checkout wording/setup and browser assertions; no worker-pool production correction. |
-| `hidden-cabin`; `ses_f36dfc262ffevnMywKcEbvjUU1` | Dirty `refactor/visual-foundations`, `b204105` | Older radius/activity/scenario-lab development; committed foundation changes are patch-equivalent to integrated work. Dirty proposals need reconciliation, not bulk application. |
-| `glowing-meadow`; `ses_f4eae1823ffejXKhc1L5WwHM9B` | Dirty detached `a88ba2f` | Older themes/elevation/scenario-lab work; no exact unresolved PR19 repair found. |
-| `native-browser-annotations` | Dirty on `08b524e` | Browser native/annotation/shared-contract work, overlapping composer and browser-flow files. Preserve owner changes. |
-| `neon-meadow-upstream`, six `spike-*` worktrees | Dirty experiments on `83f5711` | Editor, paste, IME, offset, attachment and Markdown probes. Production prompt-editor integration/consolidation is already on main. Experimental counterexamples are owned design evidence, not main-suite failures. |
-| `swift-canyon`; `ses_f011e943cffe6wZDpTvJGC7m2O` | Dirty composer-width demonstration | User preferred the existing single-row design; candidate wrapping was held out. Historical failure leads are retained separately. |
-| `sunny-harbor`; `ses_f01e2f811ffeqzyK6NyJtt162O` | Untracked UI audit document | Audit registry and independent task ownership, not a pending test repair. |
-| `misty-forest`; `ses_ee48cb167ffe9Wic5lKds9uUEZ` | Untracked Codex Cloud investigation document | No test implementation. |
-| `happy-moon/.opencode/` | Untracked metadata | Preserved; not counted as a source fix. |
+| Work/session                                          | Source and status                                                                                                                      | Relevant ownership/overlap                                                                                                                                                                                                           |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `hidden-falcon`; `ses_ee7cfae28ffeE5rA6vIhfUnPL2`     | Dirty detached `41b208b`; `docs/test-reliability-investigation.md:556–714`, dependency patches and regression files                    | Broad reliability repair already implemented. Latest recorded root test fails only Collapse All geometry; 24 SDK cases, 36 browser cases, and rebuilt 8-case packaged acceptance pass. Root gate is still failed.                    |
+| `playful-river`; `ses_ee75cf7b3ffeApmCogzOxYDUyo`     | PR #14, `968afe4`, merged as `9df86b8`                                                                                                 | Tier infrastructure, tooltip settlement, and pending ModelPicker focus. Preserve these when reconciling PR19 workflow and hidden-falcon stories.                                                                                     |
+| `shiny-orchid`; `ses_ee4afa46fffeOzWDMqox0QlPdJ`      | PR #18; original `0c30174`, later `72eaa89` merges current main                                                                        | Frame-aligned Long Path Tooltip regression. Reuse original fix; current head's new verification is pending at snapshot.                                                                                                              |
+| `brave-planet`; `ses_ee753d36effeI637Bno7iYVoDU`      | PR #19; published original `68f3209`; local native repair `c22e3f4`, rebased to `f3085ce` at snapshot, with a further test-typing edit | Parent owns native CI and packaging. Linux PTY resolver and macOS display-aware resizing are fixed there pending combined verification/publication. Syntax worker is a different resource.                                           |
+| `happy-moon`; `ses_ee7542084ffeD82j1DRnHWJisB`        | PR #15; original `608a782`, rebased remote `bba3846`                                                                                   | Focus Shared Treatment waits for exact invalid-field shadow after transition. Existing focused/old full CI passes; new rebased checks pending.                                                                                       |
+| `silent-cactus`; `ses_ee7d08328ffeNdh6W8JdDtHVKM`     | PR #13; local `1444292`, rebased remote `0df1d87`                                                                                      | Background process identity/rendering regression work. Its unrelated Long Path Tooltip failure is PR18's ownership.                                                                                                                  |
+| `clever-harbor`; `ses_ee7c35d74ffeDRHEL25MpHFW15`     | PR #20; local `f74227e`, rebased remote `efbda0c`                                                                                      | Retry/status feature. Records Virtualized List, Gutter Range Selection, Worker Pool, and inspection-startup failures outside its change.                                                                                             |
+| `mighty-wizard`; `ses_ee4a04c6fffe5WLoUtxtZfvnWC`     | PR #21, `6a94a3a`                                                                                                                      | External-image read roots, including drive/UNC casing. Failing-before feature regressions are corrected by this owner, not new flake work.                                                                                           |
+| Main/UI integration; `ses_ee4793c94ffeFPrcPkk3clWnGd` | PR #22, `a2294f2`; five rebased commits                                                                                                | Picker typography, provider heading, browser scrollbars, composer/transcript growth, project subtitles. Preserve its rendering/scroll changes when integrating stable transcript rows.                                               |
+| `tidy-rocket`; `ses_ee4a0add8ffeJWeC735dV56DmH`       | Dirty detached `612164c`                                                                                                               | Idle/stopped-send placement, uncertain acknowledgement/retry ownership, continuous steering-flash browser regression. Overlaps hidden-falcon ConversationRegion and browser files; SDK patch is complementary.                       |
+| `misty-circuit`; `ses_ee7da36c4ffeuXagdLYDOkGbJB`     | Large dirty CSS/UI/test change on `612164c`                                                                                            | Geometry, short panels/composers, pressed feedback, question-card wrapping, nested-list scrolling, suggestion popover. Owner already repairing its new red/green stories. Do not turn its development red logs into duplicate tasks. |
+| `curious-tiger`                                       | Dirty detached `8ace437`                                                                                                               | New-session checkout wording/setup and browser assertions; no worker-pool production correction.                                                                                                                                     |
+| `hidden-cabin`; `ses_f36dfc262ffevnMywKcEbvjUU1`      | Dirty `refactor/visual-foundations`, `b204105`                                                                                         | Older radius/activity/scenario-lab development; committed foundation changes are patch-equivalent to integrated work. Dirty proposals need reconciliation, not bulk application.                                                     |
+| `glowing-meadow`; `ses_f4eae1823ffejXKhc1L5WwHM9B`    | Dirty detached `a88ba2f`                                                                                                               | Older themes/elevation/scenario-lab work; no exact unresolved PR19 repair found.                                                                                                                                                     |
+| `native-browser-annotations`                          | Dirty on `08b524e`                                                                                                                     | Browser native/annotation/shared-contract work, overlapping composer and browser-flow files. Preserve owner changes.                                                                                                                 |
+| `neon-meadow-upstream`, six `spike-*` worktrees       | Dirty experiments on `83f5711`                                                                                                         | Editor, paste, IME, offset, attachment and Markdown probes. Production prompt-editor integration/consolidation is already on main. Experimental counterexamples are owned design evidence, not main-suite failures.                  |
+| `swift-canyon`; `ses_f011e943cffe6wZDpTvJGC7m2O`      | Dirty composer-width demonstration                                                                                                     | User preferred the existing single-row design; candidate wrapping was held out. Historical failure leads are retained separately.                                                                                                    |
+| `sunny-harbor`; `ses_f01e2f811ffeqzyK6NyJtt162O`      | Untracked UI audit document                                                                                                            | Audit registry and independent task ownership, not a pending test repair.                                                                                                                                                            |
+| `misty-forest`; `ses_ee48cb167ffe9Wic5lKds9uUEZ`      | Untracked Codex Cloud investigation document                                                                                           | No test implementation.                                                                                                                                                                                                              |
+| `happy-moon/.opencode/`                               | Untracked metadata                                                                                                                     | Preserved; not counted as a source fix.                                                                                                                                                                                              |
 
 Other registered worktrees include historical integrations, clean snapshots, and
 already-integrated feature branches. The complete path/head/status inventory is
@@ -252,44 +408,44 @@ The final snapshot includes **#6–10, #13, #15–16, and #18–22**. PR #14 is 
 
 ## Exact fixes to reuse
 
-| Test/scenario | Existing correction | Classification/status |
-| --- | --- | --- |
-| `syntax-highlight.test.ts`: concurrent workers and replacement after `messageerror` | Hidden-falcon waits for `worker.requests`, not construction; adds reported worker error/postMessage failure settlement | Fixed in uncommitted work; no production highlighter change |
-| `syntax-tokenizer.test.ts`: preserves whitespace and changes theme | Hidden-falcon checks exact source reconstruction/colors/theme/reuse instead of cold/warm lexical partition equality | Fixed in uncommitted work; Shiki's bounded cold tokenization makes partition equality invalid |
-| `TranscriptCodeBlock.test.tsx`: real tokens, fallback, disposal, code/theme recovery | Hidden-falcon preinitializes that unit fixture's tokenizer and adds controlled failures/stale results | Fixed in uncommitted work; cold real-worker story remains separate |
-| Worker Pool story observation window | Hidden-falcon adds bounded observer headroom to 12 seconds | Existing partial correction only: cannot fix a production request that already failed at 10 seconds |
-| Queue/steer/cancel/reload pending messages and transcript exclusion | Hidden-falcon pinned SDK cache patch plus 24 real-SDK regressions | Reproduced cache defects fixed in uncommitted work; retain SDK ownership |
-| Queue scenario leaking its held provider turn into annotations/reviews | Main #2 already added cleanup; hidden-falcon strengthens one hold owner, forced early failure and dual-error reporting | Reuse both current main and pending strengthening |
-| Review Comments after Escape | Main #2 uses asynchronous role lookup after Pierre render | Already integrated; distinct from other ContextPanel failures |
-| Gutter Range Selection readiness | Hidden-falcon changes a nonthrowing false-return wait into an assertion-based wait | Pending repair of a confirmed helper defect; does not prove every historical gutter failure has this cause |
-| GlobalForms Default/Narrow close focus | Hidden-falcon UI patch forwards native close autofocus, tracks opening identity, removes GlobalForms timer | Reproduced lifecycle repair implemented and reviewed; pending integration |
-| Browser attachment durable update / packaged missing thumbnail | Hidden-falcon stable/reactive transcript rows, actual TranscriptView regression, message-scoped packaged click diagnostics | Reproduced remount mechanism repaired; historical thumbnail attribution remains qualified |
-| Long Path Tooltip single-click disclosure | PR18 frame-phase regression plus awaited `aria-expanded`; PR14 has overlapping settlement fix | PR14 is integrated; retain PR18's complementary reproduction coverage |
-| ModelPicker focus after pending model switch | PR14 `968afe4`: restores after trigger becomes enabled | Now integrated; real production focus defect, not only an e2e wait |
-| Branch-picker-to-model-picker focus | Main #2 `d7e872f` waits for branch close/focus settlement | Integrated; preserve alongside ModelPicker production repair |
-| Focus Shared Treatment invalid shadow | PR15 `608a782`: awaits final literal neutral color/geometry | Fixed in open PR; retain exact checks in both themes |
-| Linux packaged worker startup | PR19 `c22e3f4` / rebased `f3085ce`: resolve `pty-linux-x64-gnu` | Owned fix pending final integration/verification; distinct from syntax highlighting |
-| macOS packaged resize | Same PR19 repair bounds requested content to display work area minus native frame | Owned repair; cascading missing fixtures/PID errors must not become separate fixes |
-| Idle/stopped send placement and late acknowledgement/retry | Dirty tidy-rocket tests and composer placement tracking | Reproduced feature workflow repair already owned |
-| External-image navigation and Windows/UNC casing | PR21 `6a94a3a` real browser/path regressions | Reproduced feature regressions already corrected/owned |
+| Test/scenario                                                                        | Existing correction                                                                                                        | Classification/status                                                                                      |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `syntax-highlight.test.ts`: concurrent workers and replacement after `messageerror`  | Hidden-falcon waits for `worker.requests`, not construction; adds reported worker error/postMessage failure settlement     | Fixed in uncommitted work; no production highlighter change                                                |
+| `syntax-tokenizer.test.ts`: preserves whitespace and changes theme                   | Hidden-falcon checks exact source reconstruction/colors/theme/reuse instead of cold/warm lexical partition equality        | Fixed in uncommitted work; Shiki's bounded cold tokenization makes partition equality invalid              |
+| `TranscriptCodeBlock.test.tsx`: real tokens, fallback, disposal, code/theme recovery | Hidden-falcon preinitializes that unit fixture's tokenizer and adds controlled failures/stale results                      | Fixed in uncommitted work; cold real-worker story remains separate                                         |
+| Worker Pool story observation window                                                 | Hidden-falcon adds bounded observer headroom to 12 seconds                                                                 | Existing partial correction only: cannot fix a production request that already failed at 10 seconds        |
+| Queue/steer/cancel/reload pending messages and transcript exclusion                  | Hidden-falcon pinned SDK cache patch plus 24 real-SDK regressions                                                          | Reproduced cache defects fixed in uncommitted work; retain SDK ownership                                   |
+| Queue scenario leaking its held provider turn into annotations/reviews               | Main #2 already added cleanup; hidden-falcon strengthens one hold owner, forced early failure and dual-error reporting     | Reuse both current main and pending strengthening                                                          |
+| Review Comments after Escape                                                         | Main #2 uses asynchronous role lookup after Pierre render                                                                  | Already integrated; distinct from other ContextPanel failures                                              |
+| Gutter Range Selection readiness                                                     | Hidden-falcon changes a nonthrowing false-return wait into an assertion-based wait                                         | Pending repair of a confirmed helper defect; does not prove every historical gutter failure has this cause |
+| GlobalForms Default/Narrow close focus                                               | Hidden-falcon UI patch forwards native close autofocus, tracks opening identity, removes GlobalForms timer                 | Reproduced lifecycle repair implemented and reviewed; pending integration                                  |
+| Browser attachment durable update / packaged missing thumbnail                       | Hidden-falcon stable/reactive transcript rows, actual TranscriptView regression, message-scoped packaged click diagnostics | Reproduced remount mechanism repaired; historical thumbnail attribution remains qualified                  |
+| Long Path Tooltip single-click disclosure                                            | PR18 frame-phase regression plus awaited `aria-expanded`; PR14 has overlapping settlement fix                              | PR14 is integrated; retain PR18's complementary reproduction coverage                                      |
+| ModelPicker focus after pending model switch                                         | PR14 `968afe4`: restores after trigger becomes enabled                                                                     | Now integrated; real production focus defect, not only an e2e wait                                         |
+| Branch-picker-to-model-picker focus                                                  | Main #2 `d7e872f` waits for branch close/focus settlement                                                                  | Integrated; preserve alongside ModelPicker production repair                                               |
+| Focus Shared Treatment invalid shadow                                                | PR15 `608a782`: awaits final literal neutral color/geometry                                                                | Fixed in open PR; retain exact checks in both themes                                                       |
+| Linux packaged worker startup                                                        | PR19 `c22e3f4` / rebased `f3085ce`: resolve `pty-linux-x64-gnu`                                                            | Owned fix pending final integration/verification; distinct from syntax highlighting                        |
+| macOS packaged resize                                                                | Same PR19 repair bounds requested content to display work area minus native frame                                          | Owned repair; cascading missing fixtures/PID errors must not become separate fixes                         |
+| Idle/stopped send placement and late acknowledgement/retry                           | Dirty tidy-rocket tests and composer placement tracking                                                                    | Reproduced feature workflow repair already owned                                                           |
+| External-image navigation and Windows/UNC casing                                     | PR21 `6a94a3a` real browser/path regressions                                                                               | Reproduced feature regressions already corrected/owned                                                     |
 
 ## Deduplicated remaining scenarios
 
 "Confirmed" below refers to the failed observation, not automatically to its
 cause. A later focused/full pass is retained evidence, not proof of resolution.
 
-| Scenario | Failed boundary | Disposition/design |
-| --- | --- | --- |
-| TranscriptCodeBlock / Worker Pool | First styled span absent at ten seconds, twice | Cause unresolved; hidden-falcon observation/fallback work is partial coverage. Design A. |
-| ContextPanel / Collapse All | Initial first-file disclosure absent; separate transient-baseline geometry 126→62 | Two unresolved manifestations of one scenario, not PR18's tooltip failure. Design E. |
-| ContextPanel / Virtualized List | Initial `path(0)` remains undefined at story line 347 | Confirmed initial render-readiness failure, before virtualization scroll action. Design J. |
-| ContextPanel / Gutter Range Selection | Drag on `src/generated/added.ts` produces no selection | Confirmed; hidden-falcon readiness helper correction already owned, causal attribution conditional. Design J. |
-| Browser terminal retention/navigation/WSS | Whole test exceeds 180 seconds; precise stage missing | No exact unmerged fix found; diagnostics/owned early-failure cleanup first. Design B. |
-| Inspection cleans up after SIGINT | Readiness expires before signal | Confirmed startup failure; shutdown failure unestablished. Design F. |
-| Standalone runner occupied port | Expected exit 1 absent after 15 seconds | Confirmed exit deadline failure; pre-bind versus teardown unknown. Design G. |
-| Real permission reply via keyboard | First card stays visible after Enter | Concrete enabled/focus prerequisite gap; historical causality conditional. Design H. |
-| Draft local branch/worktree preparation | Markdown-agent refresh barrier fails before saved-agent validation | Confirmed barrier failure; server reload/event ordering cause unresolved. Design I. |
-| Packaged first startup/seed scenario, PR16 | Stale element on unidentified first-scenario click | Confirmed primary failure; later missing Model/Prompt/fixtures are dependent observations. Design C. |
+| Scenario                                   | Failed boundary                                                                   | Disposition/design                                                                                            |
+| ------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| TranscriptCodeBlock / Worker Pool          | First styled span absent at ten seconds, twice                                    | Cause unresolved; hidden-falcon observation/fallback work is partial coverage. Design A.                      |
+| ContextPanel / Collapse All                | Initial first-file disclosure absent; separate transient-baseline geometry 126→62 | Two unresolved manifestations of one scenario, not PR18's tooltip failure. Design E.                          |
+| ContextPanel / Virtualized List            | Initial `path(0)` remains undefined at story line 347                             | Confirmed initial render-readiness failure, before virtualization scroll action. Design J.                    |
+| ContextPanel / Gutter Range Selection      | Drag on `src/generated/added.ts` produces no selection                            | Confirmed; hidden-falcon readiness helper correction already owned, causal attribution conditional. Design J. |
+| Browser terminal retention/navigation/WSS  | Whole test exceeds 180 seconds; precise stage missing                             | No exact unmerged fix found; diagnostics/owned early-failure cleanup first. Design B.                         |
+| Inspection cleans up after SIGINT          | Readiness expires before signal                                                   | Confirmed startup failure; shutdown failure unestablished. Design F.                                          |
+| Standalone runner occupied port            | Expected exit 1 absent after 15 seconds                                           | Confirmed exit deadline failure; pre-bind versus teardown unknown. Design G.                                  |
+| Real permission reply via keyboard         | First card stays visible after Enter                                              | Concrete enabled/focus prerequisite gap; historical causality conditional. Design H.                          |
+| Draft local branch/worktree preparation    | Markdown-agent refresh barrier fails before saved-agent validation                | Confirmed barrier failure; server reload/event ordering cause unresolved. Design I.                           |
+| Packaged first startup/seed scenario, PR16 | Stale element on unidentified first-scenario click                                | Confirmed primary failure; later missing Model/Prompt/fixtures are dependent observations. Design C.          |
 
 PR19 Linux startup and macOS resize are **fixed-in-owned-unmerged-work**, with
 verification pending. Dependency PR failures are **installation blockers, not
@@ -627,15 +783,15 @@ suite's budgets.
 
 Older remaining evidence has different dispositions:
 
-| Lead | Disposition and minimal next design |
-| --- | --- |
+| Lead                                                                     | Disposition and minimal next design                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ChangesRegion `does not reparse patches when only a review body changes` | Historical retained failures include `curious-tiger-wording-test.log:976`. No current causal reproduction. Hold parsing/initial rendering steady, mutate only the review body, distinguish reparsing from delayed DOM publication, then repair only that boundary if the present implementation fails. Keep parse-count and updated-body assertions. |
-| NewSessionFlow `clears the failed session error after adding a project` | Repeated historical timeout reports; original complete failure artifact unavailable. Observe catalog-ready/project registration/mutation settlement separately in the existing fixture. Retain recovery behavior and clean up owned work; no blanket timeout repair is justified by later passes. |
-| WarmPaper Interactive Review missing comment button | The obsolete showcase story was intentionally removed by production-only cleanup. Current real ContextPanel/ConversationRegion stories own useful behavior; do not restore the synthetic app to repair this historical test. |
-| App/browser-host/appearance localStorage failures | Historical 33-failure inventory; old unavailable-storage diagnosis is not newly established. Current corruption/unavailability coverage exists. If reproduced, compare environment/storage descriptor and adapter initialization with current mocks, repair only the actual boundary, retaining persistence/fallback assertions. |
-| Older style-token/NewSession timeouts | Historical source/tool reports, not an identified current failing candidate. Separate tool startup/traversal from intended assertions before changing their budget or implementation. |
-| Prompt-editor expected failures / codec limitations | Superseded spikes and current documented passing corpus contracts, not unnoticed root-suite failures. Compare production package tests before proposing a feature repair; preserve text/skill/offset contracts and do not reintroduce historical duplicate probes. |
-| New misty-circuit geometry/wheel/popover development failures | Owner has focused passing follow-ups; latest retained full gate's sole failure is the tokenizer equality case already repaired in hidden-falcon. Preserve owner work and combine with that correction before declaring another unresolved geometry task. |
+| NewSessionFlow `clears the failed session error after adding a project`  | Repeated historical timeout reports; original complete failure artifact unavailable. Observe catalog-ready/project registration/mutation settlement separately in the existing fixture. Retain recovery behavior and clean up owned work; no blanket timeout repair is justified by later passes.                                                    |
+| WarmPaper Interactive Review missing comment button                      | The obsolete showcase story was intentionally removed by production-only cleanup. Current real ContextPanel/ConversationRegion stories own useful behavior; do not restore the synthetic app to repair this historical test.                                                                                                                         |
+| App/browser-host/appearance localStorage failures                        | Historical 33-failure inventory; old unavailable-storage diagnosis is not newly established. Current corruption/unavailability coverage exists. If reproduced, compare environment/storage descriptor and adapter initialization with current mocks, repair only the actual boundary, retaining persistence/fallback assertions.                     |
+| Older style-token/NewSession timeouts                                    | Historical source/tool reports, not an identified current failing candidate. Separate tool startup/traversal from intended assertions before changing their budget or implementation.                                                                                                                                                                |
+| Prompt-editor expected failures / codec limitations                      | Superseded spikes and current documented passing corpus contracts, not unnoticed root-suite failures. Compare production package tests before proposing a feature repair; preserve text/skill/offset contracts and do not reintroduce historical duplicate probes.                                                                                   |
+| New misty-circuit geometry/wheel/popover development failures            | Owner has focused passing follow-ups; latest retained full gate's sole failure is the tokenizer equality case already repaired in hidden-falcon. Preserve owner work and combine with that correction before declaring another unresolved geometry task.                                                                                             |
 
 ## Integration and verification order
 
