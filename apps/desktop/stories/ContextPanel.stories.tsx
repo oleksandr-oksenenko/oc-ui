@@ -705,7 +705,10 @@ export const LongPathTooltip: Story = {
       const disclosure = paths()[0]?.closest(".diff-file-toggle");
       await expect(disclosure).toHaveAttribute("aria-expanded", "true");
       await userEvent.click(paths()[0]!);
-      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+      // CodeView updates the header in its queued animation-frame render.
+      await waitFor(() => expect(disclosure).toHaveAttribute("aria-expanded", "false"), {
+        timeout: 5_000,
+      });
     });
   },
 };
