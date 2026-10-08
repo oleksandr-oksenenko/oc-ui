@@ -470,8 +470,9 @@
 }
 
 .transcript-tool-name {
-  flex: 0 1 auto;
+  flex: none;
   min-inline-size: 0;
+  max-inline-size: 100%;
   overflow-wrap: anywhere;
   color: inherit;
   font-family: var(--oc-font-mono);

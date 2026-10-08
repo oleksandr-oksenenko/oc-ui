@@ -29,6 +29,7 @@ import {
   longNamedTools,
   longToolNamePrefix,
   longToolNameSuffixes,
+  allParameterTools,
 } from "./transcript-catalog-fixtures.ts";
 import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 import { TranscriptPendingFixture } from "./transcript-catalog/TranscriptPendingFixture.tsx";
@@ -899,6 +900,61 @@ export const ToolStates: Story = {
     });
   },
 };
+export const AllToolParameters: Story = {
+  args: { messages: [allParameterTools], sessionStatus: "idle", loading: false },
+  render: renderTranscript,
+  play: async ({ canvasElement, step }) => {
+    await userEvent.click(
+      canvasElement.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!,
+    );
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    const container = view.parentElement!;
+    const headers = [
+      ...canvasElement.querySelectorAll<HTMLButtonElement>(".transcript-tool-header"),
+    ];
+    await expect(
+      headers.map((header) => header.querySelector(".transcript-tool-name")!.textContent),
+    ).toEqual(allParameterTools.content.map((tool) => tool.type === "tool" && tool.name));
+    for (const width of [260, 390, 820, 1440]) {
+      await step(`All tool names stay readable at ${width}px`, async () => {
+        container.style.width = `${width}px`;
+        await settle();
+        for (const header of headers) {
+          const name = header.querySelector<HTMLElement>(".transcript-tool-name")!;
+          const parameter = header.querySelector<HTMLElement>(".transcript-tool-parameter")!;
+          await expect(parameter).not.toBeNull();
+          const nameBox = name.getBoundingClientRect();
+          const textBox = contentRect(name);
+          const parameterBox = parameter.getBoundingClientRect();
+          const statusBox = header
+            .querySelector(".transcript-tool-status")!
+            .getBoundingClientRect();
+          const lineHeight = Number.parseFloat(getComputedStyle(name).lineHeight);
+          await expect(nameBox.height).toBeLessThanOrEqual(lineHeight + 1);
+          await expect(textBox.left).toBeGreaterThanOrEqual(nameBox.left - 1);
+          await expect(textBox.right).toBeLessThanOrEqual(nameBox.right + 1);
+          await expect(parameterBox.left).toBeGreaterThanOrEqual(nameBox.right + 7);
+          await expect(parameterBox.width).toBeGreaterThan(0);
+          await expect(parameterBox.height).toBeLessThanOrEqual(lineHeight + 1);
+          await expect(statusBox.left).toBeGreaterThanOrEqual(parameterBox.right + 7);
+          await expect(statusBox.right).toBeLessThanOrEqual(
+            header.getBoundingClientRect().right + 1,
+          );
+          await expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth + 1);
+        }
+        await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
+      });
+    }
+    // Each tool still opens and closes with keyboard activation.
+    for (const header of headers) {
+      header.focus();
+      await userEvent.keyboard("{Enter}");
+      await expect(header).toHaveAttribute("aria-expanded", "true");
+      await userEvent.keyboard("{Enter}");
+      await expect(header).toHaveAttribute("aria-expanded", "false");
+    }
+  },
+};
 export const ToolImageLongMetadata: Story = {
   args: { messages: toolStates, sessionStatus: "idle", loading: false },
   render: renderNarrowTranscript,
@@ -921,6 +977,14 @@ export const ToolImageLongMetadata: Story = {
         await expect(parameter.getBoundingClientRect().height).toBeLessThanOrEqual(lineHeight + 1);
         const header = parameter.closest<HTMLElement>(".transcript-tool-header");
         if (!header) throw new Error("Tool header is missing");
+        // Long parameters must shrink before short tool names wrap or get clipped.
+        const name = header.querySelector<HTMLElement>(".transcript-tool-name")!;
+        const nameBox = name.getBoundingClientRect();
+        const nameText = contentRect(name);
+        await expect(nameBox.height).toBeLessThanOrEqual(lineHeight + 1);
+        await expect(nameText.left).toBeGreaterThanOrEqual(nameBox.left - 1);
+        await expect(nameText.right).toBeLessThanOrEqual(nameBox.right + 1);
+        await expect(nameBox.right).toBeLessThanOrEqual(parameter.getBoundingClientRect().left - 7);
         // A parameter holding the whole row leaves the running loader at the row's
         // edge, where its rotated box overhangs its 14px layout box by ~3px. Rows
         // without one have no such excuse.
