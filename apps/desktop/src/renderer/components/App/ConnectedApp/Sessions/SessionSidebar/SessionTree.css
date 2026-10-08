@@ -23,7 +23,8 @@
 
 .shell-session-group .shell-session-group-toggle[data-slot="collapsible-trigger"] {
   height: auto;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 4px;
   padding: 8px 7px 7px;
   border: 0;
   border-radius: var(--oc-radius);
