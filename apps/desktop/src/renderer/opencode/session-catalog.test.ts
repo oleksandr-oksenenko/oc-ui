@@ -1,6 +1,13 @@
-import type { LocationRef, OpenCodeClient, OpenCodeEvent, SessionInfo } from "@opencode/client";
-import type { Data } from "@opencode/client/solid";
+import {
+  OpenCode,
+  type LocationRef,
+  type OpenCodeClient,
+  type OpenCodeEvent,
+  type SessionInfo,
+} from "@opencode/client";
+import { createData, type Data } from "@opencode/client/solid";
 import { Effect, Exit, Scope } from "effect";
+import { createComputed } from "solid-js";
 import { withTestWorkspace } from "../test/workspace.ts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -20,6 +27,91 @@ const session = (id: string, sessionLocation: LocationRef = location, parentID?:
 };
 
 describe("session catalog reconciliation", () => {
+  it("publishes the first page with one SDK list update while the next page is pending", async () => {
+    const nextPage = deferred<Awaited<ReturnType<OpenCodeClient["session"]["list"]>>>();
+    const api = OpenCode.make({ baseUrl: "http://catalog.test" });
+    const rows = Array.from({ length: 100 }, (_, index) => session(`session-${index}`));
+    const list = vi
+      .spyOn(api.session, "list")
+      .mockResolvedValueOnce({ data: rows, cursor: { next: "older" } })
+      .mockReturnValueOnce(nextPage.promise);
+    const observed: number[] = [];
+    const catalog = withTestWorkspace((effects) => {
+      const events = createOpenCodeEventSource();
+      const data = createData({
+        api: () => api,
+        directory: location.directory,
+        event: events,
+        connection: { status: () => "connected" },
+      });
+      createComputed(() => observed.push(data.session.list().length));
+      return createSessionCatalog({ effects, api, data, events });
+    });
+    const pending = catalog.sync();
+    try {
+      await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+      expect(observed).toEqual([0, 100]);
+      expect(catalog.ids()).toEqual(rows.map((info) => info.id));
+      expect(catalog.state()).toBe("loading");
+    } finally {
+      nextPage.resolve({ data: [session("older")], cursor: {} });
+      await pending;
+    }
+    expect(observed).toEqual([0, 100, 101]);
+    expect(catalog.ids()).toHaveLength(101);
+    expect(catalog.state()).toBe("ready");
+  });
+
+  it.each(["failure", "success"])(
+    "preserves live mutations across pages on %s and reconciles on refresh",
+    async (outcome) => {
+      const nextPage = deferred<Awaited<ReturnType<OpenCodeClient["session"]["list"]>>>();
+      const list = vi
+        .fn<OpenCodeClient["session"]["list"]>()
+        .mockResolvedValueOnce({
+          data: [session("kept"), session("deleted")],
+          cursor: { next: "older" },
+        })
+        .mockReturnValueOnce(nextPage.promise);
+      const remember = vi.fn<Data["session"]["remember"]>();
+      const catalog = withTestWorkspace((effects) =>
+        createSessionCatalog({
+          effects,
+          api: { session: { list } },
+          data: { session: { remember, sync: async () => undefined } },
+          events: createOpenCodeEventSource(),
+        }),
+      );
+      const pending = catalog.sync();
+      const settled = Promise.allSettled([pending]);
+      try {
+        await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+        expect(catalog.ids()).toEqual(["kept", "deleted"]);
+        catalog.remove("deleted");
+        catalog.admit("created");
+      } finally {
+        if (outcome === "failure") nextPage.reject(new Error("offline"));
+        else
+          nextPage.resolve({
+            data: [session("kept"), session("deleted"), session("older")],
+            cursor: {},
+          });
+        await settled;
+      }
+      expect(catalog.state()).toBe(outcome === "failure" ? "failed" : "ready");
+      expect(catalog.ids()).toEqual(
+        outcome === "failure" ? ["kept", "created"] : ["kept", "older", "created"],
+      );
+      expect(remember.mock.calls.map(([info]) => info.id)).toEqual(
+        outcome === "failure" ? ["kept", "deleted"] : ["kept", "deleted", "older"],
+      );
+      list.mockResolvedValueOnce({ data: [session("created")], cursor: {} });
+      await catalog.sync();
+      expect(catalog.state()).toBe("ready");
+      expect(catalog.ids()).toEqual(["created"]);
+    },
+  );
+
   it("replays create and delete events that race a server snapshot", async () => {
     type Page = Awaited<ReturnType<OpenCodeClient["session"]["list"]>>;
     const page = deferred<Page>();
@@ -308,33 +400,39 @@ describe("session catalog reconciliation", () => {
     expect(catalog.ids()).toEqual(["recovered"]);
   });
 
-  it("cancels a shared catalog read and waits for native settlement on shutdown", async () => {
-    const page = deferred<Awaited<ReturnType<OpenCodeClient["session"]["list"]>>>();
-    const list = vi.fn<OpenCodeClient["session"]["list"]>(() => page.promise);
-    const remember = vi.fn<Data["session"]["remember"]>();
-    const { catalog, owner } = withTestWorkspace((effects) => ({
-      owner: effects,
-      catalog: createSessionCatalog({
-        effects,
-        api: { session: { list } },
-        data: { session: { remember, sync: async () => undefined } },
-        events: createOpenCodeEventSource(),
-      }),
-    }));
-    const first = catalog.sync().catch(() => undefined);
-    const second = catalog.sync().catch(() => undefined);
-    expect(list).toHaveBeenCalledOnce();
-    const signal = list.mock.calls[0]?.[1]?.signal;
-    let closed = false;
-    const closing = Effect.runPromise(Scope.close(owner.scope, Exit.void)).then(() => {
-      closed = true;
-      return undefined;
-    });
-    await vi.waitFor(() => expect(signal?.aborted).toBe(true));
-    expect(closed).toBe(false);
-    page.resolve({ data: [session("stale")], cursor: {} });
-    await Promise.all([closing, first, second]);
-    expect(remember).not.toHaveBeenCalled();
-    expect(catalog.ids()).toEqual([]);
-  });
+  it.each([1, 2])(
+    "cancels a shared catalog read on page %i and waits for native settlement on shutdown",
+    async (pageNumber) => {
+      const page = deferred<Awaited<ReturnType<OpenCodeClient["session"]["list"]>>>();
+      const list = vi.fn<OpenCodeClient["session"]["list"]>(() => page.promise);
+      if (pageNumber === 2) {
+        list.mockResolvedValueOnce({ data: [session("kept")], cursor: { next: "older" } });
+      }
+      const remember = vi.fn<Data["session"]["remember"]>();
+      const { catalog, owner } = withTestWorkspace((effects) => ({
+        owner: effects,
+        catalog: createSessionCatalog({
+          effects,
+          api: { session: { list } },
+          data: { session: { remember, sync: async () => undefined } },
+          events: createOpenCodeEventSource(),
+        }),
+      }));
+      const first = catalog.sync().catch(() => undefined);
+      const second = catalog.sync().catch(() => undefined);
+      await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(pageNumber));
+      const signal = list.mock.calls[pageNumber - 1]?.[1]?.signal;
+      let closed = false;
+      const closing = Effect.runPromise(Scope.close(owner.scope, Exit.void)).then(() => {
+        closed = true;
+        return undefined;
+      });
+      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+      expect(closed).toBe(false);
+      page.resolve({ data: [session("stale")], cursor: {} });
+      await Promise.all([closing, first, second]);
+      expect(remember).toHaveBeenCalledTimes(pageNumber - 1);
+      expect(catalog.ids()).toEqual(pageNumber === 1 ? [] : ["kept"]);
+    },
+  );
 });

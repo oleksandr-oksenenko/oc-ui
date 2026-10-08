@@ -3,6 +3,7 @@ import type { OpenCodeClient } from "@opencode/client";
 import { useAtomValue } from "@effect/atom-solid";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
+import { batch } from "solid-js";
 import type { WorkspaceOwner } from "../workspace-owner.ts";
 import type { OpenCodeEventSource } from "./event-source";
 
@@ -92,22 +93,32 @@ export function createSessionCatalog(input: SessionCatalogInput): SessionCatalog
           { signal },
         ),
       );
-      for (const info of page.data) {
-        if (
-          !snapshotIDs.has(info.id) &&
-          !mutations.some(
-            (mutation) => mutation.kind === "remove" && mutation.sessionID === info.id,
-          )
-        ) {
-          snapshotIDs.add(info.id);
-          input.data.session.remember(info);
+      // Remember a page together so SDK list sorting and workspace projections
+      // run once, and expose it without waiting for the rest of the history.
+      batch(() => {
+        const pageIDs: string[] = [];
+        for (const info of page.data) {
+          if (
+            !snapshotIDs.has(info.id) &&
+            !mutations.some(
+              (mutation) => mutation.kind === "remove" && mutation.sessionID === info.id,
+            )
+          ) {
+            snapshotIDs.add(info.id);
+            pageIDs.push(info.id);
+            input.data.session.remember(info);
+          }
         }
-      }
+        effects.registry.update(idsAtom, (current) => [...new Set([...current, ...pageIDs])]);
+      });
       cursor = page.cursor.next ?? undefined;
     } while (cursor !== undefined);
-    effects.registry.set(idsAtom, [...snapshotIDs]);
-    for (const mutation of mutations) apply(mutation);
-    effects.registry.set(stateAtom, "ready");
+    // Only a complete snapshot can remove unseen rows or trigger selection fallback.
+    batch(() => {
+      effects.registry.set(idsAtom, [...snapshotIDs]);
+      for (const mutation of mutations) apply(mutation);
+      effects.registry.set(stateAtom, "ready");
+    });
   }).pipe(
     Effect.tapError(() =>
       Effect.sync(() => {

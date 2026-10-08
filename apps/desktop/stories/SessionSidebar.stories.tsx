@@ -415,6 +415,14 @@ export const Error = {
     interactiveSidebar([], { error: "Sessions could not be loaded.", canCreate: false }),
 };
 
+export const PartialLoadFailure = {
+  render: () =>
+    interactiveSidebar(flatSessions, {
+      error: "The session list could not be loaded.",
+      canDelete: false,
+    }),
+};
+
 export const Reconnecting = {
   render: () => interactiveSidebar(flatSessions, { serverStatus: "reconnecting" }),
 };

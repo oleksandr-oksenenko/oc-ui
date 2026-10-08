@@ -43,6 +43,7 @@ const modelRoute = (url) => url.pathname === "/api/model";
 const modelDefaultRoute = (url) => url.pathname === "/api/model/default";
 const agentRoute = (url) => url.pathname === "/api/agent";
 const promptRoute = (url) => /\/session\/[^/]+\/prompt$/u.test(url.pathname);
+const sessionRoute = (url) => url.pathname === "/api/session";
 const failCatalog = (route) =>
   route.fulfill({ status: 503, json: { message: "Catalog unavailable" } });
 const failFont = (route) => route.fulfill({ status: 503, body: "Temporary font failure" });
@@ -516,6 +517,98 @@ describe.sequential("production browser app", () => {
     expect((await api.session.list({ limit: 100 })).data).toHaveLength(0);
     await page.setViewportSize({ width: 1280, height: 860 });
   });
+
+  it.each(["success", "failure"])(
+    "shows and opens recent sessions before older startup pages finish on %s",
+    async (outcome) => {
+      const created = [];
+      const target = await context.newPage();
+      const targetErrors = [];
+      target.on("pageerror", (error) => targetErrors.push(error.message));
+      let release;
+      const older = new Promise((resolve) => {
+        release = resolve;
+      });
+      let held = false;
+      let completed = false;
+      let failOlder = outcome === "failure";
+      await target.route(sessionRoute, async (route) => {
+        if (new URL(route.request().url()).searchParams.has("cursor")) {
+          held = true;
+          await older;
+          if (failOlder) {
+            failOlder = false;
+            await failCatalog(route);
+            return;
+          }
+          await route.continue();
+          completed = true;
+          return;
+        }
+        await route.continue();
+      });
+      try {
+        for (let index = 0; index < 101; index += 1) {
+          created.push(await api.session.create({ title: `Startup page ${index}` }));
+        }
+        await target.goto(uiUrl);
+        await connect(target);
+        await expect.poll(() => held).toBe(true);
+        const sidebar = target.getByRole("complementary", { name: "Sessions", exact: true });
+        const recent = created.at(-1);
+        const oldest = created[0];
+        await sidebar.getByRole("button", { name: `${recent.title}, Idle`, exact: true }).waitFor();
+        expect(await sidebar.getByText("Loading sessions", { exact: true }).count()).toBe(0);
+        expect(
+          await sidebar.getByRole("button", { name: `${oldest.title}, Idle`, exact: true }).count(),
+        ).toBe(0);
+        const filter = sidebar.getByRole("textbox", { name: "Filter sessions", exact: true });
+        await filter.fill(recent.title);
+        await sidebar.getByRole("button", { name: `${recent.title}, Idle`, exact: true }).click();
+        await target.getByRole("textbox", { name: "Prompt", exact: true }).waitFor();
+        expect(completed).toBe(false);
+        release();
+        await filter.fill("");
+        let selected = recent;
+        if (outcome === "failure") {
+          const failure = sidebar
+            .getByRole("alert")
+            .filter({ hasText: "The session list could not be loaded." });
+          await failure.waitFor();
+          expect(
+            await sidebar
+              .getByRole("button", { name: `${recent.title}, Idle`, exact: true })
+              .count(),
+          ).toBe(1);
+          expect(
+            await sidebar
+              .getByRole("button", { name: `Delete ${recent.title}`, exact: true })
+              .isDisabled(),
+          ).toBe(true);
+          selected = created.at(-2);
+          await filter.fill(selected.title);
+          await sidebar
+            .getByRole("button", { name: `${selected.title}, Idle`, exact: true })
+            .click();
+          await expect
+            .poll(() => sidebar.locator('[aria-current="page"]').getAttribute("aria-label"))
+            .toBe(`${selected.title}, Idle`);
+          await sidebar.getByRole("button", { name: "Retry", exact: true }).click();
+          await failure.waitFor({ state: "hidden" });
+          await filter.fill("");
+        }
+        await sidebar.getByRole("button", { name: `${oldest.title}, Idle`, exact: true }).waitFor();
+        await expect
+          .poll(() => sidebar.locator('[aria-current="page"]').getAttribute("aria-label"))
+          .toBe(`${selected.title}, Idle`);
+        expect(targetErrors).toEqual([]);
+      } finally {
+        release();
+        await target.close();
+        for (const session of created) await api.session.remove({ sessionID: session.id });
+      }
+    },
+  );
 
   it("collapses time groups without losing selection and reveals filtered sessions", async () => {
     await ensureConnected();
