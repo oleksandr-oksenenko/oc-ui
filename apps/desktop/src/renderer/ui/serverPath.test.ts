@@ -40,6 +40,8 @@ describe("serverPath", () => {
 
   it.each([
     ["/srv/projects/oc-ui", "/srv/projects"],
+    ["/srv/captures\\old/shot.png", "/srv/captures\\old"],
+    ["/srv/captures/shot\\old.png", "/srv/captures"],
     ["/srv", "/"],
     ["/", "/"],
     ["C:\\Users\\alex", "C:\\Users"],
@@ -65,6 +67,7 @@ describe("serverPath", () => {
     ["/srv/projects/oc-ui", "src/app.ts", "src/app.ts"],
     // A backslash is an ordinary character on a POSIX server, not a separator.
     ["/srv/projects/oc-ui", "/srv/projects/oc-ui/src/app\\name.ts", "src/app\\name.ts"],
+    ["/srv/projects\\old", "/srv/projects\\old/shot.png", "shot.png"],
     [
       "/srv/projects/oc-ui",
       "/srv/projects/oc-ui\\archive/app.ts",
@@ -75,7 +78,21 @@ describe("serverPath", () => {
     ["C:\\", "C:\\src\\app.ts", "src\\app.ts"],
     ["C:\\Users\\alex\\code", "C:\\Users\\alex\\code\\src\\app.ts", "src\\app.ts"],
     ["C:\\Users\\alex\\code", "C:/Users/alex/code/src/app.ts", "src/app.ts"],
+    ["C:\\project", "c:/project/previews/Capture.PNG", "previews/Capture.PNG"],
+    ["C:/Project", "C:\\project\\Previews\\Capture.PNG", "Previews\\Capture.PNG"],
+    ["C:/Project", "c:/project-archive/shot.png", "c:/project-archive/shot.png"],
+    ["/srv/Project", "/srv/project/shot.png", "/srv/project/shot.png"],
     ["\\\\server\\share", "\\\\server\\share\\code\\app.ts", "code\\app.ts"],
+    [
+      "\\\\SERVER\\Share\\Project",
+      "//server/share/project/Previews/Capture.PNG",
+      "Previews/Capture.PNG",
+    ],
+    [
+      "//SERVER/Share/Project",
+      "\\\\server\\share\\project\\Previews\\Capture.PNG",
+      "Previews\\Capture.PNG",
+    ],
     ["\\\\server\\share\\code", "\\\\server\\share\\code\\src\\app.ts", "src\\app.ts"],
   ])("rebases %s + %s", (directory, path, expected) => {
     expect(serverPathRelative(directory, path)).toBe(expected);

@@ -4,7 +4,17 @@ import { OpenCode } from "@opencode/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 import { build, preview } from "vite-plus";
 import { chromium } from "playwright";
-import { access, mkdir, readFile, realpath, rename, rm, unlink, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { startScriptedProvider } from "./scripted-provider.mjs";
@@ -2323,29 +2333,76 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
-  it("renders assistant Markdown images that name a file on the connected server", async () => {
-    await ensureConnected();
-    const directory = await realpath(project);
-    // Stored beside Git metadata so the disposable project's change lists are
-    // unaffected; the server still resolves it inside the session location.
-    const imagePath = join(directory, ".git", "acceptance-capture.png");
-    await writeFile(imagePath, acceptancePng);
-    const session = await api.session.create({
-      title: "Server file image",
-      location: { directory },
-    });
-    await selectSession(session.title);
-    await send(`E2E_FILE_IMAGE ${pathToFileURL(imagePath).href}`);
-    await idle();
+  it.each(["file", "symlink"])(
+    "renders assistant Markdown images for an in-project %s on the connected server",
+    async (kind) => {
+      await ensureConnected();
+      const directory = await realpath(project);
+      // Stored beside Git metadata so the disposable project's change lists are
+      // unaffected; the server still resolves it inside the session location.
+      const target = join(directory, ".git", `acceptance-capture-${kind}.png`);
+      await writeFile(target, acceptancePng);
+      let imagePath = target;
+      if (kind === "symlink") {
+        const previews = join(directory, ".git", "image-previews");
+        await mkdir(previews);
+        imagePath = join(previews, "capture.png");
+        await symlink(target, imagePath);
+      }
+      const session = await api.session.create({
+        title: `Server file image ${kind}`,
+        location: { directory },
+      });
+      await selectSession(session.title);
+      await send(`E2E_FILE_IMAGE ${pathToFileURL(imagePath).href}`);
+      await idle();
 
-    const image = page.locator(".transcript-assistant-complete img[data-file-src]").last();
-    await expect.poll(() => image.getAttribute("alt")).toBe("Tool states");
-    await expect.poll(() => image.evaluate((node) => node.src.startsWith("blob:"))).toBe(true);
-    await expect.poll(() => image.evaluate((node) => node.naturalWidth)).toBeGreaterThan(0);
-    // The sanitized markup never gives the browser a loadable file: source.
-    expect(await image.getAttribute("src")).toMatch(/^blob:/u);
-    expect(errors).toEqual([]);
-  });
+      const image = page.locator(".transcript-assistant-complete img[data-file-src]").last();
+      await expect.poll(() => image.getAttribute("alt")).toBe("Tool states");
+      await expect.poll(() => image.evaluate((node) => node.src.startsWith("blob:"))).toBe(true);
+      await expect.poll(() => image.evaluate((node) => node.naturalWidth)).toBeGreaterThan(0);
+      // The sanitized markup never gives the browser a loadable file: source.
+      expect(await image.getAttribute("src")).toMatch(/^blob:/u);
+      expect(errors).toEqual([]);
+    },
+  );
+
+  it.each(["directory", "symlinked directory"])(
+    "renders an external server image from a %s after navigating away and back without moving the session",
+    async (kind) => {
+      await ensureConnected();
+      const directory = await realpath(project);
+      const captures = join(profile.paths.app, `external captures ${kind}`);
+      await mkdir(captures);
+      await writeFile(join(captures, "capture #1.png"), acceptancePng);
+      let imageDirectory = captures;
+      if (kind === "symlinked directory") {
+        imageDirectory = join(profile.paths.app, "external capture link");
+        await symlink(captures, imageDirectory);
+      }
+      const imagePath = join(imageDirectory, "capture #1.png");
+      const session = await api.session.create({
+        title: `External server image ${kind}`,
+        location: { directory },
+      });
+      await selectSession(session.title);
+      await send(`E2E_FILE_IMAGE ${pathToFileURL(imagePath).href}`);
+      await idle();
+
+      const image = page.locator(".transcript-assistant-complete img[data-file-src]").last();
+      await expect.poll(() => image.evaluate((node) => node.naturalWidth)).toBe(1);
+      expect(await image.getAttribute("src")).toMatch(/^blob:/u);
+      const other = await api.session.create({
+        title: `Away from external image ${kind}`,
+        location: { directory },
+      });
+      await selectSession(other.title);
+      await selectSession(session.title);
+      await expect.poll(() => image.evaluate((node) => node.naturalWidth)).toBe(1);
+      expect((await api.session.get({ sessionID: session.id })).location).toEqual({ directory });
+      expect(errors).toEqual([]);
+    },
+  );
 
   it("remembers the context panel per session across reloads", async () => {
     await ensureConnected();

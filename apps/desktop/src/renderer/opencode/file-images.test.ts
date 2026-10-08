@@ -16,16 +16,27 @@ import {
 
 const bytes = (...values: number[]) => Uint8Array.from(values);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const emptyListing: Awaited<ReturnType<OpenCodeClient["file"]["list"]>> = {
+  location: {
+    directory: "/srv/project",
+    project: { id: "project_1", directory: "/srv/project", canonical: "/srv/project" },
+  },
+  data: [],
+};
 
 function setup(
   read: OpenCodeClient["file"]["read"],
-  options: { readonly timeoutMs?: number } = {},
+  options: { readonly timeoutMs?: number; readonly list?: OpenCodeClient["file"]["list"] } = {},
 ) {
   const fileRead = vi.fn<OpenCodeClient["file"]["read"]>(read);
+  const fileList = vi.fn<OpenCodeClient["file"]["list"]>(
+    options.list ?? (async () => emptyListing),
+  );
   return withTestWorkspace((effects) => ({
     effects,
     fileRead,
-    images: createServerFileImages({ fileRead, effects, timeoutMs: options.timeoutMs }),
+    fileList,
+    images: createServerFileImages({ fileRead, fileList, effects, timeoutMs: options.timeoutMs }),
   }));
 }
 
@@ -67,7 +78,7 @@ describe("serverFileImageLocation", () => {
 
 describe("createServerFileImages", () => {
   it("reads a file URL through the server with its complete location", async () => {
-    const { images, fileRead } = setup(async () => bytes(1, 2, 3));
+    const { images, fileRead, fileList } = setup(async () => bytes(1, 2, 3));
     const location = { directory: "/srv/project", workspaceID: "ws_1" };
 
     const blob = await images.read("file:///srv/project/shot.png", location);
@@ -79,6 +90,234 @@ describe("createServerFileImages", () => {
     });
     expect(blob.type).toBe("image/png");
     expect(blob.size).toBe(3);
+    expect(fileList).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["C:\\project", "file:///c:/project/previews/Capture.PNG", "c:/project/previews/Capture.PNG"],
+    ["C:/Project", "file:///C:/project/Previews/Capture.PNG", "C:/project/Previews/Capture.PNG"],
+    [
+      "\\\\SERVER\\Share\\Project",
+      "file://SERVER/share/project/Previews/Capture.PNG",
+      "//server/share/project/Previews/Capture.PNG",
+    ],
+    [
+      "//SERVER/Share/Project",
+      "file://SERVER/share/project/Previews/Capture.PNG",
+      "//server/share/project/Previews/Capture.PNG",
+    ],
+  ])(
+    "keeps the in-project read root despite Windows casing differences in %s",
+    async (directory, url, path) => {
+      const { images, fileRead, fileList } = setup(async () => bytes(1));
+      await images.read(url, { directory, workspaceID: "ws_1" });
+      expect(fileList).not.toHaveBeenCalled();
+      expect(fileRead.mock.calls[0]?.[0]).toEqual({
+        path,
+        location: { directory, workspace: "ws_1" },
+      });
+    },
+  );
+
+  it.each([
+    ["file:///tmp/captures/a%20%23%25.png", "/srv/project", "/tmp/captures", "a #%.png", undefined],
+    ["file:///tmp/captures/shot.png", "/srv/project", "/tmp/captures", "shot.png", "ws_1"],
+    ["file:///shot.png", "/srv/project", "/", "shot.png", undefined],
+    ["file:///C:/shot.png", "C:/project", "C:/", "shot.png", undefined],
+    ["file:///D:/captures/shot.png", "C:\\project", "D:/captures", "shot.png", "ws_1"],
+    [
+      "file://server/share/shot.png",
+      "//server/share/project",
+      "//server/share",
+      "shot.png",
+      "ws_1",
+    ],
+    [
+      "file:///tmp/captures%5Cold/shot%5Cold.png",
+      "/srv/project",
+      "/tmp/captures\\old",
+      "shot\\old.png",
+      undefined,
+    ],
+  ])(
+    "lists the parent before reading external image %s",
+    async (url, directory, parent, name, workspaceID) => {
+      const { images, fileRead, fileList } = setup(async () => bytes(1));
+      const location = { directory, workspaceID };
+      const original = { ...location };
+
+      await images.read(url, location);
+
+      const workspace = workspaceID === undefined ? {} : { workspace: workspaceID };
+      expect(fileList.mock.calls[0]?.[0]).toEqual({
+        path: parent,
+        location: { directory, ...workspace },
+      });
+      expect(fileRead.mock.calls[0]?.[0]).toEqual({
+        path: name,
+        location: { directory: parent, ...workspace },
+      });
+      expect(fileList.mock.invocationCallOrder[0]).toBeLessThan(
+        fileRead.mock.invocationCallOrder[0]!,
+      );
+      expect(location).toEqual(original);
+    },
+  );
+
+  it("shares the whole external load and retries a failed listing on the next display", async () => {
+    const failure = new Error("Directory unavailable");
+    let rejectList: ((cause: Error) => void) | undefined;
+    const { images, fileRead, fileList } = setup(async () => bytes(1), {
+      list: () =>
+        new Promise((_resolve, reject) => {
+          rejectList = reject;
+        }),
+    });
+    const location = { directory: "/srv/project" };
+    const first = images.read("file:///tmp/shot.png", location);
+    const second = images.read("file:///tmp/shot.png", location);
+    expect(second).toBe(first);
+    const settled = Promise.allSettled([first, second]);
+    rejectList?.(failure);
+    const results = await settled;
+    expect(results.every((result) => result.status === "rejected")).toBe(true);
+    expect(fileList).toHaveBeenCalledTimes(1);
+    expect(fileRead).not.toHaveBeenCalled();
+
+    fileList.mockResolvedValue(emptyListing);
+    await expect(images.read("file:///tmp/shot.png", location)).resolves.toBeInstanceOf(Blob);
+    expect(fileList).toHaveBeenCalledTimes(2);
+    expect(fileRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries both stages after a read fails following a successful listing", async () => {
+    const { images, fileRead, fileList } = setup(async () => {
+      throw new Error("File disappeared");
+    });
+    const location = { directory: "/srv/project", workspaceID: "ws_1" };
+    await expect(images.read("file:///tmp/shot.png", location)).rejects.toThrow(Error);
+    fileRead.mockResolvedValue(bytes(1));
+    await expect(images.read("file:///tmp/shot.png", location)).resolves.toBeInstanceOf(Blob);
+    expect(fileList).toHaveBeenCalledTimes(2);
+    expect(fileRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not share external requests across different session locations or workspaces", async () => {
+    const resolvers: Array<() => void> = [];
+    const { images, fileList } = setup(async () => bytes(1), {
+      list: () =>
+        new Promise((resolve) => {
+          resolvers.push(() => resolve(emptyListing));
+        }),
+    });
+    const reads = [
+      { directory: "/srv/A", workspaceID: "ws_1" },
+      { directory: "/srv/B", workspaceID: "ws_1" },
+      { directory: "/srv/A", workspaceID: "ws_2" },
+    ].map((location) => images.read("file:///tmp/shot.png", location));
+    expect(fileList).toHaveBeenCalledTimes(3);
+    for (const resolve of resolvers) resolve();
+    await Promise.all(reads);
+  });
+
+  it("times out a listing, aborts it, and does not start the file read", async () => {
+    let observed: AbortSignal | undefined;
+    const { images, fileRead, fileList } = setup(async () => bytes(1), {
+      timeoutMs: 50,
+      list: (_input, options) =>
+        new Promise((_resolve, reject) => {
+          observed = options?.signal;
+          observed?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    });
+    const location = { directory: "/srv/project" };
+    await expect(images.read("file:///tmp/shot.png", location)).rejects.toThrow(
+      "took too long to load",
+    );
+    expect(observed?.aborted).toBe(true);
+    expect(fileRead).not.toHaveBeenCalled();
+    fileList.mockResolvedValue(emptyListing);
+    await expect(images.read("file:///tmp/shot.png", location)).resolves.toBeInstanceOf(Blob);
+  });
+
+  it("aborts external listings and queued loads on workspace closure", async () => {
+    const signals: AbortSignal[] = [];
+    const { effects, images, fileList, fileRead } = setup(async () => bytes(1), {
+      list: (_input, options) =>
+        new Promise((_resolve, reject) => {
+          signals.push(options!.signal!);
+          options!.signal!.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    });
+    const reads = Array.from({ length: 5 }, (_, index) =>
+      images.read(`file:///tmp/${index}.png`, { directory: "/srv/project" }),
+    );
+    const settled = Promise.allSettled(reads);
+    expect(fileList).toHaveBeenCalledTimes(MAX_CONCURRENT_SERVER_FILE_IMAGE_READS);
+    await Effect.runPromise(Scope.close(effects.scope, Exit.void).pipe(Effect.uninterruptible));
+    expect((await settled).every((result) => result.status === "rejected")).toBe(true);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    expect(fileList).toHaveBeenCalledTimes(MAX_CONCURRENT_SERVER_FILE_IMAGE_READS);
+    expect(fileRead).not.toHaveBeenCalled();
+  });
+
+  it("holds each permit across the listing and read stages", async () => {
+    const resolvers: Array<(value: Uint8Array) => void> = [];
+    const { images, fileList } = setup(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const reads = Array.from({ length: 5 }, (_, index) =>
+      images.read(`file:///tmp/${index}.png`, { directory: "/srv/project" }),
+    );
+    await settle();
+    expect(fileList).toHaveBeenCalledTimes(MAX_CONCURRENT_SERVER_FILE_IMAGE_READS);
+    expect(resolvers).toHaveLength(MAX_CONCURRENT_SERVER_FILE_IMAGE_READS);
+    resolvers[0]?.(bytes(1));
+    await settle();
+    expect(fileList).toHaveBeenCalledTimes(5);
+    for (const resolve of resolvers) resolve(bytes(1));
+    await Promise.all(reads);
+  });
+
+  it("uses one total deadline for listing and reading", async () => {
+    vi.useFakeTimers();
+    try {
+      let observed: AbortSignal | undefined;
+      const { images, fileRead } = setup(
+        (_input, options) =>
+          new Promise((_resolve, reject) => {
+            observed = options?.signal;
+            observed?.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            );
+          }),
+        {
+          timeoutMs: 1000,
+          list: () =>
+            new Promise((resolve) => {
+              setTimeout(() => resolve(emptyListing), 600);
+            }),
+        },
+      );
+      const read = images.read("file:///tmp/shot.png", { directory: "/srv/project" });
+      const failure = read.catch((cause: unknown) => cause);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(fileRead).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(400);
+      expect(await failure).toMatchObject({
+        message: expect.stringContaining("took too long to load"),
+      });
+      expect(observed?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("omits an absent workspace from the server location", async () => {

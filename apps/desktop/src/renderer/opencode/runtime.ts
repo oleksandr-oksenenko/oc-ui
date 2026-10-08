@@ -76,6 +76,7 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
   const diffs = createVcsDiffStore({ diff: input.api.vcs.diff, events, effects: input.effects });
   const fileImages = createServerFileImages({
     fileRead: input.api.file.read,
+    fileList: input.api.file.list,
     effects: input.effects,
   });
 
