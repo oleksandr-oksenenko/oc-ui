@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -45,7 +45,7 @@ it("resolves every app token used by component, story, and injected styles", () 
   const foundation = readFileSync(path.join(root, "src/renderer/styles/foundations.css"), "utf8");
   const tokens = new Set([...foundation.matchAll(/(--oc-[\w-]+)\s*:/g)].map((match) => match[1]));
   const unresolved = [];
-  for (const directory of ["src/renderer", "stories"]) {
+  for (const directory of ["src/renderer", "src/preload", "stories"]) {
     for (const file of readdirSync(path.join(root, directory), {
       recursive: true,
       encoding: "utf8",
@@ -86,6 +86,33 @@ it(
       expect(result.stderr).not.toContain(`${allowed}:`);
       expect(result.stderr).toContain("--text-base");
       expect(result.stderr).toContain("--v2-background-bg-base");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+it(
+  "checks preload stylesheet literals through the default lint targets",
+  { timeout: 30_000 },
+  () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "ocui-preload-styles-"));
+    const checker = fileURLToPath(
+      new URL("../../../tools/check-inline-style-tokens.mjs", import.meta.url),
+    );
+    try {
+      for (const target of ["src/renderer", "src/preload", "stories"]) {
+        mkdirSync(path.join(directory, "apps/desktop", target), { recursive: true });
+      }
+      const file = path.join(directory, "apps/desktop/src/preload/card.ts");
+      writeFileSync(file, "const STYLES = `button { background: #fff; }`;");
+      const result = spawnSync(process.execPath, [checker], { cwd: directory, encoding: "utf8" });
+      expect(result.status, result.stderr).toBe(1);
+      expect(result.stderr).toContain("apps/desktop/src/preload/card.ts");
+      expect(result.stderr).toContain("color-no-hex");
+      writeFileSync(file, "const STYLES = `button { background: var(--oc-surface-raised); }`;");
+      const allowed = spawnSync(process.execPath, [checker], { cwd: directory, encoding: "utf8" });
+      expect(allowed.status, allowed.stderr).toBe(0);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

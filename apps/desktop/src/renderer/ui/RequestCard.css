@@ -1,6 +1,7 @@
 /* Shared question/permission anatomy; each workflow owns its content spacing. */
 .question-form-card,
 .permission-request-card {
+  container: request-card / inline-size;
   width: min(620px, 100%);
   overflow: hidden;
   border: 1px solid var(--oc-border-muted);

@@ -53,16 +53,19 @@ textarea {
 textarea:focus { border-color: var(--oc-focus-ring); }
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   margin-top: 6px;
   gap: 6px;
 }
 .hint {
+  flex: 1 1 max-content;
   margin-right: auto;
   color: var(--oc-text-faint);
   font-size: var(--oc-type-caption-size);
 }
+.row > button { flex: none; }
 button {
   padding: 3px 10px;
   border: 1px solid var(--oc-border-base);
@@ -76,6 +79,10 @@ button.primary { border-color: transparent; background: var(--oc-selection); col
 button:disabled { opacity: 0.45; cursor: default; }
 button:not(:disabled):hover { border-color: var(--oc-border-strong); }
 button.primary:not(:disabled):hover { background: var(--oc-selection-hover); }
+button:not(.primary):active:not(:disabled) {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
+}
+button.primary:active:not(:disabled) { background: var(--oc-selection-pressed); }
 button:focus-visible {
   outline: var(--oc-focus-ring-outline);
   outline-offset: var(--oc-focus-ring-offset);

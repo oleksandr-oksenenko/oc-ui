@@ -46,13 +46,13 @@
   --oc-status-danger: #c02530;
   --oc-status-danger-muted: #9b454e;
   --oc-status-danger-border: var(--oc-status-danger);
-  --oc-status-danger-surface: rgb(192 37 48 / 10%);
+  --oc-status-danger-surface: color-mix(in srgb, var(--oc-status-danger) 10%, transparent);
   --oc-selection: #0969da;
   --oc-selection-hover: #075ebd;
   --oc-selection-pressed: #064f9d;
-  --oc-selection-ring: rgb(9 105 218 / 14%);
-  --oc-selection-tint: rgb(9 105 218 / 8%);
-  --oc-selection-tint-strong: rgb(9 105 218 / 14%);
+  --oc-selection-ring: color-mix(in srgb, var(--oc-selection) 14%, transparent);
+  --oc-selection-tint: color-mix(in srgb, var(--oc-selection) 8%, transparent);
+  --oc-selection-tint-strong: color-mix(in srgb, var(--oc-selection) 14%, transparent);
   --oc-radio-outline: var(--oc-border-emphasis);
   --oc-diff-addition: var(--oc-status-success);
   --oc-diff-deletion: #b42318;
@@ -265,7 +265,14 @@
   color: var(--oc-text-strong);
   background: var(--oc-surface-canvas);
   font-synthesis: none;
-  text-rendering: optimizelegibility;
+  text-rendering: auto;
+}
+
+/* The app owns the default, including upstream controls whose styles set a
+   universal geometricPrecision rule. Shadow cards inherit the same policy. */
+:root *,
+:host * {
+  text-rendering: inherit;
 }
 
 /* Warm Paper dark palette. */
@@ -284,14 +291,13 @@
   --oc-icon-faint: #8f8d86;
   --oc-icon-base: #b7b5ac;
   --oc-accent: #74a7ff;
-  --oc-selection-tint: rgb(116 167 255 / 12%);
-  --oc-selection-tint-strong: rgb(116 167 255 / 20%);
+  --oc-selection-tint: color-mix(in srgb, var(--oc-accent) 12%, transparent);
+  --oc-selection-tint-strong: color-mix(in srgb, var(--oc-accent) 20%, transparent);
   --oc-status-info: #5598f6;
   --oc-status-success: #7ee787;
   --oc-status-warning: #f5b942;
   --oc-status-danger: #ff5d66;
   --oc-status-danger-muted: #e6aab1;
-  --oc-status-danger-surface: rgb(255 93 102 / 10%);
   --oc-diff-deletion: #ff7b72;
 
   /* The dark theme uses border and surface steps

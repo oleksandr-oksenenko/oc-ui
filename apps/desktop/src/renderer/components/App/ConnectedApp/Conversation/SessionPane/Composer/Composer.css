@@ -69,6 +69,10 @@
   background: var(--oc-selection-hover);
 }
 
+.composer-action:active:not(:disabled, [data-disabled], [aria-disabled="true"]) {
+  background: var(--oc-selection-pressed);
+}
+
 .composer-action[data-action="stop"] {
   border-color: var(--oc-border-strong);
   color: var(--oc-text-contrast);
@@ -77,6 +81,14 @@
 
 .composer-action[data-action="stop"]:hover:not(:disabled) {
   background: var(--oc-surface-hover);
+}
+
+.composer-action[data-action="stop"]:active:not(
+    :disabled,
+    [data-disabled],
+    [aria-disabled="true"]
+  ) {
+  background: var(--oc-surface-elevated);
 }
 
 .composer-action-icon {
@@ -224,6 +236,10 @@
 
 .composer-model-trigger:hover:not(:disabled) {
   background: var(--oc-surface-control);
+}
+
+.composer-model-trigger:active:not(:disabled, [data-disabled], [aria-disabled="true"]) {
+  background: var(--oc-overlay-pressed);
 }
 
 .composer-model-list.selection-list [data-slot="list-header"] {

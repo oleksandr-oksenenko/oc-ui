@@ -1,4 +1,5 @@
 .image-preview-thumbnail {
+  position: relative;
   display: block;
   padding: 0;
   border: 1px solid var(--oc-border-muted);
@@ -6,6 +7,16 @@
   background: var(--oc-surface-control);
   cursor: zoom-in;
   overflow: hidden;
+}
+
+/* Paint over opaque thumbnails as well as the attachment pill's image and label. */
+.image-preview-thumbnail:active:not(:disabled, [data-disabled], [aria-disabled="true"])::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--oc-overlay-pressed);
+  pointer-events: none;
+  content: "";
 }
 
 .image-preview-thumbnail img {
@@ -61,4 +72,8 @@
 
 .image-preview-close:hover {
   background: var(--oc-surface-hover);
+}
+
+.image-preview-close:active:not(:disabled, [data-disabled], [aria-disabled="true"]) {
+  background: var(--oc-surface-elevated);
 }

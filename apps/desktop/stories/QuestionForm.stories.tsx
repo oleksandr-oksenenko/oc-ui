@@ -7,7 +7,7 @@ import type {
   SessionMessageUser,
 } from "@opencode/client";
 import { For, createSignal, type JSX } from "solid-js";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import { QuestionForm } from "../src/renderer/ui/QuestionForm.tsx";
@@ -314,4 +314,192 @@ export const NarrowLayout: Story = {
       <QuestionForm {...args} />
     </main>
   ),
+};
+
+const longLabel = "UnbrokenOptionLabel".repeat(8);
+const longDescription = "UnbrokenOptionDescription".repeat(8);
+const customAnswerPrefix = "shared-custom-answer-prefix".repeat(8);
+const customAnswers = [
+  `${customAnswerPrefix}-first-distinct-suffix`,
+  `${customAnswerPrefix}-second-distinct-suffix`,
+];
+const longContentForm = {
+  id: "frm_card_width",
+  sessionID: "ses_oc_ui",
+  title: "Choices in differently sized slots",
+  fields: [
+    {
+      key: "text",
+      type: "string",
+      title: "StringFieldTitle".repeat(28),
+      description: "This explains the text field.",
+    },
+    {
+      key: "numericFallbackKey".repeat(24),
+      type: "number",
+      description: "This explains the numeric field with a fallback key label.",
+    },
+    {
+      key: "choice",
+      type: "string",
+      title: "UnbrokenRadioGroupTitle".repeat(6),
+      description: longDescription,
+      options: [{ value: "radio", label: longLabel, description: longDescription }],
+    },
+    {
+      key: "answers",
+      type: "multiselect",
+      title: "UnbrokenMultiselectLegend".repeat(6),
+      description: longDescription,
+      custom: true,
+      options: [{ value: "checkbox", label: longLabel, description: longDescription }],
+    },
+    {
+      key: "external",
+      type: "external",
+      title: "UnbrokenExternalTitle".repeat(20),
+      description: "Open the reference before continuing.",
+      url: "https://opencode.ai/docs",
+    },
+  ],
+} satisfies FormInfo;
+
+async function expectTextContained(text: HTMLElement, surface: HTMLElement): Promise<void> {
+  const bounds = surface.getBoundingClientRect();
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  const fragments = [...range.getClientRects()];
+  await expect(fragments.length).toBeGreaterThan(0);
+  for (const fragment of fragments) {
+    await expect(fragment.left).toBeGreaterThanOrEqual(bounds.left - 1);
+    await expect(fragment.right).toBeLessThanOrEqual(bounds.right + 1);
+    await expect(fragment.top).toBeGreaterThanOrEqual(bounds.top - 1);
+    await expect(fragment.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+  }
+}
+
+export const CardWidthAndLongAnswers: Story = {
+  args: { form: longContentForm },
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  render: (args) => (
+    <main style={{ ...frameStyle, "grid-template-columns": "360px 620px", gap: "32px" }}>
+      <For each={[360, 620]}>
+        {(width) => (
+          <section aria-label={`${width}px form slot`} style={{ width: `${width}px` }}>
+            <QuestionForm
+              {...args}
+              form={{ ...args.form, title: `${args.form.title} — ${width}px slot` }}
+            />
+          </section>
+        )}
+      </For>
+    </main>
+  ),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const width of [360, 620]) {
+      const slot = canvas.getByRole("region", { name: `${width}px form slot` });
+      const form = within(slot);
+      const card = slot.querySelector<HTMLElement>(".question-form-card")!;
+      await expect(card.getBoundingClientRect().width).toBeCloseTo(width, 0);
+      const textNodes = card.querySelectorAll<HTMLElement>(
+        '[data-slot="radio-v2-label"], [data-slot="radio-v2-description"], [data-slot="radio-v2-item-label-text"], [data-slot="radio-v2-item-description"], [data-slot="checkbox-checkbox-label"], [data-slot="checkbox-checkbox-description"], legend',
+      );
+      await expect(textNodes.length).toBe(7);
+      for (const text of textNodes) {
+        await expectTextContained(
+          text,
+          text.closest<HTMLElement>('[data-slot="radio-v2-item"], [data-component="checkbox"]') ??
+            card,
+        );
+      }
+      for (const field of args.form.fields.filter(
+        (candidate) =>
+          candidate.type === "number" || (candidate.type === "string" && !candidate.options),
+      )) {
+        const text = form.getByText(field.title ?? field.key, { selector: "span" });
+        const label = text.closest("label")!;
+        const info = within(label).getByRole("button", { name: field.description! });
+        info.scrollIntoView({ block: "center" });
+        await expectTextContained(text, text);
+        const infoBounds = info.getBoundingClientRect();
+        await expect(text.getBoundingClientRect().right).toBeLessThanOrEqual(infoBounds.left);
+        await expect(infoBounds.right).toBeLessThanOrEqual(label.getBoundingClientRect().right);
+        await expect(
+          info.contains(
+            document.elementFromPoint(
+              infoBounds.left + infoBounds.width / 2,
+              infoBounds.top + infoBounds.height / 2,
+            ),
+          ),
+        ).toBe(true);
+        await userEvent.hover(info);
+        await expect(await within(document.body).findByRole("tooltip")).toHaveTextContent(
+          field.description!,
+        );
+        await userEvent.unhover(info);
+        await waitFor(() => expect(within(document.body).queryByRole("tooltip")).toBeNull());
+      }
+      const radioText = form.getByText(longLabel, { selector: "span" });
+      const radioLabel = radioText.closest("label")!;
+      const radio = within(radioLabel.parentElement!).getByRole("radio");
+      await expect(radio).toHaveAttribute("aria-labelledby", radioLabel.id);
+      await expect(radio).not.toBeChecked();
+      await userEvent.click(radioText);
+      await expect(radio).toBeChecked();
+      const checkboxLabel = form.getByText(longLabel, { selector: "label" });
+      await userEvent.click(checkboxLabel);
+      await expect(form.getByRole("checkbox", { name: longLabel })).toBeChecked();
+      await userEvent.click(checkboxLabel);
+
+      const draft = form.getByRole("textbox", { name: "Add another answer" });
+      for (const answer of customAnswers) {
+        await userEvent.type(draft, answer);
+        await userEvent.click(form.getByRole("button", { name: "Add" }));
+        await expect(draft).toHaveValue("");
+      }
+      for (const answer of customAnswers) {
+        const text = form.getByText(answer, { selector: "span" });
+        await expectTextContained(text, text.parentElement!);
+        const remove = form.getByRole("button", { name: `Remove ${answer}` });
+        await expect(remove.getBoundingClientRect().width).toBeGreaterThanOrEqual(20);
+      }
+      const inputRow = card.querySelector<HTMLElement>(".question-form-custom-input")!;
+      const input = draft.getBoundingClientRect();
+      const add = within(inputRow).getByRole("button", { name: "Add" }).getBoundingClientRect();
+      const external = card.querySelector<HTMLElement>(".question-form-external")!;
+      const externalText = external.querySelector("div")!.getBoundingClientRect();
+      const externalTitle = external.querySelector<HTMLElement>("strong")!;
+      await expectTextContained(externalTitle, externalTitle.parentElement!);
+      const openButton = form.getByRole("button", { name: `Open ${externalTitle.textContent}` });
+      const open = openButton.getBoundingClientRect();
+      if (width === 360) {
+        await expect(add.top).toBeGreaterThanOrEqual(input.bottom);
+        await expect(open.top).toBeGreaterThanOrEqual(externalText.bottom);
+      } else {
+        await expect(add.left).toBeGreaterThanOrEqual(input.right);
+        await expect(open.left).toBeGreaterThanOrEqual(externalText.right);
+      }
+      openButton.scrollIntoView({ block: "center" });
+      const openBounds = openButton.getBoundingClientRect();
+      await expect(
+        openButton.contains(
+          document.elementFromPoint(
+            openBounds.left + openBounds.width / 2,
+            openBounds.top + openBounds.height / 2,
+          ),
+        ),
+      ).toBe(true);
+      await userEvent.click(openButton);
+      await expect(args.onOpenExternal).toHaveBeenLastCalledWith("https://opencode.ai/docs");
+      await userEvent.click(form.getByRole("button", { name: `Remove ${customAnswers[0]}` }));
+      await expect(form.queryByText(customAnswers[0]!)).toBeNull();
+      await userEvent.click(form.getByRole("button", { name: "Continue" }));
+      await expect(args.onSubmit).toHaveBeenLastCalledWith({
+        choice: "radio",
+        answers: [customAnswers[1]],
+        external: true,
+      });
+    }
+  },
 };

@@ -45,7 +45,7 @@ async function check(file) {
     const injected =
       parent &&
       ((ts.isPropertyAssignment(parent) && parent.name.text === "unsafeCSS") ||
-        (ts.isVariableDeclaration(parent) && /css$/i.test(parent.name.text)) ||
+        (ts.isVariableDeclaration(parent) && /(?:css|styles)$/i.test(parent.name.text)) ||
         (ts.isBinaryExpression(parent) &&
           ts.isPropertyAccessExpression(parent.left) &&
           parent.left.name.text === "textContent" &&
@@ -92,6 +92,6 @@ async function check(file) {
 const targets = process.argv.slice(2);
 for (const target of targets.length
   ? targets
-  : ["apps/desktop/src/renderer", "apps/desktop/stories"]) {
+  : ["apps/desktop/src/renderer", "apps/desktop/src/preload", "apps/desktop/stories"]) {
   await check(target);
 }

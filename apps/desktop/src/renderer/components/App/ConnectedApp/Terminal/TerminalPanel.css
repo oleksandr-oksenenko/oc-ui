@@ -84,7 +84,10 @@
 }
 
 .terminal-panel-error {
-  flex: none;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(120px, 25%);
+  overflow: auto;
   margin: 0;
   padding: 4px 12px;
   color: var(--oc-status-danger);
@@ -102,13 +105,18 @@
 .terminal-panel-empty {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: safe center;
+  justify-content: safe center;
   gap: 4px;
   height: 100%;
+  overflow: auto;
   padding: 12px;
   color: var(--oc-text-muted);
   text-align: center;
+}
+
+.terminal-panel-empty > * {
+  flex-shrink: 0;
 }
 
 .terminal-panel-empty p {

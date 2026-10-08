@@ -272,18 +272,35 @@ export const NavigationFailure: Story = {
   },
 };
 
-const longFailedDirectory = `/srv/${"x".repeat(240)}`;
+const longFailedDirectory = `/srv/${Array.from({ length: 24 }, () => "remote_workspace_segment").join("/")}`;
+const longListingDiagnostic =
+  "Directory unavailable. " +
+  "The remote workspace could not be listed; check access before retrying. ".repeat(24) +
+  "End of directory listing diagnostic.";
 const longDirectoryList = fn<OpenCodeClient["file"]["list"]>(() =>
-  Promise.reject(new Error("Directory unavailable.")),
+  Promise.reject(new Error(longListingDiagnostic)),
 );
+const longDirectoryOnAddProject = fn<(location: LocationRef) => void>();
 
 export const LongDirectoryListingFailure: Story = {
-  globals: { theme: "light", viewport: { value: "mobile", isRotated: false } },
+  parameters: {
+    viewport: {
+      options: {
+        short360x480: {
+          name: "Short 360 × 480",
+          styles: { width: "360px", height: "480px" },
+        },
+      },
+    },
+  },
+  globals: { theme: "light", viewport: { value: "short360x480", isRotated: false } },
   render: () => {
     longDirectoryList.mockClear();
+    longDirectoryOnAddProject.mockClear();
     return dialog({
       initialLocation: { directory: longFailedDirectory, workspaceID: "workspace-1" },
       listDirectory: longDirectoryList,
+      onAddProject: longDirectoryOnAddProject,
     });
   },
   play: async ({ step }) => {
@@ -294,21 +311,135 @@ export const LongDirectoryListingFailure: Story = {
       .getByRole("region", { name: "Project directory" })
       .querySelector<HTMLElement>(".server-directory-browser");
     if (!browser) throw new Error("Project directory browser did not render");
+    const alert = canvas.getByRole("alert");
+    const diagnostic = alert.querySelector<HTMLSpanElement>("span");
+    const header = browser.querySelector<HTMLElement>(".server-directory-browser-header");
+    const path = canvas.getByText(longFailedDirectory, { exact: true });
+    const body = currentDialog.querySelector<HTMLElement>('[data-slot="dialog-body"]');
+    const container = currentDialog.closest<HTMLElement>('[data-slot="dialog-container"]');
+    if (!diagnostic || !header || !body || !container) {
+      throw new Error("Directory listing diagnostic did not render");
+    }
+    const range = alert.ownerDocument.createRange();
+    range.selectNodeContents(diagnostic);
+    const visibleBounds = (scroller = alert) => {
+      const regions = [scroller, browser, body, currentDialog, container].map((element) =>
+        element.getBoundingClientRect(),
+      );
+      return {
+        top: Math.max(0, ...regions.map((bounds) => bounds.top)),
+        bottom: Math.min(window.innerHeight, ...regions.map((bounds) => bounds.bottom)),
+        left: Math.max(0, ...regions.map((bounds) => bounds.left)),
+        right: Math.min(window.innerWidth, ...regions.map((bounds) => bounds.right)),
+      };
+    };
 
-    await step("Keep Retry visible and reachable beside a long failed target", async () => {
+    await step("Read the full header path within its allocated browser-height budget", async () => {
+      const pathRange = header.ownerDocument.createRange();
+      pathRange.selectNodeContents(path);
+      const statePosition = alert.scrollTop;
+      await expect(header.scrollHeight).toBeGreaterThan(header.clientHeight);
+      header.scrollTop = 0;
+      await waitFor(async () => {
+        const bounds = visibleBounds(header);
+        const first = pathRange.getClientRects()[0]!;
+        const budget = Math.max(36, Math.min(browser.clientHeight * 0.35, 120));
+        await expect(header.getBoundingClientRect().height).toBeLessThanOrEqual(budget + 1);
+        await expect(alert.clientHeight).toBeGreaterThan(32);
+        await expect(header.scrollTop).toBe(0);
+        await expect(first.top).toBeGreaterThanOrEqual(bounds.top);
+        await expect(first.bottom).toBeLessThanOrEqual(bounds.bottom);
+        await expect(first.left).toBeGreaterThanOrEqual(bounds.left);
+        await expect(first.right).toBeLessThanOrEqual(bounds.right);
+      });
+      header.scrollTop = header.scrollHeight;
+      await waitFor(async () => {
+        const bounds = visibleBounds(header);
+        const lines = pathRange.getClientRects();
+        const last = lines[lines.length - 1]!;
+        await expect(header.scrollTop).toBeGreaterThan(0);
+        await expect(last.top).toBeGreaterThanOrEqual(bounds.top);
+        await expect(last.bottom).toBeLessThanOrEqual(bounds.bottom);
+        await expect(last.left).toBeGreaterThanOrEqual(bounds.left);
+        await expect(last.right).toBeLessThanOrEqual(bounds.right);
+        await expect(alert.scrollTop).toBe(statePosition);
+      });
+    });
+
+    await step("Read the complete diagnostic from its first fragment to its last", async () => {
+      await expect(window.innerWidth).toBe(360);
+      await expect(window.innerHeight).toBe(480);
       await expect(canvas.getByText(longFailedDirectory, { exact: true })).toBeVisible();
-      await expect(canvas.getByRole("alert")).toHaveTextContent(longFailedDirectory);
+      await expect(alert).toHaveTextContent(
+        `Could not list ${longFailedDirectory}. ${longListingDiagnostic}`,
+      );
+      await expect(alert.scrollHeight).toBeGreaterThan(alert.clientHeight);
+      const headerPosition = header.scrollTop;
+      alert.scrollTop = 0;
+      await waitFor(async () => {
+        const bounds = visibleBounds();
+        const first = range.getClientRects()[0]!;
+        await expect(alert.clientHeight).toBeGreaterThan(32);
+        await expect(alert.scrollTop).toBe(0);
+        await expect(first.top).toBeGreaterThanOrEqual(bounds.top);
+        await expect(first.bottom).toBeLessThanOrEqual(bounds.bottom);
+        await expect(first.left).toBeGreaterThanOrEqual(bounds.left);
+        await expect(first.right).toBeLessThanOrEqual(bounds.right);
+      });
+      alert.scrollTop = alert.scrollHeight;
+      await waitFor(async () => {
+        const bounds = visibleBounds();
+        const lines = range.getClientRects();
+        const last = lines[lines.length - 1]!;
+        await expect(alert.scrollTop).toBeGreaterThan(0);
+        await expect(last.top).toBeGreaterThanOrEqual(bounds.top);
+        await expect(last.bottom).toBeLessThanOrEqual(bounds.bottom);
+        await expect(last.left).toBeGreaterThanOrEqual(bounds.left);
+        await expect(last.right).toBeLessThanOrEqual(bounds.right);
+        await expect(header.scrollTop).toBe(headerPosition);
+      });
+    });
+
+    await step(
+      "Keyboard focus reveals the header control without moving the diagnostic",
+      async () => {
+        const statePosition = alert.scrollTop;
+        retry.focus({ preventScroll: true });
+        await userEvent.tab({ shift: true });
+        const parent = canvas.getByRole("button", { name: "Go to parent directory" });
+        await expect(parent).toHaveFocus();
+        await waitFor(async () => {
+          const bounds = visibleBounds(header);
+          const control = parent.getBoundingClientRect();
+          await expect(control.top).toBeGreaterThanOrEqual(bounds.top);
+          await expect(control.bottom).toBeLessThanOrEqual(bounds.bottom);
+          await expect(control.left).toBeGreaterThanOrEqual(bounds.left);
+          await expect(control.right).toBeLessThanOrEqual(bounds.right);
+          await expect(
+            parent.contains(
+              document.elementFromPoint(
+                control.left + control.width / 2,
+                control.top + control.height / 2,
+              ),
+            ),
+          ).toBe(true);
+          await expect(alert.scrollTop).toBe(statePosition);
+        });
+      },
+    );
+
+    await step("Keyboard focus reveals Retry inside the visible listing bounds", async () => {
       await expect(canvas.getByRole("button", { name: "Add project" })).toBeDisabled();
       await expect(
         canvas.queryByRole("button", { name: "Back to previous successfully listed directory" }),
       ).toBeNull();
+      canvas.getByRole("button", { name: "Go to parent directory" }).focus({ preventScroll: true });
+      await userEvent.tab();
+      await expect(retry).toHaveFocus();
       await waitFor(async () => {
-        const bounds = browser.getBoundingClientRect();
+        const bounds = visibleBounds();
         const control = retry.getBoundingClientRect();
-        const path = canvas.getByText(longFailedDirectory, { exact: true }).getBoundingClientRect();
         await expect(browser.scrollWidth).toBeLessThanOrEqual(browser.clientWidth);
-        await expect(path.left).toBeGreaterThanOrEqual(bounds.left);
-        await expect(path.right).toBeLessThanOrEqual(bounds.right);
         await expect(control.left).toBeGreaterThanOrEqual(bounds.left);
         await expect(control.right).toBeLessThanOrEqual(bounds.right);
         await expect(control.top).toBeGreaterThanOrEqual(bounds.top);
@@ -341,12 +472,45 @@ export const LongDirectoryListingFailure: Story = {
       );
       await expect(canvas.getByRole("button", { name: "Add project" })).toBeDisabled();
     });
+
+    await step("Header scrolling preserves the recovered directory list position", async () => {
+      longDirectoryList.mockResolvedValueOnce(
+        response(
+          longFailedDirectory,
+          Array.from({ length: 24 }, (_, index) => `project-${index}`),
+          "workspace-1",
+        ),
+      );
+      await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+      await canvas.findByRole("button", { name: "Browse directory project-23" });
+      const entries = canvas.getByRole("list", { name: "Directories" });
+      await expect(entries.scrollHeight).toBeGreaterThan(entries.clientHeight);
+      entries.scrollTop = entries.scrollHeight;
+      const listPosition = entries.scrollTop;
+      await expect(listPosition).toBeGreaterThan(0);
+      header.scrollTop = 0;
+      await expect(entries.scrollTop).toBe(listPosition);
+      header.scrollTop = header.scrollHeight;
+      await waitFor(async () => {
+        await expect(header.scrollTop).toBeGreaterThan(0);
+        await expect(entries.scrollTop).toBe(listPosition);
+      });
+      const parent = canvas.getByRole("button", { name: "Go to parent directory" });
+      parent.focus();
+      await expect(parent).toHaveFocus();
+      await expect(entries.scrollTop).toBe(listPosition);
+      await userEvent.click(canvas.getByRole("button", { name: "Add project" }));
+      await expect(longDirectoryOnAddProject).toHaveBeenCalledWith({
+        directory: longFailedDirectory,
+        workspaceID: "workspace-1",
+      });
+    });
   },
 };
 
 export const LongDirectoryListingFailureDark: Story = {
   ...LongDirectoryListingFailure,
-  globals: { theme: "dark", viewport: { value: "mobile", isRotated: false } },
+  globals: { theme: "dark", viewport: { value: "short360x480", isRotated: false } },
 };
 
 export const ValidationFailure = {

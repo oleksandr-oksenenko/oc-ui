@@ -99,7 +99,7 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
   switch (tool.state.status) {
     case "streaming":
       return [
-        <pre class="transcript-tool-output oc-scrollable" tabIndex={0}>
+        <pre class="transcript-tool-output oc-scrollable" data-scrollable tabIndex={0}>
           {tool.state.input}
         </pre>,
       ];
@@ -109,6 +109,7 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
       return [
         <pre
           class="transcript-tool-output oc-scrollable"
+          data-scrollable
           tabIndex={0}
           data-annotation-block={annotationBlock("tool", tool.id, "input")}
         >
@@ -131,6 +132,7 @@ function renderToolContent(content: ToolContent, toolID: string, index: number):
   return content.type === "text" ? (
     <pre
       class="transcript-tool-output oc-scrollable"
+      data-scrollable
       tabIndex={0}
       data-annotation-block={annotationBlock("tool", toolID, "output", index, "text")}
     >

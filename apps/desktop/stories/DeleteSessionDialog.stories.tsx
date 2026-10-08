@@ -1,10 +1,15 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook's interaction API is Promise-based. */
 
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
-import { expect, waitFor, within } from "storybook/test";
+import { expect, fn, waitFor, within } from "storybook/test";
 
 import { DeleteSessionDialog } from "../src/renderer/components/App/ConnectedApp/Sessions/SessionSidebar/DeleteSessionFlow/DeleteSessionDialog.tsx";
 import { DialogStory } from "./DialogStory.tsx";
+import {
+  expectConfirmationLayout,
+  scrollToConfirmationAction,
+  shortConfirmationViewport,
+} from "./confirmation-dialog-fixtures.ts";
 
 const meta = {
   title: "Sessions/DeleteSessionDialog",
@@ -20,6 +25,7 @@ function dialog(
     readonly title?: string;
     readonly error?: string;
     readonly deleting?: boolean;
+    readonly onDelete?: () => void;
   } = {},
 ) {
   return (
@@ -30,7 +36,7 @@ function dialog(
           descendantCount={options.descendantCount ?? 0}
           deleting={options.deleting ?? false}
           error={options.error}
-          onDelete={() => undefined}
+          onDelete={options.onDelete ?? (() => undefined)}
         />
       )}
     </DialogStory>
@@ -60,6 +66,39 @@ export const LongContent = {
       title: "Investigate the intermittent renderer reconnection failure across remote workspaces",
       descendantCount: 128,
     }),
+};
+
+const onShortHeightDelete = fn();
+
+export const ShortHeightLongError: StoryObj = {
+  ...shortConfirmationViewport,
+  render: () =>
+    dialog({
+      title: "Investigate renderer reconnection across remote workspaces. ".repeat(8),
+      descendantCount: 128,
+      error: "The session could not be deleted. Check the remote connection and try again. ".repeat(
+        24,
+      ),
+      onDelete: onShortHeightDelete,
+    }),
+  play: async ({ canvasElement }) => {
+    onShortHeightDelete.mockClear();
+    const content = await expectConfirmationLayout(
+      canvasElement.ownerDocument,
+      ".delete-session-dialog",
+      true,
+    );
+    await scrollToConfirmationAction(content, "Delete session");
+    await expect(onShortHeightDelete).toHaveBeenCalledOnce();
+  },
+};
+
+export const ShortHeightSingleSession: StoryObj = {
+  ...shortConfirmationViewport,
+  render: () => dialog(),
+  play: async ({ canvasElement }) => {
+    await expectConfirmationLayout(canvasElement.ownerDocument, ".delete-session-dialog", false);
+  },
 };
 
 export const Narrow: StoryObj = {

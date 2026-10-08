@@ -10,15 +10,29 @@ import {
   unavailableSelection,
 } from "./composer-test-fixtures.ts";
 
-// The suggestion menu scrolls its active option; jsdom has no scrollTo.
+const showPopover = vi.fn<() => void>();
+const hidePopover = vi.fn<() => void>();
+
+// jsdom has no native top layer or scrolling. Browser stories cover placement;
+// these boundary substitutes leave editing and lifecycle tests deterministic.
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
     configurable: true,
     value: () => undefined,
   });
+  Object.defineProperty(HTMLElement.prototype, "showPopover", {
+    configurable: true,
+    value: showPopover,
+  });
+  Object.defineProperty(HTMLElement.prototype, "hidePopover", {
+    configurable: true,
+    value: hidePopover,
+  });
 });
 afterAll(() => {
   Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  Reflect.deleteProperty(HTMLElement.prototype, "showPopover");
+  Reflect.deleteProperty(HTMLElement.prototype, "hidePopover");
 });
 
 // Synthetic IME coverage. jsdom does not run an input method: these tests only
@@ -221,6 +235,26 @@ describe("Composer composition precedence", () => {
 });
 
 describe("Composer menu ownership", () => {
+  it("keeps one native presentation across query edits and releases it on disposal", async () => {
+    showPopover.mockClear();
+    hidePopover.mockClear();
+    const harness = openComposer();
+    harness.paste("/");
+    await harness.settle();
+    const menu = harness.menu();
+    expect(showPopover).toHaveBeenCalledOnce();
+    expect(menu?.getAttribute("popover")).toBe("manual");
+    expect(harness.editor.closest("form")?.contains(menu)).toBe(true);
+    harness.paste("bu");
+    await harness.settle();
+    expect(harness.menu()).toBe(menu);
+    expect(showPopover).toHaveBeenCalledOnce();
+    expect(hidePopover).not.toHaveBeenCalled();
+    harness.dispose();
+    expect(hidePopover).toHaveBeenCalledOnce();
+    expect(menu?.isConnected).toBe(false);
+  });
+
   it("consumes Enter when the open menu has no matching item", async () => {
     // The menu owns Enter while it is open, whatever its state. A query with
     // no matches keeps the draft in the composer instead of sending it.

@@ -79,8 +79,8 @@ describe("Workspace", () => {
     expect(leftSeparator.getAttribute("aria-valuenow")).toBe("264");
     expect(rightSeparator.getAttribute("aria-valuenow")).toBe("376");
     const shell = host.querySelector<HTMLElement>(".app-shell-v2");
-    expect(shell?.style.getPropertyValue("--shell-left-sidebar-width")).toBe("264px");
-    expect(shell?.style.getPropertyValue("--shell-right-panel-width")).toBe("376px");
+    expect(shell?.style.getPropertyValue("--shell-left-preferred-width")).toBe("264px");
+    expect(shell?.style.getPropertyValue("--shell-right-preferred-width")).toBe("376px");
 
     dispose();
   });
@@ -110,7 +110,7 @@ describe("Workspace", () => {
     expect(
       host
         .querySelector<HTMLElement>(".app-shell-v2")
-        ?.style.getPropertyValue("--shell-left-sidebar-width"),
+        ?.style.getPropertyValue("--shell-left-preferred-width"),
     ).toBe("288px");
     window.dispatchEvent(pointerEvent("pointerup", { pointerID: 7, clientX: 260 }));
     expect(workspace.classList.contains("resizing")).toBe(false);
@@ -122,7 +122,7 @@ describe("Workspace", () => {
     expect(
       host
         .querySelector<HTMLElement>(".app-shell-v2")
-        ?.style.getPropertyValue("--shell-right-panel-width"),
+        ?.style.getPropertyValue("--shell-right-preferred-width"),
     ).toBe("400px");
     window.dispatchEvent(pointerEvent("pointerup", { pointerID: 8, clientX: 600 }));
 
@@ -131,7 +131,7 @@ describe("Workspace", () => {
     expect(
       host
         .querySelector<HTMLElement>(".app-shell-v2")
-        ?.style.getPropertyValue("--shell-left-sidebar-width"),
+        ?.style.getPropertyValue("--shell-left-preferred-width"),
     ).toBe("288px");
     window.dispatchEvent(pointerEvent("pointercancel", { pointerID: 9, clientX: 260 }));
     expect(workspace.classList.contains("resizing")).toBe(false);
@@ -157,12 +157,12 @@ describe("Workspace", () => {
 
     handle.dispatchEvent(pointerEvent("pointerdown", { pointerID: 1, clientX: 800 }));
     window.dispatchEvent(pointerEvent("pointermove", { pointerID: 1, clientX: 790 }));
-    expect(shell.style.getPropertyValue("--shell-right-panel-width")).toBe("410px");
+    expect(shell.style.getPropertyValue("--shell-right-preferred-width")).toBe("410px");
     window.dispatchEvent(pointerEvent("pointerup", { pointerID: 1, clientX: 790 }));
 
     Object.defineProperty(panel, "offsetWidth", { configurable: true, value: 380 });
     handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-    expect(shell.style.getPropertyValue("--shell-right-panel-width")).toBe("396px");
+    expect(shell.style.getPropertyValue("--shell-right-preferred-width")).toBe("396px");
     dispose();
   });
 
@@ -182,6 +182,34 @@ describe("Workspace", () => {
     );
 
     expect(host.querySelectorAll('[role="separator"]')).toHaveLength(0);
+    dispose();
+  });
+
+  it("keeps drag preferences within their configured ranges when rendered panels shrink", () => {
+    const { host, dispose } = mount(() => (
+      <main class="app-shell-v2">
+        <Workspace
+          leftSidebarOpen
+          rightPanelOpen
+          sidebar={<div>Sessions</div>}
+          main={<div>Transcript</div>}
+          context={<div>Context</div>}
+        />
+      </main>
+    ));
+    const workspace = host.querySelector<HTMLElement>(".shell-workspace")!;
+    const left = host.querySelector<HTMLElement>(".shell-left-sidebar")!;
+    const right = host.querySelector<HTMLElement>(".shell-right-panel")!;
+    const leftHandle = host.querySelector<HTMLElement>(".shell-left-resize-handle")!;
+    const rightHandle = host.querySelector<HTMLElement>(".shell-right-resize-handle")!;
+    Object.defineProperty(workspace, "clientWidth", { value: 820 });
+    Object.defineProperty(left, "offsetWidth", { value: 176 });
+    Object.defineProperty(right, "offsetWidth", { value: 224 });
+
+    leftHandle.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    rightHandle.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    expect(leftHandle.getAttribute("aria-valuenow")).toBe("220");
+    expect(rightHandle.getAttribute("aria-valuenow")).toBe("280");
     dispose();
   });
 

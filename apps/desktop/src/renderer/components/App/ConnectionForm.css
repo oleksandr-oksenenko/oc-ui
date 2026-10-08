@@ -1,9 +1,11 @@
 .connection-form-page {
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
   width: 100%;
-  min-height: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+  overflow-y: auto;
   padding: 40px 24px;
   background: var(--oc-surface-canvas);
   color: var(--oc-text-base);

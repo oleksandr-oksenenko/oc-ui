@@ -1,8 +1,11 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { Button } from "@opencode/ui/button";
 
 import { TerminalPanelFixture } from "./TerminalPanelFixture.tsx";
+import { TerminalPanel } from "../../src/renderer/components/App/ConnectedApp/Terminal/TerminalPanel.tsx";
+import "../../src/renderer/components/App/ConnectedApp/Terminal/TerminalRegion/TerminalSurface.css";
 
 const connectedTabs = [
   { id: "1", title: "Terminal 1", status: "connected" },
@@ -17,6 +20,30 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+const longError =
+  "Terminal setup failed. " +
+  "The renderer or remote connection could not initialize; inspect the complete diagnostic before retrying. ".repeat(
+    30,
+  ) +
+  "End of terminal diagnostic.";
+
+async function expectFullDiagnosticReachable(scroller: HTMLElement, content = scroller) {
+  const range = content.ownerDocument.createRange();
+  range.selectNodeContents(content);
+  await expect(scroller.clientHeight).toBeGreaterThan(0);
+  await expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight);
+  scroller.scrollTop = 0;
+  await expect(range.getClientRects()[0]!.top).toBeGreaterThanOrEqual(
+    scroller.getBoundingClientRect().top,
+  );
+  scroller.scrollTop = scroller.scrollHeight;
+  await expect(scroller.scrollTop).toBeGreaterThan(0);
+  const lines = range.getClientRects();
+  await expect(lines[lines.length - 1]!.bottom).toBeLessThanOrEqual(
+    scroller.getBoundingClientRect().bottom + 1,
+  );
+}
 
 export const Empty: Story = {
   play: async ({ canvasElement }) => {
@@ -137,6 +164,85 @@ export const Exited: Story = {
 };
 
 export const CreateFailed: Story = { args: { error: "The server could not create a terminal." } };
+
+export const ShortFailedLongError: Story = {
+  args: {
+    tabs: [{ id: "1", title: "Terminal 1", status: "failed", error: longError }],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("separator", { name: "Resize terminal panel" }));
+    await userEvent.keyboard("{Home}");
+    const pane = canvas.getByRole("region", { name: "Terminal" });
+    const bounds = pane.getBoundingClientRect();
+    await expect(
+      canvasElement.querySelector(".shell-bottom-panel")!.getBoundingClientRect().height,
+    ).toBe(120);
+    const error = canvas.getByRole("alert");
+    await expect(error.getBoundingClientRect().bottom).toBeLessThanOrEqual(bounds.bottom);
+    await expectFullDiagnosticReachable(error);
+    const surface = canvas.getByRole("tabpanel").getBoundingClientRect();
+    await expect(surface.height).toBeGreaterThan(0);
+    await expect(surface.bottom).toBeLessThanOrEqual(bounds.bottom);
+    const reconnect = canvas.getByRole("button", { name: "Reconnect terminal" });
+    await expect(reconnect.getBoundingClientRect().top).toBeGreaterThanOrEqual(bounds.top);
+    await expect(reconnect.getBoundingClientRect().bottom).toBeLessThanOrEqual(bounds.bottom);
+    await userEvent.click(reconnect);
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("status")).not.toBeInTheDocument();
+  },
+};
+
+const retryRenderer = fn();
+export const ShortRendererLongError: Story = {
+  // Controlled notice markup exercises production CSS without initializing GPU or PTY resources.
+  render: () => (
+    <div style={{ width: "300px", height: "120px" }}>
+      <TerminalPanel
+        open
+        tabs={[connectedTabs[0]!]}
+        activeID="1"
+        canCreate
+        onCreate={fn()}
+        onSelect={fn()}
+        onClose={fn()}
+        onReconnect={fn()}
+        onHide={fn()}
+      >
+        <div class="terminal-surface">
+          <div class="terminal-renderer" />
+          <div class="terminal-renderer-notice" role="alert">
+            <span>{longError}</span>
+            <Button
+              size="small"
+              variant="ghost"
+              data-terminal-focus
+              aria-label="Retry terminal renderer"
+              onClick={retryRenderer}
+            >
+              Retry renderer
+            </Button>
+          </div>
+        </div>
+      </TerminalPanel>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const notice = canvas.getByRole("alert");
+    const content = within(notice).getByText(longError);
+    await expectFullDiagnosticReachable(notice, content);
+    const retry = canvas.getByRole("button", { name: "Retry terminal renderer" });
+    await expect(retry.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      notice.getBoundingClientRect().top,
+    );
+    await expect(retry.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      notice.getBoundingClientRect().bottom,
+    );
+    await userEvent.click(retry);
+    await expect(retryRenderer).toHaveBeenCalledOnce();
+  },
+};
 
 export const Resizable: Story = {
   args: { tabs: connectedTabs },

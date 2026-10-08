@@ -32,13 +32,19 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: safe center;
+  justify-content: safe center;
   gap: 8px;
   padding: 16px;
+  overflow: auto;
+  overflow-wrap: anywhere;
   color: var(--oc-text-muted);
   background: var(--oc-surface-canvas);
   font-size: var(--oc-type-body-size);
+}
+
+.terminal-renderer-notice > * {
+  flex-shrink: 0;
 }
 
 /* Restty portals its controlled clipboard menu to document.body. */
@@ -71,8 +77,10 @@
   cursor: pointer;
 }
 
-.pane-context-menu-item:hover {
-  background: var(--oc-surface-hover);
+@media (hover: hover) and (pointer: fine) {
+  .pane-context-menu-item:hover:not(:disabled) {
+    background: var(--oc-surface-hover);
+  }
 }
 
 .pane-context-menu-item:focus-visible {
@@ -82,4 +90,8 @@
 .pane-context-menu-item:disabled {
   color: var(--oc-text-faint);
   cursor: default;
+}
+
+.pane-context-menu-item:active:not(:disabled) {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
 }

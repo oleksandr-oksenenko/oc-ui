@@ -229,6 +229,154 @@ export const RefreshError: Story = {
   },
 };
 
+const longDiffError =
+  "The working tree could not be read. " +
+  "The connected server could not load this comparison; check the workspace location and retry. ".repeat(
+    4,
+  ) +
+  `/workspace/${"unbroken_directory_name".repeat(12)}/changes.ts. End of diff diagnostic.`;
+const initialErrorRetry = fn<NonNullable<DiffViewPresentation["onRetry"]>>();
+const refreshErrorRetry = fn<NonNullable<DiffViewPresentation["onRetry"]>>();
+const errorComparisonChange = fn<NonNullable<DiffViewPresentation["onComparisonChange"]>>();
+
+/** The fixture owns only the controlled comparison; files and status stay supplied by the story. */
+const shortErrorRender: Story["render"] = (args) => {
+  const [comparison, setComparison] = createSignal("working");
+  return (
+    <div data-short-diff-slot style={{ width: "168px", height: "160px", overflow: "hidden" }}>
+      <ContextPanel
+        {...args}
+        presentation={{
+          ...args.presentation,
+          loading: false,
+          comparison: comparison(),
+          comparisonOptions: [
+            { value: "working", label: "Working changes" },
+            { value: "branch", label: "Changes vs main" },
+          ],
+          onComparisonChange: (value) => {
+            errorComparisonChange(value);
+            setComparison(value);
+          },
+        }}
+      />
+    </div>
+  );
+};
+
+const shortErrorPlay: Story["play"] = async ({ canvasElement, args, step }) => {
+  const canvas = within(canvasElement);
+  const slot = canvasElement.querySelector<HTMLElement>("[data-short-diff-slot]")!;
+  const cached = args.files.length > 0;
+  const onRetry = cached ? refreshErrorRetry : initialErrorRetry;
+  onRetry.mockClear();
+  errorComparisonChange.mockClear();
+
+  for (const [index, width] of [168, 360].entries()) {
+    await step(`${width}px wide, 160px high: diagnostic and Retry remain reachable`, async () => {
+      slot.style.width = `${width}px`;
+      const error = canvas.getByRole("alert");
+      const message = canvas.getByText(longDiffError);
+      const lines = error.ownerDocument.createRange();
+      lines.selectNodeContents(message);
+      await expect(slot.getBoundingClientRect().height).toBe(160);
+      await expect(slot.getBoundingClientRect().width).toBe(width);
+      await expect(error.clientHeight).toBeGreaterThan(0);
+      await expect(error.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        slot.getBoundingClientRect().bottom + 1,
+      );
+      await expect(error.scrollWidth).toBeLessThanOrEqual(error.clientWidth + 1);
+      await expect(error.scrollHeight).toBeGreaterThan(error.clientHeight);
+
+      error.scrollTop = 0;
+      await expect(lines.getClientRects()[0]!.top).toBeGreaterThanOrEqual(
+        error.getBoundingClientRect().top,
+      );
+      await expect(lines.getClientRects()[0]!.bottom).toBeLessThanOrEqual(
+        error.getBoundingClientRect().bottom + 1,
+      );
+      error.scrollTop =
+        [...lines.getClientRects()].at(-1)!.bottom - error.getBoundingClientRect().bottom;
+      await expect(error.scrollTop).toBeGreaterThan(0);
+      const lastLine = [...lines.getClientRects()].at(-1)!;
+      await expect(lastLine.top).toBeGreaterThanOrEqual(error.getBoundingClientRect().top);
+      await expect(lastLine.bottom).toBeLessThanOrEqual(error.getBoundingClientRect().bottom + 1);
+
+      const retry = canvas.getByRole("button", { name: "Retry" });
+      error.scrollTop = cached ? 0 : error.scrollHeight;
+      await expect(retry.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+        error.getBoundingClientRect().top,
+      );
+      await expect(retry.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        error.getBoundingClientRect().bottom + 1,
+      );
+      const point = center(retry);
+      await expect(retry.contains(error.ownerDocument.elementFromPoint(point.x, point.y))).toBe(
+        true,
+      );
+      await userEvent.click(retry);
+      await expect(onRetry).toHaveBeenCalledTimes(index + 1);
+
+      const selector = canvas.getByRole("button", { name: /Diff comparison/ });
+      await userEvent.click(selector);
+      const label = index === 0 ? "Changes vs main" : "Working changes";
+      await userEvent.click(
+        await within(canvasElement.ownerDocument.body).findByRole("option", { name: label }),
+      );
+      await expect(errorComparisonChange).toHaveBeenLastCalledWith(
+        index === 0 ? "branch" : "working",
+      );
+      await expect(selector).toHaveTextContent(label);
+      await expect(error).toHaveTextContent(longDiffError);
+      await expect(canvas.queryByText("Refreshing diff")).not.toBeInTheDocument();
+      await expect(canvas.queryByText("Showing cached changes")).not.toBeInTheDocument();
+
+      const viewport = canvasElement.querySelector<HTMLElement>(".diff-code-view");
+      if (cached) {
+        await canvas.findByRole("button", { name: `Collapse ${diffFiles[0]!.file}` });
+        await expect(viewport!.clientHeight).toBeGreaterThan(0);
+        await expect(viewport!.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+          slot.getBoundingClientRect().bottom + 1,
+        );
+        await expect(viewport!.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+          error.getBoundingClientRect().bottom,
+        );
+        await expect(viewport!.scrollHeight).toBeGreaterThan(viewport!.clientHeight);
+        const diagnosticScroll = error.scrollTop;
+        viewport!.scrollTop = viewport!.scrollHeight;
+        await expect(viewport!.scrollTop).toBeGreaterThan(0);
+        await expect(error.scrollTop).toBe(diagnosticScroll);
+        viewport!.scrollTop = 0;
+      } else {
+        await expect(viewport).toBeNull();
+        await expect(canvas.queryByText("No working tree changes")).not.toBeInTheDocument();
+      }
+    });
+  }
+};
+
+export const ShortInitialError: Story = {
+  args: {
+    ...panelProps({ files: [], loading: false, error: longDiffError, onRetry: initialErrorRetry }),
+  },
+  render: shortErrorRender,
+  play: shortErrorPlay,
+};
+
+export const ShortRefreshError: Story = {
+  args: {
+    ...panelProps({
+      files: diffFiles,
+      loading: false,
+      stale: true,
+      error: longDiffError,
+      onRetry: refreshErrorRetry,
+    }),
+  },
+  render: shortErrorRender,
+  play: shortErrorPlay,
+};
+
 export const CachedStale: Story = {
   args: {
     ...panelProps({ files: diffFiles, loading: false, stale: true }),

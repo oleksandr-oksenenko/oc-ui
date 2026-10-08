@@ -44,6 +44,13 @@
 
 .server-flow-dialog-add-project .server-directory-state {
   flex: 1;
+  min-block-size: 0;
+}
+
+.server-flow-dialog-add-project .server-directory-browser-header {
+  max-block-size: clamp(36px, 35%, 120px);
+  overflow-y: auto;
+  align-items: safe center;
 }
 
 .server-flow-dialog [data-slot="dialog-header"] {

@@ -1,4 +1,8 @@
-import type { SessionMessageAssistant, SessionMessageInfo } from "@opencode/client";
+import type {
+  SessionMessageAssistant,
+  SessionMessageAssistantTool,
+  SessionMessageInfo,
+} from "@opencode/client";
 import { createSessionPrompt } from "../src/renderer/opencode/session-prompt.ts";
 import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 
@@ -72,6 +76,36 @@ export const streamingAssistant: SessionMessageInfo = {
       name: "git-diff",
       time: { created: 12, ran: 12 },
       state: { status: "running", input: { command: "git diff" }, metadata: {} },
+    },
+  ],
+};
+
+export const longToolNamePrefix = "workspace_release_verification_".repeat(4);
+export const longToolNameSuffixes = ["alpha", "beta"] as const;
+export const longNamedTools: SessionMessageAssistant = {
+  ...assistant("long-tool-names"),
+  content: [
+    ...longToolNameSuffixes.map((suffix): SessionMessageAssistantTool => ({
+      type: "tool",
+      id: `long-name-${suffix}`,
+      name: `${longToolNamePrefix}${suffix}`,
+      time: { created: 2, completed: 3 },
+      state: {
+        status: "completed",
+        input: {},
+        content: [{ type: "text", text: `Result for ${suffix}` }],
+      },
+    })),
+    {
+      type: "tool",
+      id: "long-name-path",
+      name: "read",
+      time: { created: 2, completed: 3 },
+      state: {
+        status: "completed",
+        input: { path: `/workspace/${"nested/".repeat(30)}README.md` },
+        content: [{ type: "text", text: "File contents" }],
+      },
     },
   ],
 };

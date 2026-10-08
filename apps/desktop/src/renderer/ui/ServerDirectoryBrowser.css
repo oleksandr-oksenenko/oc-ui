@@ -106,12 +106,13 @@
 
 .server-directory-state {
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
   gap: 8px;
   min-height: 112px;
   margin: 0;
   padding: 16px;
+  overflow-y: auto;
   text-align: center;
   font-size: var(--oc-type-body-size);
   line-height: var(--oc-type-body-line-height);

@@ -104,9 +104,11 @@
 }
 
 .context-view-button {
-  min-width: 70px;
+  flex: 0 1 70px;
+  min-inline-size: 0;
   height: 100%;
   padding: 0 10px;
+  overflow: hidden;
   border: 0;
   border-bottom: 3px solid transparent;
   color: var(--oc-text-muted);
@@ -114,11 +116,17 @@
   cursor: pointer;
   font-size: var(--oc-type-label-size);
   font-weight: var(--oc-type-label-weight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .context-view-button[aria-pressed="true"] {
   border-bottom-color: var(--oc-selection);
   color: var(--oc-text-strong);
+}
+
+.context-view-button:enabled:active {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
 }
 
 .workspace-context-body {

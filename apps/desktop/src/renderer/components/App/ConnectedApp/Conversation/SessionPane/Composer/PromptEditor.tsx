@@ -30,6 +30,7 @@ import {
 } from "@oc-ui/prompt-editor";
 import "prosemirror-view/style/prosemirror.css";
 import type { PasteRoute } from "./pasteRoute.ts";
+import { SuggestionPopover } from "./PromptEditor/SuggestionPopover.tsx";
 import "./PromptEditor/PromptEditor.css";
 
 /** One already-classified paste the composer hands to the editor to apply. */
@@ -271,14 +272,6 @@ export function PromptEditor(props: EditorProps) {
             close();
             return false;
           },
-          blur(editor, event) {
-            if (
-              !(event.relatedTarget instanceof Node) ||
-              !editor.dom.closest("form")?.contains(event.relatedTarget)
-            )
-              close();
-            return false;
-          },
         },
         // Clipboard copies write skill atoms as their names, matching the draft
         // text the same content serializes to.
@@ -380,9 +373,18 @@ export function PromptEditor(props: EditorProps) {
     props.control?.(undefined);
   });
   return (
-    <div class="prompt-editor">
+    <div
+      class="prompt-editor"
+      onFocusOut={(event) => {
+        if (
+          !(event.relatedTarget instanceof Node) ||
+          !event.currentTarget.contains(event.relatedTarget)
+        )
+          close();
+      }}
+    >
       <Show when={query() !== undefined}>
-        <section class="prompt-suggestion-menu" aria-label="Suggestions">
+        <SuggestionPopover>
           <Show when={listMounted()}>
             <List
               ref={(value) => {
@@ -424,8 +426,8 @@ export function PromptEditor(props: EditorProps) {
                       <button
                         type="button"
                         onClick={() => {
-                          props.catalog?.onRetry();
                           view?.focus();
+                          props.catalog?.onRetry();
                         }}
                       >
                         Try again
@@ -437,7 +439,7 @@ export function PromptEditor(props: EditorProps) {
             </div>
           </Show>
           <div class="prompt-suggestion-footer">↑ ↓ navigate · Enter select · Esc close</div>
-        </section>
+        </SuggestionPopover>
       </Show>
       <div
         ref={(element) => {

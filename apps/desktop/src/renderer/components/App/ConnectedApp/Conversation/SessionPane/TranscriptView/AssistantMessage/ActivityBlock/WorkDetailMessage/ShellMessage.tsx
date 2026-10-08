@@ -49,6 +49,7 @@ export function ShellMessage(props: { readonly message: SessionMessageShell }): 
                 data-annotation-block={annotationBlock("shell", "output")}
                 data-annotation-disabled={props.message.status === "running" ? "true" : undefined}
                 class="transcript-tool-output oc-scrollable"
+                data-scrollable
                 tabIndex={0}
               >
                 {output}

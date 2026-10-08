@@ -1,9 +1,27 @@
+:root :is(.delete-session-dialog, .code-review-removal-dialog)[data-slot="dialog-container"] {
+  max-block-size: calc(100dvh - 32px);
+}
+
+:root
+  :is(.delete-session-dialog, .code-review-removal-dialog)[data-slot="dialog-container"]
+  > [data-slot="dialog-content"] {
+  min-block-size: 0;
+}
+
 .delete-session-dialog form,
 .code-review-removal-dialog form {
   display: flex;
-  flex: 1;
+  flex: none;
   flex-direction: column;
   width: 100%;
+}
+
+:root
+  :is(.delete-session-dialog, .code-review-removal-dialog)[data-slot="dialog-container"]
+  > [data-slot="dialog-content"]
+  > form
+  > [data-slot="dialog-body"] {
+  flex: none;
 }
 
 .delete-session-dialog-body,

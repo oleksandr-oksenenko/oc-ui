@@ -91,6 +91,16 @@ export async function startScriptedProvider() {
       )
         return;
       if (respondBrowser(prompt, toolReply, body, send, finish, requests.length)) return;
+      if (toolReply && prompt.includes("E2E_TOOL_SCROLL")) {
+        send({ content: "Acceptance tool scroll stream is waiting." });
+        completeResponse(prompt, response, () => {
+          send({
+            content: `\n\n${"Appended transcript paragraph.\n\n".repeat(40)}Tool scroll complete.`,
+          });
+          finish();
+        });
+        return;
+      }
       if (respondTool(prompt, toolReply, body, send, finish, requests.length)) return;
       send({ content: "Acceptance first streamed fragment. " });
       const complete = () => {
@@ -202,6 +212,11 @@ function requestedTool(prompt) {
       name: "shell",
       input: { command: "printf 'Background acceptance output\\n'", background: true },
     };
+  }
+  if (prompt.includes("E2E_TOOL_SCROLL")) {
+    const path = prompt.match(/E2E_TOOL_SCROLL ([^\s"\\]+)/u)?.[1];
+    if (!path) throw new Error("Tool scroll fixture path missing");
+    return { name: "read", input: { path } };
   }
   if (prompt.includes("E2E_CREATE_SESSION")) {
     return { name: "session_create", input: { prompt: "Independent acceptance task" } };

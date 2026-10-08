@@ -3,3 +3,8 @@
 .code-review-removal-dialog[data-slot="dialog-container"] {
   width: min(calc(100vw - 32px), 400px);
 }
+
+.code-review-removal-dialog [data-slot="dialog-title"] {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
