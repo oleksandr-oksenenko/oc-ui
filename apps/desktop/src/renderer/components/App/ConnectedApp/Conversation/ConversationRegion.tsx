@@ -367,6 +367,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               messages={visibleTranscript()}
               activityOpen={activityOpen}
               sessionStatus={props.workspace.transcriptStatus()}
+              connected={props.connected()}
               loading={props.workspace.transcriptLoading()}
               error={props.workspace.transcriptError()}
               onRetry={() => {

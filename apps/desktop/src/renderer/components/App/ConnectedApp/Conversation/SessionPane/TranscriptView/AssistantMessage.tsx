@@ -13,6 +13,7 @@ export type AssistantMessageProps = {
   readonly message: SessionMessageAssistant;
   readonly sessionID?: string;
   readonly sessionStatus: DataSessionStatus;
+  readonly connected?: boolean;
   readonly turnActive?: boolean;
   readonly activityLive?: boolean;
   readonly activityOpen?: Map<string, boolean>;
@@ -25,14 +26,30 @@ export type AssistantMessageProps = {
 };
 
 export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
-  const failed = () => props.message.error !== undefined || props.message.finish === "error";
+  const error = () => props.message.error ?? props.message.retry?.error;
+  const failed = () => error() !== undefined || props.message.finish === "error";
+  const retrying = () =>
+    props.message.retry !== undefined &&
+    props.connected !== false &&
+    props.sessionStatus === "running" &&
+    (props.turnActive ?? true);
+  const disconnected = () => props.message.retry !== undefined && props.connected === false;
+  const status = () => {
+    if (disconnected()) return "Disconnected";
+    if (retrying()) return `Retrying, attempt ${props.message.retry?.attempt}`;
+    const cause = error();
+    if (cause?.type === "provider.internal" || cause?.status === 503) return "Provider unavailable";
+    return cause ? `Failed: ${cause.message}` : "Failed";
+  };
   const state = () =>
-    failed()
-      ? "failed"
-      : props.message.time.completed === undefined &&
-          (props.turnActive ?? props.sessionStatus === "running")
-        ? "streaming"
-        : "complete";
+    retrying()
+      ? "retrying"
+      : failed()
+        ? "failed"
+        : props.message.time.completed === undefined &&
+            (props.turnActive ?? props.sessionStatus === "running")
+          ? "streaming"
+          : "complete";
 
   return (
     <article
@@ -73,10 +90,10 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
         <Show when={failed()}>
           <p
             class="transcript-message-failure"
-            role="alert"
+            role={retrying() || disconnected() ? "status" : "alert"}
             data-annotation-block={annotationBlock("error")}
           >
-            {props.message.error?.message ?? "Response failed"}
+            {status()}
           </p>
         </Show>
       </div>

@@ -684,6 +684,92 @@ export const FailedStates: Story = {
   },
   render: renderTranscript,
 };
+
+export const Retrying: Story = {
+  args: {
+    messages: [
+      {
+        ...assistant("assistant-retry", "error"),
+        content: [{ type: "text", text: "I checked the changes. Continuing verification…" }],
+        error: { type: "provider.transport", message: "WebSocket closed with code 1000" },
+        retry: {
+          attempt: 3,
+          at: 1,
+          error: { type: "provider.transport", message: "WebSocket closed with code 1000" },
+        },
+      },
+    ],
+    sessionStatus: "running",
+    connected: true,
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Retrying, attempt 3")).toBeVisible();
+    await expect(canvas.queryByText("WebSocket closed with code 1000")).toBeNull();
+  },
+};
+
+export const DisconnectedDuringRetry: Story = {
+  ...Retrying,
+  args: { ...Retrying.args, connected: false },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText("Disconnected")).toBeVisible();
+  },
+};
+
+export const FailedAfterRetry: Story = {
+  ...Retrying,
+  args: { ...Retrying.args, sessionStatus: "idle" },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText("Failed: WebSocket closed with code 1000"),
+    ).toBeVisible();
+  },
+};
+
+export const RetryingBeforeOutput: Story = {
+  args: {
+    messages: [
+      {
+        ...assistant("assistant-retry-before-output"),
+        time: { created: 1 },
+        finish: undefined,
+        content: [],
+        retry: {
+          attempt: 2,
+          at: 1,
+          error: { type: "provider.internal", message: "Provider unavailable", status: 503 },
+        },
+      },
+    ],
+    sessionStatus: "running",
+  },
+  render: renderNarrowTranscript,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Retrying, attempt 2")).toBeVisible();
+    await expect(canvas.queryByText("503")).toBeNull();
+  },
+};
+
+export const ProviderUnavailable: Story = {
+  args: {
+    messages: [
+      {
+        ...assistant("assistant-unavailable", "error"),
+        content: [],
+        error: { type: "provider.internal", message: "Upstream unavailable", status: 503 },
+      },
+    ],
+    sessionStatus: "idle",
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText("Provider unavailable")).toBeVisible();
+  },
+};
+
 export const DescriptiveWorking: Story = {
   args: {
     messages: [],

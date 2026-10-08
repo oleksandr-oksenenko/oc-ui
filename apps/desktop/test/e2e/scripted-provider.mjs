@@ -52,6 +52,7 @@ export async function startScriptedProvider() {
       const toolReply = afterUser.find((message) => message.role === "tool");
       requests.push({ model: body.model, prompt, toolReply: toolReply?.content });
       console.log(`[acceptance provider] ${body.model}: ${prompt.slice(0, 100)}`);
+      if (respondRetry(prompt, body.model, requests, response)) return;
       if (prompt.includes("E2E_PROVIDER_ERROR") && body.model !== "title") {
         response.writeHead(400, { "Content-Type": "application/json" });
         response.end(
@@ -147,6 +148,17 @@ export async function startScriptedProvider() {
         server.closeAllConnections();
       }),
   };
+}
+
+function respondRetry(prompt, modelName, requests, response) {
+  if (!prompt.includes("E2E_PROVIDER_RETRY") || modelName === "title") return false;
+  if (requests.filter((item) => item.prompt === prompt && item.model !== "title").length !== 1)
+    return false;
+  response.writeHead(503, { "Content-Type": "application/json", "Retry-After": "5" });
+  response.end(
+    JSON.stringify({ error: { message: "Acceptance provider is temporarily unavailable" } }),
+  );
+  return true;
 }
 
 function respondScriptedPrompt({ modelName, prompt, response, send, finish, onCancel }) {

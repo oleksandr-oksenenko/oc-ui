@@ -1032,6 +1032,124 @@ describe("TranscriptView", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows one retry status and switches to disconnection or failure when recovery stops", () => {
+    stubResizeObserver();
+    const [connected, setConnected] = createSignal(true);
+    const [sessionStatus, setSessionStatus] = createSignal<"running" | "idle">("running");
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      {
+        ...textAssistantMessage("assistant", "Partial answer"),
+        finish: "error",
+        error: { type: "provider.transport", message: "WebSocket closed with code 1000" },
+        retry: {
+          attempt: 3,
+          at: 1,
+          error: { type: "provider.internal", message: "Upstream unavailable", status: 503 },
+        },
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID="session"
+        messages={messages}
+        sessionStatus={sessionStatus()}
+        connected={connected()}
+      />
+    ));
+    const row = host.querySelector<HTMLElement>('[data-message-id="assistant"]')!;
+    const status = () => row.querySelector(".transcript-message-failure")!;
+    expect(row.dataset.state).toBe("retrying");
+    expect(status().textContent).toBe("Retrying, attempt 3");
+    expect(status().getAttribute("role")).toBe("status");
+    expect(row.querySelector('[role="alert"]')).toBeNull();
+    expect(row.textContent).not.toContain("WebSocket closed with code 1000");
+    expect(row.textContent).not.toContain("provider.transport");
+    expect(row.textContent).not.toContain("503");
+    expect(row.querySelector("time")).toBeNull();
+
+    setMessages(0, (message) =>
+      message.type === "assistant" && message.retry
+        ? { ...message, retry: { ...message.retry, attempt: 4 } }
+        : message,
+    );
+    expect(status().textContent).toBe("Retrying, attempt 4");
+
+    setConnected(false);
+    expect(status().textContent).toBe("Disconnected");
+    expect(row.dataset.state).toBe("failed");
+    setConnected(true);
+    setSessionStatus("idle");
+    expect(status().textContent).toBe("Failed: WebSocket closed with code 1000");
+    expect(status().getAttribute("role")).toBe("alert");
+    expect(row.dataset.state).toBe("failed");
+
+    // The SDK clears retry on a new step. The old error remains historical.
+    setMessages(0, (message) => ({ ...message, retry: undefined }));
+    setMessages(1, textAssistantMessage("continued", "Resumed answer"));
+    setSessionStatus("running");
+    expect(status().textContent).toBe("Failed: WebSocket closed with code 1000");
+    expect(host.textContent).toContain("Resumed answer");
+    expect(host.querySelector('[data-state="retrying"]')).toBeNull();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows retries before any output and does not reactivate an old turn's retry", () => {
+    stubResizeObserver();
+    const [messages, setMessages] = createStore<SessionMessageInfo[]>([
+      {
+        ...textAssistantMessage("assistant", ""),
+        content: [],
+        retry: {
+          attempt: 2,
+          at: 1,
+          error: { type: "provider.transport", message: "Connection interrupted" },
+        },
+      },
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages} sessionStatus="running" />
+    ));
+    const row = host.querySelector<HTMLElement>('[data-message-id="assistant"]')!;
+    expect(row.hidden).toBe(false);
+    expect(row.dataset.state).toBe("retrying");
+    expect(row.querySelector('[role="status"]')?.textContent).toBe("Retrying, attempt 2");
+    expect(row.textContent).not.toContain("Connection interrupted");
+    expect(row.textContent).not.toContain("HTTP status");
+    expect(row.querySelector('[role="alert"]')).toBeNull();
+    setMessages(1, { id: "new-user", type: "user", time: base, text: "New prompt" });
+    expect(row.dataset.state).not.toBe("retrying");
+    expect(row.querySelector('[role="alert"]')?.textContent).toBe("Failed: Connection interrupted");
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      error: { type: "provider.internal", message: "Upstream unavailable", status: 503 },
+      label: "Provider unavailable",
+    },
+    {
+      error: { type: "provider.transport", message: "Connection interrupted" },
+      label: "Failed: Connection interrupted",
+    },
+    { error: undefined, label: "Failed" },
+  ])("shows a concise terminal error: $label", ({ error, label }) => {
+    stubResizeObserver();
+    const message: SessionMessageAssistant = {
+      ...textAssistantMessage("assistant", ""),
+      finish: "error",
+      error,
+    };
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={[message]} sessionStatus="idle" />
+    ));
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(label);
+    expect(host.querySelector("dl")).toBeNull();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
   it("replaces an open compaction body when the row fails", () => {
     stubResizeObserver();
     const [messages, setMessages] = createStore<SessionMessageInfo[]>([
