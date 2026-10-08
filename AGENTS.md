@@ -48,3 +48,13 @@ This repository uses Effect v4 RC for server communication, persistence, connect
 - Follow the [affected-UI checklist](docs/app-verification.md#check-affected-ui) and [reusable test guidance](docs/app-verification.md#write-reusable-acceptance-tests). Use browser-use for ad-hoc exploration during development. Add regression coverage for important gaps in the existing suites and rely on CI for full heavier runs. Do not manually replay passing automated flows by default. Use targeted visual or native inspection for questions the tests cannot establish. Report local evidence and CI evidence separately; an unrun CI tier is pending, not passing.
 - Keep regression tests focused on real failure modes. For workflow changes, cover the relevant ordering, cancellation, partial failure, retry, cleanup, and shutdown behavior alongside success. Avoid large full-app fixtures for small component or policy changes.
 - Before integrating delegated or worktree commits, inspect status and ancestry against the current target branch. Preserve newer and unrelated changes, and verify the combined result.
+
+## Pull requests
+
+- When creating a pull request, default to a ready-for-review PR targeting `main` with auto-merge enabled, unless the user explicitly requests a draft or a different merge policy.
+- Before the final push, fetch `origin` and rebase the PR branch onto the latest `origin/main`. Resolve conflicts while preserving newer and unrelated changes, then complete the verification required above for the resulting diff. If `main` advances before handoff, update the branch and repeat affected verification.
+- Push the branch and create the PR with `gh pr create --base main`. Include a concise change summary, verification results, and the required complexity accounting in the PR description.
+- Enable rebase auto-merge with `gh pr merge <number> --auto --rebase`. This may merge immediately if all requirements are already satisfied; otherwise, GitHub waits for the configured merge requirements. Auto-merge does not update a stale PR branch, so branch updates remain part of the PR workflow.
+- After rebasing a published branch, inspect its remote state and use `git push --force-with-lease` to publish rewritten commits without overwriting intervening remote work.
+- Verify that GitHub reports auto-merge enabled or the PR already merged. Check any reported CI or merge blockers, fix findings introduced by the change, and report unresolved blockers rather than claiming the PR is ready. Preserve configured checks and review requirements.
+- Report the PR URL and its actual merge status at handoff. Re-enable auto-merge if subsequent updates disable it.
