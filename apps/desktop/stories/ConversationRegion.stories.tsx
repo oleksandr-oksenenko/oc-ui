@@ -81,6 +81,7 @@ const renderConversation =
         value: () => "",
         disabled: () => false,
         submitting: () => false,
+        transcriptPromptIDs: () => [],
         error: () => undefined,
         review: () => undefined,
         command: () => undefined,

@@ -4,6 +4,7 @@ import type {
   PermissionRequest,
   SessionInfo,
   SessionMessageAssistant,
+  SessionInboxUser,
 } from "@opencode/client";
 import { Show, createSignal } from "solid-js";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -55,6 +56,8 @@ function setup(
     readonly contextLimit?: () => number | undefined;
     readonly sessions?: readonly SessionInfo[];
     readonly subagentIDs?: readonly string[];
+    readonly transcriptPromptIDs?: SessionComposerController["transcriptPromptIDs"];
+    readonly pending?: () => readonly SessionInboxUser[];
   } = {},
 ) {
   stubResizeObserver();
@@ -138,6 +141,7 @@ function setup(
     value: () => "",
     disabled: () => false,
     submitting: () => false,
+    transcriptPromptIDs: options.transcriptPromptIDs ?? (() => []),
     error: () => undefined,
     review: () => undefined,
     command: () => undefined,
@@ -175,7 +179,7 @@ function setup(
           workspace={workspace}
           composer={composer}
           inbox={{
-            messages: () => [],
+            messages: options.pending ?? (() => []),
             busy: () => false,
             error: () => undefined,
             cancel: async () => undefined,
@@ -684,6 +688,65 @@ describe("ConversationRegion composer context", () => {
 });
 
 describe("ConversationRegion transcript", () => {
+  it("keeps an idle send in its transcript row while real steering and queued messages stay above the composer", () => {
+    const item: SessionInboxUser = {
+      id: "idle-send",
+      sessionID: session.id,
+      timeCreated: 1,
+      type: "user",
+      delivery: "steer",
+      payload: { text: "Resume this session" },
+    };
+    const steering = { ...item, id: "steering", payload: { text: "Steer this turn" } };
+    const queued = {
+      ...item,
+      id: "queued",
+      delivery: "queue" as const,
+      payload: { text: "Next task" },
+    };
+    const [pending, setPending] = createSignal<readonly SessionInboxUser[]>([
+      item,
+      steering,
+      queued,
+    ]);
+    const [transcriptPromptIDs, setTranscriptPromptIDs] = createSignal<readonly string[]>([
+      item.id,
+    ]);
+    const messages: ReturnType<SessionWorkspace["transcript"]> = [item, steering, queued].map(
+      ({ id, payload, timeCreated }) => ({
+        id,
+        type: "user",
+        ...payload,
+        time: { created: timeCreated },
+      }),
+    );
+    const mounted = setup([], [], {
+      pending,
+      transcriptPromptIDs,
+      transcript: () => messages,
+    });
+    const row = mounted.host.querySelector('[data-message-id="idle-send"]');
+    expect(row?.textContent).toContain(item.payload.text);
+    expect(mounted.host.querySelector(".pending-messages")?.textContent).not.toContain(
+      item.payload.text,
+    );
+    expect(mounted.host.querySelector(".pending-messages")?.textContent).toContain(
+      steering.payload.text,
+    );
+    expect(mounted.host.querySelector(".pending-messages")?.textContent).toContain(
+      queued.payload.text,
+    );
+    expect(mounted.host.querySelector('[data-message-id="steering"]')).toBeNull();
+    mounted.setVisible(false);
+    mounted.setVisible(true);
+    const remountedRow = mounted.host.querySelector('[data-message-id="idle-send"]');
+    expect(remountedRow?.textContent).toContain(item.payload.text);
+    setPending([steering, queued]);
+    setTranscriptPromptIDs([]);
+    expect(mounted.host.querySelector('[data-message-id="idle-send"]')).toBe(remountedRow);
+    mounted.dispose();
+  });
+
   it("shows tool paths relative to the selected session location", () => {
     const tool: SessionMessageAssistant["content"][number] = {
       type: "tool",

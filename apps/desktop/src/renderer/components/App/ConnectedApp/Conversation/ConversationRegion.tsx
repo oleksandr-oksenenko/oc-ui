@@ -59,8 +59,12 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
   // Disclosure is presentation state. Keep manual choices while the reader
   // switches sessions; transcript rows themselves can unmount and remount.
   const activityOpen = new Map<string, boolean>();
+  const pendingMessages = createMemo(() => {
+    const transcriptIDs = new Set(props.composer.transcriptPromptIDs());
+    return props.inbox.messages().filter((item) => !transcriptIDs.has(item.id));
+  });
   const visibleTranscript = createMemo(() => {
-    const pending = new Set(props.inbox.messages().map((item) => item.id));
+    const pending = new Set(pendingMessages().map((item) => item.id));
     return props.workspace.transcript().filter((message) => !pending.has(message.id));
   });
   let annotationButton: HTMLButtonElement | undefined;
@@ -376,7 +380,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
         composer={
           <Show when={props.workspace.selectedSession()}>
             <PendingMessages
-              messages={props.inbox.messages()}
+              messages={pendingMessages()}
               disabled={
                 !props.connected() ||
                 props.inbox.busy() ||
