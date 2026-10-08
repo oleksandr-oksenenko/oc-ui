@@ -1,15 +1,16 @@
 # Storybook verification
 
 The desktop Storybook is the renderer's controlled verification surface. Its
-project configuration keeps the existing unit tests and the Storybook story
-tests in one Vitest run, with the projects named `unit` and `storybook`.
+project configuration separates the `unit`, `storybook`, `storage`, and `web`
+Vitest projects. Storybook and Chromium storage tests belong to tier 1, which
+runs in GitHub Actions on every PR and push to `main`.
 Use [App verification](app-verification.md) to decide when stories, full-app
 workflows, Electron checks, and packaging checks are needed.
 
-Run the canonical repository test gate from the root:
+Run the component tier from the root when a full local run is useful:
 
 ```sh
-pnpm test
+pnpm test:components
 ```
 
 To run only the Storybook project while developing, use the existing Vite+
@@ -42,5 +43,6 @@ weakening the catalog-wide gate. The shared viewport toolbar provides these name
 - `narrow`: 820 × 900
 - `mobile`: 390 × 760
 
-The static Storybook build is included in the root `pnpm ready` command after
-the existing checks, unit/story tests, and desktop build.
+The static Storybook build runs in the CI build job and in the opt-in root
+`pnpm ready:ci` command. Local `pnpm ready` runs static checks and unit tests only;
+it does not require Chromium.
