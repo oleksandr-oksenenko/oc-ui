@@ -2,7 +2,7 @@
 
 ## Toolchain
 
-- Use the exact Node.js version pinned in [`.node-version`](.node-version) for dependency installation, development, checks, tests, and builds. Verify `node --version` matches before running these commands. The `package.json` engine range is a compatibility minimum, not the development version.
+- Use `mise` as the Node.js version manager and select the exact version pinned in [`.node-version`](.node-version) for dependency installation, development, checks, tests, and builds. Verify `node --version` matches before running these commands. The `package.json` engine range is a compatibility minimum, not the development version.
 
 ## Effect and state ownership
 
