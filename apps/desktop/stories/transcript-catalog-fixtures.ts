@@ -316,6 +316,40 @@ export const longToolPath =
 export const longShellCommand =
   "pnpm exec vp test run --project=storybook --reporter=verbose --coverage --runInBand --silent --watch=false --maxWorkers=2 --exclude=**/node_modules/** --testNamePattern=wraps-long-shell-commands-without-clipping";
 
+export const allParameterTools: SessionMessageAssistant = {
+  ...assistant("all-parameter-tools"),
+  content: (
+    [
+      ["bash", "command", longShellCommand],
+      ["edit", "path", longToolPath],
+      ["glob", "pattern", `**/${"nested/".repeat(30)}*.tsx`],
+      ["grep", "pattern", "TranscriptView|SessionPane|".repeat(15)],
+      ["patch", "patchText", `*** Begin Patch\n*** Update File: ${longToolPath}\n*** End Patch`],
+      ["read", "path", longToolPath],
+      ["shell", "command", longShellCommand],
+      ["skill", "id", "workspace-release-verification-".repeat(15)],
+      [
+        "subagent",
+        "description",
+        "Review the transcript layout and tool parameter clipping. ".repeat(8),
+      ],
+      ["webfetch", "url", `https://example.com/${"documentation/".repeat(25)}index.html`],
+      ["websearch", "query", "responsive tool header layout with long parameters ".repeat(8)],
+      ["write", "path", longToolPath],
+    ] as const
+  ).map(([name, key, value]): SessionMessageAssistantTool => ({
+    type: "tool",
+    id: `parameter-${name}`,
+    name,
+    time: { created: 2, completed: 3 },
+    state: {
+      status: "completed",
+      input: { [key]: value },
+      content: [{ type: "text", text: `Result for ${name}` }],
+    },
+  })),
+};
+
 export const toolStates: readonly SessionMessageInfo[] = [
   {
     id: "tool-states",
