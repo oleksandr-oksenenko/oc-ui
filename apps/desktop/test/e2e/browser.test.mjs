@@ -1144,23 +1144,22 @@ describe.sequential("production browser app", () => {
   });
 
   it("switches palettes without replacing the workspace and restores the choice after reload", async () => {
-    const expectNeutralComposerFocus = async (color) => {
-      await page.getByLabel("Prompt", { exact: true }).click();
+    const expectComposerWithoutOutline = async (borderColor) => {
+      const prompt = page.getByLabel("Prompt", { exact: true });
+      await prompt.click();
+      await expect
+        .poll(() => prompt.evaluate((node) => node === document.activeElement))
+        .toBe(true);
       await expect
         .poll(() =>
           page.getByRole("form", { name: "Message composer" }).evaluate((node) => {
             const style = getComputedStyle(node);
-            return [
-              style.outlineColor,
-              style.outlineStyle,
-              style.outlineWidth,
-              style.outlineOffset,
-            ];
+            return [style.outlineStyle, style.borderColor, style.borderWidth];
           }),
         )
-        .toEqual([color, "solid", "1px", "0px"]);
+        .toEqual(["none", borderColor, "1px"]);
     };
-    await expectNeutralComposerFocus("rgb(119, 119, 117)");
+    await expectComposerWithoutOutline("rgb(216, 216, 215)");
     const prompt = await page.getByLabel("Prompt", { exact: true }).elementHandle();
     await page.getByRole("button", { name: "Switch to dark theme" }).click();
     await expect.poll(() => page.locator("html").getAttribute("data-color-scheme")).toBe("dark");
@@ -1171,7 +1170,7 @@ describe.sequential("production browser app", () => {
     expect(await page.getByLabel("Prompt", { exact: true }).textContent()).toBe(
       "Independent draft",
     );
-    await expectNeutralComposerFocus("rgb(135, 133, 128)");
+    await expectComposerWithoutOutline("rgb(64, 62, 60)");
     const second = await context.newPage();
     try {
       await second.goto(uiUrl);
@@ -1192,7 +1191,7 @@ describe.sequential("production browser app", () => {
     await page.keyboard.press("Enter");
     await expect.poll(() => page.locator("html").getAttribute("data-color-scheme")).toBe("light");
     expect(await prompt.evaluate((node) => node.isConnected)).toBe(true);
-    await expectNeutralComposerFocus("rgb(119, 119, 117)");
+    await expectComposerWithoutOutline("rgb(216, 216, 215)");
   });
 
   it("streams prompts, resolves questions, stops real provider work, and reconnects after transport loss", async () => {
