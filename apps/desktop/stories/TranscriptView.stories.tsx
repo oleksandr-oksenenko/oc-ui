@@ -26,6 +26,9 @@ import {
   longToolCommand,
   longToolPath,
   longShellCommand,
+  longNamedTools,
+  longToolNamePrefix,
+  longToolNameSuffixes,
 } from "./transcript-catalog-fixtures.ts";
 import { previewImageBase64, previewImageMime } from "./image-fixtures.ts";
 import { TranscriptPendingFixture } from "./transcript-catalog/TranscriptPendingFixture.tsx";
@@ -979,6 +982,66 @@ export const ToolImageLongMetadata: Story = {
     });
   },
 };
+export const LongToolNamesNarrow: Story = {
+  args: { messages: [longNamedTools], sessionStatus: "idle", loading: false },
+  render: (args) => (
+    <div style={{ width: "420px", height: "100vh", background: "var(--oc-surface-canvas)" }}>
+      <TranscriptView {...args} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvasElement.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!,
+    );
+    const view = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    for (const suffix of longToolNameSuffixes) {
+      const trigger = canvas.getByRole("button", {
+        name: `${longToolNamePrefix}${suffix} Completed`,
+      });
+      const name = trigger.querySelector<HTMLElement>(".transcript-tool-name")!;
+      const copy = trigger.querySelector<HTMLElement>(".transcript-tool-copy")!;
+      const suffixBox = substringRect(name, suffix);
+      const copyBox = copy.getBoundingClientRect();
+      const triggerBox = trigger.getBoundingClientRect();
+      // A text-content assertion alone passes even when the distinguishing tail is clipped.
+      await expect(suffixBox.width).toBeGreaterThan(0);
+      await expect(suffixBox.left).toBeGreaterThanOrEqual(copyBox.left - 1);
+      await expect(suffixBox.right).toBeLessThanOrEqual(copyBox.right + 1);
+      await expect(suffixBox.top).toBeGreaterThanOrEqual(copyBox.top - 1);
+      await expect(suffixBox.bottom).toBeLessThanOrEqual(copyBox.bottom + 1);
+      await expect(name.getBoundingClientRect().height).toBeGreaterThan(
+        Number.parseFloat(getComputedStyle(name).lineHeight),
+      );
+      const icons = trigger.querySelectorAll<HTMLElement>('[data-slot="icon-svg"]');
+      await expect(icons).toHaveLength(2);
+      for (const icon of icons) {
+        const box = icon.getBoundingClientRect();
+        await expect(Math.round(box.width)).toBe(14);
+        await expect(Math.round(box.height)).toBe(14);
+        await expect(box.left).toBeGreaterThanOrEqual(triggerBox.left - 1);
+        await expect(box.right).toBeLessThanOrEqual(triggerBox.right + 1);
+        await expect(box.top).toBeGreaterThanOrEqual(triggerBox.top - 1);
+        await expect(box.bottom).toBeLessThanOrEqual(triggerBox.bottom + 1);
+      }
+      await userEvent.click(trigger);
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+      await expect(canvas.getByText(`Result for ${suffix}`)).toBeVisible();
+    }
+    // Only known tools have a parameter summary; keep that existing path-tail contract.
+    const parameter = canvasElement.querySelector<HTMLElement>(".transcript-tool-parameter")!;
+    const box = parameter.getBoundingClientRect();
+    const tail = substringRect(parameter, "README.md");
+    await expect(contentRect(parameter).left).toBeLessThan(box.left - 1);
+    await expect(box.height).toBeLessThanOrEqual(
+      Number.parseFloat(getComputedStyle(parameter).lineHeight) + 1,
+    );
+    await expect(tail.left).toBeGreaterThanOrEqual(box.left - 1);
+    await expect(tail.right).toBeLessThanOrEqual(box.right + 1);
+    await expect(view.scrollWidth).toBeLessThanOrEqual(view.clientWidth + 1);
+  },
+};
+
 export const ShellStates: Story = {
   args: { messages: shellStates, sessionStatus: "idle" },
   render: renderTranscript,

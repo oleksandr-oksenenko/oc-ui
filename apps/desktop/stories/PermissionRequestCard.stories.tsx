@@ -1,11 +1,12 @@
 /* oxlint-disable effecttsgo/async-function */
 
 import type { PermissionReply, PermissionRequest } from "@opencode/client";
-import { type JSX } from "solid-js";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { For, createSignal, type JSX } from "solid-js";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import { PermissionRequestCard } from "../src/renderer/ui/PermissionRequestCard.tsx";
+import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 
 const request = {
   id: "per_release_files",
@@ -149,4 +150,110 @@ export const NarrowLongContent: Story = {
       <PermissionRequestCard {...args} />
     </main>
   ),
+};
+
+export const CardWidthLayouts: Story = {
+  args: NarrowLongContent.args,
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  render: (args) => (
+    <main style={{ ...frameStyle, "grid-template-columns": "360px 620px", gap: "32px" }}>
+      <For each={[360, 620]}>
+        {(width) => (
+          <section aria-label={`${width}px permission slot`} style={{ width: `${width}px` }}>
+            <PermissionRequestCard {...args} />
+          </section>
+        )}
+      </For>
+    </main>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const width of [360, 620]) {
+      const slot = canvas.getByRole("region", { name: `${width}px permission slot` });
+      const card = slot.querySelector<HTMLElement>(".permission-request-card")!;
+      await expect(card.getBoundingClientRect().width).toBeCloseTo(width, 0);
+      await expect(card.scrollWidth).toBeLessThanOrEqual(card.clientWidth + 1);
+      const source = card.querySelector<HTMLElement>(".permission-request-source")!;
+      const label = source.querySelector("span")!.getBoundingClientRect();
+      const code = source.querySelector("code")!.getBoundingClientRect();
+      const buttons = [...card.querySelectorAll<HTMLButtonElement>("button")];
+      if (width === 360) {
+        await expect(code.top).toBeGreaterThanOrEqual(label.bottom);
+        for (let index = 1; index < buttons.length; index++) {
+          await expect(buttons[index]!.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+            buttons[index - 1]!.getBoundingClientRect().bottom,
+          );
+        }
+      } else {
+        await expect(code.left).toBeGreaterThanOrEqual(label.right);
+        for (let index = 1; index < buttons.length; index++) {
+          await expect(buttons[index]!.getBoundingClientRect().left).toBeGreaterThanOrEqual(
+            buttons[index - 1]!.getBoundingClientRect().right,
+          );
+        }
+      }
+    }
+  },
+};
+
+export const NestedListsKeepTranscriptFollowing: Story = {
+  args: NarrowLongContent.args,
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  render: (args) => {
+    const [height, setHeight] = createSignal(1000);
+    return (
+      <main style={{ ...frameStyle, height: "900px", "grid-template-rows": "auto minmax(0, 1fr)" }}>
+        <button type="button" onClick={() => setHeight((current) => current + 200)}>
+          Grow transcript fixture
+        </button>
+        <div
+          style={{
+            display: "grid",
+            "grid-template-rows": "minmax(0, 1fr)",
+            width: "620px",
+            height: "100%",
+            "min-height": "0",
+          }}
+        >
+          <TranscriptView
+            sessionID="ses_oc_ui"
+            messages={[]}
+            sessionStatus="running"
+            pendingInteraction={
+              <div class="permission-request-entry">
+                <div style={{ height: `${height()}px` }} aria-hidden="true" />
+                <PermissionRequestCard {...args} />
+              </div>
+            }
+          />
+        </div>
+      </main>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvasElement.querySelector<HTMLElement>(".transcript-view")!;
+    const expectFollowing = () =>
+      expect(
+        viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+      ).toBeLessThanOrEqual(2);
+    await expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
+    await waitFor(expectFollowing);
+    for (const name of ["Requested resources", "Always allow patterns"]) {
+      const list = canvas.getByRole("list", { name });
+      await expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+      // Synthetic input verifies the follow policy, not native scrolling or chaining.
+      for (const event of [
+        new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
+        new WheelEvent("wheel", { deltaY: -120, bubbles: true }),
+      ]) {
+        list.focus({ preventScroll: true });
+        list.querySelector("code")!.dispatchEvent(event);
+        const before = viewport.scrollHeight;
+        await userEvent.click(canvas.getByRole("button", { name: "Grow transcript fixture" }));
+        await waitFor(() => expect(viewport.scrollHeight).toBeGreaterThan(before));
+        await waitFor(expectFollowing);
+      }
+    }
+  },
 };

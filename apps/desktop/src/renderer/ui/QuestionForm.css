@@ -50,6 +50,24 @@
   color: var(--oc-text-muted);
 }
 
+.question-form-choice-group [data-slot="radio-v2-item-label"],
+.question-form-choice-group [data-slot="radio-v2-item-text"],
+.question-form-options [data-slot="checkbox-checkbox-content"],
+.question-form [data-slot="field-v2-label-text"] {
+  min-inline-size: 0;
+}
+
+.question-form-choice-group [data-slot="radio-v2-label"],
+.question-form-choice-group [data-slot="radio-v2-description"],
+.question-form-choice-group [data-slot="radio-v2-item-label-text"],
+.question-form-choice-group [data-slot="radio-v2-item-description"],
+.question-form-options [data-slot="checkbox-checkbox-label"],
+.question-form-options [data-slot="checkbox-checkbox-description"],
+.question-form [data-slot="field-v2-label-text"],
+.question-form-multiselect legend {
+  overflow-wrap: anywhere;
+}
+
 .question-form-choice-group [data-slot="radio-v2-item"] {
   align-items: center;
   gap: 10px;
@@ -147,6 +165,11 @@
   background: var(--oc-surface-control);
 }
 
+.question-form-choice-group [data-slot="radio-v2-item"]:where(:not([data-disabled])):active,
+.question-form-options [data-component="checkbox"]:where(:not([data-disabled])):active {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
+}
+
 .question-form-options
   [data-component="checkbox"][data-checked]:not([data-disabled])
   [data-slot="checkbox-checkbox-control"],
@@ -188,9 +211,11 @@
 
 .question-form-custom-value > span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.question-form-custom-value > [data-remove-button] {
+  flex-shrink: 0;
 }
 
 .question-form-custom-input {
@@ -222,6 +247,7 @@
   font-size: var(--oc-type-metadata-size);
   font-weight: var(--oc-type-control-weight);
   line-height: var(--oc-type-metadata-line-height);
+  overflow-wrap: anywhere;
 }
 
 .question-form-field-error,
@@ -253,7 +279,7 @@
   box-shadow: none;
 }
 
-@media (width <= 520px) {
+@container request-card (width <= 520px) {
   .question-form {
     gap: 8px 14px;
     padding: 10px 12px 12px;

@@ -143,10 +143,10 @@ export function Workspace(props: WorkspaceProps) {
       workspace?.style.setProperty("--shell-bottom-panel-height", `${size}px`);
     } else if (side === "left") {
       setLeftWidth(size);
-      shell?.style.setProperty("--shell-left-sidebar-width", `${size}px`);
+      shell?.style.setProperty("--shell-left-preferred-width", `${size}px`);
     } else {
       setRightWidth(size);
-      shell?.style.setProperty("--shell-right-panel-width", `${size}px`);
+      shell?.style.setProperty("--shell-right-preferred-width", `${size}px`);
     }
   };
 

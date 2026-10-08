@@ -1921,6 +1921,122 @@ describe.sequential("production browser app", () => {
     );
   });
 
+  it("contains native tool-output wheel scrolling while new streamed content stays followed", async () => {
+    await ensureConnected();
+    const previous = page.locator('.shell-session-main[aria-current="page"] .shell-session-title');
+    const previousTitle = (await previous.count()) ? await previous.textContent() : undefined;
+    const directory = await realpath(project);
+    const session = await api.session.create({
+      title: "Tool output scroll containment",
+      location: { directory },
+    });
+    const wheelRow = page.getByRole("button", {
+      name: new RegExp(`^${session.title},`, "u"),
+    });
+    const path = join(directory, "tool-scroll-output.txt");
+    await writeFile(path, "Scrollable tool output line.\n".repeat(120));
+    try {
+      await selectSession(session.title);
+      await send(
+        `E2E_TOOL_SCROLL ${path}\nE2E_QUEUE_HOLD\n${"Transcript history line.\n".repeat(80)}`,
+      );
+      await transcript("Acceptance tool scroll stream is waiting.");
+      await page.locator(".transcript-activity-trigger").click();
+      await page.getByRole("button", { name: /read .*tool-scroll-output.txt Completed/u }).click();
+      const view = page.locator(".transcript-view");
+      const output = page
+        .locator(".transcript-tool-output")
+        .filter({ hasText: "Scrollable tool output line." });
+      await expect
+        .poll(() => output.evaluate((node) => node.scrollHeight - node.clientHeight))
+        .toBeGreaterThan(500);
+      await expect
+        .poll(() => view.evaluate((node) => node.scrollHeight - node.clientHeight))
+        .toBeGreaterThan(500);
+      // Restore follow after disclosure activation, before testing only inner gestures.
+      await view.press("End");
+      await expect
+        .poll(() => view.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop))
+        .toBeLessThan(2);
+      const outerTop = await view.evaluate((node) => node.scrollTop);
+      const bounds = await output.boundingBox();
+      expect(bounds).not.toBeNull();
+      await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+      await page.mouse.wheel(0, 500);
+      await expect.poll(() => output.evaluate((node) => node.scrollTop)).toBeGreaterThan(300);
+      const innerTop = await output.evaluate((node) => node.scrollTop);
+      await output.evaluate((node) => node.focus({ preventScroll: true }));
+      await page.keyboard.press("PageUp");
+      await expect.poll(() => output.evaluate((node) => node.scrollTop)).toBeLessThan(innerTop);
+      expect(await view.evaluate((node) => node.scrollTop)).toBe(outerTop);
+      // Establish the boundary independently of wheel delta or keyboard animation distance.
+      expect(await output.evaluate((node) => node === document.activeElement)).toBe(true);
+      await page.keyboard.press("Home");
+      await expect.poll(() => output.evaluate((node) => node.scrollTop)).toBe(0);
+      expect(await view.evaluate((node) => node.scrollTop)).toBe(outerTop);
+
+      // Recompute a point inside the visible output after keyboard scrolling.
+      // Use the viewport intersection and hit-test it so the wheel cannot miss the inner scroller.
+      const outputBox = await output.boundingBox();
+      const viewBox = await view.boundingBox();
+      expect(outputBox).not.toBeNull();
+      expect(viewBox).not.toBeNull();
+      const visibleTop = Math.max(outputBox.y, viewBox.y);
+      const visibleBottom = Math.min(outputBox.y + outputBox.height, viewBox.y + viewBox.height);
+      expect(visibleBottom).toBeGreaterThan(visibleTop);
+      const point = {
+        x: outputBox.x + outputBox.width / 2,
+        y: (visibleTop + visibleBottom) / 2,
+      };
+      expect(
+        await output.evaluate(
+          (node, position) =>
+            document
+              .elementFromPoint(position.x, position.y)
+              ?.closest(".transcript-tool-output") === node,
+          point,
+        ),
+      ).toBe(true);
+      await page.mouse.move(point.x, point.y);
+
+      // Observe the native boundary wheel before sampling its rendering frames.
+      // A synthetic WheelEvent cannot prove chaining.
+      await output.evaluate((node) => {
+        node.addEventListener(
+          "wheel",
+          () => {
+            node.dataset.boundaryWheelObserved = "true";
+          },
+          { once: true, passive: true },
+        );
+      });
+      await page.mouse.wheel(0, -500);
+      await expect.poll(() => output.getAttribute("data-boundary-wheel-observed")).toBe("true");
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      );
+      expect(await view.evaluate((node) => node.scrollTop)).toBe(outerTop);
+      expect(await output.evaluate((node) => node.scrollTop)).toBe(0);
+      provider.releaseHeld();
+      await transcript("Tool scroll complete.");
+      await idle();
+      await expect
+        .poll(() => view.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop))
+        .toBeLessThan(2);
+    } catch (cause) {
+      await page.screenshot({ path: join(artifacts, "tool-scroll-failure.png") });
+      throw cause;
+    } finally {
+      provider.releaseHeld();
+      const stop = page.getByRole("button", { name: "Stop", exact: true });
+      if (await stop.count()) await stop.click();
+      if (previousTitle) await selectSession(previousTitle);
+      await api.session.remove({ sessionID: session.id });
+      await expect.poll(() => wheelRow.count()).toBe(0);
+      await unlink(path);
+    }
+  });
+
   it("keeps the latest transcript above composer growth from drafts, annotations and steering", async () => {
     await ensureConnected();
     const previous = page.locator('.shell-session-main[aria-current="page"] .shell-session-title');

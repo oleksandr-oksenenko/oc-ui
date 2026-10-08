@@ -117,9 +117,16 @@
 }
 
 .titlebar-left-region {
+  container: titlebar-sessions / inline-size;
   display: flex;
   align-items: center;
   padding-left: 4px;
+}
+
+@container titlebar-sessions (inline-size <= 64px) {
+  .titlebar-left-region > .shell-session-header {
+    padding-inline: 0 4px;
+  }
 }
 
 .left-sidebar-open .titlebar-left-region {

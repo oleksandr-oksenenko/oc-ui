@@ -1,7 +1,5 @@
 .app-shell-v2 {
-  --shell-left-sidebar-width: 248px;
-  --shell-right-panel-width: 360px;
-
+  container: app-shell / inline-size;
   display: grid;
   grid-template-rows: var(--oc-titlebar-height) minmax(0, 1fr);
   width: 100%;
@@ -13,9 +11,40 @@
   font-family: var(--oc-font-sans);
 }
 
-@media (720px <= width <= 1100px) {
-  .app-shell-v2 {
-    --shell-left-sidebar-width: clamp(172px, 24vw, 208px);
-    --shell-right-panel-width: clamp(240px, 34vw, 280px);
+.app-shell-v2 > :is(.shell-titlebar, .shell-workspace) {
+  --shell-left-default: 248px;
+  --shell-right-default: 360px;
+  --shell-left-request: 0px;
+  --shell-right-request: 0px;
+  --shell-right-floor: 0px;
+  --shell-side-budget: max(0px, calc(100% - 420px));
+
+  /* Keep preferences intact. Shrink context first, then sessions; below the
+     combined minima (220 + 280), share the remaining budget in that ratio.
+     Percentages resolve against the same width in both rows and their handles. */
+  --shell-left-sidebar-width: min(
+    var(--shell-left-request),
+    max(0px, calc(var(--shell-side-budget) - var(--shell-right-floor)))
+  );
+  --shell-right-panel-width: min(
+    var(--shell-right-request),
+    max(0px, calc(var(--shell-side-budget) - var(--shell-left-sidebar-width)))
+  );
+}
+
+.app-shell-v2:has(> .shell-workspace.left-sidebar-open) > :is(.shell-titlebar, .shell-workspace) {
+  --shell-left-request: var(--shell-left-preferred-width, var(--shell-left-default));
+}
+
+.app-shell-v2:has(> .shell-workspace.right-panel-open) > :is(.shell-titlebar, .shell-workspace) {
+  --shell-right-request: var(--shell-right-preferred-width, var(--shell-right-default));
+  --shell-right-floor: min(280px, calc(var(--shell-side-budget) * 0.56));
+}
+
+@container app-shell (720px <= width <= 1100px) {
+  .shell-titlebar,
+  .shell-workspace {
+    --shell-left-default: clamp(172px, 24cqi, 208px);
+    --shell-right-default: clamp(240px, 34cqi, 280px);
   }
 }

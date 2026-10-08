@@ -60,9 +60,15 @@
 
 .context-state {
   display: grid;
+  flex: 0 1 auto;
+  min-block-size: 0;
+  grid-auto-rows: max-content;
+  align-content: start;
   justify-items: center;
   gap: 8px;
   padding: 16px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-metadata-size);
   font-weight: var(--oc-type-metadata-weight);
@@ -105,11 +111,15 @@
 
 .diff-refresh-state {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-block-size: 0;
+  max-block-size: min(120px, 25%);
   align-items: center;
   gap: 8px;
   margin: 0 0 8px;
   padding: 8px 10px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   color: var(--oc-text-muted);
   font-size: var(--oc-type-caption-size);
   font-weight: var(--oc-type-caption-weight);
@@ -117,9 +127,18 @@
 }
 
 .diff-refresh-state.error-state {
+  align-items: start;
   justify-content: space-between;
   color: var(--oc-status-danger-muted);
   background: var(--oc-status-danger-surface);
+}
+
+.diff-refresh-state > span {
+  min-inline-size: 0;
+}
+
+.diff-refresh-state [data-component="button-v2"] {
+  flex: 0 0 auto;
 }
 
 .diff-summary [data-component="select-v2-root"] {
@@ -200,6 +219,10 @@
   cursor: pointer;
   font: inherit;
   text-align: left;
+}
+
+.diff-file-toggle:enabled:active {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
 }
 
 .diff-file-name {

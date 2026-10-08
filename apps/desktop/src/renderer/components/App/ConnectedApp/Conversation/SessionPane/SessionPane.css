@@ -1,6 +1,6 @@
 .session-pane-shell {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   height: 100%;
   min-height: 0;
@@ -8,12 +8,19 @@
 }
 
 .session-pane-transcript {
-  display: contents;
-  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-block-size: 0;
 }
 
 .session-pane-composer {
+  flex: 0 1 auto;
   min-width: 0;
+  min-block-size: 0;
+  max-block-size: 60%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 .session-pane-empty {
@@ -49,6 +56,7 @@
 }
 
 .transcript-view {
+  flex: 1 1 0;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
@@ -394,6 +402,10 @@
   background: var(--oc-surface-subtle);
 }
 
+.transcript-markdown td {
+  font-variant-numeric: tabular-nums;
+}
+
 .transcript-markdown img {
   max-width: 100%;
   height: auto;
@@ -434,10 +446,6 @@
   cursor: pointer;
 }
 
-.transcript-tool-header:not(:disabled):hover {
-  color: var(--oc-text-strong);
-}
-
 .transcript-reasoning {
   border: 0;
 }
@@ -462,7 +470,9 @@
 }
 
 .transcript-tool-name {
-  flex: none;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   color: inherit;
   font-family: var(--oc-font-mono);
   font-size: var(--oc-type-metadata-size);
@@ -520,6 +530,7 @@
   margin: 0 0 6px;
   padding: 5px 6px;
   overflow: auto;
+  overscroll-behavior-y: contain;
   border: 1px solid var(--oc-border-muted);
   border-radius: var(--oc-radius);
   color: var(--oc-text-base);
@@ -604,8 +615,23 @@
   cursor: pointer;
 }
 
-.transcript-context-trigger:hover {
-  color: var(--oc-text-strong);
+@media (hover: hover) and (pointer: fine) {
+  :is(.transcript-tool-header, .transcript-context-trigger):not(
+      :disabled,
+      [data-disabled],
+      [aria-disabled="true"]
+    ):hover {
+    color: var(--oc-text-strong);
+  }
+}
+
+/* Paint over the existing disclosure surface without replacing its state or focus background. */
+:is(.transcript-tool-header, .transcript-context-trigger):not(
+    :disabled,
+    [data-disabled],
+    [aria-disabled="true"]
+  ):active {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
 }
 
 .transcript-context-status {

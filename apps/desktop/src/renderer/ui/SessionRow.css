@@ -26,6 +26,13 @@
   background: var(--oc-selection-tint);
 }
 
+/* The row owns the press layer; keep the selected tint and marker underneath. */
+.shell-session-row:has(
+  .shell-session-main:active:not(:disabled, [data-disabled], [aria-disabled="true"])
+) {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
+}
+
 .shell-session-row.selected::before {
   position: absolute;
   top: 4px;
@@ -136,6 +143,14 @@
 .shell-session-disclosure:focus-visible {
   color: var(--oc-text-contrast);
   background: var(--oc-surface-hover);
+}
+
+.shell-session-disclosure[data-slot="collapsible-trigger"]:active:not(
+    :disabled,
+    [data-disabled],
+    [aria-disabled="true"]
+  ) {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
 }
 
 .shell-session-title {

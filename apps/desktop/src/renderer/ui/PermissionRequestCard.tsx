@@ -46,6 +46,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps): JSX.El
         <ul
           class="permission-request-values oc-scrollable"
           data-permission-resources
+          data-scrollable
           aria-label="Requested resources"
           tabIndex={0}
         >
@@ -74,6 +75,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps): JSX.El
           <ul
             class="permission-request-values oc-scrollable"
             data-permission-save-patterns
+            data-scrollable
             aria-label="Always allow patterns"
             tabIndex={0}
           >

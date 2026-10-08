@@ -2500,6 +2500,71 @@ describe("TranscriptView", () => {
     }
   });
 
+  it.each([
+    ["streaming input", "streaming", 0],
+    ["parsed input", "running", 0],
+    ["completed output", "completed", 1],
+    ["shell output", "shell", 0],
+  ] as const)(
+    "keeps following new messages after wheel and keyboard input in %s",
+    (_label, status, index) => {
+      const resize = stubResizeObservers();
+      const frames = stubAnimationFrames();
+      const initial: SessionMessageInfo =
+        status === "shell"
+          ? {
+              id: "shell-response",
+              type: "shell",
+              shellID: "nested-shell",
+              time: base,
+              command: "echo output",
+              status: "running",
+              output: { output: "Shell output", cursor: 11, size: 11, truncated: false },
+            }
+          : {
+              ...toolAssistantMessage("response", "nested-tool"),
+              content: [assistant("nested-tool", status)],
+            };
+      const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>([initial]);
+      const { host, dispose } = mount(() => (
+        <TranscriptView sessionID="session" messages={messages()} sessionStatus="running" />
+      ));
+      const view = host.querySelector<HTMLElement>(".transcript-view")!;
+      let scrollHeight = 500;
+      Object.defineProperty(view, "scrollHeight", { get: () => scrollHeight, configurable: true });
+      Object.defineProperty(view, "clientHeight", { get: () => 100, configurable: true });
+      try {
+        if (status === "shell") {
+          host
+            .querySelector<HTMLButtonElement>(
+              ".transcript-shell-message .transcript-context-trigger",
+            )!
+            .click();
+        } else {
+          host.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!.click();
+          host.querySelector<HTMLButtonElement>(".transcript-tool-header")!.click();
+        }
+        frames.runAll();
+        const output = host.querySelectorAll<HTMLElement>("pre.transcript-tool-output")[index]!;
+        expect(output.hasAttribute("data-scrollable")).toBe(true);
+        output.focus({ preventScroll: true });
+        expect(document.activeElement).toBe(output);
+        // These synthetic gestures establish policy; browser acceptance covers native chaining.
+        wheelAt(output, { deltaY: -120 });
+        output.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true }));
+        setMessages([initial, textAssistantMessage("appended", "The next streamed message.")]);
+        scrollHeight = 800;
+        resize.notify();
+        expect(view.scrollTop).toBe(800);
+        expect(view.style.overflowAnchor).toBe("none");
+        expect(host.querySelector('[data-message-id="appended"]')).not.toBeNull();
+      } finally {
+        dispose();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
   it("stops following synchronously on older keyboard navigation", () => {
     const resize = stubResizeObservers();
     const frames = stubAnimationFrames();

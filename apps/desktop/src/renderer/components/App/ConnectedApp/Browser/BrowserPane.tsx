@@ -61,97 +61,100 @@ export function BrowserPane(props: BrowserPaneProps) {
           </div>
         }
       >
-        <div class="browser-tabs" role="group" aria-label="Browser tabs">
-          <div class="browser-tab-list">
-            <For each={props.state.browser.tabs}>
-              {(item) => (
-                <div
-                  class="browser-tab"
-                  classList={{ selected: item.id === props.state.browser.focusedTabID }}
-                >
-                  <button
-                    class="browser-tab-select oc-focus-inset"
-                    type="button"
-                    aria-pressed={item.id === props.state.browser.focusedTabID}
-                    title={item.url}
-                    onClick={() => props.onCommand({ type: "tabs.focus", tabID: item.id })}
+        <div class="browser-controls">
+          <div class="browser-tabs" role="group" aria-label="Browser tabs">
+            <div class="browser-tab-list">
+              <For each={props.state.browser.tabs}>
+                {(item) => (
+                  <div
+                    class="browser-tab"
+                    classList={{ selected: item.id === props.state.browser.focusedTabID }}
                   >
-                    {item.title || "New tab"}
-                  </button>
-                  <IconButton
-                    size="normal"
-                    variant="ghost-muted"
-                    icon={<Icon name="close" size="small" />}
-                    aria-label={`Close ${item.title || "new tab"}`}
-                    title={`Close ${item.title || "new tab"}`}
-                    onClick={() => props.onCommand({ type: "tabs.close", tabID: item.id })}
-                  />
-                </div>
-              )}
-            </For>
+                    <button
+                      class="browser-tab-select oc-focus-inset"
+                      type="button"
+                      aria-pressed={item.id === props.state.browser.focusedTabID}
+                      title={item.url}
+                      onClick={() => props.onCommand({ type: "tabs.focus", tabID: item.id })}
+                    >
+                      {item.title || "New tab"}
+                    </button>
+                    <IconButton
+                      size="normal"
+                      variant="ghost-muted"
+                      icon={<Icon name="close" size="small" />}
+                      aria-label={`Close ${item.title || "new tab"}`}
+                      title={`Close ${item.title || "new tab"}`}
+                      onClick={() => props.onCommand({ type: "tabs.close", tabID: item.id })}
+                    />
+                  </div>
+                )}
+              </For>
+            </div>
+            <IconButton
+              size="normal"
+              variant="ghost-muted"
+              icon={<Icon name="plus" size="small" />}
+              aria-label="New browser tab"
+              title="New browser tab"
+              onClick={() => props.onCommand({ type: "tabs.open" })}
+            />
           </div>
-          <IconButton
-            size="normal"
-            variant="ghost-muted"
-            icon={<Icon name="plus" size="small" />}
-            aria-label="New browser tab"
-            title="New browser tab"
-            onClick={() => props.onCommand({ type: "tabs.open" })}
-          />
+          <form class="browser-navigation" onSubmit={navigate}>
+            <IconButton
+              type="button"
+              size="normal"
+              variant="ghost-muted"
+              icon={<Icon name="arrow-left" size="small" />}
+              aria-label="Browser back"
+              title="Browser back"
+              disabled={!tab()?.canGoBack}
+              onClick={() => {
+                const item = tab();
+                if (item) props.onCommand({ type: "back", tabID: item.id });
+              }}
+            />
+            <IconButton
+              type="button"
+              size="normal"
+              variant="ghost-muted"
+              icon={<Icon name="arrow-right" size="small" />}
+              aria-label="Browser forward"
+              title="Browser forward"
+              disabled={!tab()?.canGoForward}
+              onClick={() => {
+                const item = tab();
+                if (item) props.onCommand({ type: "forward", tabID: item.id });
+              }}
+            />
+            <Button
+              class="browser-reload oc-focus-inset"
+              type="button"
+              size="small"
+              variant="ghost-muted"
+              disabled={!tab()}
+              aria-label={tab()?.loading ? "Stop loading browser page" : "Reload browser page"}
+              onClick={() => {
+                const item = tab();
+                if (item)
+                  props.onCommand({ type: item.loading ? "stop" : "reload", tabID: item.id });
+              }}
+            >
+              {tab()?.loading ? "Stop" : "Reload"}
+            </Button>
+            <input
+              aria-label="Browser address"
+              placeholder="Enter a URL"
+              value={address()}
+              onInput={(event) => setAddress(event.currentTarget.value)}
+              spellcheck={false}
+            />
+            <Button type="submit" size="small">
+              Go
+            </Button>
+          </form>
+          {props.annotation}
         </div>
-        <form class="browser-navigation" onSubmit={navigate}>
-          <IconButton
-            type="button"
-            size="normal"
-            variant="ghost-muted"
-            icon={<Icon name="arrow-left" size="small" />}
-            aria-label="Browser back"
-            title="Browser back"
-            disabled={!tab()?.canGoBack}
-            onClick={() => {
-              const item = tab();
-              if (item) props.onCommand({ type: "back", tabID: item.id });
-            }}
-          />
-          <IconButton
-            type="button"
-            size="normal"
-            variant="ghost-muted"
-            icon={<Icon name="arrow-right" size="small" />}
-            aria-label="Browser forward"
-            title="Browser forward"
-            disabled={!tab()?.canGoForward}
-            onClick={() => {
-              const item = tab();
-              if (item) props.onCommand({ type: "forward", tabID: item.id });
-            }}
-          />
-          <Button
-            class="browser-reload oc-focus-inset"
-            type="button"
-            size="small"
-            variant="ghost-muted"
-            disabled={!tab()}
-            aria-label={tab()?.loading ? "Stop loading browser page" : "Reload browser page"}
-            onClick={() => {
-              const item = tab();
-              if (item) props.onCommand({ type: item.loading ? "stop" : "reload", tabID: item.id });
-            }}
-          >
-            {tab()?.loading ? "Stop" : "Reload"}
-          </Button>
-          <input
-            aria-label="Browser address"
-            placeholder="Enter a URL"
-            value={address()}
-            onInput={(event) => setAddress(event.currentTarget.value)}
-            spellcheck={false}
-          />
-          <Button type="submit" size="small">
-            Go
-          </Button>
-        </form>
-        {props.annotation}
         <Show
           when={tab()}
           fallback={

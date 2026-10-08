@@ -51,6 +51,7 @@
   margin: 0;
   padding: 0;
   overflow: auto;
+  overscroll-behavior-y: contain;
   list-style: none;
 }
 
@@ -122,7 +123,9 @@
     gap: 12px;
     padding: 10px 12px 12px;
   }
+}
 
+@container request-card (width <= 520px) {
   .permission-request-source {
     grid-template-columns: 1fr;
     gap: 3px;

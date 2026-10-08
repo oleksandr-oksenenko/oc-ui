@@ -1,10 +1,27 @@
 .browser-pane {
   display: flex;
+  inline-size: 100%;
   height: 100%;
   min-height: 0;
   flex-direction: column;
+  container: browser-pane / size;
   color: var(--oc-text-base);
   background: var(--oc-surface-canvas);
+}
+
+.browser-controls {
+  display: flex;
+  min-block-size: 0;
+  flex: 0 1 auto;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.browser-controls > .browser-annotations {
+  max-height: none;
+  max-block-size: 45cqb;
+  flex-shrink: 0;
 }
 
 .browser-empty {
@@ -13,10 +30,14 @@
   flex: 1;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: safe center;
   padding: 24px;
   gap: 12px;
   overflow: auto;
+}
+
+.browser-empty > * {
+  flex-shrink: 0;
 }
 
 .browser-empty p {
@@ -75,11 +96,19 @@
   white-space: nowrap;
 }
 
+.browser-tab-select:active:not(:disabled, [data-disabled], [aria-disabled="true"]) {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
+}
+
+.browser-navigation {
+  flex-wrap: wrap;
+}
+
 .browser-navigation input {
-  width: 0;
-  min-width: 0;
+  inline-size: auto;
+  min-inline-size: min(100%, 10ch);
   height: 24px;
-  flex: 1;
+  flex: 1 1 12ch;
   padding: 0 6px;
   border: 1px solid var(--oc-border-base);
   border-radius: var(--oc-radius);
@@ -89,7 +118,8 @@
 }
 
 .browser-tabs [data-component="icon-button-v2"],
-.browser-navigation [data-component="icon-button-v2"] {
+.browser-navigation [data-component="icon-button-v2"],
+.browser-navigation [data-component="button-v2"] {
   flex-shrink: 0;
 }
 
@@ -97,8 +127,8 @@
   /* Keep Chromium clear of the sidebar resize handle that overlaps its edge. */
   margin-inline: 4px;
   min-width: 0;
-  min-height: 80px;
-  flex: 1;
+  min-block-size: 24px;
+  flex: 1 0 24px;
   background: var(--oc-surface-canvas);
 }
 
@@ -111,8 +141,9 @@
 }
 
 .browser-error {
-  flex-shrink: 0;
-  max-height: 120px;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(120px, 25%);
   overflow: auto;
   margin: 0;
   padding: 10px;

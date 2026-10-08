@@ -177,3 +177,11 @@
   min-height: 40px;
   padding-block: 4px;
 }
+
+/* Outrank the adapter's highlighted-row background shorthand without resetting it. */
+:root
+  .selection-list[data-component="list"]
+  [data-slot="list-items"]
+  [data-slot="list-item"]:active:not(:disabled, [data-disabled], [aria-disabled="true"]) {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
+}

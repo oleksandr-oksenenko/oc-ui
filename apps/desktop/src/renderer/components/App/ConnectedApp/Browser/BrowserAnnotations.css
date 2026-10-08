@@ -5,7 +5,8 @@
   max-height: 45%;
   flex-direction: column;
   gap: 6px;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 6px;
   border-bottom: 1px solid var(--oc-border-base);
 }
@@ -27,7 +28,7 @@
 
 .browser-annotation-list {
   display: flex;
-  min-height: 0;
+  min-block-size: 44px;
   flex-direction: column;
   gap: 6px;
   overflow: auto;

@@ -1,7 +1,7 @@
 /* oxlint-disable effecttsgo/async-function */
 
-import { createEffect, createSignal } from "solid-js";
-import { expect, userEvent, within } from "storybook/test";
+import { createEffect, createSignal, For } from "solid-js";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 
 import { AppShell } from "../src/renderer/components/App/ConnectedApp/Shell/AppShell.tsx";
@@ -18,6 +18,10 @@ import { Composer } from "../src/renderer/components/App/ConnectedApp/Conversati
 import { TranscriptView } from "../src/renderer/components/App/ConnectedApp/Conversation/SessionPane/TranscriptView.tsx";
 import { storyTranscript as transcript } from "./transcript-fixtures.ts";
 import { storySession } from "./session-fixtures.ts";
+import {
+  ShortShellComposerFixture,
+  exerciseShortShellComposer,
+} from "./short-shell-composer-fixture.tsx";
 import {
   composerAgentSelection,
   composerModelSelection,
@@ -329,6 +333,147 @@ export const NarrowRightPanelCollapsed = {
   },
 };
 
+export const ResizePreferencesSurviveShrink = {
+  globals: { viewport: { value: "desktop", isRotated: false } },
+  render: () => {
+    const [width, setWidth] = createSignal(1440);
+    const [leftOpen, setLeftOpen] = createSignal(true);
+    const [rightOpen, setRightOpen] = createSignal(true);
+    return (
+      <div>
+        <div role="group" aria-label="Available shell width">
+          <For each={[720, 820, 1440, 1800]}>
+            {(size) => (
+              <button type="button" onClick={() => setWidth(size)}>
+                {size}px wide
+              </button>
+            )}
+          </For>
+        </div>
+        <div style={{ width: `${width()}px`, height: "540px" }}>
+          <AppShell
+            titlebar={
+              <Titlebar
+                selectedTitle="Responsive resize preferences"
+                leftSidebarOpen={leftOpen()}
+                rightPanelOpen={rightOpen()}
+                rightPanelAvailable
+                onToggleLeftSidebar={() => setLeftOpen((open) => !open)}
+                onToggleRightPanel={() => setRightOpen((open) => !open)}
+                rightControls={<ContextTitlebarRegion onClose={() => setRightOpen(false)} />}
+              />
+            }
+            workspace={
+              <Workspace
+                leftSidebarOpen={leftOpen()}
+                rightPanelOpen={rightOpen()}
+                sidebar={<div>Sessions</div>}
+                main={<div>Transcript stays readable</div>}
+                context={<div>Workspace context</div>}
+              />
+            }
+          />
+        </div>
+      </div>
+    );
+  },
+  play: async ({ canvasElement, step }: StoryPlayContext) => {
+    const canvas = within(canvasElement);
+    const region = (selector: string) => {
+      const element = canvasElement.querySelector<HTMLElement>(selector);
+      if (!element) throw new Error(`Missing shell region: ${selector}`);
+      return element;
+    };
+    const expectGeometry = async (leftWidth: number, rightWidth: number) => {
+      await waitFor(async () => {
+        const workspace = region(".shell-workspace");
+        const main = region(".shell-main").getBoundingClientRect();
+        await expect(main.width).toBeGreaterThanOrEqual(419.9);
+        await expect(workspace.scrollWidth).toBeLessThanOrEqual(workspace.clientWidth);
+        await expect(main.width + leftWidth + rightWidth).toBeCloseTo(workspace.clientWidth, 0);
+        for (const [side, expected] of [
+          ["left", leftWidth],
+          ["right", rightWidth],
+        ] as const) {
+          if (!expected) continue;
+          const panelSelector = side === "left" ? ".shell-left-sidebar" : ".shell-right-panel";
+          const panel = region(panelSelector).getBoundingClientRect();
+          const titlebar = region(`.titlebar-${side}-region`).getBoundingClientRect();
+          const handle = region(`.shell-${side}-resize-handle`).getBoundingClientRect();
+          await expect(panel.width).toBeCloseTo(expected, 0);
+          await expect(titlebar.left).toBeCloseTo(panel.left, 0);
+          await expect(titlebar.right).toBeCloseTo(panel.right, 0);
+          await expect(handle.left + handle.width / 2).toBeCloseTo(
+            side === "left" ? panel.right : panel.left,
+            0,
+          );
+        }
+      });
+    };
+    const enlarge = async (name: string) => {
+      await userEvent.click(canvas.getByRole("separator", { name }));
+      await userEvent.keyboard("{End}");
+    };
+    const resize = async (width: number) =>
+      userEvent.click(canvas.getByRole("button", { name: `${width}px wide` }));
+
+    await step("Enlarge both sidebars with the keyboard", async () => {
+      await enlarge("Resize sessions sidebar");
+      await enlarge("Resize context sidebar");
+      await expectGeometry(420, 600);
+    });
+    await step(
+      "Shrink without losing the center or misaligning the titlebar and handles",
+      async () => {
+        await resize(820);
+        await expectGeometry(176, 224);
+        await resize(720);
+        await expectGeometry(132, 168);
+        await resize(820);
+      },
+    );
+    await step("Reopening either panel reclamps the other panel", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Hide sessions" }));
+      await expectGeometry(0, 400);
+      await userEvent.click(canvas.getByRole("button", { name: "Show sessions" }));
+      await expectGeometry(176, 224);
+      await userEvent.click(canvas.getByRole("button", { name: "Hide context panel" }));
+      await expectGeometry(400, 0);
+      await userEvent.click(canvas.getByRole("button", { name: "Show context" }));
+      await expectGeometry(176, 224);
+    });
+    await step(
+      "Grow to restore preferences, including a context preference set while sessions were hidden",
+      async () => {
+        await resize(1440);
+        await expectGeometry(420, 600);
+        await userEvent.click(canvas.getByRole("button", { name: "Hide sessions" }));
+        await enlarge("Resize context sidebar");
+        await expectGeometry(0, 840);
+        await userEvent.click(canvas.getByRole("button", { name: "Show sessions" }));
+        await expectGeometry(420, 600);
+        await resize(1800);
+        await expectGeometry(420, 840);
+        await resize(1440);
+        await expectGeometry(420, 600);
+      },
+    );
+    await step(
+      "Keyboard minima remain preferred sizes while CSS relaxes the effective minima",
+      async () => {
+        await resize(820);
+        await userEvent.click(canvas.getByRole("separator", { name: "Resize sessions sidebar" }));
+        await userEvent.keyboard("{Home}");
+        await userEvent.click(canvas.getByRole("separator", { name: "Resize context sidebar" }));
+        await userEvent.keyboard("{Home}");
+        await expectGeometry(176, 224);
+        await resize(1440);
+        await expectGeometry(220, 280);
+      },
+    );
+  },
+};
+
 export const MobileTranscript = {
   globals: mobileGlobals,
   render: () => IntegratedFixture("transcript"),
@@ -434,4 +579,31 @@ export const MobileSessionsOverlay = {
 export const MobileContextOverlay = {
   globals: mobileGlobals,
   render: () => IntegratedFixture("context"),
+};
+
+const shortComposerViewport = {
+  viewport: {
+    options: {
+      shortComposer: {
+        name: "Short composer 1280 × 480",
+        styles: { width: "1280px", height: "480px" },
+      },
+    },
+  },
+};
+const shortComposerGlobals = { viewport: { value: "shortComposer", isRotated: false } };
+
+export const ShortSelectedComposer = {
+  parameters: shortComposerViewport,
+  globals: shortComposerGlobals,
+  render: () => <ShortShellComposerFixture />,
+  play: async ({ canvasElement }: StoryPlayContext) => exerciseShortShellComposer(canvasElement),
+};
+
+export const ShortNewDraftComposer = {
+  parameters: shortComposerViewport,
+  globals: shortComposerGlobals,
+  render: () => <ShortShellComposerFixture newDraft />,
+  play: async ({ canvasElement }: StoryPlayContext) =>
+    exerciseShortShellComposer(canvasElement, true),
 };

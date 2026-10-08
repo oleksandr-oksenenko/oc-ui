@@ -1,15 +1,19 @@
 .new-session-screen {
-  display: grid;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   min-width: 0;
-  min-height: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding-block: 16px;
   color: var(--oc-text-base);
   background: var(--oc-surface-canvas);
 }
 
 .new-session-center {
+  flex: none;
   width: 100%;
   margin: auto;
 }

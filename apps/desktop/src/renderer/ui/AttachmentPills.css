@@ -89,6 +89,12 @@
   padding-right: 4px;
 }
 
+/* Layer the press over the pill's expanded and keyboard-focus surface cues. */
+.attachment-pill
+  .attachment-pill-trigger:active:not(:disabled, [data-disabled], [aria-disabled="true"]) {
+  background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
+}
+
 .attachment-pill-remove[data-component="icon-button-v2"] {
   margin-right: 3px;
   display: inline-flex;
@@ -107,6 +113,16 @@
 
 .attachment-pill-remove:hover {
   background: var(--oc-surface-raised);
+}
+
+/* The local RemoveButton hover paint otherwise wins over upstream's press. */
+.attachment-pill
+  .attachment-pill-remove[data-component="icon-button-v2"]:active:not(
+    :disabled,
+    [data-disabled],
+    [aria-disabled="true"]
+  ) {
+  background: var(--oc-overlay-pressed);
 }
 
 .attachment-pill-popover-body p {
