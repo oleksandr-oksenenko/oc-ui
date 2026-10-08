@@ -1,14 +1,13 @@
 import { prepareProjectFixture } from "./project-fixture.ts";
-import { createProfile } from "./profile.mjs";
-import { constants } from "node:fs";
-import { access, mkdir, open, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { createProfile, startSecretService } from "./profile.mjs";
+import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { startScriptedProvider } from "./scripted-provider.mjs";
-import { assertElfX64, packagedArtifacts } from "./packaged-artifacts.mjs";
+import { packagedArtifacts, verifyPackagedApplication } from "./packaged-artifacts.mjs";
 import { isOwnedProcessRunning } from "./owned-process.ts";
 
 const desktopRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -28,6 +27,7 @@ const main = async () => {
   process.on("SIGINT", interrupt);
   process.on("SIGTERM", interrupt);
   let profile;
+  let secretService;
   const failures = [];
   try {
     const artifacts = packagedArtifacts(
@@ -41,10 +41,19 @@ const main = async () => {
     await verifyPackagedApplication(artifacts, interruption.signal);
     interruption.signal.throwIfAborted();
     profile = await createProfile("ocui-packaged-e2e-");
+    if (artifacts.platform === "linux") {
+      secretService = await startSecretService(profile, interruption.signal);
+      // Ubuntu CI's unprivileged user-namespace policy needs this test substitute.
+      // This run does not establish production sandbox behavior.
+      profile.env.OCUI_E2E_NO_SANDBOX = "1";
+    }
     const { root, paths, env } = profile;
     Object.assign(env, {
       pnpm_config_verify_deps_before_run: "false",
       OCUI_E2E_APP_BINARY_PATH: artifacts.appBinaryPath,
+      OCUI_E2E_RESOURCES_PATH: artifacts.resources,
+      OCUI_E2E_PLATFORM: artifacts.platform,
+      OCUI_E2E_ARCH: artifacts.arch,
       OCUI_E2E_USER_DATA_PATH: paths.app,
       OCUI_E2E_ARTIFACT_DIRECTORY: join(root, "artifacts"),
     });
@@ -123,28 +132,7 @@ const main = async () => {
   } catch (cause) {
     failures.push(cause);
   } finally {
-    if (profile !== undefined) {
-      try {
-        await assertWorkersStopped(profile.paths.app);
-      } catch (cause) {
-        failures.push(cause);
-      }
-      if (interruption.signal.aborted && !failures.includes(interruption.signal.reason)) {
-        failures.push(interruption.signal.reason);
-      }
-      if (failures.length === 0) {
-        try {
-          await rm(profile.root, { recursive: true, force: true });
-        } catch (cause) {
-          failures.push(cause);
-        }
-      }
-      if (failures.length > 0) {
-        console.error(
-          `Acceptance failed; disposable profile and artifacts preserved at ${profile.root}`,
-        );
-      }
-    }
+    await cleanupProfile(profile, secretService, interruption.signal, failures);
     process.off("SIGINT", interrupt);
     process.off("SIGTERM", interrupt);
   }
@@ -152,42 +140,32 @@ const main = async () => {
   if (failures.length > 1) throw new AggregateError(failures, "Packaged acceptance failed");
 };
 
-const verifyPackagedApplication = async (artifacts, signal) => {
-  await Promise.all([
-    ...artifacts.executables.map((path) => access(path, constants.X_OK)),
-    ...[...artifacts.executables, ...artifacts.bindings, ...artifacts.assets].map(async (path) => {
-      if (!(await stat(path)).isFile()) throw new Error(`Packaged asset is not a file: ${path}`);
-    }),
-  ]);
-  signal.throwIfAborted();
-  const nativeFiles = [...artifacts.executables, ...artifacts.bindings];
-  if (process.platform === "darwin") {
-    await execFileAsync("codesign", ["--verify", "--deep", "--strict", artifacts.appDirectory], {
-      signal,
-      timeout: 60_000,
-    });
-    await Promise.all(nativeFiles.map((path) => assertArm64(path, signal)));
-  } else {
-    await Promise.all(
-      nativeFiles.map(async (path) => {
-        const file = await open(path, "r");
-        try {
-          const header = Buffer.alloc(64);
-          const { bytesRead } = await file.read(header, 0, header.length, 0);
-          signal.throwIfAborted();
-          assertElfX64(header.subarray(0, bytesRead), path);
-        } finally {
-          await file.close();
-        }
-      }),
-    );
+const cleanupProfile = async (profile, secretService, signal, failures) => {
+  if (profile === undefined) return;
+  try {
+    await assertWorkersStopped(profile.paths.app);
+  } catch (cause) {
+    failures.push(cause);
   }
-};
-
-const assertArm64 = async (path, signal) => {
-  const { stdout } = await execFileAsync("lipo", ["-archs", path], { signal, timeout: 30_000 });
-  if (!stdout.trim().split(/\s+/u).includes("arm64")) {
-    throw new Error(`Expected an arm64 executable at ${path}`);
+  if (secretService !== undefined) {
+    try {
+      await secretService.close();
+    } catch (cause) {
+      failures.push(cause);
+    }
+  }
+  if (signal.aborted && !failures.includes(signal.reason)) failures.push(signal.reason);
+  if (failures.length === 0) {
+    try {
+      await rm(profile.root, { recursive: true, force: true });
+    } catch (cause) {
+      failures.push(cause);
+    }
+  }
+  if (failures.length > 0) {
+    console.error(
+      `Acceptance failed; disposable profile and artifacts preserved at ${profile.root}`,
+    );
   }
 };
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
+import { Schema } from "effect";
 import { $, browser } from "@wdio/globals";
 
 export async function verifyConnectionSettings(settingsPath: string): Promise<void> {
@@ -30,7 +31,23 @@ export async function verifyConnectionSettings(settingsPath: string): Promise<vo
   );
   const contents = await readFile(settingsPath, "utf8");
   assert.equal(contents.includes(local.connection.password), false);
-  assert.match(JSON.parse(contents).encryptedPassword, /^[A-Za-z0-9+/]+=*$/u);
+  const { encryptedPassword: encrypted } = Schema.decodeSync(
+    Schema.fromJsonString(Schema.Struct({ encryptedPassword: Schema.NonEmptyString })),
+  )(contents);
+  assert.match(encrypted, /^[A-Za-z0-9+/]+=*$/u);
+  if (globalThis.process.platform === "linux") {
+    // v10 uses Chromium's hardcoded "peanuts" key; require real libsecret v11.
+    assert.equal(Buffer.from(encrypted, "base64").subarray(0, 3).toString(), "v11");
+  }
+  assert.equal(
+    await browser.electron.execute(
+      (electron, encoded, expected) =>
+        electron.safeStorage.decryptString(Buffer.from(encoded, "base64")) === expected,
+      encrypted,
+      local.connection.password,
+    ),
+    true,
+  );
   assert.equal(
     await browser.execute(async () => {
       const saved = await window.desktop.target.load();

@@ -14,7 +14,8 @@ pnpm install --frozen-lockfile
 ```
 
 The local default (`pnpm ready`) runs static checks and unit tests. GitHub Actions
-runs the heavier component, integration, build, and packaged desktop checks. See
+runs component and integration checks on Linux, plus packaged checks on Linux
+x64 and macOS arm64. Each heavier tier owns its production build. See
 [verification tiers](docs/app-verification.md#verification-tiers) for execution policy.
 
 Opt-in local component and integration tests require Chromium to be provisioned
@@ -100,9 +101,12 @@ and a test project. It uses a scripted provider and does not run UI assertions.
 See [App verification](docs/app-verification.md) for inspection, cleanup, and
 which automated checks to run for a change.
 
-Packaged desktop acceptance (tier 3) runs on both platforms on pushes to `main`
-and manual CI dispatch.
+Packaged Linux x64 and macOS arm64 acceptance (tier 3) runs on every PR, push to
+`main`, and manual CI dispatch.
 It is separate from `pnpm test`, `pnpm ready`, and `pnpm ready:ci`.
+For a local Linux run, install the Electron libraries and Xvfb/D-Bus/keyring
+fixture prerequisites and use the wrapper in
+[App verification](docs/app-verification.md#packaged-electron-webdriverio).
 
 ### Local tests and CI
 
@@ -120,12 +124,17 @@ completing an implementation, run the root `pnpm check` and `pnpm test` gates.
 The [CI workflow](.github/workflows/ci.yml) runs on every pull request and push to
 `main`, and can also be started manually. Both Linux x64 (`ubuntu-24.04`) and macOS
 arm64 (`macos-15`) runners provision the pinned Node.js and pnpm versions.
-Static checks, unit tests, components, integrations, and builds have independent
-jobs; Chromium is installed only for component and integration jobs:
+Fast, Components, Integration, and Native run independently; Chromium is installed
+only for component and integration jobs:
 
-- Linux and macOS: tiers 0–2 and desktop/browser/Storybook builds on PRs and `main`.
-- Linux and macOS: the same packaged acceptance suite on `main` and manual
-  dispatch. Packaging supports macOS arm64 and Linux x64/glibc.
+- Linux: Fast, Components (including the static Storybook build), and Integration
+  (including renderer typechecking and the production browser build).
+- Linux x64 and macOS arm64: Native builds, packages, and tests the desktop app.
+  Linux Native runs under Xvfb and a private D-Bus session; the packaged runner
+  owns an isolated keyring fixture.
+
+All tiers run independently on PRs, pushes to `main`, and manual dispatch, with
+matrix fail-fast disabled. There is no separate Builds job.
 
 CI invokes Vite+ tasks through `vp run --no-cache -w` so every run executes those
 tasks. GitHub Actions dependency
@@ -138,19 +147,21 @@ self-contained scripted provider.
 ## Desktop packaging
 
 Packaging supports macOS arm64 and Linux x64 with glibc, building on the target
-platform. `pnpm package:mac`, `pnpm make:mac`, and `pnpm package:linux` build `out/`,
-stage the pinned server library and native/WASM assets, and run electron-builder.
+platform. `pnpm package:mac`, `pnpm make:mac`, and `pnpm package:linux` build `out/`
+and run electron-builder. The Electron build hook stages the pinned server
+library and native/WASM assets once before packaging.
 The macOS app is written to `apps/desktop/dist/mac-arm64/Ocui.app`, with the server
 runtime at `Contents/Resources/opencode-runtime`. The Linux executable is
 `apps/desktop/dist/linux-unpacked/ocui`, with the server runtime at
 `resources/opencode-runtime`.
 
-Linux packaged acceptance needs Electron's system libraries, `xvfb`, and `xauth`.
-The native CI job installs these dependencies; WebdriverIO manages the virtual
-display. Linux acceptance launches use `--no-sandbox` and Electron's basic
-password-store test substitute. macOS uses a mock keychain. These exercise
-credential persistence rather than real OS secret-store protection; production
-launch arguments and secure-storage behavior are unchanged.
+Linux packaged acceptance needs Electron's system libraries and the Xvfb,
+D-Bus, and Secret Service fixture tools. The native CI job installs these
+dependencies; the outer wrapper owns the display and private D-Bus session, and
+the packaged runner owns an isolated gnome-keyring fixture for libsecret storage.
+Linux acceptance launches use test-only `--no-sandbox`; macOS uses a mock keychain.
+See [App verification](docs/app-verification.md#packaged-electron-webdriverio)
+for the local prerequisites and wrapper.
 
 By default the macOS app uses ad-hoc signing for local testing. To use
 an installed Apple Development identity, provide its exact name through

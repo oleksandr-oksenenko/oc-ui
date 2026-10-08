@@ -8,22 +8,33 @@ exploration and visual questions that those tests do not answer.
 
 ## Verification tiers
 
-| Tier            | Contents                                                                                                                                           | Commands from the root                                     | Default execution                                                            |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 0 — Fast        | Formatting, lint, types, style/layout/unused-code checks; prompt-editor, session-tools, and desktop unit/controller tests                          | `pnpm check` + `pnpm test`, or `pnpm ready`                | Locally after implementation; every PR and push to `main` in CI              |
-| 1 — Components  | Storybook interaction/accessibility tests and real Chromium storage tests (`storybook`, `storage`)                                                 | `pnpm test:components`                                     | Every PR and push to `main` in CI                                            |
-| 2 — Integration | Production browser acceptance, pinned-server contracts, browser inspection startup/cleanup, and server-backed shutdown (`web`)                     | `pnpm test:integration`                                    | Every PR and push to `main` in CI                                            |
-| 3 — Native      | Packaged macOS arm64 signature/architecture and Linux x64/glibc ELF/assets; Electron/IPC/settings/server lifetime and scripted-provider acceptance | `pnpm test:acceptance:mac` or `pnpm test:acceptance:linux` | Pushes to `main` and manual workflow dispatch in CI; before desktop delivery |
-| Build checks    | Desktop, browser, and static Storybook builds                                                                                                      | `pnpm build`, `pnpm build:web`, `pnpm build-storybook`     | Every PR and push to `main` in CI                                            |
+| Tier            | Contents                                                                                                                                                         | Commands from the root                                     | Default execution                                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 0 — Fast        | Formatting, lint, types, style/layout/unused-code checks; prompt-editor, session-tools, and desktop unit/controller tests                                        | `pnpm check` + `pnpm test`, or `pnpm ready`                | Locally after implementation; Linux x64 CI on PR/main/manual            |
+| 1 — Components  | Static Storybook build, interaction/accessibility tests, and real Chromium storage tests (`storybook`, `storage`)                                                | `pnpm build-storybook` + `pnpm test:components`            | Linux x64 CI on PR/main/manual                                          |
+| 2 — Integration | Renderer typecheck, production browser build/acceptance, pinned-server contracts, inspection and shutdown checks (`web`)                                         | `pnpm test:integration`                                    | Linux x64 CI on PR/main/manual                                          |
+| 3 — Native      | Desktop build/package, macOS arm64 signature/architecture and Linux x64/glibc ELF/assets; Electron/IPC/settings/server lifetime and scripted-provider acceptance | `pnpm test:acceptance:linux` or `pnpm test:acceptance:mac` | Linux x64 and macOS arm64 CI on PR/main/manual; before desktop delivery |
 
-[CI workflow](../.github/workflows/ci.yml) runs the fast, component, integration,
-and build jobs independently on Linux x64/glibc and macOS arm64. Both platforms
-run desktop builds and the same native acceptance suite. All jobs use `.node-version` and the frozen
-lockfile and report separate results. Dependency caching and stored artifact
+[CI workflow](../.github/workflows/ci.yml) runs Fast, Components, and Integration
+only on Linux x64 (`ubuntu-24.04`), and Native on Linux x64 and macOS arm64
+(`macos-15`). All tiers run independently on pull requests, pushes to `main`, and
+manual dispatch; both matrices disable fail-fast. Integration owns the production
+browser build, Components owns the static Storybook build, and Native owns desktop
+builds and packaging. There is no separate Builds job. All jobs use the exact
+Node.js version in `.node-version` and the frozen lockfile and report separate
+results. Dependency caching and stored artifact
 uploads remain disabled; diagnostics are available in the job logs. PR dependency
-review remains enabled. Obsolete PR runs are cancelled. A manual dispatch on a
-branch runs all tiers, including native acceptance, before merging a
-native-sensitive change when needed.
+review remains enabled. Obsolete PR runs are cancelled. Manual dispatch runs the
+same tiers on the selected branch.
+
+GitHub ruleset `24677793` requires these checks:
+
+- `Fast (ubuntu-24.04)`
+- `Components (ubuntu-24.04)`
+- `Integration (ubuntu-24.04)`
+- `Native (ubuntu-24.04)`
+- `Native (macos-15)`
+- `Dependency review`
 
 `pnpm test` runs only tier 0 tests: no Chromium, app server, or packaged app is
 started. `pnpm ready` is the local completion gate (`check` + `test`), with no
@@ -126,9 +137,9 @@ printf '\nVerification exit: %s; full log: %s\n' "$verification_status" "$verifi
 ```
 
 If `check` fails, this sequence does not run `test`. Report that distinction.
-GitHub CI runs tiers 0–2 and desktop/browser/Storybook builds on Linux x64/glibc
-and macOS arm64 for every pull request and push to `main`. Packaged acceptance
-runs on both platforms on `main` and manual dispatch. Use the tier
+GitHub CI runs tiers 0–2 on Linux x64 and packaged desktop builds/acceptance on
+Linux x64 and macOS arm64 for every PR, push to `main`, and manual dispatch. The
+browser and Storybook builds belong to Integration and Components. Use the tier
 policy above to distinguish local evidence from completed CI evidence.
 Use a 30–60 second completion-aware tool wait and retain its process/session ID
 while a command runs. Avoid one-second polling or restarting a quiet command.
@@ -189,16 +200,15 @@ new test that merely restates its CSS or markup.
   launches; the packaged app does not enable them automatically. An explicit
   port variable can still enable one for other unpackaged runs.
 
-- **Packaged acceptance:** `pnpm test:acceptance:mac` and
-  `pnpm test:acceptance:linux` build and test the macOS arm64 and Linux x64/glibc apps
+- **Packaged acceptance:** `pnpm test:acceptance:linux` and
+  `pnpm test:acceptance:mac` build and test the Linux x64/glibc and macOS arm64 apps
   using WebdriverIO, the real pinned OpenCode server, disposable state, and a
   scripted local provider (tier 3). They are separate from `pnpm test` and
-  `pnpm ready:ci` and run on `main` or manual CI dispatch by default. Linux uses
-  WebdriverIO's virtual display (`xvfb` and `xauth` must be installed) and test-only
-  `--no-sandbox`. Native dialogs and credential storage use test substitutes:
-  macOS uses a mock keychain and Linux explicitly enables Electron's basic
-  password-store backend inside the test. This does not prove the appearance of
-  native dialogs or real OS credential protection.
+  `pnpm ready:ci` and run on PRs, `main`, and manual CI dispatch. Linux uses an
+  isolated keyring fixture with gnome-keyring and libsecret; the outer wrapper
+  owns the virtual display and private D-Bus session. Native dialogs and macOS
+  keychain behavior use test substitutes. This does not prove native dialog
+  appearance or integration with a user's keychain.
 
 Browser mode has its own explicit entrypoint and settings adapter. Do not open the
 Electron renderer URL as a substitute. Storybook remains the surface for controlled
@@ -257,11 +267,27 @@ evidence that DOM interaction cannot provide, such as owned process state. Keep
 native substitutes explicit: mocked native dialogs and keychain behavior cannot
 prove the appearance of a native dialog or real OS credential integration.
 
-From the root, run `pnpm test:acceptance:mac` on macOS arm64 or
-`pnpm test:acceptance:linux` on Linux x64/glibc for the same packaged
-scripted-provider suite. It is separate from `pnpm test`. The
-`test:acceptance:chat:mac` command uses a live provider and credentials; it is not
-the default regression command.
+From the root, run `pnpm test:acceptance:mac` on macOS arm64 for the packaged
+scripted-provider suite. On Linux x64/glibc, provision Electron's libraries and the
+fixture tools first. For Ubuntu 24.04, matching CI:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y zsh openssl xvfb xauth dbus-x11 gnome-keyring libsecret-1-0 libsecret-tools libglib2.0-bin binutils libgtk-3-0t64 libnotify4
+pnpm --filter desktop exec playwright install-deps chromium
+xvfb-run -a dbus-run-session -- pnpm test:acceptance:linux
+```
+
+The Playwright command installs system dependencies only; Native uses Electron's
+bundled Chromium and needs no separate browser download. The wrapper supplies a
+display and private D-Bus session. The packaged runner owns a private HOME and
+foreground gnome-keyring fixture, waits for readiness with `gdbus`, and cleans up
+both inside that session. `binutils` supplies `readelf` for packaged architecture
+verification. Linux acceptance supplies `--no-sandbox` for the disposable CI
+environment; it does not establish production sandbox behavior.
+These commands are separate from `pnpm test`. The `test:acceptance:chat:mac`
+command uses a live provider and credentials; it is not the default regression
+command.
 
 ### Make each scenario useful
 
@@ -335,14 +361,15 @@ without exposing credentials. Select only processes belonging to the test run.
 
 ## Build and delivery checks
 
-- CI runs `pnpm build`, `pnpm build:web`, and `pnpm build-storybook` on every PR
-  and push to `main`. Run an affected build locally when debugging bundling,
-  entrypoints, dependency resolution, or delivered assets.
+- CI builds the browser app in Linux Integration, static Storybook in Linux
+  Components, and desktop packages in Linux x64/macOS arm64 Native on every PR,
+  push to `main`, and manual dispatch. Run an affected build locally when debugging
+  bundling, entrypoints, dependency resolution, or delivered assets.
   `pnpm ready:ci` combines root checks, tiers 0–2, and these builds for an opt-in
   full local run; `pnpm ready` stays fast.
-- Use tier 3 CI evidence for native integration rows above, dispatching the workflow
-  on the candidate branch when needed before merge. Before delivering an app,
-  run the platform's packaged acceptance command on the delivery candidate.
+- Use tier 3 CI evidence for native integration rows above. Before delivering a
+  desktop app, run the target host's `pnpm test:acceptance:linux` (with the Linux
+  wrapper above) or `pnpm test:acceptance:mac` on the delivery candidate.
   macOS checks the packaged signature and ARM64 architecture; Linux checks
   executable permissions and x86-64 ELF assets. Both run the same runtime
   scenarios; a development launch cannot establish packaging.

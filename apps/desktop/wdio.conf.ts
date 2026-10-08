@@ -23,37 +23,38 @@ const mochaTimeout =
   Number.isFinite(configuredMochaTimeout) && configuredMochaTimeout > 0
     ? configuredMochaTimeout
     : 120_000;
+const linux = globalThis.process.platform === "linux";
 
-const capabilities: Capabilities.TestrunnerCapabilities = [
-  {
-    browserName: "electron",
-    "wdio:electronServiceOptions": {
-      appBinaryPath,
-      appArgs: [
-        ...(globalThis.process.platform === "linux"
-          ? [
-              "--no-sandbox",
-              "--password-store=basic",
-              // Xvfb has no GPU. Keep WebGL available through Chromium's CPU renderer.
-              "--use-gl=angle",
-              "--use-angle=swiftshader",
-              "--enable-unsafe-swiftshader",
-            ]
-          : ["--use-mock-keychain"]),
-        `${USER_DATA_PATH_ARGUMENT_PREFIX}${userDataPath}`,
-        `--user-data-dir=${resolveSessionDataPath(userDataPath)}`,
-      ],
-      captureRendererLogs: true,
-      captureMainProcessLogs: false,
-    },
+const capability: WebdriverIO.Capabilities = {
+  browserName: "electron",
+  "wdio:electronServiceOptions": {
+    appBinaryPath,
+    appArgs: [
+      ...(linux
+        ? [
+            "--password-store=gnome-libsecret",
+            // Xvfb has no GPU. Keep WebGL available through Chromium's CPU renderer.
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-unsafe-swiftshader",
+          ]
+        : ["--use-mock-keychain"]),
+      ...(linux && globalThis.process.env.OCUI_E2E_NO_SANDBOX === "1" ? ["--no-sandbox"] : []),
+      `${USER_DATA_PATH_ARGUMENT_PREFIX}${userDataPath}`,
+      `--user-data-dir=${resolveSessionDataPath(userDataPath)}`,
+    ],
+    captureRendererLogs: true,
+    captureMainProcessLogs: false,
   },
-];
+};
+// ChromeDriver otherwise injects basic storage and the macOS mock switch.
+if (linux) {
+  capability["goog:chromeOptions"] = { excludeSwitches: ["password-store", "use-mock-keychain"] };
+}
+const capabilities: Capabilities.TestrunnerCapabilities = [capability];
 
 export const config: WebdriverIO.Config = {
   runner: "local",
-  // The isolated profile omits DISPLAY. WDIO owns Xvfb per worker on Linux.
-  autoXvfb: globalThis.process.platform === "linux",
-  xvfbAutoInstall: false,
   rootDir: desktopRoot,
   specs: [join(desktopRoot, "test", "e2e", "packaged-startup.e2e.ts")],
   maxInstances: 1,

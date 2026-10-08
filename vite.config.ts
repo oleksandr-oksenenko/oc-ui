@@ -197,6 +197,9 @@ export default defineConfig({
           "apps/desktop/test/browser-inspection.test.mjs",
           "apps/desktop/test/browser-shutdown.test.mjs",
           "apps/desktop/test/sdk-inbox.test.mjs",
+          "apps/desktop/test/owned-process.test.mjs",
+          "apps/desktop/test/e2e-profile.test.mjs",
+          "apps/desktop/test/packaged-artifacts.test.mjs",
           "apps/desktop/test/style-tokens.test.mjs",
         ],
         rules: {

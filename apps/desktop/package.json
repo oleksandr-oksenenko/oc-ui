@@ -13,10 +13,10 @@
     "build": "tsc -b && electron-vite build",
     "build-storybook": "storybook build --output-dir storybook-static --disable-telemetry",
     "check": "vp check",
-    "make:mac": "pnpm run build && pnpm run stage:opencode && electron-builder --config electron-builder.config.mjs --mac dir dmg --arm64",
+    "make:mac": "pnpm run build && electron-builder --config electron-builder.config.mjs --mac dir dmg --arm64",
     "predev": "install-electron --no",
-    "package:mac": "pnpm run build && pnpm run stage:opencode && electron-builder --config electron-builder.config.mjs --mac dir --arm64",
-    "package:linux": "pnpm run build && pnpm run stage:opencode && electron-builder --config electron-builder.config.mjs --linux dir --x64",
+    "package:mac": "pnpm run build && electron-builder --config electron-builder.config.mjs --mac dir --arm64",
+    "package:linux": "pnpm run build && electron-builder --config electron-builder.config.mjs --linux dir --x64",
     "dev": "electron-vite dev --watch",
     "dev:web": "vp dev --config vite.web.config.ts",
     "opencode:serve": "node scripts/serve-opencode.mjs",
@@ -34,7 +34,7 @@
     "test": "vp test run --project=unit",
     "test:unit": "pnpm test",
     "test:components": "vp test run --project=storage --project=storybook",
-    "test:integration": "pnpm --filter @oc-ui/opencode-session-tools build && vp test run --project=web"
+    "test:integration": "tsc -p tsconfig.renderer.json && pnpm --filter @oc-ui/opencode-session-tools build && vp test run --project=web"
   },
   "dependencies": {
     "@effect/atom-solid": "catalog:",
