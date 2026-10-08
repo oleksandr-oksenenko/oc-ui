@@ -1,7 +1,12 @@
 import type { LocationRef, OpenCodeClient } from "@opencode/client";
 import { Effect, Schema, Semaphore } from "effect";
 
-import { serverFilePathFromFileUrl } from "../ui/serverPath.ts";
+import {
+  serverFilePathFromFileUrl,
+  serverPathEntryName,
+  serverPathParent,
+  serverPathRelative,
+} from "../ui/serverPath.ts";
 import type { WorkspaceOwner } from "../workspace-owner.ts";
 
 /**
@@ -18,7 +23,7 @@ export const MAX_SERVER_FILE_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_CONCURRENT_SERVER_FILE_IMAGE_READS = 4;
 
 /**
- * Deadline for one server read, measured after its permit is acquired. A
+ * Deadline for one image load, measured after its permit is acquired. A
  * stalled server must not occupy a read permit indefinitely. Image loads are
  * best-effort: on timeout the alt text remains until the image is remounted.
  */
@@ -88,7 +93,9 @@ const fileImageKey = (
  *
  * The renderer cannot load `file:` URLs: they name the Electron host, while a
  * session's files belong to the connected server. Requests carry the session's
- * complete location, and the server applies its own path containment.
+ * complete location. For an image outside that directory, validate its parent
+ * by listing it in the original context, then read from that parent while
+ * preserving workspace identity. The server applies its own path containment.
  *
  * Completed reads are not cached here. A file URL is a mutable path, not a
  * content identity, so a displayed image always reflects a current read; the
@@ -100,8 +107,9 @@ const fileImageKey = (
  */
 export function createServerFileImages(input: {
   readonly fileRead: OpenCodeClient["file"]["read"];
+  readonly fileList: OpenCodeClient["file"]["list"];
   readonly effects: WorkspaceOwner;
-  /** Deadline for one read; defaults to 30 seconds. */
+  /** Total deadline for one image load; defaults to 30 seconds. */
   readonly timeoutMs?: number;
 }): ServerFileImages {
   const pending = new Map<string, Promise<Blob>>();
@@ -134,45 +142,51 @@ export function createServerFileImages(input: {
 
     const request = input.effects
       .runPromise(
-        input.effects
-          .request((signal) =>
-            input.fileRead(
-              {
-                path,
-                location:
-                  requested.workspaceID === undefined
-                    ? { directory: requested.directory }
-                    : { directory: requested.directory, workspace: requested.workspaceID },
-              },
-              { signal },
-            ),
-          )
-          .pipe(
-            // The permit is held only for the timed read; a timeout interrupts
-            // the request, forwards the abort, and releases the permit once the
-            // underlying read has settled.
-            Effect.timeoutOrElse({
-              duration: timeoutMs,
-              orElse: () =>
-                Effect.fail(
+        Effect.gen(function* () {
+          const requestLocation =
+            requested.workspaceID === undefined
+              ? { directory: requested.directory }
+              : { directory: requested.directory, workspace: requested.workspaceID };
+          let readLocation = requestLocation;
+          let readPath = path;
+          if (serverPathRelative(requested.directory, path) === path) {
+            const parent = serverPathParent(path);
+            yield* input.effects.request((signal) =>
+              input.fileList({ path: parent, location: requestLocation }, { signal }),
+            );
+            // Listing's response location is the original context, not the
+            // listed directory. Keep workspace identity when selecting parent.
+            readLocation = { ...requestLocation, directory: parent };
+            readPath = serverPathEntryName(parent, path);
+          }
+          return yield* input.effects.request((signal) =>
+            input.fileRead({ path: readPath, location: readLocation }, { signal }),
+          );
+        }).pipe(
+          // One permit and deadline cover both listing and reading. On
+          // interruption the active request aborts and settles before release.
+          Effect.timeoutOrElse({
+            duration: timeoutMs,
+            orElse: () =>
+              Effect.fail(
+                new ServerFileImageError({
+                  message: "The server file took too long to load.",
+                }),
+              ),
+          }),
+          readGate.withPermits(1),
+          Effect.flatMap((bytes) =>
+            bytes.byteLength > MAX_SERVER_FILE_IMAGE_BYTES
+              ? Effect.fail(
                   new ServerFileImageError({
-                    message: "The server file took too long to load.",
+                    message: "The server file is too large to display.",
                   }),
-                ),
-            }),
-            readGate.withPermits(1),
-            Effect.flatMap((bytes) =>
-              bytes.byteLength > MAX_SERVER_FILE_IMAGE_BYTES
-                ? Effect.fail(
-                    new ServerFileImageError({
-                      message: "The server file is too large to display.",
-                    }),
-                  )
-                : Effect.succeed(bytes),
-            ),
-            // Copy into a fresh view: Blob parts require an ArrayBuffer-backed view.
-            Effect.map((bytes) => new Blob([new Uint8Array(bytes)], { type: mime })),
+                )
+              : Effect.succeed(bytes),
           ),
+          // Copy into a fresh view: Blob parts require an ArrayBuffer-backed view.
+          Effect.map((bytes) => new Blob([new Uint8Array(bytes)], { type: mime })),
+        ),
       )
       .finally(() => {
         pending.delete(key);

@@ -68,14 +68,18 @@ export function serverPathChild(directory: string, relativeEntry: string): strin
 
 /**
  * A path inside `directory` as a relative path; the directory itself, paths
- * outside it, and relative paths are unchanged.
+ * outside it, and relative paths are unchanged. Windows-shaped locations use
+ * case-insensitive comparison; the result keeps the path's original spelling.
  */
 export function serverPathRelative(directory: string, path: string): string {
   const base = trimTrailingSeparators(directory);
   if (base === "" || serverPathRoot(base) === "") return path;
   const prefix = base.endsWith("/") ? base : `${base}/`;
-  const normalized = serverPathSeparator(directory) === "\\" ? path.replaceAll("\\", "/") : path;
-  if (!normalized.startsWith(prefix)) return path;
+  const windows = /^[a-zA-Z]:[\\/]|^\\\\|^\/\//.test(directory);
+  const normalized = windows ? path.replaceAll("\\", "/") : path;
+  const candidate = normalized.slice(0, prefix.length);
+  if (windows ? candidate.toLowerCase() !== prefix.toLowerCase() : candidate !== prefix)
+    return path;
   // Replacement is length-preserving, so the original slice keeps its style.
   const relative = path.slice(prefix.length);
   return relative === "" ? path : relative;
@@ -83,9 +87,8 @@ export function serverPathRelative(directory: string, path: string): string {
 
 export function serverPathParent(directory: string): string {
   const separator = serverPathSeparator(directory);
-  const normalized = directory.replaceAll("\\", "/");
-  const root = serverPathRoot(normalized);
-  const trimmed = trimTrailingSeparators(normalized);
+  const trimmed = trimTrailingSeparators(directory);
+  const root = serverPathRoot(trimmed);
   if (trimmed === "" || trimmed === root) return directory;
 
   const index = trimmed.lastIndexOf("/");
@@ -125,7 +128,8 @@ function trimSeparators(value: string): string {
 }
 
 function trimTrailingSeparators(value: string): string {
-  const normalized = value.replaceAll("\\", "/");
+  const windows = /^[a-zA-Z]:[\\/]|^\\\\|^\/\//.test(value);
+  const normalized = windows ? value.replaceAll("\\", "/") : value;
   const root = serverPathRoot(normalized);
   if (normalized === root) return normalized;
   return normalized.replace(/\/+$/g, "");
