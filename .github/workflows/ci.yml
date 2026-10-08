@@ -9,28 +9,62 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  CI: "true"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  full-suite:
-    name: Full suite (${{ matrix.os }})
+  tiers:
+    name: ${{ matrix.name }} (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15]
+        include:
+          - name: Fast
+            tier: fast
+            command: pnpm check && pnpm exec vp run --no-cache -w test
+            os: ubuntu-24.04
+          - name: Fast
+            tier: fast
+            command: pnpm check && pnpm exec vp run --no-cache -w test
+            os: macos-15
+          - name: Components
+            tier: components
+            command: pnpm exec vp run --no-cache -w test:components
+            os: ubuntu-24.04
+          - name: Components
+            tier: components
+            command: pnpm exec vp run --no-cache -w test:components
+            os: macos-15
+          - name: Integration
+            tier: integration
+            command: pnpm exec vp run --no-cache -w test:integration
+            os: ubuntu-24.04
+          - name: Integration
+            tier: integration
+            command: pnpm exec vp run --no-cache -w test:integration
+            os: macos-15
+          - name: Builds
+            tier: builds
+            command: pnpm build:web && pnpm exec vp run --no-cache -w build-storybook
+            os: ubuntu-24.04
+          - name: Builds
+            tier: builds
+            command: pnpm exec vp run --no-cache -w build && pnpm build:web && pnpm exec vp run --no-cache -w build-storybook
+            os: macos-15
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    defaults:
-      run:
-        shell: bash
-    env:
-      CI: "true"
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - uses: actions/setup-node@v6
         with:
@@ -47,28 +81,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install server fixture prerequisites
+        if: matrix.tier == 'integration' && runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zsh openssl
+
       - name: Install Chromium
+        if: matrix.tier == 'components' || matrix.tier == 'integration'
         run: pnpm --filter desktop exec playwright install --with-deps chromium
 
-      - name: Check, test, and build all targets (macOS)
-        if: runner.os == 'macOS'
-        run: pnpm exec vp run --no-cache -w ready
+      - name: Run tier
+        run: ${{ matrix.command }}
 
-      - name: Check, test, and build browser targets (Linux)
-        if: runner.os == 'Linux'
-        # Desktop runtime staging and packaging currently support macOS arm64 only.
+  native:
+    name: Native macOS
+    if: github.event_name != 'pull_request'
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Verify toolchain and runner architecture
         run: |
-          pnpm check
-          pnpm exec vp run --no-cache -w test
-          pnpm build:web
-          pnpm exec vp run --no-cache -w build-storybook
-
-      - name: Test packaged Electron app
-        if: runner.os == 'macOS'
-        env:
-          # Keep the configured ad-hoc signature on PR builds; no certificate is used.
-          CSC_FOR_PULL_REQUEST: "true"
-        run: pnpm test:acceptance:mac
+          test "$(node --version)" = "v$(cat .node-version)"
+          test "$(node -p process.arch)" = arm64
+          echo "TMPDIR=${RUNNER_TEMP}/" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:acceptance:mac
 
   dependency-review:
     name: Dependency review

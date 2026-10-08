@@ -21,7 +21,8 @@
     "lint": "vp lint && pnpm lint:styles",
     "lint:styles": "stylelint \"apps/**/*.css\" && node tools/check-inline-style-tokens.mjs",
     "prepare": "effect-tsgo patch --no-typescript --oxlint",
-    "ready": "pnpm check && pnpm test && pnpm build && vp run desktop#build:web && vp run desktop#build-storybook",
+    "ready": "pnpm check && pnpm test",
+    "ready:ci": "pnpm check && pnpm test:all && pnpm build && pnpm build:web && pnpm build-storybook",
     "storybook": "vp run desktop#storybook",
     "storybook:preview": "vp run desktop#storybook:preview",
     "build-storybook": "vp run desktop#build-storybook",
@@ -30,7 +31,10 @@
     "test:acceptance:mac": "pnpm --filter desktop test:acceptance:mac",
     "test:acceptance:chat:mac": "pnpm --filter desktop test:acceptance:chat:mac",
     "test": "vp run @oc-ui/prompt-editor#test && vp run @oc-ui/opencode-session-tools#test && vp run desktop#test",
-    "test:local": "vp run @oc-ui/prompt-editor#test && vp run @oc-ui/opencode-session-tools#test && vp run desktop#test:unit"
+    "test:local": "pnpm test",
+    "test:components": "vp run desktop#test:components",
+    "test:integration": "vp run desktop#test:integration",
+    "test:all": "pnpm test && pnpm test:components && pnpm test:integration"
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:",

@@ -20,6 +20,7 @@ type ModelPickerProps = {
 export function ModelPicker(props: ModelPickerProps) {
   let root: HTMLSpanElement | undefined;
   const [open, setOpen] = createSignal(false);
+  const [restoreFocusWhenEnabled, setRestoreFocusWhenEnabled] = createSignal(false);
   // Upstream List identifies the current option by object identity.
   const options = createMemo(() => props.options);
   const selected = () => options().find((option) => option.id === props.selectedID);
@@ -28,7 +29,17 @@ export function ModelPicker(props: ModelPickerProps) {
     if (!option) return;
     props.onSelect(option.id);
     setOpen(false);
+    // The popover cannot restore focus while a server-backed switch disables its trigger.
+    setRestoreFocusWhenEnabled(props.disabled);
   };
+
+  createEffect(() => {
+    if (props.disabled || open() || !restoreFocusWhenEnabled()) return;
+    setRestoreFocusWhenEnabled(false);
+    queueMicrotask(() =>
+      root?.querySelector<HTMLButtonElement>(".composer-model-trigger")?.focus(),
+    );
+  });
 
   createEffect(() => {
     if (props.disabled || options().length === 0) {
