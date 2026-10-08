@@ -704,8 +704,12 @@ export const LongPathTooltip: Story = {
     await step("keeps the disclosure operable under the tooltip trigger", async () => {
       const disclosure = paths()[0]?.closest(".diff-file-toggle");
       await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+      // Exercise a click that can settle before Pierre's next render frame.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       await userEvent.click(paths()[0]!);
-      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+      // renderCustomHeader publishes the header props on that frame;
+      // userEvent.click only waits for the input events to settle.
+      await waitFor(() => expect(disclosure).toHaveAttribute("aria-expanded", "false"));
     });
   },
 };
