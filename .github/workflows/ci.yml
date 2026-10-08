@@ -31,34 +31,17 @@ jobs:
             tier: fast
             command: pnpm check && pnpm exec vp run --no-cache -w test
             os: ubuntu-24.04
-          - name: Fast
-            tier: fast
-            command: pnpm check && pnpm exec vp run --no-cache -w test
-            os: macos-15
+            arch: x64
           - name: Components
             tier: components
-            command: pnpm exec vp run --no-cache -w test:components
+            command: pnpm exec vp run --no-cache -w build-storybook && pnpm exec vp run --no-cache -w test:components
             os: ubuntu-24.04
-          - name: Components
-            tier: components
-            command: pnpm exec vp run --no-cache -w test:components
-            os: macos-15
+            arch: x64
           - name: Integration
             tier: integration
             command: pnpm exec vp run --no-cache -w test:integration
             os: ubuntu-24.04
-          - name: Integration
-            tier: integration
-            command: pnpm exec vp run --no-cache -w test:integration
-            os: macos-15
-          - name: Builds
-            tier: builds
-            command: pnpm exec vp run --no-cache -w build && pnpm build:web && pnpm exec vp run --no-cache -w build-storybook
-            os: ubuntu-24.04
-          - name: Builds
-            tier: builds
-            command: pnpm exec vp run --no-cache -w build && pnpm build:web && pnpm exec vp run --no-cache -w build-storybook
-            os: macos-15
+            arch: x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -71,9 +54,10 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
-      - name: Verify toolchain
+      - name: Verify toolchain and runner architecture
         run: |
           test "$(node --version)" = "v$(cat .node-version)"
+          test "$(node -p process.arch)" = "${{ matrix.arch }}"
           node --version
           pnpm --version
           echo "TMPDIR=${RUNNER_TEMP}/" >> "$GITHUB_ENV"
@@ -94,14 +78,13 @@ jobs:
 
   native:
     name: Native (${{ matrix.os }})
-    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
             arch: x64
-            command: pnpm test:acceptance:linux
+            command: xvfb-run -a dbus-run-session -- pnpm test:acceptance:linux
           - os: macos-15
             arch: arm64
             command: pnpm test:acceptance:mac
@@ -122,12 +105,13 @@ jobs:
           test "$(node -p process.arch)" = "${{ matrix.arch }}"
           echo "TMPDIR=${RUNNER_TEMP}/" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
-      - name: Install Linux desktop dependencies
+      - name: Install Linux native fixture prerequisites
         if: runner.os == 'Linux'
         run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh openssl xvfb xauth dbus-x11 gnome-keyring libsecret-1-0 libsecret-tools libglib2.0-bin binutils libgtk-3-0t64 libnotify4
           pnpm --filter desktop exec playwright install-deps chromium
-          sudo apt-get install --no-install-recommends -y xvfb xauth libgbm1 zsh openssl
-      - name: Test packaged Electron app
+      - name: Run packaged acceptance
         run: ${{ matrix.command }}
 
   dependency-review:

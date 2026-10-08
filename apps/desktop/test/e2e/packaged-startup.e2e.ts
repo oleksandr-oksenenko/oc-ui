@@ -33,7 +33,9 @@ const settingsPath = join(userDataPath, "connection-settings.json");
 const pidRecordPath = join(userDataPath, "acceptance-worker-pids.json");
 const workerPids: number[] = [];
 const terminalPids: number[] = [];
-const artifactDirectory = fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
+const artifactDirectory =
+  globalThis.process.env.OCUI_E2E_ARTIFACT_DIRECTORY ??
+  fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
 const projectDirectory = join(userDataPath, "acceptance-project");
 
 describe("packaged owned OpenCode", () => {
@@ -41,8 +43,6 @@ describe("packaged owned OpenCode", () => {
     await mkdir(artifactDirectory, { recursive: true });
     const runtime = await browser.electron.execute(async (electron) => {
       await electron.app.whenReady();
-      // Test-only credential substitute for the isolated, headless Linux profile.
-      if (process.platform === "linux") electron.safeStorage.setUsePlainTextEncryption(true);
       return {
         isPackaged: electron.app.isPackaged,
         userData: electron.app.getPath("userData"),
@@ -54,18 +54,33 @@ describe("packaged owned OpenCode", () => {
           process.platform === "linux"
             ? electron.safeStorage.getSelectedStorageBackend()
             : undefined,
+        platform: process.platform,
+        arch: process.arch,
+        executable: process.execPath,
+        resources: process.resourcesPath,
+        appPath: electron.app.getAppPath(),
         databasePath: process.env.OPENCODE_DB,
       };
     });
     assert.equal(runtime.isPackaged, true);
     assert.equal(runtime.userData, userDataPath);
-    if (globalThis.process.platform === "linux") {
-      assert.equal(runtime.noSandbox, true);
-      assert.equal(runtime.passwordStore, "basic");
-      assert.equal(runtime.storageBackend, "basic_text");
-      assert.equal(runtime.encryptionAvailable, true);
-    } else {
-      assert.equal(runtime.mockKeychain, true);
+    assert.equal(runtime.platform, globalThis.process.env.OCUI_E2E_PLATFORM);
+    assert.equal(runtime.arch, globalThis.process.env.OCUI_E2E_ARCH);
+    assert.equal(
+      await realpath(runtime.executable),
+      await realpath(globalThis.process.env.OCUI_E2E_APP_BINARY_PATH!),
+    );
+    assert.equal(
+      await realpath(runtime.resources),
+      await realpath(globalThis.process.env.OCUI_E2E_RESOURCES_PATH!),
+    );
+    assert.equal(runtime.appPath, join(runtime.resources, "app.asar"));
+    assert.equal(runtime.mockKeychain, runtime.platform === "darwin");
+    assert.equal(runtime.encryptionAvailable, true);
+    if (runtime.platform === "linux") {
+      assert.equal(runtime.noSandbox, globalThis.process.env.OCUI_E2E_NO_SANDBOX === "1");
+      assert.equal(runtime.passwordStore, "gnome-libsecret");
+      assert.equal(runtime.storageBackend, "gnome_libsecret");
     }
     assert.equal(runtime.databasePath, globalThis.process.env.OPENCODE_DB);
     await waitForLocalConnection();
