@@ -30,6 +30,15 @@ This repository uses Effect v4 RC for server communication, persistence, connect
 - Report production lines added, removed, and net change, plus new abstractions and old machinery removed. Count tests, documentation, and generated code separately. Treat growth as an advisory signal to review complexity, never as a failing gate or a reason to compress formatting or remove useful checks.
 - Explain remaining growth. If duplication is temporary, name what will disappear and the follow-up step that removes it.
 
+## Commit messages
+
+- Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): `<type>(<optional scope>): <description>`.
+- Use `feat` for new functionality, `fix` for bug fixes, `docs` for documentation, `refactor` for restructuring without behavior changes, `test` for tests, `build` for build tooling or dependencies, `ci` for CI changes, `perf` for performance improvements, `style` for code formatting only, and `chore` for other maintenance. Visual or UI behavior changes belong under `feat` or `fix`, not `style`.
+- Use a short, stable scope when it clarifies the affected area, such as `desktop`, `ui`, or `storybook`; omit it for repository-wide changes.
+- Write a concise, imperative description with a lowercase initial and no trailing period, such as `fix(desktop): keep transcript above growing composer` or `docs: define commit message conventions`.
+- Keep each commit focused on one logical change. Add a body when needed to explain why the change is necessary, important tradeoffs, or migration steps; separate it from the subject with a blank line.
+- Mark breaking changes with `!` before the colon and include a `BREAKING CHANGE:` footer explaining the impact and required migration. Put issue references and other trailers in the footer when applicable.
+
 ## UI and desktop runtime
 
 - Focus styling is a product contract: neutral, compact, and flush with controls in both themes. Do not restore blue/accent focus glows or detached outer rings during theme redesigns. Preserve visible keyboard focus and compound-field delegation; keep the literal neutral-color and geometry regressions in the Focus and Composer stories.
