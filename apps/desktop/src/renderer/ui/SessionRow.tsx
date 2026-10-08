@@ -35,7 +35,7 @@ export function SessionRow(props: SessionRowProps) {
         value={props.title}
       >
         <Button
-          class="shell-session-main oc-focus-inset"
+          class="shell-session-main"
           type="button"
           size="small"
           variant="ghost-muted"

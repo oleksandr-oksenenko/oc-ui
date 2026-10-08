@@ -47,14 +47,7 @@
   background: transparent;
 }
 
-/* Editing uses the popup border as one stable focus frame, like diff review comments. */
-.attachment-detail-popover:has(.annotation-inline-editor:focus-within) {
-  border-color: var(--oc-border-emphasis);
-}
-
 .attachment-detail-popover .annotation-inline-editor[data-component="textarea-v2"] {
-  /* stylelint-disable-next-line property-disallowed-list, declaration-no-important -- The popup owns this field's focus frame. */
-  outline: none !important;
   box-shadow: none;
 }
 

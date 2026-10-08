@@ -69,7 +69,7 @@ export function SessionTreeItem(props: SessionTreeItemProps) {
             <>
               {props.hasChildren ? (
                 <Collapsible.Trigger
-                  class="shell-session-disclosure oc-focus-inset"
+                  class="shell-session-disclosure"
                   type="button"
                   aria-label={props.expanded ? `Collapse ${title()}` : `Expand ${title()}`}
                 >

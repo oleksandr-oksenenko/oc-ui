@@ -21,7 +21,7 @@ export function DiffFileHeader(props: DiffFileHeaderProps) {
     <header class="diff-file-header">
       <button
         type="button"
-        class="diff-file-toggle oc-focus-inset"
+        class="diff-file-toggle"
         ref={(element) => {
           element.dataset.diffFileToggle = props.path;
         }}

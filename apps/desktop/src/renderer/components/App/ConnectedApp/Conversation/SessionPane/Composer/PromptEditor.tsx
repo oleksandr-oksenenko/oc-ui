@@ -225,7 +225,7 @@ export function PromptEditor(props: EditorProps) {
         }),
         editable: () => !props.readOnly,
         attributes: {
-          class: "composer-input oc-focus-delegate prompt-editor-input",
+          class: "composer-input prompt-editor-input",
           role: "textbox",
           "aria-label": "Prompt",
           "aria-multiline": "true",

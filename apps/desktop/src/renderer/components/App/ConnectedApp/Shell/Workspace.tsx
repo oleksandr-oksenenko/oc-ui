@@ -232,7 +232,7 @@ export function Workspace(props: WorkspaceProps) {
           </div>
           {props.mobile ? null : (
             <div
-              class="shell-resize-handle shell-left-resize-handle oc-focus-inset"
+              class="shell-resize-handle shell-left-resize-handle"
               role="separator"
               aria-label="Resize sessions sidebar"
               aria-orientation="vertical"
@@ -257,7 +257,7 @@ export function Workspace(props: WorkspaceProps) {
         <>
           {props.mobile ? null : (
             <div
-              class="shell-resize-handle shell-right-resize-handle oc-focus-inset"
+              class="shell-resize-handle shell-right-resize-handle"
               role="separator"
               aria-label="Resize context sidebar"
               aria-orientation="vertical"
@@ -291,7 +291,7 @@ export function Workspace(props: WorkspaceProps) {
       ) : null}
       {bottomOpen() && !mobileOverlayOpen() ? (
         <div
-          class="shell-resize-handle shell-bottom-resize-handle oc-focus-inset"
+          class="shell-resize-handle shell-bottom-resize-handle"
           role="separator"
           aria-label="Resize terminal panel"
           aria-orientation="horizontal"

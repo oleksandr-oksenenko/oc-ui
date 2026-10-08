@@ -37,7 +37,7 @@ export function BrowserPane(props: BrowserPaneProps) {
       <Show
         when={props.state.status === "connected"}
         fallback={
-          <div class="browser-empty oc-focus-inset" tabIndex={0}>
+          <div class="browser-empty" tabIndex={0}>
             <strong>Session browser</strong>
             <p>
               {props.sessionSelected
@@ -71,7 +71,7 @@ export function BrowserPane(props: BrowserPaneProps) {
                     classList={{ selected: item.id === props.state.browser.focusedTabID }}
                   >
                     <button
-                      class="browser-tab-select oc-focus-inset"
+                      class="browser-tab-select"
                       type="button"
                       aria-pressed={item.id === props.state.browser.focusedTabID}
                       title={item.url}
@@ -128,7 +128,7 @@ export function BrowserPane(props: BrowserPaneProps) {
               }}
             />
             <Button
-              class="browser-reload oc-focus-inset"
+              class="browser-reload"
               type="button"
               size="small"
               variant="ghost-muted"
@@ -158,7 +158,7 @@ export function BrowserPane(props: BrowserPaneProps) {
         <Show
           when={tab()}
           fallback={
-            <div class="browser-empty oc-focus-inset" tabIndex={0}>
+            <div class="browser-empty" tabIndex={0}>
               <p>No tabs open.</p>
               <Button onClick={() => props.onCommand({ type: "tabs.open" })}>New tab</Button>
             </div>
@@ -171,7 +171,7 @@ export function BrowserPane(props: BrowserPaneProps) {
         </footer>
       </Show>
       <Show when={props.state.error}>
-        <p class="browser-error oc-focus-inset" role="alert" tabIndex={0}>
+        <p class="browser-error" role="alert" tabIndex={0}>
           {props.state.error}
         </p>
       </Show>

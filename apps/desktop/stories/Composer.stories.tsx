@@ -85,17 +85,16 @@ export const Idle: Story = {
 
     const canvas = within(canvasElement);
     const prompt = canvas.getByRole("textbox", { name: "Prompt" });
+    const frame = canvas.getByRole("form", { name: "Message composer" });
+    const restingBorder = getComputedStyle(frame).borderColor;
+    const restingShadow = getComputedStyle(frame).boxShadow;
 
     await step("Submit a non-empty draft with Enter", async () => {
       await userEvent.type(prompt, "Send");
-      const frame = canvas.getByRole("form", { name: "Message composer" });
-      await expect(getComputedStyle(frame).outlineColor).toBe(
-        document.documentElement.dataset.colorScheme === "dark"
-          ? "rgb(135, 133, 128)"
-          : "rgb(119, 119, 117)",
-      );
-      await expect(getComputedStyle(frame).outlineWidth).toBe("1px");
-      await expect(getComputedStyle(frame).outlineOffset).toBe("0px");
+      await expect(prompt).toHaveFocus();
+      await expect(getComputedStyle(frame).outlineStyle).toBe("none");
+      await expect(getComputedStyle(frame).borderColor).toBe(restingBorder);
+      await expect(getComputedStyle(frame).boxShadow).toBe(restingShadow);
       await expect(getComputedStyle(prompt).outlineStyle).toBe("none");
       await userEvent.keyboard("{Enter}");
       await expect(prompt).toHaveTextContent("");
@@ -855,7 +854,7 @@ export const PromptFocused: Story = {
   render: () => (
     <Composer
       {...composerPasteProps}
-      value="A focused prompt exposes the canonical composer focus treatment."
+      value="The composer keeps its normal border when focused."
       disabled={false}
       action="send"
       modelSelection={composerModelSelection()}

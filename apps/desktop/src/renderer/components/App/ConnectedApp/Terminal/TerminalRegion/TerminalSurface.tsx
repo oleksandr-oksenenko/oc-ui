@@ -163,7 +163,6 @@ export function TerminalSurface(props: TerminalSurfaceProps) {
             if (!pane) throw new Error("The terminal surface could not be created.");
             pane.container.querySelector("textarea")?.setAttribute("aria-label", "Terminal input");
             pane.container.querySelector("canvas")?.setAttribute("aria-label", "Terminal output");
-            pane.container.querySelector("canvas")?.classList.add("oc-focus-inset");
             await pane.runtime.lifecycle.init();
             if (signal.aborted) return;
             if (widget.getBackend() === "none")

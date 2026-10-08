@@ -1111,7 +1111,7 @@ export const ShellStates: Story = {
   render: renderTranscript,
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
-    await step("Keyboard-focusable annotated output keeps its focus indicator", async () => {
+    await step("Annotated output remains keyboard-focusable without an outline", async () => {
       await userEvent.click(canvas.getByRole("button", { name: /pnpm check/ }));
       const output = await waitFor(() => {
         const element = canvasElement.querySelector<HTMLElement>(
@@ -1125,7 +1125,7 @@ export const ShellStates: Story = {
       output.focus();
       await waitFor(() => expect(output).toHaveFocus());
       await expect(output.matches(":focus-visible")).toBe(true);
-      await expect(getComputedStyle(output).outlineStyle).not.toBe("none");
+      await expect(getComputedStyle(output).outlineStyle).toBe("none");
     });
     await step("Wraps a long command inside the transcript column", async () => {
       const label = [

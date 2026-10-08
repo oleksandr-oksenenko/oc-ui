@@ -534,7 +534,7 @@ export function Composer(props: ComposerProps) {
         ref={(element) => {
           form = element;
         }}
-        class="composer oc-focus-container"
+        class="composer"
         aria-label="Message composer"
         data-dropping={dropping() ? "true" : undefined}
         onSubmit={submit}

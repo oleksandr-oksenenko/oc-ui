@@ -62,8 +62,7 @@ export default {
         "apps/desktop/src/renderer/ui/**/*.css",
       ],
       rules: {
-        // Focus selectors may express local state, but ring geometry belongs to
-        // renderer/styles/focus.css so every control follows the same roles.
+        // Local focus states must not reintroduce outlines or ring shadows.
         "property-disallowed-list": ["/^outline(?:-.+)?$/", "/^scrollbar-/"],
         "rule-selector-property-disallowed-list": {
           "/:(?:focus|focus-visible|focus-within)\\b/": ["box-shadow"],

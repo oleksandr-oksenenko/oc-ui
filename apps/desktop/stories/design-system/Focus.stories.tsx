@@ -23,16 +23,10 @@ const meta = {
 
 export default meta;
 
-async function ring(element: Element, offset = "0px") {
+async function noOutline(element: Element) {
   await waitFor(async () => {
     const style = getComputedStyle(element);
-    // Product contract: neutral, flush focus in every theme. Theme redesigns must
-    // preserve this; deriving the expectation from tokens would hide regressions.
-    const dark = document.documentElement.dataset.colorScheme === "dark";
-    await expect(style.outlineColor).toBe(dark ? "rgb(135, 133, 128)" : "rgb(119, 119, 117)");
-    await expect(style.outlineStyle).toBe("solid");
-    await expect(style.outlineWidth).toBe("1px");
-    await expect(style.outlineOffset).toBe(offset);
+    await expect(style.outlineStyle).toBe("none");
   });
 }
 
@@ -57,7 +51,7 @@ export const SharedTreatment: StoryObj = {
         <RadioItem value="one" label="Focus radio" />
       </RadioGroup>
       <div style={{ overflow: "hidden" }}>
-        <Button class="oc-focus-inset">Focus edge action</Button>
+        <Button>Focus edge action</Button>
       </div>
       <TextInput aria-label="Focus invalid field" invalid value="Invalid" />
       <TextInput aria-label="Focus disabled field" disabled />
@@ -66,6 +60,9 @@ export const SharedTreatment: StoryObj = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const filter = canvas.getByRole("textbox", { name: "Focus filter" });
+    const frame = filter.closest('[data-component="text-input-v2"]')!;
+    const restingEdge = getComputedStyle(frame).boxShadow;
     const slot = (name: string) => {
       const element = canvasElement.querySelector(`[data-slot="${name}"]`);
       if (!element) throw new Error(`Missing focus specimen slot: ${name}`);
@@ -74,43 +71,57 @@ export const SharedTreatment: StoryObj = {
 
     await userEvent.click(canvas.getByRole("button", { name: "Start focus tour" }));
     await userEvent.tab();
-    await ring(canvas.getByRole("button", { name: "Focus icon" }));
+    const icon = canvas.getByRole("button", { name: "Focus icon" });
+    await expect(icon).toHaveFocus();
+    await noOutline(icon);
     await userEvent.tab();
-    const filter = canvas.getByRole("textbox", { name: "Focus filter" });
-    const frame = filter.closest('[data-component="text-input-v2"]')!;
-    await ring(frame);
+    await expect(filter).toHaveFocus();
+    await noOutline(frame);
+    await waitFor(() => expect(getComputedStyle(frame).boxShadow).toBe(restingEdge));
     await expect(getComputedStyle(filter).outlineStyle).toBe("none");
     await userEvent.tab();
-    await ring(canvas.getByRole("button", { name: "Clear focus filter" }));
+    const clear = canvas.getByRole("button", { name: "Clear focus filter" });
+    await expect(clear).toHaveFocus();
+    await noOutline(clear);
     await expect(getComputedStyle(frame).outlineStyle).toBe("none");
+    await expect(getComputedStyle(frame).boxShadow).toBe(restingEdge);
     await userEvent.tab();
     const notes = canvas.getByRole("textbox", { name: "Focus notes" });
-    await ring(notes.closest('[data-component="textarea-v2"]')!);
+    await expect(notes).toHaveFocus();
+    await noOutline(notes.closest('[data-component="textarea-v2"]')!);
     await expect(getComputedStyle(notes).outlineStyle).toBe("none");
     await userEvent.tab();
     const inline = canvas.getByRole("textbox", { name: "Focus inline input" });
-    await ring(inline);
+    await expect(inline).toHaveFocus();
+    await noOutline(inline);
     await expect(getComputedStyle(inline).boxShadow).toBe("none");
     await userEvent.tab();
     const select = canvas.getByRole("button", { name: "Focus select One" });
-    await ring(select);
+    await expect(select).toHaveFocus();
+    await noOutline(select);
     await userEvent.keyboard("{Enter}{Escape}");
     await waitFor(() => expect(select).toHaveFocus());
-    await ring(select);
+    await noOutline(select);
     await userEvent.tab();
-    await ring(slot("checkbox-checkbox-control"));
+    await expect(slot("checkbox-checkbox-input")).toHaveFocus();
+    await noOutline(slot("checkbox-checkbox-control"));
     await expect(getComputedStyle(slot("checkbox-checkbox-control")).boxShadow).toBe("none");
     await userEvent.tab();
-    await ring(slot("switch-control"));
+    await expect(slot("switch-input")).toHaveFocus();
+    await noOutline(slot("switch-control"));
     await userEvent.tab();
-    await ring(slot("radio-v2-item-control"));
+    await expect(slot("radio-v2-item-input")).toHaveFocus();
+    await noOutline(slot("radio-v2-item-control"));
     await userEvent.tab();
-    await ring(canvas.getByRole("button", { name: "Focus edge action" }), "-1px");
+    const edge = canvas.getByRole("button", { name: "Focus edge action" });
+    await expect(edge).toHaveFocus();
+    await noOutline(edge);
     await userEvent.tab();
     const invalid = canvas.getByRole("textbox", { name: "Focus invalid field" });
     const invalidFrame = invalid.closest('[data-component="text-input-v2"]')!;
-    await ring(invalidFrame);
-    // The neutral outline settles before the upstream box-shadow transition.
+    await expect(invalid).toHaveFocus();
+    await noOutline(invalidFrame);
+    // Validation is independent of the removed focus ring.
     await waitFor(async () => {
       const color =
         document.documentElement.dataset.colorScheme === "dark"
@@ -121,9 +132,11 @@ export const SharedTreatment: StoryObj = {
     await expect(canvas.getByRole("textbox", { name: "Focus disabled field" })).toBeDisabled();
     await expect(canvas.getByRole("button", { name: "Focus disabled action" })).toBeDisabled();
 
-    // Pointer editing uses the same single frame as keyboard editing.
+    // Pointer editing also leaves the resting edge unchanged.
     await userEvent.click(filter);
-    await ring(frame);
+    await expect(filter).toHaveFocus();
+    await noOutline(frame);
+    await expect(getComputedStyle(frame).boxShadow).toBe(restingEdge);
     await expect(getComputedStyle(filter).outlineStyle).toBe("none");
   },
 };
@@ -155,18 +168,16 @@ export const EmbeddedAnnotationCard: StoryObj = {
     const editor = root.querySelector("textarea")!;
     const buttons = [...root.querySelectorAll("button")];
     await expect(root.activeElement).toBe(editor);
-    await expect(getComputedStyle(editor).borderColor).toBe("rgb(135, 133, 128)");
-    await userEvent.type(editor, "Keep focus neutral");
+    await noOutline(editor);
+    await expect(getComputedStyle(editor).borderColor).toBe("rgb(64, 62, 60)");
+    await userEvent.type(editor, "No focus outlines");
     for (const button of buttons) {
       // userEvent's synthetic Tab traversal does not enter shadow roots.
       button.focus();
       await expect(root.activeElement).toBe(button);
       await expect(button.matches(":focus-visible")).toBe(true);
       const style = getComputedStyle(button);
-      await expect(style.outlineColor).toBe("rgb(135, 133, 128)");
-      await expect(style.outlineStyle).toBe("solid");
-      await expect(style.outlineWidth).toBe("1px");
-      await expect(style.outlineOffset).toBe("0px");
+      await noOutline(button);
       await expect(style.boxShadow).toBe("none");
     }
     await userEvent.keyboard("{Enter}");

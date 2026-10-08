@@ -45,7 +45,6 @@ export function TerminalPanelFixture(props: {
             ref={(element) => {
               toggle = element;
             }}
-            class="oc-focus-inset"
             variant="ghost-muted"
             icon={<Icon name="console" />}
             aria-label={open() ? "Hide terminal panel" : "Show terminal"}

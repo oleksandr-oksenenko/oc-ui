@@ -111,7 +111,7 @@ export function GlobalFormsRegion(props: GlobalFormsRegionProps): JSX.Element {
             ref={(element: HTMLButtonElement) => {
               launcher = element;
             }}
-            class="global-forms-region-button oc-focus-inset"
+            class="global-forms-region-button"
             data-error={props.controller.loadError() !== undefined ? true : undefined}
             type="button"
             size="large"
