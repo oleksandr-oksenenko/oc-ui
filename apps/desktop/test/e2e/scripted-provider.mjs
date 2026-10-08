@@ -91,17 +91,19 @@ export async function startScriptedProvider() {
       )
         return;
       if (respondBrowser(prompt, toolReply, body, send, finish, requests.length)) return;
-      if (toolReply && prompt.includes("E2E_TOOL_SCROLL")) {
-        send({ content: "Acceptance tool scroll stream is waiting." });
-        completeResponse(prompt, response, () => {
-          send({
-            content: `\n\n${"Appended transcript paragraph.\n\n".repeat(40)}Tool scroll complete.`,
-          });
-          finish();
-        });
+      if (
+        respondTool(
+          prompt,
+          toolReply,
+          body,
+          send,
+          finish,
+          requests.length,
+          response,
+          completeResponse,
+        )
+      )
         return;
-      }
-      if (respondTool(prompt, toolReply, body, send, finish, requests.length)) return;
       send({ content: "Acceptance first streamed fragment. " });
       const complete = () => {
         send({ content: `Acceptance completed with ${body.model}.` });
@@ -352,7 +354,17 @@ function respondBrowser(prompt, toolReply, body, send, finish, requestID) {
   }
 }
 
-function respondTool(prompt, toolReply, body, send, finish, requestID) {
+function respondTool(prompt, toolReply, body, send, finish, requestID, response, completeResponse) {
+  if (toolReply && prompt.includes("E2E_TOOL_SCROLL")) {
+    send({ content: "Acceptance tool scroll stream is waiting." });
+    completeResponse(prompt, response, () => {
+      send({
+        content: `\n\n${"Appended transcript paragraph.\n\n".repeat(40)}Tool scroll complete.`,
+      });
+      finish();
+    });
+    return true;
+  }
   const requested = requestedTool(prompt);
   if (requested && !toolReply) {
     send(toolCall(body.tools, requested, requestID));
