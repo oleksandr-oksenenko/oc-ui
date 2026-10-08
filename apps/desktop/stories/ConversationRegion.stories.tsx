@@ -60,6 +60,7 @@ const renderConversation =
         running: () => false,
         stopError: () => undefined,
         transcript: () => [],
+        transcriptSnapshot: () => ({ sessionID: session.id, messages: [] }),
         transcriptStatus: () => "idle",
         transcriptLoading: () => false,
         transcriptError: () => undefined,

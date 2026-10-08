@@ -193,6 +193,10 @@ catalogs:
 overrides:
   vite@*: npm:@voidzero-dev/vite-plus-core@0.3.0
 
+patchedDependencies:
+  '@opencode/client@2.0.3': d72327cb3770767f5a1f2f0a8c8a8f2f0ff90446201c83a4b968b35bd982d7a8
+  '@opencode/ui@2.0.3': 9925af72e3dd6060129ed08f159753c77812c94b74d4082a055639832c3549f0
+
 importers:
 
   .:
@@ -247,7 +251,7 @@ importers:
         version: link:../../packages/prompt-editor
       '@opencode/client':
         specifier: 'catalog:'
-        version: 2.0.3(effect@4.0.0-rc.112)(solid-js@1.9.15)
+        version: 2.0.3(patch_hash=d72327cb3770767f5a1f2f0a8c8a8f2f0ff90446201c83a4b968b35bd982d7a8)(effect@4.0.0-rc.112)(solid-js@1.9.15)
       '@opencode/plugin-browser':
         specifier: 'catalog:'
         version: 2.0.3(@opentelemetry/api-logs@0.220.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(@opentui/core@0.5.10(typescript@7.0.2)(web-tree-sitter@0.25.10))(redis@6.2.1(@opentelemetry/api@1.9.1))(solid-js@1.9.15)(supports-color@8.1.1)
@@ -259,7 +263,7 @@ importers:
         version: 2.0.3(@aws-sdk/credential-provider-node@3.972.82)(@opentelemetry/api-logs@0.220.0)(@opentelemetry/api@1.9.1)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(@opentui/core@0.5.10(typescript@7.0.2)(web-tree-sitter@0.25.10))(@sinclair/typebox@0.34.52)(@smithy/signature-v4@5.7.3)(ai@6.0.275(zod@4.1.8))(graphql@16.14.2)(redis@6.2.1(@opentelemetry/api@1.9.1))(solid-js@1.9.15)(supports-color@8.1.1)(typescript@7.0.2)(web-tree-sitter@0.25.10)(ws@8.21.3)(zod@4.1.8)
       '@opencode/ui':
         specifier: 'catalog:'
-        version: 2.0.3(@shikijs/themes@4.4.3)(@solidjs/meta@0.29.4(solid-js@1.9.15))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@1.9.15)
+        version: 2.0.3(patch_hash=9925af72e3dd6060129ed08f159753c77812c94b74d4082a055639832c3549f0)(@shikijs/themes@4.4.3)(@solidjs/meta@0.29.4(solid-js@1.9.15))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@1.9.15)
       '@opencode/util':
         specifier: 'catalog:'
         version: 2.0.3(@opentelemetry/api-logs@0.220.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(redis@6.2.1(@opentelemetry/api@1.9.1))(supports-color@8.1.1)
@@ -411,7 +415,7 @@ importers:
     dependencies:
       '@opencode/client':
         specifier: 'catalog:'
-        version: 2.0.3(effect@4.0.0-rc.112)(solid-js@1.9.15)
+        version: 2.0.3(patch_hash=d72327cb3770767f5a1f2f0a8c8a8f2f0ff90446201c83a4b968b35bd982d7a8)(effect@4.0.0-rc.112)(solid-js@1.9.15)
       markdown-it:
         specifier: 'catalog:'
         version: 14.3.2
@@ -10606,7 +10610,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opencode/client@2.0.3(effect@4.0.0-rc.112)(solid-js@1.9.15)':
+  '@opencode/client@2.0.3(patch_hash=d72327cb3770767f5a1f2f0a8c8a8f2f0ff90446201c83a4b968b35bd982d7a8)(effect@4.0.0-rc.112)(solid-js@1.9.15)':
     dependencies:
       '@opencode/protocol': 2.0.3
       '@opencode/schema': 2.0.3
@@ -10889,7 +10893,7 @@ snapshots:
     dependencies:
       '@ai-sdk/provider': 3.0.8
       '@opencode/ai': 2.0.3(supports-color@8.1.1)
-      '@opencode/client': 2.0.3(effect@4.0.0-rc.112)(solid-js@1.9.15)
+      '@opencode/client': 2.0.3(patch_hash=d72327cb3770767f5a1f2f0a8c8a8f2f0ff90446201c83a4b968b35bd982d7a8)(effect@4.0.0-rc.112)(solid-js@1.9.15)
       '@opencode/protocol': 2.0.3
       '@opencode/schema': 2.0.3
       '@opencode/util': 2.0.3(@opentelemetry/api-logs@0.220.0)(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.6.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(redis@6.2.1(@opentelemetry/api@1.9.1))(supports-color@8.1.1)
@@ -10915,7 +10919,7 @@ snapshots:
     dependencies:
       '@ai-sdk/provider': 3.0.8
       '@opencode/ai': 2.0.3(supports-color@10.2.2)
-      '@opencode/client': 2.0.3(effect@4.0.0-rc.112)(solid-js@1.9.15)
+      '@opencode/client': 2.0.3(patch_hash=d72327cb3770767f5a1f2f0a8c8a8f2f0ff90446201c83a4b968b35bd982d7a8)(effect@4.0.0-rc.112)(solid-js@1.9.15)
       '@opencode/protocol': 2.0.3
       '@opencode/schema': 2.0.3
       '@opencode/util': 2.0.3(supports-color@10.2.2)
@@ -11115,7 +11119,7 @@ snapshots:
       - valibot
       - web-tree-sitter
 
-  '@opencode/ui@2.0.3(@shikijs/themes@4.4.3)(@solidjs/meta@0.29.4(solid-js@1.9.15))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@1.9.15)':
+  '@opencode/ui@2.0.3(patch_hash=9925af72e3dd6060129ed08f159753c77812c94b74d4082a055639832c3549f0)(@shikijs/themes@4.4.3)(@solidjs/meta@0.29.4(solid-js@1.9.15))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@1.9.15)':
     dependencies:
       '@kobalte/core': 0.13.13(solid-js@1.9.15)
       '@pierre/diffs': 1.2.10(@shikijs/themes@4.4.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

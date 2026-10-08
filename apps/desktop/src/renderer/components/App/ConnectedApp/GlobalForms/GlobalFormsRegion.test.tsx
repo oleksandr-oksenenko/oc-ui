@@ -1,6 +1,8 @@
 import type { FormAnswer, FormInfo, LocationRef } from "@opencode/client";
+import { useDialog } from "@opencode/ui/context/dialog";
+import { Dialog, DialogHeader, DialogTitleGroup } from "@opencode/ui/dialog";
 import { ServerFlowDialogProvider } from "../../../../ui/ServerFlowDialogProvider.tsx";
-import { createSignal } from "solid-js";
+import { Show, createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -99,6 +101,45 @@ function buttonWithText(root: ParentNode, text: string): HTMLButtonElement {
   return button;
 }
 
+function mountFocusHarness(value: GlobalFormsController) {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const [regionMounted, setRegionMounted] = createSignal(true);
+  let dialogs!: ReturnType<typeof useDialog>;
+  const harness = () => {
+    dialogs = useDialog();
+    return (
+      <>
+        <div class="shell-session-sidebar">
+          <Show when={regionMounted()}>
+            <GlobalFormsRegion controller={value} />
+          </Show>
+          <button class="shell-server-selector">Server</button>
+        </div>
+        <div class="shell-titlebar">
+          <button aria-label="Show sessions">Show sessions</button>
+        </div>
+      </>
+    );
+  };
+  const dispose = render(
+    () => <ServerFlowDialogProvider>{harness()}</ServerFlowDialogProvider>,
+    host,
+  );
+  return { host, dispose, dialogs, setRegionMounted };
+}
+
+function replacementDialog() {
+  return (
+    <Dialog>
+      <DialogHeader>
+        <DialogTitleGroup title="Replacement" description="A different dialog owns focus." />
+      </DialogHeader>
+      <button autofocus>Replacement action</button>
+    </Dialog>
+  );
+}
+
 function launcher(root: ParentNode): HTMLButtonElement {
   const button = root.querySelector(".global-forms-region-button");
   if (!(button instanceof HTMLButtonElement)) throw new Error("Launcher button not found.");
@@ -123,10 +164,125 @@ async function settle(): Promise<void> {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   document.body.replaceChildren();
 });
 
 describe("GlobalFormsRegion", () => {
+  it.each(["Escape", "Keep pending"])(
+    "restores launcher focus from the real provider after %s and disposes the closed root",
+    async (dismissal) => {
+      const mounted = mountFocusHarness(controller([form("one")]).value);
+      const opener = launcher(mounted.host);
+      opener.focus();
+      opener.click();
+      await settle();
+      const oldDialog = document.querySelector('[role="dialog"]');
+      const disposeRoot = vi.spyOn(mounted.dialogs.active!, "dispose");
+      vi.useFakeTimers();
+      if (dismissal === "Escape") {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      } else {
+        buttonWithText(document.body, "Keep pending").click();
+      }
+      await vi.advanceTimersByTimeAsync(150);
+
+      expect(disposeRoot).toHaveBeenCalledOnce();
+      expect(oldDialog?.isConnected).toBe(false);
+      expect(mounted.dialogs.active).toBeUndefined();
+      expect(document.activeElement).toBe(opener);
+      mounted.dispose();
+    },
+  );
+
+  it.each(["removed", "disabled"])(
+    "skips a %s opener and disabled fallback when the real provider closes",
+    async (invalidOpener) => {
+      const state = controller([form("one")]);
+      const mounted = mountFocusHarness(state.value);
+      const opener = launcher(mounted.host);
+      opener.focus();
+      opener.click();
+      await settle();
+      const server = buttonWithText(mounted.host, "Server");
+      server.disabled = true;
+      if (invalidOpener === "removed") {
+        state.setForms([]);
+      } else {
+        opener.disabled = true;
+      }
+      expect(opener.isConnected).toBe(invalidOpener !== "removed");
+      const disposeRoot = vi.spyOn(mounted.dialogs.active!, "dispose");
+      vi.useFakeTimers();
+      buttonWithText(document.body, "Keep pending").click();
+      await vi.advanceTimersByTimeAsync(150);
+
+      expect(disposeRoot).toHaveBeenCalledOnce();
+      expect(document.activeElement).toBe(buttonWithText(mounted.host, "Show sessions"));
+      mounted.dispose();
+    },
+  );
+
+  it("prevents native restoration and fallback lookup after the launcher owner is disposed", async () => {
+    const mounted = mountFocusHarness(controller([form("one")]).value);
+    const opener = launcher(mounted.host);
+    opener.focus();
+    opener.click();
+    await settle();
+    const focusOpener = vi.spyOn(opener, "focus");
+    const focusServer = vi.spyOn(buttonWithText(mounted.host, "Server"), "focus");
+    const lookup = vi.spyOn(document, "querySelector");
+    const disposeRoot = vi.spyOn(mounted.dialogs.active!, "dispose");
+    vi.useFakeTimers();
+    mounted.setRegionMounted(false);
+    await vi.advanceTimersByTimeAsync(150);
+
+    expect(disposeRoot).toHaveBeenCalledOnce();
+    expect(focusOpener).not.toHaveBeenCalled();
+    expect(focusServer).not.toHaveBeenCalled();
+    expect(lookup).not.toHaveBeenCalledWith(".shell-session-sidebar .shell-server-selector");
+    expect(lookup).not.toHaveBeenCalledWith('.shell-titlebar [aria-label="Show sessions"]');
+    lookup.mockRestore();
+    mounted.dispose();
+  });
+
+  it.each(["show", "push during close"])(
+    "disposes the old provider root without stealing replacement focus on %s",
+    async (replacement) => {
+      const mounted = mountFocusHarness(controller([form("one")]).value);
+      const opener = launcher(mounted.host);
+      opener.focus();
+      opener.click();
+      await settle();
+      const oldDialog = document.querySelector('[role="dialog"]');
+      const oldID = mounted.dialogs.active!.id;
+      const disposeRoot = vi.spyOn(mounted.dialogs.active!, "dispose");
+      const focusOpener = vi.spyOn(opener, "focus");
+      vi.useFakeTimers();
+      if (replacement === "show") {
+        await mounted.dialogs.show(replacementDialog);
+      } else {
+        buttonWithText(document.body, "Keep pending").click();
+        // Push before the provider's ordinary 100 ms close delay completes.
+        await mounted.dialogs.push(replacementDialog);
+      }
+      const action = buttonWithText(document.body, "Replacement action");
+      action.focus();
+      await vi.advanceTimersByTimeAsync(150);
+
+      expect(disposeRoot).toHaveBeenCalledOnce();
+      expect(oldDialog?.isConnected).toBe(false);
+      expect(mounted.dialogs.active?.id).not.toBe(oldID);
+      expect(document.querySelectorAll("[data-dialog-layer]")).toHaveLength(1);
+      expect(focusOpener).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(action);
+      mounted.dialogs.close();
+      await vi.advanceTimersByTimeAsync(150);
+      expect(mounted.dialogs.active).toBeUndefined();
+      mounted.dispose();
+    },
+  );
+
   it("does not look up fallback focus after the request launcher is disposed", async () => {
     const mounted = mount(controller([form("one")]).value);
     launcher(mounted.host).click();

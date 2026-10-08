@@ -196,6 +196,7 @@ export default defineConfig({
           "apps/desktop/test/e2e/**/*.{ts,mjs}",
           "apps/desktop/test/browser-inspection.test.mjs",
           "apps/desktop/test/browser-shutdown.test.mjs",
+          "apps/desktop/test/sdk-inbox.test.mjs",
           "apps/desktop/test/style-tokens.test.mjs",
         ],
         rules: {

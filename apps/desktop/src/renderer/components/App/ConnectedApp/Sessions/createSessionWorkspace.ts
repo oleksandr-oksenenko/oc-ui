@@ -52,6 +52,10 @@ export type SessionWorkspace = {
   readonly running: Accessor<boolean>;
   readonly stopError: Accessor<string | undefined>;
   readonly transcript: Accessor<readonly SessionMessage[]>;
+  readonly transcriptSnapshot: Accessor<{
+    readonly sessionID: string | undefined;
+    readonly messages: readonly SessionMessage[];
+  }>;
   readonly transcriptStatus: Accessor<DataSessionStatus>;
   readonly transcriptLoading: Accessor<boolean>;
   readonly transcriptError: Accessor<string | undefined>;
@@ -162,10 +166,14 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
       }),
     );
 
-  const transcript = createMemo<readonly SessionMessage[]>(() => {
-    const id = selectedID();
-    return id === undefined ? [] : input.runtime.data.session.message.list(id);
+  const transcriptSnapshot = createMemo(() => {
+    const sessionID = selectedID();
+    return {
+      sessionID,
+      messages: sessionID === undefined ? [] : input.runtime.data.session.message.list(sessionID),
+    };
   });
+  const transcript = () => transcriptSnapshot().messages;
 
   const hydrate = (sessionID: string): Promise<void> => {
     // A stale request must not replace the current selection's work or state.
@@ -419,6 +427,7 @@ export function createSessionWorkspace(input: CreateSessionWorkspaceInput): Sess
     running,
     stopError,
     transcript,
+    transcriptSnapshot,
     transcriptStatus,
     transcriptLoading,
     transcriptError,

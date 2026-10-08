@@ -1,6 +1,7 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook owns interaction tests. */
 import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { createSignal, onCleanup } from "solid-js";
 
 import {
   TranscriptView,
@@ -31,6 +32,11 @@ import { TranscriptPendingFixture } from "./transcript-catalog/TranscriptPending
 import { TranscriptUpdatesFixture } from "./transcript-catalog/TranscriptUpdatesFixture.tsx";
 import { TranscriptActivityFixture } from "./transcript-catalog/TranscriptActivityFixture.tsx";
 import { ActivityStatesFixture } from "./transcript-catalog/ActivityStatesFixture.tsx";
+import { browserMessage } from "./attachment-fixtures.ts";
+import {
+  browserAnnotationMetadata,
+  readBrowserAnnotationMetadata,
+} from "../src/renderer/opencode/browser-annotation-metadata.ts";
 
 const meta = {
   title: "Transcript/TranscriptView",
@@ -79,6 +85,94 @@ const readStoryFileImage = async (): Promise<Blob> =>
 export const Rich: Story = {
   args: { messages: richItems, sessionStatus: "idle", loading: false },
   render: renderTranscript,
+};
+
+export const BrowserAttachmentDurableUpdate: Story = {
+  args: { messages: [browserMessage], sessionStatus: "idle" },
+  render: (args) => {
+    const [message, setMessage] = createSignal(browserMessage);
+    const [session, setSession] = createSignal(args.sessionID);
+    const [present, setPresent] = createSignal(true);
+    return (
+      <div
+        style={{ height: "100vh", display: "grid", "grid-template-rows": "minmax(0, 1fr)" }}
+        data-durable-message-fixture
+        ref={(element) => {
+          const replace = () =>
+            setMessage({
+              ...browserMessage,
+              text: "Acknowledged browser prompt",
+              metadata: browserAnnotationMetadata(
+                "Acknowledged browser prompt",
+                readBrowserAnnotationMetadata(browserMessage.metadata)!.annotations,
+              ),
+            });
+          element.addEventListener("durable-message", replace);
+          const changeSession = () => setSession("another-transcript-session");
+          const remove = () => setPresent(false);
+          element.addEventListener("session-change", changeSession);
+          element.addEventListener("remove-message", remove);
+          onCleanup(() => {
+            element.removeEventListener("durable-message", replace);
+            element.removeEventListener("session-change", changeSession);
+            element.removeEventListener("remove-message", remove);
+          });
+        }}
+      >
+        <TranscriptView
+          {...args}
+          sessionID={session()}
+          sessionStatus="idle"
+          messages={present() ? [message()] : []}
+        />
+      </div>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = await canvas.findByRole("button", { name: "Browser · 1" });
+    await userEvent.click(trigger);
+    await screen.findByRole("button", { name: "Enlarge Browser annotation 1" });
+    // An SDK acknowledgement replaces the same-ID object without pointer/focus input.
+    canvasElement
+      .querySelector("[data-durable-message-fixture]")!
+      .dispatchEvent(new Event("durable-message"));
+    await canvas.findByText("Acknowledged browser prompt");
+    await expect(canvas.getByRole("button", { name: "Browser · 1" })).toBe(trigger);
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Enlarge Browser annotation 1" }),
+    );
+    await screen.findByRole("dialog", { name: "Preview of Browser annotation 1" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Enlarge Browser annotation 1" })).toHaveFocus(),
+    );
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await userEvent.click(trigger);
+    await screen.findByRole("button", { name: "Enlarge Browser annotation 1" });
+    await userEvent.click(canvas.getByText("Acknowledged browser prompt"));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Enlarge Browser annotation 1" })).toBeNull(),
+    );
+    await userEvent.click(trigger);
+    await screen.findByRole("button", { name: "Enlarge Browser annotation 1" });
+    const fixture = canvasElement.querySelector("[data-durable-message-fixture]")!;
+    fixture.dispatchEvent(new Event("session-change"));
+    await waitFor(() => expect(trigger.isConnected).toBe(false));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Enlarge Browser annotation 1" })).toBeNull(),
+    );
+    const next = canvas.getByRole("button", { name: "Browser · 1" });
+    await userEvent.click(next);
+    await screen.findByRole("button", { name: "Enlarge Browser annotation 1" });
+    fixture.dispatchEvent(new Event("remove-message"));
+    await waitFor(() => expect(next.isConnected).toBe(false));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Enlarge Browser annotation 1" })).toBeNull(),
+    );
+  },
 };
 
 /** Muted activity disclosures keep the emphasis on model messages. */

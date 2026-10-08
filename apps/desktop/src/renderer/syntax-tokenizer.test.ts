@@ -27,16 +27,25 @@ function highlight(input: import("./syntax-highlight.ts").HighlightSnippet = sni
 }
 
 describe("SyntaxTokenizer", () => {
-  it("preserves whitespace and changes theme", async () => {
+  it("preserves cold and warm source text and uses theme colors with one highlighter", async () => {
     const factory = vi.fn<typeof create>(create);
     const owner = runtime(factory);
     try {
       const first = await owner.runPromise(highlight());
-      expect(first?.map((line) => line.map((token) => token.content).join("")).join("\n")).toBe(
-        snippet.code,
-      );
-      expect(await owner.runPromise(highlight())).toEqual(first);
+      const warm = await owner.runPromise(highlight());
       const dark = await owner.runPromise(highlight({ ...snippet, theme: "dark" }));
+      // Shiki's time budget can change token boundaries between cold and warm runs.
+      for (const tokens of [first, warm, dark]) {
+        expect(tokens?.map((line) => line.map((token) => token.content).join("")).join("\n")).toBe(
+          snippet.code,
+        );
+        const colors = tokens
+          ?.flat()
+          .map((token) => token.color)
+          .filter(Boolean);
+        expect(colors?.length).toBeGreaterThan(0);
+        for (const color of colors ?? []) expect(color).toMatch(/^#[\da-f]{6}$/i);
+      }
       expect(dark?.[0]?.[0]?.color).not.toBe(first?.[0]?.[0]?.color);
       expect(factory).toHaveBeenCalledTimes(1);
     } finally {

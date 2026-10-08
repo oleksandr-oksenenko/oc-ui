@@ -301,6 +301,24 @@ async function idle() {
   await page.locator(".transcript-working").waitFor({ state: "hidden" });
 }
 
+async function withHeldProviderResponse(action) {
+  const failures = [];
+  try {
+    await action();
+  } catch (cause) {
+    failures.push(cause);
+  } finally {
+    provider.releaseHeld();
+    try {
+      await idle();
+    } catch (cause) {
+      failures.push(cause);
+    }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, "Queue scenario and cleanup failed");
+}
+
 async function changeServer(target = page) {
   await target.getByRole("button", { name: /Select server, .*Connected/u }).click();
   await target.getByRole("heading", { name: "Connect to OpenCode" }).waitFor();
@@ -1261,8 +1279,23 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
+  it("releases a held provider response after an early scenario failure", async () => {
+    const failure = new Error("Intentional held-scenario failure");
+    const scenario = withHeldProviderResponse(async () => {
+      await send("E2E_QUEUE_HOLD early failure");
+      await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
+      await page
+        .locator(".transcript-assistant-streaming")
+        .getByText("Acceptance first streamed fragment.", { exact: false })
+        .waitFor();
+      throw failure;
+    });
+    await expect(scenario).rejects.toBe(failure);
+    await sendCompleted("E2E_RECOVER after held scenario failure");
+  });
+
   it("queues, cancels, steers and restores server-owned pending messages after reload", async () => {
-    try {
+    await withHeldProviderResponse(async () => {
       const before = (await providerState()).requests.length;
       const admitted = page.waitForResponse(
         (response) =>
@@ -1331,11 +1364,14 @@ describe.sequential("production browser app", () => {
       );
       await prompt.press("Enter");
       await expect.poll(() => prompt.textContent()).toBe("");
-      // Admission can project into either the inbox or transcript before this
-      // assertion. Check the server acknowledgement before releasing the hold.
+      // Admission is acknowledged while delivery remains blocked by the hold.
       const accepted = await directSteer;
       expect(accepted.ok()).toBe(true);
       expect(accepted.request().postDataJSON().delivery).toBe("steer");
+      await pending.getByText("Direct steering task", { exact: true }).waitFor();
+      expect(await page.locator(".transcript-view").textContent()).not.toContain(
+        "Direct steering task",
+      );
       provider.releaseHeld();
       await pending.waitFor({ state: "hidden" });
       await idle();
@@ -1363,11 +1399,7 @@ describe.sequential("production browser app", () => {
       expect(steerIndex).toBeGreaterThan(0);
       expect(middleIndex).toBeGreaterThan(steerIndex);
       expect(queueIndex).toBeGreaterThan(middleIndex);
-    } finally {
-      // The test owns this hold; a failed assertion must not stall later flows.
-      provider.releaseHeld();
-      await idle();
-    }
+    });
   });
 
   it("marks completed background turns until their session is opened", async () => {
