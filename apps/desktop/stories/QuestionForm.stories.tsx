@@ -454,7 +454,9 @@ export const CardWidthAndLongAnswers: Story = {
 
       const draft = form.getByRole("textbox", { name: "Add another answer" });
       for (const answer of customAnswers) {
-        await userEvent.type(draft, answer);
+        await userEvent.click(draft);
+        await userEvent.paste(answer);
+        await expect(draft).toHaveValue(answer);
         await userEvent.click(form.getByRole("button", { name: "Add" }));
         await expect(draft).toHaveValue("");
       }
