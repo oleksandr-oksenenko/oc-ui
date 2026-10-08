@@ -26,13 +26,13 @@ export function ContextTabs(props: ContextTabsProps) {
             id={tabId}
             aria-controls={panelId}
             class="context-tab"
-            classes={{ button: "context-tab-trigger oc-focus-inset" }}
+            classes={{ button: "context-tab-trigger" }}
           >
             Diff
           </Tabs.Trigger>
         </Tabs.List>
         <IconButton
-          class="context-panel-close oc-focus-inset"
+          class="context-panel-close"
           size="normal"
           variant="ghost-muted"
           icon={<Icon name="layout-right-partial" size="small" aria-hidden="true" />}

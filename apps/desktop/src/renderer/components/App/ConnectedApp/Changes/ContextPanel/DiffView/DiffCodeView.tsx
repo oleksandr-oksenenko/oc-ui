@@ -61,9 +61,9 @@ const UNSAFE_CSS = `
     padding-bottom: 8px;
   }
 
-  :is(code[data-code], [data-expand-button]):focus-visible {
-    outline: var(--oc-focus-ring-outline);
-    outline-offset: var(--oc-focus-ring-inset-offset);
+  :host * {
+    /* stylelint-disable-next-line declaration-no-important -- Suppress pinned diff outlines inside this shadow root. */
+    outline: none !important;
   }
 
   :host(.diff-file-unavailable) [data-line],

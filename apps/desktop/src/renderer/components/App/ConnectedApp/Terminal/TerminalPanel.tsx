@@ -74,10 +74,8 @@ export function TerminalPanel(props: TerminalPanelProps): JSX.Element {
                       data-status={tab()?.status}
                       aria-controls={`${id}-surfaces`}
                       class="terminal-panel-tab"
-                      classes={{ button: "oc-focus-inset" }}
                       closeButton={
                         <Tabs.CloseButton
-                          class="oc-focus-inset"
                           aria-label={`Close terminal ${tab()?.title}`}
                           title={`Close terminal ${tab()?.title}`}
                           onClick={() => props.onClose(tabID)}
@@ -103,7 +101,6 @@ export function TerminalPanel(props: TerminalPanelProps): JSX.Element {
               type="button"
               size="small"
               variant="ghost-muted"
-              class="oc-focus-inset"
               icon={<Icon name="plus" />}
               aria-label="New terminal"
               data-terminal-focus
@@ -115,7 +112,6 @@ export function TerminalPanel(props: TerminalPanelProps): JSX.Element {
               type="button"
               size="small"
               variant="ghost-muted"
-              class="oc-focus-inset"
               icon={<Icon name="chevron-down" />}
               aria-label="Hide terminal"
               title="Hide terminal"
@@ -151,7 +147,7 @@ export function TerminalPanel(props: TerminalPanelProps): JSX.Element {
           )}
         </Show>
         <div
-          class="terminal-panel-surfaces oc-focus-inset"
+          class="terminal-panel-surfaces"
           id={`${id}-surfaces`}
           role={active() ? "tabpanel" : undefined}
           aria-labelledby={active() ? `${id}-${active()!.id}` : undefined}

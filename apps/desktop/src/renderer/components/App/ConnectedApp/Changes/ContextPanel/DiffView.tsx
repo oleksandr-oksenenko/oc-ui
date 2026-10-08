@@ -116,7 +116,7 @@ export function DiffView(props: DiffViewProps) {
               </div>
             </div>
             <IconButton
-              class="diff-collapse-toggle oc-focus-inset"
+              class="diff-collapse-toggle"
               type="button"
               size="small"
               variant="ghost-muted"

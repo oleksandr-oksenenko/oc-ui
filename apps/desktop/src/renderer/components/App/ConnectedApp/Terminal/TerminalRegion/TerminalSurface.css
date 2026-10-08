@@ -83,10 +83,6 @@
   }
 }
 
-.pane-context-menu-item:focus-visible {
-  border-color: var(--oc-focus-ring);
-}
-
 .pane-context-menu-item:disabled {
   color: var(--oc-text-faint);
   cursor: default;

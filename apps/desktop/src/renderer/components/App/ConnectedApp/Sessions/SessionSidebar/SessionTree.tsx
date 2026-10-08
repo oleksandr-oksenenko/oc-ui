@@ -142,7 +142,7 @@ export function SessionTree(props: SessionTreeProps) {
                 >
                   <h2 id={`shell-session-group-${id}`}>
                     <Collapsible.Trigger
-                      class="shell-session-group-toggle oc-focus-inset"
+                      class="shell-session-group-toggle"
                       type="button"
                       disabled={query().length > 0}
                     >

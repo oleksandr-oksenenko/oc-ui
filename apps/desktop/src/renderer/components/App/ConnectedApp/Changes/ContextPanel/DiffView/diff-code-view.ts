@@ -134,7 +134,7 @@ export function createReviewAnnotation(comment: ReviewComment, review: DiffRevie
 
   if (review.editingCommentID === comment.id) {
     const editor = document.createElement("textarea");
-    editor.className = "diff-review-editor oc-focus-delegate";
+    editor.className = "diff-review-editor";
     editor.rows = 1;
     editor.value = comment.body;
     editor.placeholder = "Leave a review comment";

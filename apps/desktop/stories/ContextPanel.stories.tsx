@@ -188,6 +188,19 @@ export const Diff: Story = {
   // Check renderer readiness without explicitly preloading the shared highlighter.
   play: async ({ canvasElement }) => {
     for (const file of diffFiles) await waitForDiffBody(canvasElement, file.file);
+    await userEvent.tab();
+    for (const file of diffFiles) {
+      await waitFor(async () => {
+        const root = diffItem(canvasElement, file.file)?.shadowRoot;
+        const code = root?.querySelector<HTMLPreElement>('pre[tabindex="0"]');
+        if (!root || !code) throw new TypeError("Focusable diff output did not render");
+        // Synthetic Tab traversal does not enter Pierre's shadow roots.
+        code.focus();
+        await expect(root.activeElement).toBe(code);
+        await expect(code.matches(":focus-visible")).toBe(true);
+        await expect(getComputedStyle(code).outlineStyle).toBe("none");
+      });
+    }
   },
 };
 
@@ -677,6 +690,18 @@ export const GutterRangeSelection: Story = {
         { line: 3, type: "change-addition" },
       );
       await expect(captured()).toBe("2:deletions-3:additions");
+    });
+
+    await step("Focused gutter actions have no outline inside the shadow root", async () => {
+      await userEvent.tab();
+      await waitFor(async () => {
+        const button = utility("src/generated/mixed.ts");
+        if (!button) throw new TypeError("Diff gutter action did not render");
+        button.focus();
+        await expect(item("src/generated/mixed.ts")?.shadowRoot?.activeElement).toBe(button);
+        await expect(button.matches(":focus-visible")).toBe(true);
+        await expect(getComputedStyle(button).outlineStyle).toBe("none");
+      });
     });
   },
 };

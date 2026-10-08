@@ -50,7 +50,6 @@ textarea {
   font: inherit;
   outline: none;
 }
-textarea:focus { border-color: var(--oc-focus-ring); }
 .row {
   display: flex;
   flex-wrap: wrap;
@@ -83,10 +82,6 @@ button:not(.primary):active:not(:disabled) {
   background-image: linear-gradient(var(--oc-overlay-pressed), var(--oc-overlay-pressed));
 }
 button.primary:active:not(:disabled) { background: var(--oc-selection-pressed); }
-button:focus-visible {
-  outline: var(--oc-focus-ring-outline);
-  outline-offset: var(--oc-focus-ring-offset);
-}
 `;
 
 /** Places the card beside the anchor inside the current viewport. */

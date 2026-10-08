@@ -101,7 +101,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
                 <p>{error()}</p>
               </div>
               <Button
-                class="shell-sidebar-action oc-focus-inset"
+                class="shell-sidebar-action"
                 type="button"
                 size="small"
                 variant="outline"
@@ -124,7 +124,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
           <div class="shell-sidebar-message">
             <p>No sessions yet.</p>
             <Button
-              class="shell-sidebar-action oc-focus-inset"
+              class="shell-sidebar-action"
               type="button"
               size="small"
               variant="outline"
@@ -161,7 +161,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
           {props.globalControls}
         </div>
         <Button
-          class="shell-server-selector oc-focus-inset"
+          class="shell-server-selector"
           type="button"
           size="small"
           variant="ghost-muted"

@@ -19,7 +19,7 @@ export function ContextTitlebarRegion(props: ContextTitlebarRegionProps) {
         <div class="context-view-controls" role="group" aria-label="Workspace view">
           <button
             type="button"
-            class="context-view-button oc-focus-inset"
+            class="context-view-button"
             aria-pressed={props.view !== "browser"}
             onClick={() => props.onViewChange?.("diff")}
           >
@@ -27,7 +27,7 @@ export function ContextTitlebarRegion(props: ContextTitlebarRegionProps) {
           </button>
           <button
             type="button"
-            class="context-view-button oc-focus-inset"
+            class="context-view-button"
             aria-pressed={props.view === "browser"}
             onClick={() => props.onViewChange?.("browser")}
           >

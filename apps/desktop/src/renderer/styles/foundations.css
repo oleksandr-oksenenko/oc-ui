@@ -32,14 +32,6 @@
   --oc-icon-faint: #858583;
   --oc-icon-base: #636361;
   --oc-accent: #075ebd;
-
-  /* Product contract across themes: neutral, flush focus; never accent-colored
-     glows or detached outer rings. Keep this independent of theme accent choices. */
-  --oc-focus-ring: var(--oc-border-emphasis);
-  --oc-focus-ring-width: 1px;
-  --oc-focus-ring-offset: 0px;
-  --oc-focus-ring-outline: var(--oc-focus-ring-width) solid var(--oc-focus-ring);
-  --oc-focus-ring-inset-offset: calc(-1 * var(--oc-focus-ring-width));
   --oc-status-info: #075ebd;
   --oc-status-success: #176f2c;
   --oc-status-warning: #855600;
@@ -153,10 +145,8 @@
   --border-selected: var(--oc-selection);
   --border-weak-selected: var(--oc-selection-ring);
   --border-interactive-base: var(--oc-border-emphasis);
-  --border-interactive-focus: var(--oc-focus-ring);
-  --shadow-xs-border-focus:
-    0 0 0 var(--oc-focus-ring-offset) var(--oc-surface-canvas),
-    0 0 0 calc(var(--oc-focus-ring-offset) + var(--oc-focus-ring-width)) var(--oc-focus-ring);
+  --border-interactive-focus: var(--oc-border-base);
+  --shadow-xs-border-focus: none;
   --icon-base: var(--oc-icon-base);
   --text-strong: var(--oc-text-strong);
   --text-base: var(--oc-text-base);
@@ -193,7 +183,7 @@
   --v2-border-border-muted: var(--oc-border-muted);
   --v2-border-border-base: var(--oc-border-base);
   --v2-border-border-strong: var(--oc-border-strong);
-  --v2-border-border-focus: var(--oc-focus-ring);
+  --v2-border-border-focus: var(--oc-border-base);
   --v2-overlay-simple-overlay-hover: var(--oc-overlay-hover);
   --v2-overlay-simple-overlay-pressed: var(--oc-overlay-pressed);
   --v2-elevation-floating: var(--oc-shadow-floating);
@@ -207,7 +197,7 @@
      arrows, tooltips, switch thumbs, and radio indicators. */
   --border-disabled: var(--oc-border-muted);
   --border-error: var(--oc-status-danger);
-  --border-focus: var(--oc-focus-ring);
+  --border-focus: var(--oc-border-base);
   --border-hover: var(--oc-border-strong);
   --icon-disabled: var(--oc-icon-faint);
   --icon-invert-base: var(--oc-text-on-selection);
@@ -272,6 +262,8 @@
    universal geometricPrecision rule. Shadow cards inherit the same policy. */
 :root *,
 :host * {
+  /* stylelint-disable-next-line declaration-no-important -- Suppress browser and upstream outlines in document and shadow roots. */
+  outline: none !important;
   text-rendering: inherit;
 }
 
