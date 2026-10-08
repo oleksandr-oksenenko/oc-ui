@@ -13,8 +13,12 @@ A desktop and browser client for OpenCode.
 pnpm install --frozen-lockfile
 ```
 
-Storybook and full-app browser tests, which run as part of `pnpm test` and `pnpm ready`,
-require Chromium to be provisioned once per machine (the full-app HTTPS fixture also uses OpenSSL):
+The local default (`pnpm ready`) runs static checks and unit tests. GitHub Actions
+runs the heavier component, integration, build, and packaged macOS checks. See
+[verification tiers](docs/app-verification.md#verification-tiers) for execution policy.
+
+Opt-in local component and integration tests require Chromium to be provisioned
+once per machine (integration fixtures also use OpenSSL and zsh):
 
 ```sh
 pnpm --filter desktop exec playwright install chromium
@@ -77,9 +81,13 @@ pnpm dev:opencode       # Start the pinned OpenCode server library
 pnpm storybook          # Start the component catalog at http://localhost:6006
 pnpm build-storybook    # Build the static component catalog
 pnpm verify:browser     # Start an isolated app/server session for manual inspection
-pnpm test:local         # Run package and desktop unit tests for local development
-pnpm test               # Run unit, Storybook, browser, and session-tools tests
-pnpm ready              # Run checks, all tests, desktop/browser builds, and Storybook
+pnpm test               # Tier 0: unit/controller, prompt-editor, and session-tools tests
+pnpm test:local         # Compatibility alias for pnpm test
+pnpm ready              # Local gate: static checks and tier 0 tests
+pnpm test:components    # Tier 1: Storybook/accessibility and Chromium storage tests
+pnpm test:integration   # Tier 2: browser acceptance and real-server lifecycle tests
+pnpm test:all           # Opt in to all non-packaged test tiers (0–2)
+pnpm ready:ci           # Opt in to checks, tiers 0–2, and all three builds
 pnpm package:mac        # Build an unpacked macOS arm64 .app in apps/desktop/dist
 pnpm make:mac           # Build the unpacked .app and a macOS arm64 DMG
 pnpm test:acceptance:mac # Package and test the macOS arm64 app with WebdriverIO
@@ -90,11 +98,12 @@ and a test project. It uses a scripted provider and does not run UI assertions.
 See [App verification](docs/app-verification.md) for inspection, cleanup, and
 which automated checks to run for a change.
 
-Packaged macOS acceptance is separate from `pnpm test` and `pnpm ready`.
+Packaged macOS acceptance (tier 3) runs on pushes to `main` and manual CI dispatch.
+It is separate from `pnpm test`, `pnpm ready`, and `pnpm ready:ci`.
 
 ### Local tests and CI
 
-Use `pnpm test:local` for the fast local loop. It runs both workspace packages and
+Use `pnpm test` (or its `test:local` alias) for the fast local loop. It runs both workspace packages and
 the desktop `unit` project, without needing Chromium. For a single desktop test:
 
 ```sh
@@ -107,16 +116,16 @@ completing an implementation, run the root `pnpm check` and `pnpm test` gates.
 
 The [CI workflow](.github/workflows/ci.yml) runs on every pull request and push to
 `main`, and can also be started manually. Both Linux x64 (`ubuntu-24.04`) and macOS
-arm64 (`macos-15`) runners provision the pinned Node.js and pnpm versions and
-Chromium, then run all test projects:
+arm64 (`macos-15`) runners provision the pinned Node.js and pnpm versions.
+Static checks, unit tests, components, integrations, and builds have independent
+jobs; Chromium is installed only for component and integration jobs:
 
-- Linux: `pnpm check`, `pnpm test`, `pnpm build:web`, and `pnpm build-storybook`.
-- macOS: `pnpm ready` (checks, all tests, and desktop/browser/Storybook builds),
-  followed by `pnpm test:acceptance:mac` (packaging and scripted-provider Electron
-  acceptance). Desktop runtime staging and packaging currently require macOS arm64.
+- Linux and macOS: tiers 0–2, browser builds, and Storybook builds on PRs and `main`.
+- macOS: desktop builds on PRs and `main`; packaged acceptance on `main` and manual
+  dispatch. Desktop runtime staging and packaging currently require macOS arm64.
 
-CI invokes the `test`, `ready`, and `build-storybook` scripts through
-`vp run --no-cache -w` so every run executes those tasks. GitHub Actions dependency
+CI invokes Vite+ tasks through `vp run --no-cache -w` so every run executes those
+tasks. GitHub Actions dependency
 caching is disabled, and CI does not upload artifacts. Build outputs and test
 diagnostics stay on the disposable runner; test output is available in the job logs.
 

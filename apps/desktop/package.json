@@ -29,8 +29,10 @@
     "test:acceptance:mac": "pnpm run package:mac && node test/e2e/run-packaged.mjs startup",
     "test:acceptance:chat:mac": "pnpm run package:mac && node test/e2e/run-packaged.mjs chat",
     "test:acceptance:mac:wdio": "wdio run wdio.conf.ts",
-    "test": "vp test run --passWithNoTests",
-    "test:unit": "vp test run --project=unit"
+    "test": "vp test run --project=unit",
+    "test:unit": "pnpm test",
+    "test:components": "vp test run --project=storage --project=storybook",
+    "test:integration": "pnpm --filter @oc-ui/opencode-session-tools build && vp test run --project=web"
   },
   "dependencies": {
     "@effect/atom-solid": "catalog:",
