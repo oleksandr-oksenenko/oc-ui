@@ -2,7 +2,7 @@ import { Button } from "@opencode/ui/button";
 import { DiffChanges } from "@opencode/ui/diff-changes";
 import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../../ui/Loader.tsx";
 import { Select } from "@opencode/ui/select";
 import type { FileDiffInfo } from "@opencode/client";
 import type { SelectedLineRange } from "@pierre/diffs";

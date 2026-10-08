@@ -1,6 +1,6 @@
 import type { SessionAttentionState } from "../../session-attention-rollup.ts";
 import { Collapsible } from "@opencode/ui/collapsible";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../../../ui/Loader.tsx";
 import type { Project, SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
 import type { JSX } from "solid-js";

@@ -8,7 +8,7 @@ import type {
 } from "@opencode/client";
 import { Collapsible } from "@opencode/ui/collapsible";
 import { Icon } from "@opencode/ui/icon";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../../../../../ui/Loader.tsx";
 import { For, Show, type JSX } from "solid-js";
 
 import { annotationBlock } from "../../../../annotation-source.ts";

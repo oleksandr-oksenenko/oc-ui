@@ -5,6 +5,9 @@ import { verifyTransportRecovery } from "./transport-flows.ts";
 const TIMEOUT = 30_000;
 const PROMPT = '[aria-label="Prompt"]';
 
+// Electron 42 still exposes Performance, which newer devtools-protocol types omit.
+type PerformanceMetrics = { metrics: { name: string; value: number }[] };
+
 export async function verifyProviderFlows(): Promise<void> {
   await $('[aria-label="Model: Acceptance Stream"]').waitForClickable({ timeout: TIMEOUT });
   // Exercise the delivered worker/provider integration before destroying the renderer.
@@ -77,7 +80,56 @@ export async function verifyProviderFlows(): Promise<void> {
       request.prompt.includes("Acceptance annotation reaches the provider."),
     ),
   );
+  await verifyIdleSpinners();
   await verifyTransportRecovery();
+}
+
+async function verifyIdleSpinners(): Promise<void> {
+  const title = await $(".titlebar-session-title").getText();
+  await send("E2E_STOP: keep a background session running while the focused view is idle.");
+  try {
+    await waitForText("Acceptance stream is waiting for cancellation.");
+    await $('[aria-label="Create session"]').click();
+    await $(".new-session-screen").waitForDisplayed();
+    await $(
+      '.shell-session-status[data-status="running"] [data-component="loader-v2"]',
+    ).waitForDisplayed();
+    const styleRecalculations = await browser.electron.execute(async (electron) => {
+      const contents = electron.BrowserWindow.getAllWindows()[0]?.webContents;
+      if (!contents) throw new Error("Main renderer is missing");
+      if (contents.debugger.isAttached()) throw new Error("Renderer debugger already has an owner");
+      contents.debugger.attach("1.3");
+      try {
+        await contents.debugger.sendCommand("Performance.enable");
+        const before: PerformanceMetrics =
+          await contents.debugger.sendCommand("Performance.getMetrics");
+        // Measure a quiet one-second window, rather than asserting wall-clock CPU time.
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const after: PerformanceMetrics =
+          await contents.debugger.sendCommand("Performance.getMetrics");
+        const start = before.metrics.find((metric) => metric.name === "RecalcStyleCount");
+        const end = after.metrics.find((metric) => metric.name === "RecalcStyleCount");
+        if (!start || !end) throw new Error("Style recalculation counters are unavailable");
+        return end.value - start.value;
+      } finally {
+        try {
+          await contents.debugger.sendCommand("Performance.disable");
+        } finally {
+          contents.debugger.detach();
+        }
+      }
+    });
+    // Allow transient UI updates, but reject continuous 60/120 Hz SVG animation work.
+    assert.ok(
+      styleRecalculations < 15,
+      `Idle spinners caused ${styleRecalculations} style recalculations`,
+    );
+  } finally {
+    await $(`.shell-session-main*=${title}`).click();
+    const stop = $('[aria-label="Stop"]');
+    if (await stop.isExisting()) await stop.click();
+    await idle();
+  }
 }
 
 async function addAnnotation(body: string): Promise<void> {

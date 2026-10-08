@@ -3,7 +3,7 @@ import { Icon } from "@opencode/ui/icon";
 import { SessionRow } from "../../../../../ui/SessionRow.tsx";
 import { RemoveButton } from "../../../../../ui/RemoveButton.tsx";
 import "./SessionTree.css";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../../ui/Loader.tsx";
 import "./DraftList.css";
 import type { LocationRef, Project } from "@opencode/client";
 import { sessionProjectLabel } from "../session-project-label.ts";

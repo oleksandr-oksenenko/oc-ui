@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-solid";
 import type { LocationRef, OpenCodeClient } from "@opencode/client";
 import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "./Loader.tsx";
 import { Effect } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { For, Show, createEffect, createMemo, createUniqueId, onCleanup } from "solid-js";

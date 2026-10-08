@@ -1,5 +1,5 @@
 import { Button } from "@opencode/ui/button";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../ui/Loader.tsx";
 import { Show } from "solid-js";
 
 import "./BuiltInStartup.css";

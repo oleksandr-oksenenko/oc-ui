@@ -8,7 +8,7 @@ import {
 } from "@opencode/ui/dialog";
 import { useDialog } from "@opencode/ui/context/dialog";
 import { Icon } from "@opencode/ui/icon";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../../../ui/Loader.tsx";
 import { Show } from "solid-js";
 
 import "./DeleteSessionDialog.css";

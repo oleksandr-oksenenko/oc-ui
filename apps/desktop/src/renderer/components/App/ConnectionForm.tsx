@@ -1,6 +1,6 @@
 import { Button } from "@opencode/ui/button";
 import { Field } from "@opencode/ui/field";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../ui/Loader.tsx";
 import { RadioGroup, RadioItem } from "@opencode/ui/radio";
 import { TextInput } from "@opencode/ui/text-input";
 import { Show } from "solid-js";
