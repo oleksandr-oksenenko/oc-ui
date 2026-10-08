@@ -2,9 +2,48 @@
 
 Choose checks from the behavior and boundaries a change can affect. Use small,
 repeatable tests for detailed failure cases and reusable acceptance tests against
-the real app and server for final behavioral verification. Use browser-use for
-exploration and visual questions that those tests do not answer. Keep the root
-completion gates.
+the real app and server for final behavioral verification. Run the fast tier
+locally and let GitHub Actions run the full heavier tiers. Use browser-use for
+exploration and visual questions that those tests do not answer.
+
+## Verification tiers
+
+| Tier            | Contents                                                                                                                       | Commands from the root                                 | Default execution                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| 0 — Fast        | Formatting, lint, types, style/layout/unused-code checks; prompt-editor, session-tools, and desktop unit/controller tests      | `pnpm check` + `pnpm test`, or `pnpm ready`            | Locally after implementation; every PR and push to `main` in CI            |
+| 1 — Components  | Storybook interaction/accessibility tests and real Chromium storage tests (`storybook`, `storage`)                             | `pnpm test:components`                                 | Every PR and push to `main` in CI                                          |
+| 2 — Integration | Production browser acceptance, pinned-server contracts, browser inspection startup/cleanup, and server-backed shutdown (`web`) | `pnpm test:integration`                                | Every PR and push to `main` in CI                                          |
+| 3 — Native      | Packaged macOS arm64 signature/architecture, Electron/IPC/settings/server lifetime, and scripted-provider acceptance           | `pnpm test:acceptance:mac`                             | Pushes to `main` and manual workflow dispatch in CI; before macOS delivery |
+| Build checks    | Desktop, browser, and static Storybook builds                                                                                  | `pnpm build`, `pnpm build:web`, `pnpm build-storybook` | Every PR and push to `main` in CI                                          |
+
+[CI workflow](../.github/workflows/ci.yml) runs the fast, component, integration,
+and build jobs independently on Linux x64 and macOS arm64. Desktop builds and
+native acceptance require macOS arm64. All jobs use `.node-version` and the frozen
+lockfile and report separate results. Dependency caching and stored artifact
+uploads remain disabled; diagnostics are available in the job logs. PR dependency
+review remains enabled. Obsolete PR runs are cancelled. A manual dispatch on a
+branch runs all tiers, including native acceptance, before merging a
+native-sensitive change when needed.
+
+`pnpm test` runs only tier 0 tests: no Chromium, app server, or packaged app is
+started. `pnpm ready` is the local completion gate (`check` + `test`), with no
+builds. `pnpm test:local` remains an alias for `pnpm test`. `pnpm test:all` opts
+into tiers 0–2; `pnpm ready:ci` also includes static
+checks and all three builds. Neither includes packaged acceptance or the
+credential-dependent `test:acceptance:chat:mac` live-provider run.
+
+During edits, run the smallest relevant test. After implementation, run tier 0
+once locally and rely on CI for full heavier suites. Run focused stories or an
+integration scenario locally when diagnosing a failure, developing new coverage,
+or resolving a question before CI is available. Native/visual questions that
+automation cannot establish still need targeted inspection. The affected-boundary
+table below describes required coverage, not a requirement to launch every
+applicable full suite locally.
+
+Heavy suites are not skipped in CI based on changed paths. A local tier 0 pass is
+local evidence only; report heavier tiers as pending until their CI jobs pass on
+the completed candidate. Do not claim the full change is verified from a local
+`pnpm ready` pass alone.
 
 ## Start here
 
@@ -28,8 +67,8 @@ implementation: try an idea, reproduce a failure, or discover the expected flow.
 When a behavior needs lasting coverage, turn the meaningful scenario into a test
 in the existing suite. Do not save every exploratory click as a regression test.
 
-For final behavioral verification, run the applicable reusable tests on the
-completed candidate. A passing automated browser flow against the real server
+For final behavioral verification, use the applicable reusable tests on the
+completed candidate, normally through CI. A passing automated browser flow against the real server
 satisfies that behavioral check; do not repeat it through browser-use by default.
 Use targeted visual or native inspection for remaining questions such as spacing,
 clipping, usability, or OS dialogs covered by test substitutes. State that question
@@ -70,10 +109,10 @@ when you intentionally need a separately managed server or project.
 
 ## Run checks without repeated supervision
 
-Use `pnpm test:local` for package and desktop unit tests during local development;
+Use `pnpm test` for package and desktop unit tests during local development;
 it does not require Chromium. Use a focused existing project while fixing a failure, for example
 `pnpm --filter desktop exec vp test run --project=unit <test-file>` or
-`pnpm --filter desktop exec vp test run --project=web`. Run the required root gates
+`pnpm --filter desktop exec vp test run --project=storybook <story-file>`. Run the required root gates
 on the completed candidate. Preserve full logs locally and return a bounded tail
 plus the exit status; do not stream every passing test into the task context:
 
@@ -87,11 +126,10 @@ printf '\nVerification exit: %s; full log: %s\n' "$verification_status" "$verifi
 ```
 
 If `check` fails, this sequence does not run `test`. Report that distinction.
-GitHub CI runs all test projects and browser/Storybook builds on Linux x64 and
-macOS arm64 for every pull request and push to `main`. The macOS job also builds
-the desktop app and runs `pnpm test:acceptance:mac`; native staging and packaging
-currently require macOS arm64. The local subset does not replace the completion
-gates below.
+GitHub CI runs tiers 0–2 and browser/Storybook builds on Linux x64 and macOS arm64
+for every pull request and push to `main`. Desktop builds also run on macOS for
+both events. Packaged acceptance runs on `main` and manual dispatch. Use the tier
+policy above to distinguish local evidence from completed CI evidence.
 Use a 30–60 second completion-aware tool wait and retain its process/session ID
 while a command runs. Avoid one-second polling or restarting a quiet command.
 Read targeted failure lines from the full log if the tail is insufficient. Once
@@ -101,7 +139,8 @@ requires another run. Neither shorter output nor fewer waits reduces coverage.
 ## Choose what to check
 
 For implementation changes, always run `pnpm check` and `pnpm test` from the
-repository root after the final edit. Add the checks in every applicable row:
+repository root after the final edit. Ensure coverage for every applicable row
+through the CI tiers; use focused local runs and inspection as described above:
 
 | Change                                                                             | Focused evidence                                                                             | Runtime evidence                                                                                                          |
 | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -128,12 +167,13 @@ new test that merely restates its CSS or markup.
   cases. It does not establish browser layout or real Electron behavior.
 - **Storybook:** `pnpm storybook` opens the existing component catalog on port 6006.
   Use the Codex in-app browser for inspection. Its automated Chromium interaction
-  and accessibility tests already run in `pnpm test`. See
+  and accessibility tests run in `pnpm test:components` (tier 1). See
   [Storybook verification](storybook-verification.md) for setup and focused runs.
 - **Full browser app:** `pnpm dev:web` serves the real application for in-app browser
   inspection. Connect to an independently running pinned server. The `web` Vitest
   project runs a production build against its own disposable server, provider,
-  and Git fixtures as part of `pnpm test`. It requires OpenSSL for its TLS fixture.
+  and Git fixtures as part of `pnpm test:integration` (tier 2). It requires OpenSSL
+  for its TLS fixture and zsh for server shell/terminal scenarios.
 - **Electron:** launch with `pnpm dev` from the root for native integration and
   host-dependent layout. The in-app browser cannot attach to the Electron window.
   Use existing WebdriverIO acceptance for repeatable DOM interaction and computer
@@ -150,7 +190,8 @@ new test that merely restates its CSS or markup.
 
 - **Packaged acceptance:** `pnpm test:acceptance:mac` builds and tests the macOS
   arm64 app using WebdriverIO, the real pinned OpenCode server, disposable state,
-  and a scripted local provider. It is separate from `pnpm test` and `pnpm ready`.
+  and a scripted local provider (tier 3). It is separate from `pnpm test` and
+  `pnpm ready:ci` and runs on `main` or manual CI dispatch by default.
   Native dialogs and keychain behavior use test substitutes; this does not prove
   the appearance of native dialogs or real OS credential integration.
 
@@ -182,13 +223,17 @@ Use Playwright role/label locators and observable state waits. Follow the suite'
 the UI; use API or filesystem reads to establish resulting server state where
 relevant. Do not bypass the action under test by calling its implementation.
 
-Run the focused suite from the root while developing:
+Run the integration tier from the root when a local full run is useful. This
+command builds the session-tools plugin needed by the disposable server first:
 
 ```sh
-pnpm --filter desktop exec vp test run --project=web
+pnpm test:integration
 ```
 
-It also runs in `pnpm test`. Preserve the existing failure screenshot and profile
+For one scenario, build the plugin with
+`pnpm --filter @oc-ui/opencode-session-tools build`, then run
+`pnpm --filter desktop exec vp test run --project=web -t '<scenario>'`.
+The full tier runs in CI. Preserve the existing failure screenshot and profile
 handling; inspect those artifacts before reproducing a failure manually.
 
 ### Packaged Electron: WebdriverIO
@@ -224,7 +269,7 @@ For a regression, establish that the assertion detects the original failure when
 practical, then verify the fix. Confirm the runner actually discovered and ran the
 scenario; a filtered run with no tests is not evidence. Reuse fixture cleanup and
 bounded failure artifacts. Run focused tests during edits, then the required root
-gates and applicable acceptance suite on the completed candidate. Browser-use is
+gates and rely on the applicable CI tiers on the completed candidate. Browser-use is
 useful to investigate a failure, but the reusable test must pass after the fix.
 
 ## Check affected UI
@@ -283,12 +328,14 @@ without exposing credentials. Select only processes belonging to the test run.
 
 ## Build and delivery checks
 
-- Run `pnpm build` when changing bundling, entrypoints, or dependency resolution.
-  Run `pnpm build:web` for browser entry, assets, or deployment changes.
-  Run `pnpm build-storybook` for Storybook configuration or build integration.
-  `pnpm ready` combines root checks, all tests, and desktop/browser/Storybook builds.
-- Use `pnpm test:acceptance:mac` for the integration rows above and before
-  delivering a macOS app. It checks the packaged signature and architecture as
+- CI runs `pnpm build`, `pnpm build:web`, and `pnpm build-storybook` on every PR
+  and push to `main`. Run an affected build locally when debugging bundling,
+  entrypoints, dependency resolution, or delivered assets.
+  `pnpm ready:ci` combines root checks, tiers 0–2, and these builds for an opt-in
+  full local run; `pnpm ready` stays fast.
+- Use tier 3 CI evidence for native integration rows above, dispatching the workflow
+  on the candidate branch when needed before merge. Before delivering a macOS app,
+  run `pnpm test:acceptance:mac` on the delivery candidate. It checks the packaged signature and architecture as
   well as runtime scenarios; a development launch cannot establish packaging.
 - When delivering a DMG, build it with `pnpm make:mac` and also verify that exact
   artifact with `hdiutil verify`. Report signing and notarization separately.
@@ -319,7 +366,8 @@ responses separately when deploying. The initial verified browser is Chromium.
 Keep the completion report short and specific:
 
 - What changed and which behavior was checked.
-- Which root gates, browser scenarios, Electron scenarios, and builds passed.
+- Which local root gates passed, which CI tiers passed, and which tiers are pending
+  or failed. Include a workflow link and commit when CI evidence is available.
 - The tested checkout/artifact and any relevant screenshots or logs.
 - What used controlled data, a real server, or a native substitute; any remaining
   failures or unverified behavior. Report app, renderer, and server status separately

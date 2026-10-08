@@ -29,15 +29,25 @@ export default mergeConfig(
             name: "unit",
             environment: "jsdom",
             include: ["src/**/*.test.{ts,tsx}", "test/*.test.mjs"],
-            exclude: ["src/**/*.browser.test.ts"],
+            exclude: [
+              "src/**/*.browser.test.ts",
+              "test/browser-inspection.test.mjs",
+              "test/browser-shutdown.test.mjs",
+            ],
             setupFiles: ["./test/setup-dom.ts"],
           },
         },
         {
+          extends: true,
           test: {
             name: "web",
             environment: "node",
-            include: ["test/e2e/browser.test.mjs", "test/e2e/opencode-server.test.mjs"],
+            include: [
+              "test/e2e/browser.test.mjs",
+              "test/e2e/opencode-server.test.mjs",
+              "test/browser-inspection.test.mjs",
+              "test/browser-shutdown.test.mjs",
+            ],
             hookTimeout: 60_000,
             testTimeout: 180_000,
             expect: { poll: { timeout: 30_000 } },
