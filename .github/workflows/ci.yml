@@ -92,6 +92,8 @@ jobs:
     timeout-minutes: 60
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # Acceptance uses the configured ad-hoc identity, without signing credentials.
+      CSC_FOR_PULL_REQUEST: "true"
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4

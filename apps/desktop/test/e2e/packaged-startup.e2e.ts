@@ -5,8 +5,9 @@
 import { OpenCode } from "@opencode/client";
 import assert from "node:assert/strict";
 import { access, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Schema } from "effect";
 import { $, browser } from "@wdio/globals";
 import type { DesktopApi } from "../../src/shared/desktop-api.ts";
 import { OPENCODE_VERSION } from "../../src/shared/desktop-api.ts";
@@ -16,6 +17,8 @@ import { verifyProjectFlows } from "./project-flows.ts";
 import { verifyProviderFlows } from "./provider-flows.ts";
 import { verifySessionTools } from "./session-tools-flows.ts";
 import { isOwnedProcessRunning } from "./owned-process.ts";
+import { packagedArtifacts } from "./packaged-artifacts.mjs";
+import { runnerPath } from "./runner-path.ts";
 
 declare global {
   interface Window {
@@ -33,14 +36,11 @@ const settingsPath = join(userDataPath, "connection-settings.json");
 const pidRecordPath = join(userDataPath, "acceptance-worker-pids.json");
 const workerPids: number[] = [];
 const terminalPids: number[] = [];
-const artifactDirectory =
-  globalThis.process.env.OCUI_E2E_ARTIFACT_DIRECTORY ??
-  fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
+let artifactDirectory = fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
 const projectDirectory = join(userDataPath, "acceptance-project");
 
 describe("packaged owned OpenCode", () => {
   it("starts automatically without a chooser and creates sessions in the bundled worker default directory", async () => {
-    await mkdir(artifactDirectory, { recursive: true });
     const runtime = await browser.electron.execute(async (electron) => {
       await electron.app.whenReady();
       return {
@@ -66,14 +66,41 @@ describe("packaged owned OpenCode", () => {
     assert.equal(runtime.userData, userDataPath);
     assert.equal(runtime.platform, globalThis.process.env.OCUI_E2E_PLATFORM);
     assert.equal(runtime.arch, globalThis.process.env.OCUI_E2E_ARCH);
+    const expectedArtifacts = packagedArtifacts(
+      fileURLToPath(new URL("../..", import.meta.url)),
+      globalThis.process.platform,
+      globalThis.process.arch,
+      globalThis.process.platform === "linux"
+        ? Schema.decodeUnknownSync(
+            Schema.Struct({
+              header: Schema.Struct({ glibcVersionRuntime: Schema.NonEmptyString }),
+            }),
+          )(globalThis.process.report.getReport()).header.glibcVersionRuntime
+        : undefined,
+    );
     assert.equal(
       await realpath(runtime.executable),
-      await realpath(globalThis.process.env.OCUI_E2E_APP_BINARY_PATH!),
+      await realpath(
+        runnerPath(
+          globalThis.process.env.OCUI_E2E_APP_BINARY_PATH,
+          expectedArtifacts.appBinaryPath,
+        ),
+      ),
     );
     assert.equal(
       await realpath(runtime.resources),
-      await realpath(globalThis.process.env.OCUI_E2E_RESOURCES_PATH!),
+      await realpath(
+        runnerPath(globalThis.process.env.OCUI_E2E_RESOURCES_PATH, expectedArtifacts.resources),
+      ),
     );
+    const configuredArtifacts = globalThis.process.env.OCUI_E2E_ARTIFACT_DIRECTORY;
+    if (configuredArtifacts !== undefined) {
+      artifactDirectory = runnerPath(
+        configuredArtifacts,
+        join(dirname(runtime.userData), "artifacts"),
+      );
+    }
+    await mkdir(artifactDirectory, { recursive: true });
     assert.equal(runtime.appPath, join(runtime.resources, "app.asar"));
     assert.equal(runtime.mockKeychain, runtime.platform === "darwin");
     assert.equal(runtime.encryptionAvailable, true);
