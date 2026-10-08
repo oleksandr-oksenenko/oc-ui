@@ -32,9 +32,7 @@ const settingsPath = join(userDataPath, "connection-settings.json");
 const pidRecordPath = join(userDataPath, "acceptance-worker-pids.json");
 const workerPids: number[] = [];
 const terminalPids: number[] = [];
-const artifactDirectory =
-  globalThis.process.env.OCUI_E2E_ARTIFACT_DIRECTORY ??
-  fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
+const artifactDirectory = fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
 const projectDirectory = join(userDataPath, "acceptance-project");
 
 describe("packaged owned OpenCode", () => {
