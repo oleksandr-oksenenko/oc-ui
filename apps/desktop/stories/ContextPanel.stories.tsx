@@ -707,9 +707,10 @@ export const LongPathTooltip: Story = {
       // Exercise a click that can settle before Pierre's next render frame.
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       await userEvent.click(paths()[0]!);
-      // renderCustomHeader publishes the header props on that frame;
-      // userEvent.click only waits for the input events to settle.
-      await waitFor(() => expect(disclosure).toHaveAttribute("aria-expanded", "false"));
+      // CodeView updates the header in its queued animation-frame render.
+      await waitFor(() => expect(disclosure).toHaveAttribute("aria-expanded", "false"), {
+        timeout: 5_000,
+      });
     });
   },
 };
