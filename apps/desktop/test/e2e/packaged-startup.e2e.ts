@@ -86,6 +86,7 @@ describe("packaged owned OpenCode", () => {
       });
       assert.equal(runtime.isPackaged, true);
       assert.equal(runtime.userData, userDataPath);
+      const ownedUserDataPath = runnerPath(userDataPath, runtime.userData);
       assert.equal(runtime.platform, globalThis.process.env.OCUI_E2E_PLATFORM);
       assert.equal(runtime.arch, globalThis.process.env.OCUI_E2E_ARCH);
       const expectedArtifacts = packagedArtifacts(
@@ -147,8 +148,11 @@ describe("packaged owned OpenCode", () => {
       startupStage = "worker identity and health";
       const firstPid = await recordWorker();
       await verifyHealth(firstPid);
-      assert.deepEqual(JSON.parse(await readFile(settingsPath, "utf8")), { kind: "local" });
-      await assert.rejects(access(join(userDataPath, "opencode", "service.json")), {
+      assert.deepEqual(
+        JSON.parse(await readFile(join(ownedUserDataPath, "connection-settings.json"), "utf8")),
+        { kind: "local" },
+      );
+      await assert.rejects(access(join(ownedUserDataPath, "opencode", "service.json")), {
         code: "ENOENT",
       });
       await createBundledSessions();
