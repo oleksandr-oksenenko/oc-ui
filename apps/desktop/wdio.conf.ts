@@ -2,6 +2,7 @@
 /// <reference types="@wdio/electron-service" />
 
 import { mkdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { browser } from "@wdio/globals";
@@ -81,11 +82,14 @@ export const config: WebdriverIO.Config = {
       throw new Error("OCUI_E2E_USER_DATA_PATH must be set by the packaged E2E runner");
     }
   },
-  afterTest: async (_test, _context, result) => {
+  afterTest: async (test, _context, result) => {
     if (result.passed) return;
     try {
       await mkdir(artifactDirectory, { recursive: true });
-      await browser.saveScreenshot(join(artifactDirectory, `${artifactName}.png`));
+      const title = test.title.replace(/[^a-zA-Z0-9_-]+/gu, "-").slice(0, 80);
+      await browser.saveScreenshot(
+        join(artifactDirectory, `${artifactName}-${title}-${randomUUID()}.png`),
+      );
     } catch {
       // Preserve the original test failure when screenshot capture is unavailable.
     }

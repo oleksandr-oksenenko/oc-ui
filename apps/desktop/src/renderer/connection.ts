@@ -358,10 +358,11 @@ export function createRenderer(host: AppHost) {
           const service = yield* SyntaxHighlight;
           return yield* service.highlight(input);
         }).pipe(
-          Effect.catchTag("SyntaxHighlightError", () =>
-            Effect.logWarning("Syntax highlighting could not load; keeping plain code").pipe(
-              Effect.as(undefined),
-            ),
+          Effect.catchTag("SyntaxHighlightError", (error) =>
+            Effect.logWarning(
+              "Syntax highlighting could not load; keeping plain code",
+              error.message,
+            ).pipe(Effect.as(undefined)),
           ),
         ),
         { signal },

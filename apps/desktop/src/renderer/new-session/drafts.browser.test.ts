@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { Deferred, Effect, Exit, Fiber, Layer, ManagedRuntime, Scope } from "effect";
+import { Clock, Deferred, Effect, Exit, Fiber, Layer, ManagedRuntime, Scope } from "effect";
+import { TestClock } from "effect/testing";
 import { AtomRegistry } from "effect/unstable/reactivity";
 import { RegistryContext } from "@effect/atom-solid";
 import { createComponent, createRoot, createSignal, untrack } from "solid-js";
@@ -60,13 +61,21 @@ const choices = {
 const sync = async () => undefined;
 function controller(
   one: ReturnType<typeof fixture>,
-  options: { currentBranch?: string; previous?: ReturnType<typeof sessionFixture> } = {
+  options: {
+    currentBranch?: string;
+    previous?: ReturnType<typeof sessionFixture>;
+    testClock?: boolean;
+  } = {
     currentBranch: "feature",
   },
 ) {
   const scope = Scope.makeUnsafe();
+  const clock = options.testClock
+    ? Effect.runSync(TestClock.make().pipe(Effect.provideService(Scope.Scope, scope)))
+    : undefined;
+  const owner = makeWorkspaceOwner(one.registry).pipe(Effect.provideService(Scope.Scope, scope));
   const effects = Effect.runSync(
-    makeWorkspaceOwner(one.registry).pipe(Effect.provideService(Scope.Scope, scope)),
+    clock ? owner.pipe(Effect.provideService(Clock.Clock, clock)) : owner,
   );
   const pending = deferred();
   const events = createOpenCodeEventSource();
@@ -137,6 +146,11 @@ function controller(
         ),
       },
       plugin: { awaitActivation: sync },
+      agent: {
+        list: vi.fn<Parameters<typeof createNewSessionDrafts>[0]["api"]["agent"]["list"]>(
+          async () => ({ location, data: [] }),
+        ),
+      },
       session: {
         get: vi.fn<Parameters<typeof createNewSessionDrafts>[0]["api"]["session"]["get"]>(),
         message: vi.fn<Parameters<typeof createNewSessionDrafts>[0]["api"]["session"]["message"]>(),
@@ -229,7 +243,17 @@ function controller(
       },
     });
   });
-  return { adapter, select, pending, runtime, selectSession, setConnection, projects, events };
+  return {
+    adapter,
+    select,
+    pending,
+    runtime,
+    selectSession,
+    setConnection,
+    projects,
+    events,
+    clock,
+  };
 }
 
 describe("native draft persistence", () => {
@@ -1012,8 +1036,8 @@ describe("native draft persistence", () => {
   });
 });
 
-async function submitting(one = fixture()) {
-  const connected = controller(one);
+async function submitting(one = fixture(), testClock = false) {
+  const connected = controller(one, { currentBranch: "feature", testClock });
   const { runtime } = connected;
   connected.pending.resolve();
   const model = (await runtime.api.model.default()).data!;
@@ -1052,7 +1076,127 @@ async function submitting(one = fixture()) {
   return { ...connected, one, id };
 }
 
+function markdownCheckout(fake: Awaited<ReturnType<typeof submitting>>) {
+  const switched = deferred();
+  const originalCreate = fake.runtime.api.shell.create;
+  const originalOutput = fake.runtime.api.shell.output;
+  const originalVcs = fake.runtime.api.vcs.get;
+  let command = "";
+  fake.runtime.api.vcs.get = async (input, options) => {
+    const vcs = await originalVcs(input, options);
+    return { ...vcs, data: { ...vcs.data, branch: { ...vcs.data.branch, current: "main" } } };
+  };
+  fake.runtime.api.shell.create = async (input, options) => {
+    command = input.command;
+    return originalCreate(input, options);
+  };
+  fake.runtime.api.shell.output = async (input, options) => {
+    const output = await originalOutput(input, options);
+    if (command.startsWith("git switch")) switched.resolve();
+    return {
+      ...output,
+      data: {
+        ...output.data,
+        output: command.startsWith("git diff") ? ".opencode/agents/build.md\n" : "fixture-commit\n",
+      },
+    };
+  };
+  const unsubscribed = vi.fn<() => void>();
+  fake.runtime.data.on = (type, listener) => {
+    const stop = fake.events.on(type, listener);
+    return () => {
+      unsubscribed();
+      stop();
+    };
+  };
+  return { switched, unsubscribed };
+}
+
 describe("durable new-session Send", () => {
+  it("does not let a reload from another logical workspace authorize a checkout Send", async () => {
+    const fake = await submitting(fixture(), true);
+    const checkout = markdownCheckout(fake);
+    fake.adapter.submit(fake.id);
+    await checkout.switched.promise;
+    fake.events.emit({
+      type: "agent.updated",
+      id: "other-workspace",
+      created: 0,
+      location: { directory: "/srv/project", workspaceID: "other" },
+      data: {},
+    });
+    await fake.runtime.effects.runPromise(fake.clock!.adjust("10001 millis"));
+    await vi.waitFor(() => expect(fake.runtime.api.agent.list).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(fake.one.service.get(fake.id)?.value.attempt?.result).toBe("failed"),
+    );
+    expect(fake.one.service.get(fake.id)?.value.attempt?.message).toContain(
+      "configuration refresh could not be confirmed",
+    );
+    expect(fake.one.service.get(fake.id)?.value.text).toBe("Captured first message");
+    expect(fake.runtime.data.session.create).not.toHaveBeenCalled();
+    expect(fake.runtime.data.session.prompt).not.toHaveBeenCalled();
+    expect(checkout.unsubscribed).toHaveBeenCalledTimes(5);
+  });
+
+  it("cancels failed refresh diagnostics without replacing the original checkout error", async () => {
+    const fake = await submitting(fixture(), true);
+    const checkout = markdownCheckout(fake);
+    let signal: AbortSignal | undefined;
+    fake.runtime.api.agent.list = vi.fn<typeof fake.runtime.api.agent.list>((_input, options) => {
+      signal = options?.signal;
+      return new Promise<Awaited<ReturnType<typeof fake.runtime.api.agent.list>>>(
+        (_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Cancelled", "AbortError")),
+            { once: true },
+          );
+        },
+      );
+    });
+    fake.adapter.submit(fake.id);
+    await checkout.switched.promise;
+    await fake.runtime.effects.runPromise(fake.clock!.adjust("10001 millis"));
+    await vi.waitFor(() => expect(fake.runtime.api.agent.list).toHaveBeenCalledOnce());
+    await fake.runtime.effects.runPromise(fake.clock!.adjust("2001 millis"));
+    await vi.waitFor(() =>
+      expect(fake.one.service.get(fake.id)?.value.attempt?.result).toBe("failed"),
+    );
+    expect(signal?.aborted).toBe(true);
+    expect(fake.one.service.get(fake.id)?.value.attempt?.message).toContain(
+      "configuration refresh could not be confirmed",
+    );
+    expect(fake.runtime.data.session.create).not.toHaveBeenCalled();
+    expect(checkout.unsubscribed).toHaveBeenCalledTimes(5);
+  });
+
+  it("revalidates the saved agent after a matching checkout reload and releases its listeners", async () => {
+    const fake = await submitting();
+    const checkout = markdownCheckout(fake);
+    fake.adapter.submit(fake.id);
+    await checkout.switched.promise;
+    const agents = fake.runtime.data.location.agent.list({ directory: "/srv/project" })!;
+    fake.runtime.data.location.agent.list = () =>
+      agents.map((agent) => ({ ...agent, hidden: true }));
+    fake.events.emit({
+      type: "agent.updated",
+      id: "checkout-refresh",
+      created: 0,
+      location: { directory: "/srv/project" },
+      data: {},
+    });
+    await vi.waitFor(() =>
+      expect(fake.one.service.get(fake.id)?.value.attempt?.result).toBe("failed"),
+    );
+    expect(fake.one.service.get(fake.id)?.value.attempt?.message).toBe(
+      "The saved agent is unavailable at this location.",
+    );
+    expect(fake.runtime.api.agent.list).not.toHaveBeenCalled();
+    expect(fake.runtime.data.session.create).not.toHaveBeenCalled();
+    expect(checkout.unsubscribed).toHaveBeenCalledTimes(5);
+  });
+
   it("keeps a draft editable through a failed background default refresh and recovers on retry", async () => {
     const fake = await submitting();
     const original = await fake.runtime.api.model.default();

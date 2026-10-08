@@ -201,6 +201,8 @@ export default defineConfig({
           "apps/desktop/test/e2e-profile.test.mjs",
           "apps/desktop/test/packaged-artifacts.test.mjs",
           "apps/desktop/test/runner-path.test.mjs",
+          "apps/desktop/test/config-agent-watch.test.mjs",
+          "apps/desktop/test/terminal-fixture.test.mjs",
           "apps/desktop/test/style-tokens.test.mjs",
         ],
         rules: {

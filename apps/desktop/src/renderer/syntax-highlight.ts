@@ -26,7 +26,10 @@ export const makeSyntaxHighlight = Effect.fn("SyntaxHighlight.make")(function* (
 ) {
   const pool = yield* Pool.makeWithTTL({
     acquire: Effect.acquireRelease(
-      Effect.try({ try: createWorker, catch: (cause) => new SyntaxHighlightError({ cause }) }),
+      Effect.try({
+        try: createWorker,
+        catch: (cause) => new SyntaxHighlightError({ cause, stage: "construction" }),
+      }),
       (worker) => Effect.sync(() => worker.terminate()),
     ),
     min: 0,
@@ -39,20 +42,26 @@ export const makeSyntaxHighlight = Effect.fn("SyntaxHighlight.make")(function* (
     (input: HighlightSnippet) =>
       Pool.use(pool, (worker) =>
         Effect.callback<HighlightTokens, SyntaxHighlightError>((resume) => {
-          const fail = (cause: unknown) => resume(Effect.fail(new SyntaxHighlightError({ cause })));
+          const fail = (cause: unknown, stage: SyntaxHighlightError["stage"]) =>
+            resume(Effect.fail(new SyntaxHighlightError({ cause, stage })));
           const onMessage = (event: MessageEvent<unknown>) =>
             resume(
               Schema.decodeUnknownEffect(HighlightResponse)(event.data).pipe(
-                Effect.mapError((cause) => new SyntaxHighlightError({ cause })),
+                Effect.mapError(
+                  (cause) => new SyntaxHighlightError({ cause, stage: "response-decoding" }),
+                ),
                 Effect.flatMap((response) =>
                   "tokens" in response
                     ? Effect.succeed(response.tokens)
-                    : Effect.fail(new SyntaxHighlightError({ cause: response.error })),
+                    : Effect.fail(
+                        new SyntaxHighlightError({ cause: response.error, stage: "tokenizer" }),
+                      ),
                 ),
               ),
             );
-          const onError = (event: ErrorEvent) => fail(event.error ?? event.message);
-          const onMessageError = () => fail("Worker response could not be decoded");
+          const onError = (event: ErrorEvent) => fail(event.error ?? event.message, "worker");
+          const onMessageError = () =>
+            fail("Worker response could not be decoded", "message-decoding");
           worker.addEventListener("message", onMessage);
           worker.addEventListener("error", onError);
           worker.addEventListener("messageerror", onMessageError);
@@ -60,7 +69,7 @@ export const makeSyntaxHighlight = Effect.fn("SyntaxHighlight.make")(function* (
             // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Dedicated workers do not have a target origin.
             worker.postMessage(input);
           } catch (cause) {
-            fail(cause);
+            fail(cause, "posting");
           }
           return Effect.sync(() => {
             worker.removeEventListener("message", onMessage);
@@ -70,7 +79,7 @@ export const makeSyntaxHighlight = Effect.fn("SyntaxHighlight.make")(function* (
         }).pipe(
           Effect.timeout("10 seconds"),
           Effect.catchTag("TimeoutError", (cause) =>
-            Effect.fail(new SyntaxHighlightError({ cause })),
+            Effect.fail(new SyntaxHighlightError({ cause, stage: "response-timeout" })),
           ),
           // Terminate failed or interrupted work before this slot can be borrowed again.
           Effect.onExit((exit) =>

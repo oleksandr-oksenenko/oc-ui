@@ -174,7 +174,11 @@ describe("SyntaxHighlight worker pool", () => {
           kind === "error response"
             ? { _tag: "SyntaxHighlightError", cause: "grammar failed" }
             : { _tag: "SyntaxHighlightError" };
-        expect(await failed).toMatchObject({ _tag: "Failure", failure: expected });
+        const outcome = await failed;
+        expect(outcome).toMatchObject({ _tag: "Failure", failure: expected });
+        if (outcome._tag !== "Failure") throw new Error("Expected worker failure");
+        expect(outcome.failure.message).toContain(outcome.failure.stage);
+        expect(outcome.failure.message).not.toContain("invalid");
         expect(TestWorker.instances[0]!.terminate).toHaveBeenCalledOnce();
         const retry = owner.runPromise(highlight());
         await vi.waitFor(() => expect(TestWorker.instances[1]?.postMessage).toHaveBeenCalledOnce());
@@ -219,15 +223,30 @@ describe("SyntaxHighlight worker pool", () => {
     vi.useFakeTimers();
     const owner = runtime();
     try {
-      const result = owner.runPromiseExit(highlight());
+      const result = owner.runPromise(Effect.result(highlight()));
       await vi.waitFor(() => expect(TestWorker.instances[0]?.postMessage).toHaveBeenCalledOnce());
       await vi.advanceTimersByTimeAsync(10_001);
-      expect((await result)._tag).toBe("Failure");
+      const outcome = await result;
+      expect(outcome).toMatchObject({
+        _tag: "Failure",
+        failure: {
+          _tag: "SyntaxHighlightError",
+          stage: "response-timeout",
+          cause: { _tag: "TimeoutError" },
+        },
+      });
+      if (outcome._tag !== "Failure") throw new Error("Expected worker timeout");
+      expect(outcome.failure.message).toContain("TimeoutError");
       expect(TestWorker.instances[0]!.terminate).toHaveBeenCalledOnce();
+      const retry = owner.runPromise(highlight());
+      await vi.waitFor(() => expect(TestWorker.instances[1]?.postMessage).toHaveBeenCalledOnce());
+      TestWorker.instances[1]!.respond();
+      expect(await retry).toBeDefined();
     } finally {
       await owner.dispose();
       vi.useRealTimers();
     }
+    for (const worker of TestWorker.instances) expect(worker.terminate).toHaveBeenCalledOnce();
   });
 
   it("interrupts pending callers and terminates all workers at shutdown", async () => {

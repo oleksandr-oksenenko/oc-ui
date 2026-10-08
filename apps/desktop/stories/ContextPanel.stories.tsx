@@ -5,6 +5,8 @@ import { createMemo, createSignal } from "solid-js";
 import type { Decorator, Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type { SelectedLineRange } from "@pierre/diffs";
+import { preloadHighlighter } from "@pierre/diffs";
+import { activeDiffTheme } from "../src/renderer/diff-highlighter.ts";
 
 import { ContextPanel } from "../src/renderer/components/App/ConnectedApp/Changes/ContextPanel.tsx";
 import type {
@@ -157,9 +159,35 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+const prepareLayoutDiffs = () =>
+  preloadHighlighter({
+    themes: [activeDiffTheme("light"), activeDiffTheme("dark")],
+    langs: ["tsx", "css", "typescript"],
+  });
+
+const diffItem = (canvasElement: HTMLElement, path: string) =>
+  [...canvasElement.querySelectorAll<HTMLElement>("diffs-container")].find((item) =>
+    [...item.querySelectorAll(".diff-file-path")].some((node) => node.textContent === path),
+  );
+
+const waitForDiffBody = (canvasElement: HTMLElement, path: string) =>
+  waitFor(
+    async () => {
+      const item = diffItem(canvasElement, path);
+      await expect(item?.querySelector("[data-diff-file-toggle]")).toBeTruthy();
+      await expect(item?.shadowRoot?.querySelector("[data-code]")?.textContent).toBeTruthy();
+      await expect(item?.getBoundingClientRect().height).toBeGreaterThan(30);
+    },
+    { timeout: 5_000 },
+  );
+
 export const Diff: Story = {
   args: {
     ...panelProps({ files: diffFiles, loading: false }),
+  },
+  // Check renderer readiness without explicitly preloading the shared highlighter.
+  play: async ({ canvasElement }) => {
+    for (const file of diffFiles) await waitForDiffBody(canvasElement, file.file);
   },
 };
 
@@ -433,22 +461,27 @@ deleted file mode 100644
 };
 
 export const CollapseAll: Story = {
+  beforeEach: prepareLayoutDiffs,
   args: {
     ...panelProps({ files: diffFiles, loading: false }),
   },
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
-    const firstItemTop = () =>
-      canvasElement.querySelector("diffs-container")?.getBoundingClientRect().top;
+    const viewport = canvasElement.querySelector<HTMLElement>(".diff-code-view")!;
+    const expectContentStart = async () => {
+      await expect(viewport.clientHeight).toBeGreaterThan(0);
+      await expect(viewport.scrollTop).toBe(0);
+      const first = diffItem(canvasElement, diffFiles[0]!.file)!.getBoundingClientRect();
+      const start = viewport.getBoundingClientRect().top + viewport.clientTop;
+      await expect(Math.abs(first.top - start)).toBeLessThanOrEqual(1);
+    };
 
     await step("collapse every file", async () => {
-      // Wait for the first row before anchoring; items render on the next frame.
-      await canvas.findByRole(
-        "button",
-        { name: `Collapse ${diffFiles[0]!.file}` },
-        { timeout: 5_000 },
-      );
-      const anchoredTop = firstItemTop();
+      for (const file of diffFiles) {
+        await canvas.findByRole("button", { name: `Collapse ${file.file}` });
+        await waitForDiffBody(canvasElement, file.file);
+      }
+      await waitFor(expectContentStart);
       await userEvent.click(canvas.getByRole("button", { name: "Collapse all files" }));
       await expect(canvas.getByRole("button", { name: "Expand all files" })).toBeVisible();
       for (const file of diffFiles) {
@@ -461,7 +494,20 @@ export const CollapseAll: Story = {
       }
       // Collapsed rows must render at their measured height or the list
       // bottom-aligns in the leftover space and pushes the first row down.
-      await waitFor(() => expect(firstItemTop()).toBe(anchoredTop), { timeout: 5_000 });
+      await waitFor(
+        async () => {
+          await expectContentStart();
+          const bounds = diffFiles.map((file) =>
+            diffItem(canvasElement, file.file)!.getBoundingClientRect(),
+          );
+          for (const [index, rect] of bounds.entries()) {
+            // Literal product contract: 30px header plus the 8px card gap.
+            await expect(rect.height).toBe(38);
+            if (index > 0) await expect(rect.top).toBe(bounds[index - 1]!.bottom);
+          }
+        },
+        { timeout: 5_000 },
+      );
     });
 
     await step("expand every file", async () => {
@@ -474,12 +520,14 @@ export const CollapseAll: Story = {
           { timeout: 5_000 },
         );
         await expect(toggle).toHaveAttribute("aria-expanded", "true");
+        await waitForDiffBody(canvasElement, file.file);
       }
     });
   },
 };
 
 export const VirtualizedList: Story = {
+  beforeEach: prepareLayoutDiffs,
   args: {
     ...panelProps({ files: manyFiles, loading: false }),
   },
@@ -492,6 +540,8 @@ export const VirtualizedList: Story = {
       );
 
     await step("renders only the visible window", async () => {
+      await waitForDiffBody(canvasElement, manyFiles[0]!.file);
+      await expect(viewport()!.clientHeight).toBeGreaterThan(0);
       await waitFor(() => expect(path(0)).not.toBeUndefined(), { timeout: 5_000 });
       await waitFor(() => expect(rendered()).toBeLessThan(manyFiles.length), { timeout: 5_000 });
       await expect(path(0)).not.toBeUndefined();
@@ -505,6 +555,7 @@ export const VirtualizedList: Story = {
       await waitFor(() => expect(path(manyFiles.length - 1)).not.toBeUndefined(), {
         timeout: 5_000,
       });
+      await waitForDiffBody(canvasElement, manyFiles.at(-1)!.file);
       await expect(path(0)).toBeUndefined();
       await expect(rendered()).toBeLessThan(manyFiles.length);
     });
@@ -514,6 +565,7 @@ export const VirtualizedList: Story = {
       await expect(scroller).not.toBeNull();
       scroller!.scrollTop = 0;
       await waitFor(() => expect(path(0)).not.toBeUndefined(), { timeout: 5_000 });
+      await waitForDiffBody(canvasElement, manyFiles[0]!.file);
       await expect(rendered()).toBeLessThan(manyFiles.length);
     });
   },

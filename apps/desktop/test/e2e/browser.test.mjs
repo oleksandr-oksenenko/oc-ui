@@ -20,6 +20,7 @@ import { pathToFileURL } from "node:url";
 import { startScriptedProvider } from "./scripted-provider.mjs";
 import { git, prepareProjectFixture } from "./project-fixture.ts";
 import { startServer, startTlsProxy, testCertificate } from "./browser-fixture.mjs";
+import { ownTerminalPage, withTerminalFixture } from "./terminal-fixture.mjs";
 
 let profile;
 let provider;
@@ -36,6 +37,7 @@ let uiUrl;
 let api;
 let acceptanceConfig;
 let failed = false;
+let terminalCleanupFailure;
 let permissionRequestNumber = 0;
 const errors = [];
 const artifacts = new URL("../../dist/web-artifacts/", import.meta.url).pathname;
@@ -53,6 +55,31 @@ const acceptancePng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=",
   "base64",
 );
+
+async function expectServerImage(fileUrl) {
+  const image = page.locator(
+    `.transcript-assistant-complete img[alt="Tool states"][data-file-src=${JSON.stringify(fileUrl)}]`,
+  );
+  // A render can replace the image between separate reads. Sample the source
+  // and decoded dimensions on the same element, including after navigation.
+  await expect
+    .poll(() =>
+      image.evaluate((node) => ({
+        fileUrl: node.getAttribute("data-file-src"),
+        source: node.getAttribute("src"),
+        complete: node.complete,
+        width: node.naturalWidth,
+        height: node.naturalHeight,
+      })),
+    )
+    .toEqual({
+      fileUrl,
+      source: expect.stringMatching(/^blob:/u),
+      complete: true,
+      width: 1,
+      height: 1,
+    });
+}
 
 async function preparePermissionProject(directory, identity) {
   await mkdir(directory, { recursive: true });
@@ -2349,11 +2376,55 @@ describe.sequential("production browser app", () => {
     await selectSession(navigationTitle);
     expect(await preexistingCard.count()).toBe(0);
     expect(await attentionRow.locator(".shell-session-attention-dot").count()).toBe(1);
-    await selectSession(title);
-    const allowOnce = preexistingCard.getByRole("button", { name: "Allow once", exact: true });
-    await allowOnce.focus();
-    await page.keyboard.press("Enter");
-    await expectPermissionSettled(permissionSession.id, beforeConnect);
+    const permissionPath = `/api/session/${permissionSession.id}/permission`;
+    const hydrationRoute = (url) => url.pathname === permissionPath;
+    let releaseHydration;
+    let hydrationStarted = false;
+    const heldHydration = new Promise((resolve) => {
+      releaseHydration = resolve;
+    });
+    const holdHydration = async (route) => {
+      if (route.request().method() === "GET") {
+        hydrationStarted = true;
+        await heldHydration;
+      }
+      await route.continue();
+    };
+    const replyPath = `${permissionPath}/${beforeConnect}/reply`;
+    let replies = 0;
+    const statuses = [];
+    const observeReply = (request) => {
+      if (new URL(request.url()).pathname === replyPath && request.method() === "POST") replies++;
+    };
+    const observeReplyResponse = (response) => {
+      if (new URL(response.url()).pathname === replyPath && response.request().method() === "POST")
+        statuses.push(response.status());
+    };
+    await page.route(hydrationRoute, holdHydration);
+    page.on("request", observeReply);
+    page.on("response", observeReplyResponse);
+    try {
+      await selectSession(title);
+      await expect.poll(() => hydrationStarted).toBe(true);
+      const allowOnce = preexistingCard.getByRole("button", { name: "Allow once", exact: true });
+      await expect.poll(() => allowOnce.isEnabled()).toBe(false);
+      expect(replies).toBe(0);
+      releaseHydration();
+      await expect.poll(() => allowOnce.isEnabled()).toBe(true);
+      await allowOnce.focus();
+      await expect
+        .poll(() => allowOnce.evaluate((node) => node === document.activeElement))
+        .toBe(true);
+      await page.keyboard.press("Enter");
+      await expect.poll(() => statuses).toEqual([204]);
+      await expectPermissionSettled(permissionSession.id, beforeConnect);
+      expect(replies).toBe(1);
+    } finally {
+      releaseHydration();
+      await page.unroute(hydrationRoute, holdHydration);
+      page.off("request", observeReply);
+      page.off("response", observeReplyResponse);
+    }
     await expect
       .poll(() =>
         page.getByRole("button", { name: `${title}, Permission required`, exact: true }).count(),
@@ -2684,12 +2755,8 @@ describe.sequential("production browser app", () => {
       await send(`E2E_FILE_IMAGE ${pathToFileURL(imagePath).href}`);
       await idle();
 
-      const image = page.locator(".transcript-assistant-complete img[data-file-src]").last();
-      await expect.poll(() => image.getAttribute("alt")).toBe("Tool states");
-      await expect.poll(() => image.evaluate((node) => node.src.startsWith("blob:"))).toBe(true);
-      await expect.poll(() => image.evaluate((node) => node.naturalWidth)).toBeGreaterThan(0);
       // The sanitized markup never gives the browser a loadable file: source.
-      expect(await image.getAttribute("src")).toMatch(/^blob:/u);
+      await expectServerImage(pathToFileURL(imagePath).href);
       expect(errors).toEqual([]);
     },
   );
@@ -2716,16 +2783,14 @@ describe.sequential("production browser app", () => {
       await send(`E2E_FILE_IMAGE ${pathToFileURL(imagePath).href}`);
       await idle();
 
-      const image = page.locator(".transcript-assistant-complete img[data-file-src]").last();
-      await expect.poll(() => image.evaluate((node) => node.naturalWidth)).toBe(1);
-      expect(await image.getAttribute("src")).toMatch(/^blob:/u);
+      await expectServerImage(pathToFileURL(imagePath).href);
       const other = await api.session.create({
         title: `Away from external image ${kind}`,
         location: { directory },
       });
       await selectSession(other.title);
       await selectSession(session.title);
-      await expect.poll(() => image.evaluate((node) => node.naturalWidth)).toBe(1);
+      await expectServerImage(pathToFileURL(imagePath).href);
       expect((await api.session.get({ sessionID: session.id })).location).toEqual({ directory });
       expect(errors).toEqual([]);
     },
@@ -3199,21 +3264,117 @@ describe.sequential("production browser app", () => {
     await selectSession("Permission acceptance");
   });
 
-  it("retains real terminal processes across hiding, session navigation and WSS recovery", async () => {
+  it("cleans up an early terminal-renderer failure while preserving existing server PTYs", async () => {
     await ensureConnected();
     const location = { directory: await realpath(project) };
-    const session = await api.session.create({ title: "Terminal acceptance", location });
-    const neighbor = await api.session.create({ title: "Terminal same location", location });
-    const elsewhere = await api.session.create({
-      title: "Terminal other location",
-      location: { directory: await realpath(secondaryProject) },
-    });
-    await selectSession(session.title);
-    // A small real input application exercises alternate-screen and composed
-    // text without depending on the user's shell configuration or installed TUI.
-    await writeFile(
-      join(project, ".git", "terminal-acceptance.sh"),
-      `printf 'TERMINAL_READY\\n'
+    let baseline;
+    let terminalPage;
+    const failures = [];
+    const original = new Error("Forced failure before the terminal creation helper returns");
+    try {
+      baseline = (
+        await api.pty.create(
+          { location, cwd: location.directory, title: "Baseline terminal cleanup" },
+          { signal: AbortSignal.timeout(5_000) },
+        )
+      ).data;
+      const before = (await api.pty.list({ location }, { signal: AbortSignal.timeout(5_000) })).data
+        .map((pty) => pty.id)
+        .toSorted();
+      await expect(
+        withTerminalFixture(api, location, async (fixture) => {
+          const target = (terminalPage = await context.newPage());
+          ownTerminalPage(fixture, target);
+          target.on("pageerror", (error) => errors.push(error.message));
+          fixture.restore(() => proxy.reconnect());
+          const session = await fixture.createSession({
+            title: "Terminal cleanup failure",
+            location,
+          });
+          const font = "**/assets/JetBrainsMonoNerdFontMono-Regular*.ttf";
+          await target.route(font, failFont);
+          fixture.restore(() => target.unroute(font, failFont));
+          await target.goto(uiUrl);
+          await connect(target);
+          await selectSession(session.title, target);
+          await target.getByRole("button", { name: "Show terminal", exact: true }).click();
+          await target.getByRole("button", { name: "New terminal", exact: true }).click();
+          await target
+            .getByRole("button", { name: "Retry terminal renderer", exact: true })
+            .waitFor();
+          expect((await fixture.list()).filter((pty) => !before.includes(pty.id))).toHaveLength(1);
+          proxy.disconnect();
+          fixture.checkpoint("forced font failure");
+          throw original;
+        }).catch((error) => {
+          if (error.cleanupFailed) terminalCleanupFailure = error;
+          throw error;
+        }),
+      ).rejects.toMatchObject({
+        cleanupFailed: false,
+        errors: [expect.objectContaining({ cause: original })],
+      });
+      expect(
+        (await api.pty.list({ location }, { signal: AbortSignal.timeout(5_000) })).data
+          .map((pty) => pty.id)
+          .toSorted(),
+      ).toEqual(before);
+      expect(
+        (
+          await api.pty.get(
+            { ptyID: baseline.id, location },
+            { signal: AbortSignal.timeout(5_000) },
+          )
+        ).data.status,
+      ).toBe("running");
+      expect(terminalPage.isClosed()).toBe(true);
+      // The following real terminal scenario exercises the restored routes/transport.
+    } catch (error) {
+      failures.push(error);
+      if (!baseline) terminalCleanupFailure = error;
+    } finally {
+      if (baseline) {
+        try {
+          await api.pty.remove(
+            { ptyID: baseline.id, location },
+            { signal: AbortSignal.timeout(5_000) },
+          );
+        } catch (error) {
+          terminalCleanupFailure = error;
+          failures.push(error);
+        }
+      }
+    }
+    if (failures.length)
+      throw new AggregateError(failures, "Early terminal regression or baseline cleanup failed");
+  });
+
+  it("retains real terminal processes across hiding, session navigation and WSS recovery", async () => {
+    if (terminalCleanupFailure)
+      throw new Error("The earlier terminal fixture did not establish isolation", {
+        cause: terminalCleanupFailure,
+      });
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    await withTerminalFixture(api, location, async (fixture) => {
+      const target = await context.newPage();
+      ownTerminalPage(fixture, target);
+      target.on("pageerror", (error) => errors.push(error.message));
+      await target.goto(uiUrl);
+      await connect(target);
+      fixture.restore(() => proxy.reconnect());
+      const session = await fixture.createSession({ title: "Terminal acceptance", location });
+      const neighbor = await fixture.createSession({ title: "Terminal same location", location });
+      const elsewhere = await fixture.createSession({
+        title: "Terminal other location",
+        location: { directory: await realpath(secondaryProject) },
+      });
+      await selectSession(session.title, target);
+      // A small real input application exercises alternate-screen and composed
+      // text without depending on the user's shell configuration or installed TUI.
+      await writeFile(
+        join(project, ".git", "terminal-acceptance.sh"),
+        `printf 'TERMINAL_READY\\n'
 while IFS= read -r line; do
   case "$line" in
     SIZE) stty size > .git/terminal-size.txt ;;
@@ -3224,119 +3385,149 @@ while IFS= read -r line; do
   esac
 done
 `,
-    );
-    const sockets = [];
-    const output = [];
-    const sent = [];
-    const resizes = [];
-    const observeResize = (request) => {
-      if (request.method() === "PUT" && /\/api\/pty\//u.test(request.url()))
-        resizes.push({ url: request.url(), size: request.postDataJSON()?.size });
-    };
-    page.on("request", observeResize);
-    const observeSocket = (socket) => {
-      if (!/\/api\/pty\/[^/]+\/connect/u.test(socket.url())) return;
-      sockets.push(socket.url());
-      socket.on("framesent", ({ payload }) => sent.push(payload.toString()));
-      socket.on("framereceived", ({ payload }) => {
-        const text = payload.toString();
-        if (!text.startsWith("\0")) output.push(text);
-      });
-    };
-    page.on("websocket", observeSocket);
-    const disk = (name) => readFile(join(project, ".git", name), "utf8").catch(() => "");
-    const surface = () => page.locator(".terminal-surface[data-terminal-id]:visible");
-    const input = () => surface().getByLabel("Terminal input", { exact: true });
-    const type = async (text) => {
-      await input().focus();
-      await page.keyboard.type(text);
-      await page.keyboard.press("Enter");
-    };
-    const fontPattern = "**/assets/JetBrainsMonoNerdFontMono-Regular*.ttf";
-    await page.route(fontPattern, failFont);
-    let retryFont = true;
-    const create = async () => {
-      const existing = new Set((await api.pty.list({ location })).data.map((pty) => pty.id));
-      await page.getByRole("button", { name: "New terminal", exact: true }).click();
-      if (retryFont) {
-        const retry = page.getByRole("button", { name: "Retry terminal renderer", exact: true });
-        await retry.waitFor();
-        const id = await surface().getAttribute("data-terminal-id");
-        await page.unroute(fontPattern, failFont);
-        let releaseFont;
-        const heldFont = new Promise((resolve) => {
-          releaseFont = resolve;
+      );
+      const sockets = [];
+      const output = [];
+      const sent = [];
+      const resizes = [];
+      fixture.diagnostics(async () => {
+        console.error("Terminal failure state", {
+          surfaces: await target.locator(".terminal-surface").evaluateAll((nodes) =>
+            nodes.map((node) => ({
+              id: node.getAttribute("data-terminal-id"),
+              ready: node.getAttribute("data-ready"),
+              hidden: node.hidden,
+            })),
+          ),
+          tabs: await target.getByRole("tab").evaluateAll((nodes) =>
+            nodes.map((node) => ({
+              status: node.getAttribute("data-status"),
+              selected: node.getAttribute("aria-selected"),
+            })),
+          ),
+          attachments: sockets.length,
+          resizeRequests: resizes.length,
+          outputFrames: output.length,
+          inputFrames: sent.length,
         });
-        const holdFont = async (route) => {
-          await heldFont;
-          await route.continue();
+      });
+      const observeResize = (request) => {
+        if (request.method() === "PUT" && /\/api\/pty\//u.test(request.url()))
+          resizes.push({ url: request.url(), size: request.postDataJSON()?.size });
+      };
+      target.on("request", observeResize);
+      fixture.cleanup(() => target.off("request", observeResize));
+      const observeSocket = (socket) => {
+        if (!/\/api\/pty\/[^/]+\/connect/u.test(socket.url())) return;
+        const endpoint = new URL(socket.url());
+        endpoint.search = ""; // Never retain single-use WebSocket tickets in diagnostics.
+        sockets.push(endpoint.href);
+        const onSent = ({ payload }) => sent.push(payload.toString());
+        const onReceived = ({ payload }) => {
+          const text = payload.toString();
+          if (!text.startsWith("\0")) output.push(text);
         };
-        await page.route(fontPattern, holdFont);
-        try {
-          const requested = page.waitForRequest(fontPattern);
-          await retry.click();
-          await requested;
-          await page.getByRole("button", { name: "Hide terminal", exact: true }).click();
+        socket.on("framesent", onSent);
+        socket.on("framereceived", onReceived);
+        fixture.cleanup(() => {
+          socket.off("framesent", onSent);
+          socket.off("framereceived", onReceived);
+        });
+      };
+      target.on("websocket", observeSocket);
+      fixture.cleanup(() => target.off("websocket", observeSocket));
+      const disk = (name) => readFile(join(project, ".git", name), "utf8").catch(() => "");
+      const surface = () => target.locator(".terminal-surface[data-terminal-id]:visible");
+      const input = () => surface().getByLabel("Terminal input", { exact: true });
+      const type = async (text) => {
+        await input().focus();
+        await target.keyboard.type(text);
+        await target.keyboard.press("Enter");
+      };
+      const fontPattern = "**/assets/JetBrainsMonoNerdFontMono-Regular*.ttf";
+      await target.route(fontPattern, failFont);
+      fixture.restore(() => target.unroute(fontPattern, failFont));
+      let retryFont = true;
+      const create = async () => {
+        fixture.checkpoint("terminal creation / font readiness");
+        const existing = new Set((await fixture.list()).map((pty) => pty.id));
+        await target.getByRole("button", { name: "New terminal", exact: true }).click();
+        if (retryFont) {
+          const retry = target.getByRole("button", {
+            name: "Retry terminal renderer",
+            exact: true,
+          });
+          await retry.waitFor();
+          const id = await surface().getAttribute("data-terminal-id");
+          await target.unroute(fontPattern, failFont);
+          let releaseFont;
+          const heldFont = new Promise((resolve) => {
+            releaseFont = resolve;
+          });
+          const holdFont = async (route) => {
+            await heldFont;
+            await route.continue();
+          };
+          await target.route(fontPattern, holdFont);
+          fixture.restore(async () => {
+            releaseFont();
+            await target.unroute(fontPattern, holdFont);
+          });
+          await Promise.all([target.waitForRequest(fontPattern), retry.click()]);
+          await target.getByRole("button", { name: "Hide terminal", exact: true }).click();
           releaseFont();
-          const hidden = page.locator(`.terminal-surface[data-terminal-id="${id}"]`);
+          const hidden = target.locator(`.terminal-surface[data-terminal-id="${id}"]`);
           await expect.poll(() => hidden.getAttribute("data-ready")).toBe("true");
           expect(sockets).toHaveLength(0);
           expect(resizes.filter((request) => request.url.includes(id))).toEqual([]);
-          await page.getByRole("button", { name: "Show terminal", exact: true }).click();
-        } finally {
-          releaseFont();
-          await page.unroute(fontPattern, holdFont);
+          await target.getByRole("button", { name: "Show terminal", exact: true }).click();
+          await target.unroute(fontPattern, holdFont);
+          await expect.poll(() => surface().getAttribute("data-ready")).toBe("true");
+          expect(await surface().getAttribute("data-terminal-id")).toBe(id);
+          expect((await fixture.list()).filter((pty) => !existing.has(pty.id))).toHaveLength(1);
+          retryFont = false;
         }
-        await expect.poll(() => surface().getAttribute("data-ready")).toBe("true");
-        expect(await surface().getAttribute("data-terminal-id")).toBe(id);
-        expect(
-          (await api.pty.list({ location })).data.filter((pty) => !existing.has(pty.id)),
-        ).toHaveLength(1);
-        retryFont = false;
-      }
-      await expect
-        .poll(async () => {
-          if ((await surface().count()) !== 1) return "No single visible surface";
-          const id = await surface().getAttribute("data-terminal-id");
-          const ready =
-            id !== null &&
-            !existing.has(id) &&
-            (await surface().getAttribute("data-ready")) === "true";
-          return ready
-            ? true
-            : page.locator(".terminal-surface").evaluateAll((nodes) =>
-                nodes.map((node) => ({
-                  id: node.getAttribute("data-terminal-id"),
-                  ready: node.getAttribute("data-ready"),
-                  hidden: node.hidden,
-                })),
-              );
-        })
-        .toBe(true);
-      await expect
-        .poll(() => page.getByRole("tab", { selected: true }).getAttribute("data-status"))
-        .toBe("connected");
-      const id = await surface().getAttribute("data-terminal-id");
-      const info = (await api.pty.get({ ptyID: id, location })).data;
-      expect(info.cwd).toBe(location.directory);
-      expect(info.status).toBe("running");
-      const title = await page.getByRole("tab", { selected: true }).getAttribute("aria-label");
-      return { id, title, node: await surface().elementHandle() };
-    };
-    const close = async (terminal) => {
-      // Use the public tab title rather than the server's opaque PTY title.
-      await page
-        .getByRole("button", { name: `Close terminal ${terminal.title}`, exact: true })
-        .click();
-      await expect
-        .poll(async () =>
-          (await api.pty.list({ location })).data.some((pty) => pty.id === terminal.id),
-        )
-        .toBe(false);
-      await expect.poll(() => terminal.node.evaluate((node) => node.isConnected)).toBe(false);
-    };
-    try {
-      await page.getByRole("button", { name: "Show terminal", exact: true }).click();
+        await expect
+          .poll(async () => {
+            if ((await surface().count()) !== 1) return "No single visible surface";
+            const id = await surface().getAttribute("data-terminal-id");
+            const ready =
+              id !== null &&
+              !existing.has(id) &&
+              (await surface().getAttribute("data-ready")) === "true";
+            return ready
+              ? true
+              : target.locator(".terminal-surface").evaluateAll((nodes) =>
+                  nodes.map((node) => ({
+                    id: node.getAttribute("data-terminal-id"),
+                    ready: node.getAttribute("data-ready"),
+                    hidden: node.hidden,
+                  })),
+                );
+          })
+          .toBe(true);
+        await expect
+          .poll(() => target.getByRole("tab", { selected: true }).getAttribute("data-status"))
+          .toBe("connected");
+        const id = await surface().getAttribute("data-terminal-id");
+        const info = await fixture.get(id);
+        expect(info.cwd).toBe(location.directory);
+        expect(info.status).toBe("running");
+        const title = await target.getByRole("tab", { selected: true }).getAttribute("aria-label");
+        return { id, title, node: await surface().elementHandle() };
+      };
+      const close = async (terminal) => {
+        // Use the public tab title rather than the server's opaque PTY title.
+        await target
+          .getByRole("button", { name: `Close terminal ${terminal.title}`, exact: true })
+          .click();
+        await expect
+          .poll(async () => (await fixture.list()).some((pty) => pty.id === terminal.id))
+          .toBe(false);
+        await expect.poll(() => terminal.node.evaluate((node) => node.isConnected)).toBe(false);
+      };
+      fixture.checkpoint("initial attachment");
+      await target.getByRole("button", { name: "Show terminal", exact: true }).click();
       const first = await create();
       await expect.poll(() => resizes.some((request) => request.url.includes(first.id))).toBe(true);
       expect(
@@ -3348,12 +3539,13 @@ done
         await surface().getByLabel("Terminal output", { exact: true }).getAttribute("tabindex"),
       ).toBe("0");
       await type("exec /bin/bash .git/terminal-acceptance.sh");
+      fixture.checkpoint("keyboard / IME input");
       await expect.poll(() => output.join("")).toContain("TERMINAL_READY\r\n");
       const unicode = "👩🏽‍💻 e\u0301 中文";
       await input().focus();
       // Chromium's IME path generates real composition/input events; do not call
       // the widget's write/input implementation or synthesize DOM events.
-      const ime = await context.newCDPSession(page);
+      const ime = await context.newCDPSession(target);
       try {
         await ime.send("Input.imeSetComposition", {
           text: unicode,
@@ -3364,22 +3556,23 @@ done
       } finally {
         await ime.detach();
       }
-      await page.keyboard.press("Enter");
+      await target.keyboard.press("Enter");
       await expect.poll(() => disk("terminal-input.txt")).toBe(unicode);
       await expect.poll(() => output.join("")).toContain(`REPLY:${unicode}\r\n`);
-      await page.getByRole("button", { name: "Switch to dark theme" }).click();
+      await target.getByRole("button", { name: "Switch to dark theme" }).click();
       await expect
         .poll(() =>
-          page
+          target
             .getByRole("button", { name: "Switch to light theme" })
             .evaluate((node) => node === document.activeElement),
         )
         .toBe(true);
       expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
-      await page.screenshot({ path: join(artifacts, "browser-terminal-dark.png") });
-      await page.getByRole("button", { name: "Switch to light theme" }).click();
+      await target.screenshot({ path: join(artifacts, "browser-terminal-dark.png") });
+      await target.getByRole("button", { name: "Switch to light theme" }).click();
+      fixture.cleanup(() => context.clearPermissions());
       await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: uiUrl });
-      await page.evaluate(() => {
+      await target.evaluate(() => {
         const read = navigator.clipboard.readText.bind(navigator.clipboard);
         document.documentElement.dataset.terminalClipboardReads = "0";
         navigator.clipboard.readText = () => {
@@ -3394,87 +3587,91 @@ done
       await type("CLIPBOARD");
       await expect.poll(() => output.join("")).toContain("CLIPBOARD_DONE\r\n");
       expect(
-        await page.evaluate(() => document.documentElement.dataset.terminalClipboardReads),
+        await target.evaluate(() => document.documentElement.dataset.terminalClipboardReads),
       ).toBe("0");
       expect(sent.join("")).not.toContain(
         Buffer.from("host clipboard private sentinel").toString("base64"),
       );
-      await page.evaluate(() => navigator.clipboard.writeText("clipboard terminal input"));
+      await target.evaluate(() => navigator.clipboard.writeText("clipboard terminal input"));
       await surface().getByLabel("Terminal output", { exact: true }).click({ button: "right" });
-      const clipboardMenu = page.locator(".pane-context-menu:visible");
+      const clipboardMenu = target.locator(".pane-context-menu:visible");
       expect(await clipboardMenu.getByRole("button").allTextContents()).toEqual(["Copy", "Paste"]);
       await clipboardMenu.getByRole("button", { name: "Paste", exact: true }).click();
       await expect.poll(() => output.join("")).toContain("clipboard terminal input");
       await input().focus();
-      await page.keyboard.press("Enter");
+      await target.keyboard.press("Enter");
       await expect.poll(() => disk("terminal-input.txt")).toBe("clipboard terminal input");
-      await page.getByRole("button", { name: "Hide terminal", exact: true }).click();
+      await target.getByRole("button", { name: "Hide terminal", exact: true }).click();
+      fixture.checkpoint("hiding / session navigation");
       expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
-      expect((await api.pty.get({ ptyID: first.id, location })).data.status).toBe("running");
-      await selectSession(neighbor.title);
+      expect((await fixture.get(first.id)).status).toBe("running");
+      await selectSession(neighbor.title, target);
       expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
-      await selectSession(session.title);
-      await page.getByRole("button", { name: "Show terminal", exact: true }).click();
+      await selectSession(session.title, target);
+      await target.getByRole("button", { name: "Show terminal", exact: true }).click();
       await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(first.id);
-      await selectSession(neighbor.title);
+      await selectSession(neighbor.title, target);
       await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(first.id);
-      await selectSession(elsewhere.title);
+      await selectSession(elsewhere.title, target);
       expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
       await expect
-        .poll(() => page.locator(`.terminal-surface[data-terminal-id="${first.id}"]`).isVisible())
+        .poll(() => target.locator(`.terminal-surface[data-terminal-id="${first.id}"]`).isVisible())
         .toBe(false);
-      await selectSession(session.title);
+      await selectSession(session.title, target);
       await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(first.id);
       const second = await create();
       expect(second.id).not.toBe(first.id);
       expect(await first.node.evaluate((node) => node.isConnected)).toBe(true);
       expect(
-        await page.locator(`.terminal-surface[data-terminal-id="${first.id}"]`).isVisible(),
+        await target.locator(`.terminal-surface[data-terminal-id="${first.id}"]`).isVisible(),
       ).toBe(false);
       const third = await create();
-      await page.getByRole("tab", { name: first.title, exact: true }).focus();
+      await target.getByRole("tab", { name: first.title, exact: true }).focus();
       for (const terminal of [second, third]) {
-        await page.keyboard.press("ArrowRight");
+        await target.keyboard.press("ArrowRight");
         await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(terminal.id);
         expect(
-          await page
+          await target
             .getByRole("tab", { name: terminal.title, exact: true })
             .evaluate((node) => node === document.activeElement),
         ).toBe(true);
       }
       await close(third);
       await close(second);
-      await page.getByRole("tab", { name: first.title, exact: true }).click();
+      await target.getByRole("tab", { name: first.title, exact: true }).click();
       await expect.poll(() => surface().getAttribute("data-terminal-id")).toBe(first.id);
 
+      fixture.checkpoint("resize / alternate screen / flood");
       await type("SIZE");
       await expect.poll(() => disk("terminal-size.txt")).toMatch(/^\d+ \d+\n$/u);
       const before = (await disk("terminal-size.txt")).trim().split(" ").map(Number);
-      const taller = page.waitForResponse((response) => {
-        if (
-          !response.url().includes(`/api/pty/${first.id}`) ||
-          response.request().method() !== "PUT"
-        )
-          return false;
-        return response.request().postDataJSON()?.size?.rows > before[0] && response.ok();
-      });
-      await page.getByRole("separator", { name: "Resize terminal panel" }).focus();
-      for (let index = 0; index < 4; index += 1) await page.keyboard.press("ArrowUp");
-      await taller;
+      await target.getByRole("separator", { name: "Resize terminal panel" }).focus();
+      await Promise.all([
+        target.waitForResponse(
+          (response) =>
+            response.url().includes(`/api/pty/${first.id}`) &&
+            response.request().method() === "PUT" &&
+            response.request().postDataJSON()?.size?.rows > before[0] &&
+            response.ok(),
+        ),
+        (async () => {
+          for (let index = 0; index < 4; index += 1) await target.keyboard.press("ArrowUp");
+        })(),
+      ]);
       await type("SIZE");
       await expect
         .poll(async () => Number((await disk("terminal-size.txt")).trim().split(" ")[0]))
         .toBeGreaterThan(before[0]);
-      const resized = page.waitForResponse((response) => {
-        if (
-          !response.url().includes(`/api/pty/${first.id}`) ||
-          response.request().method() !== "PUT"
-        )
-          return false;
-        return response.request().postDataJSON()?.size?.cols < before[1] && response.ok();
-      });
-      await page.setViewportSize({ width: 1000, height: 760 });
-      await resized;
+      await Promise.all([
+        target.waitForResponse(
+          (response) =>
+            response.url().includes(`/api/pty/${first.id}`) &&
+            response.request().method() === "PUT" &&
+            response.request().postDataJSON()?.size?.cols < before[1] &&
+            response.ok(),
+        ),
+        target.setViewportSize({ width: 1000, height: 760 }),
+      ]);
       await type("SIZE");
       await expect
         .poll(async () => Number((await disk("terminal-size.txt")).trim().split(" ")[1]))
@@ -3491,25 +3688,26 @@ done
       await expect.poll(() => output.join("")).toContain("FLOOD_DONE\r\n");
 
       const attachments = sockets.length;
+      fixture.checkpoint("WSS recovery");
       proxy.disconnect();
       try {
-        await page.getByRole("button", { name: /Select server, .*Reconnecting/u }).waitFor();
+        await target.getByRole("button", { name: /Select server, .*Reconnecting/u }).waitFor();
       } finally {
         proxy.reconnect();
       }
-      await page.getByRole("button", { name: /Select server, .*Connected/u }).waitFor();
+      await target.getByRole("button", { name: /Select server, .*Connected/u }).waitFor();
       await expect
-        .poll(() => page.getByRole("tab", { selected: true }).getAttribute("data-status"))
+        .poll(() => target.getByRole("tab", { selected: true }).getAttribute("data-status"))
         .toBe("connected");
       await expect.poll(() => sockets.length).toBeGreaterThan(attachments);
       expect(sockets.every((url) => url.startsWith("wss:"))).toBe(true);
-      expect((await api.pty.get({ ptyID: first.id, location })).data.status).toBe("running");
+      expect((await fixture.get(first.id)).status).toBe("running");
       await type("after-reconnect");
       await expect.poll(() => disk("terminal-input.txt")).toBe("after-reconnect");
       await input().focus();
       const finalUnicode = `final ${unicode}`;
-      await page.keyboard.insertText(finalUnicode);
-      await page.keyboard.press("Enter");
+      await target.keyboard.insertText(finalUnicode);
+      await target.keyboard.press("Enter");
       await expect.poll(() => disk("terminal-input.txt")).toBe(finalUnicode);
       await expect.poll(() => output.join("")).toContain(`REPLY:${finalUnicode}\r\n`);
       await close(first);
@@ -3517,26 +3715,32 @@ done
       // Closing after rendering combining/ZWJ output must leave a fresh emulator
       // usable; protect against the close/recreate grapheme-state regression.
       const recreated = await create();
+      fixture.checkpoint("recreated terminal input");
       await type("printf 'recreated\\n' > .git/terminal-recreated.txt");
       await expect.poll(() => disk("terminal-recreated.txt")).toBe("recreated\n");
-      await type(`printf 'recreated ${unicode}\\n'`);
-      await expect.poll(() => output.join("")).toContain(`recreated ${unicode}\r\n`);
-      await page.screenshot({ path: join(artifacts, "browser-terminal.png") });
+      const recreatedOutput = output.length;
+      await type("exec /bin/bash .git/terminal-acceptance.sh");
+      await expect
+        .poll(() => output.slice(recreatedOutput).join(""))
+        .toContain("TERMINAL_READY\r\n");
+      await type(`recreated ${unicode}`);
+      await expect.poll(() => disk("terminal-input.txt")).toBe(`recreated ${unicode}`);
+      await expect.poll(() => output.join("")).toContain(`REPLY:recreated ${unicode}\r\n`);
+      await target.screenshot({ path: join(artifacts, "browser-terminal.png") });
       await close(recreated);
       expect(errors).toEqual([]);
-    } finally {
-      proxy.reconnect();
-      await page.unroute(fontPattern, failFont);
-      await page.evaluate(() => {
-        delete navigator.clipboard.readText;
-      });
-      page.off("websocket", observeSocket);
-      page.off("request", observeResize);
-      await page.setViewportSize({ width: 1280, height: 860 });
-    }
+    }).catch((error) => {
+      if (error.cleanupFailed) terminalCleanupFailure = error;
+      throw error;
+    });
   });
 
   it("recovers from browser navigation and unavailable storage without stopping the server", async () => {
+    if (terminalCleanupFailure)
+      throw new Error(
+        "Terminal cleanup did not establish isolation for the next browser scenario",
+        { cause: terminalCleanupFailure },
+      );
     await page.goto("about:blank");
     await page.goBack();
     await page.getByRole("heading", { name: "Connect to OpenCode" }).waitFor();
