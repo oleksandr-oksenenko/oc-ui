@@ -38,15 +38,34 @@ const projectDirectory = join(userDataPath, "acceptance-project");
 describe("packaged owned OpenCode", () => {
   it("starts automatically without a chooser and creates sessions in the bundled worker default directory", async () => {
     await mkdir(artifactDirectory, { recursive: true });
-    const runtime = await browser.electron.execute((electron) => ({
-      isPackaged: electron.app.isPackaged,
-      userData: electron.app.getPath("userData"),
-      mockKeychain: electron.app.commandLine.hasSwitch("use-mock-keychain"),
-      databasePath: process.env.OPENCODE_DB,
-    }));
+    const runtime = await browser.electron.execute(async (electron) => {
+      await electron.app.whenReady();
+      // Test-only credential substitute for the isolated, headless Linux profile.
+      if (process.platform === "linux") electron.safeStorage.setUsePlainTextEncryption(true);
+      return {
+        isPackaged: electron.app.isPackaged,
+        userData: electron.app.getPath("userData"),
+        mockKeychain: electron.app.commandLine.hasSwitch("use-mock-keychain"),
+        noSandbox: electron.app.commandLine.hasSwitch("no-sandbox"),
+        passwordStore: electron.app.commandLine.getSwitchValue("password-store"),
+        encryptionAvailable: electron.safeStorage.isEncryptionAvailable(),
+        storageBackend:
+          process.platform === "linux"
+            ? electron.safeStorage.getSelectedStorageBackend()
+            : undefined,
+        databasePath: process.env.OPENCODE_DB,
+      };
+    });
     assert.equal(runtime.isPackaged, true);
     assert.equal(runtime.userData, userDataPath);
-    assert.equal(runtime.mockKeychain, true);
+    if (globalThis.process.platform === "linux") {
+      assert.equal(runtime.noSandbox, true);
+      assert.equal(runtime.passwordStore, "basic");
+      assert.equal(runtime.storageBackend, "basic_text");
+      assert.equal(runtime.encryptionAvailable, true);
+    } else {
+      assert.equal(runtime.mockKeychain, true);
+    }
     assert.equal(runtime.databasePath, globalThis.process.env.OPENCODE_DB);
     await waitForLocalConnection();
     assert.equal(await $("#connection-form-title").isExisting(), false);
@@ -369,16 +388,35 @@ async function ownedWorkerPids(): Promise<number[]> {
 }
 
 async function resizeWindow(width: number, height: number): Promise<void> {
-  await browser.electron.execute(
+  const [contentWidth, contentHeight] = await browser.electron.execute(
     (electron, nextWidth, nextHeight) => {
       const window = electron.BrowserWindow.getAllWindows()[0];
       if (window === undefined) throw new Error("Acceptance window is missing");
-      window.setSize(nextWidth, nextHeight);
+      const bounds = window.getBounds();
+      const content = window.getContentBounds();
+      const { workAreaSize } = electron.screen.getDisplayMatching(bounds);
+      // CI displays can be smaller than the wide viewport. Allow room for the
+      // native frame (including Linux decorations), then require that exact size.
+      const targetWidth = Math.min(nextWidth, workAreaSize.width - (bounds.width - content.width));
+      const targetHeight = Math.min(
+        nextHeight,
+        workAreaSize.height - (bounds.height - content.height),
+      );
+      window.setContentSize(targetWidth, targetHeight);
+      return [targetWidth, targetHeight];
     },
     width,
     height,
   );
-  await browser.waitUntil(async () => (await browser.execute(() => window.innerWidth)) <= width);
+  await browser.waitUntil(
+    async () => {
+      const viewport = await browser.execute(() => [window.innerWidth, window.innerHeight]);
+      return viewport[0] === contentWidth && viewport[1] === contentHeight;
+    },
+    {
+      timeoutMsg: `Renderer did not settle at ${contentWidth}×${contentHeight} (requested ${width}×${height})`,
+    },
+  );
 }
 
 async function recordWorker(): Promise<number> {

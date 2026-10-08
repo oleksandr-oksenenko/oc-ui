@@ -53,7 +53,7 @@ jobs:
             os: macos-15
           - name: Builds
             tier: builds
-            command: pnpm build:web && pnpm exec vp run --no-cache -w build-storybook
+            command: pnpm exec vp run --no-cache -w build && pnpm build:web && pnpm exec vp run --no-cache -w build-storybook
             os: ubuntu-24.04
           - name: Builds
             tier: builds
@@ -93,9 +93,19 @@ jobs:
         run: ${{ matrix.command }}
 
   native:
-    name: Native macOS
+    name: Native (${{ matrix.os }})
     if: github.event_name != 'pull_request'
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x64
+            command: pnpm test:acceptance:linux
+          - os: macos-15
+            arch: arm64
+            command: pnpm test:acceptance:mac
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -109,10 +119,16 @@ jobs:
       - name: Verify toolchain and runner architecture
         run: |
           test "$(node --version)" = "v$(cat .node-version)"
-          test "$(node -p process.arch)" = arm64
+          test "$(node -p process.arch)" = "${{ matrix.arch }}"
           echo "TMPDIR=${RUNNER_TEMP}/" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:acceptance:mac
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          pnpm --filter desktop exec playwright install-deps chromium
+          sudo apt-get install --no-install-recommends -y xvfb xauth libgbm1 zsh openssl
+      - name: Test packaged Electron app
+        run: ${{ matrix.command }}
 
   dependency-review:
     name: Dependency review

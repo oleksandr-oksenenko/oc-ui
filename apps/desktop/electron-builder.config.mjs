@@ -4,6 +4,9 @@ const configuredIdentity = globalThis.process.env.CSC_NAME?.trim() || undefined;
 export default {
   appId: "net.oksenenko.ocui",
   productName: "Ocui",
+  beforePack: ({ electronPlatformName, arch }) => {
+    assertRuntimePackagingTarget({ platform: electronPlatformName, arch: Arch[arch] });
+  },
   directories: {
     output: "dist",
   },
@@ -31,6 +34,10 @@ export default {
   dmg: {
     writeUpdateInfo: false,
   },
+  linux: {
+    executableName: "ocui",
+    target: [{ target: "dir", arch: ["x64"] }],
+  },
   mac: {
     binaries: [
       "Contents/Resources/opencode-runtime/node_modules/@opencode-ai/pty-darwin-arm64/bin/opencode-pty",
@@ -47,3 +54,6 @@ export default {
     ],
   },
 };
+import { Arch } from "electron-builder";
+
+import { assertRuntimePackagingTarget } from "../../tools/opencode-runtime-native.mjs";

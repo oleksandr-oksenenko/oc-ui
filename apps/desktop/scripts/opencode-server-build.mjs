@@ -13,6 +13,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { findPackage, stagePackageClosure } from "../../../tools/opencode-runtime-packages.mjs";
+import { openCodeRuntimeDependencies } from "../../../tools/opencode-runtime-native.mjs";
 import { bundleOpenCodeRuntime } from "./build-opencode-runtime.ts";
 
 const scriptsDirectory = dirname(fileURLToPath(import.meta.url));
@@ -24,7 +25,6 @@ const lockDirectory = join(runtimeDirectory, ".build.lock");
 const lockOwnerPath = join(lockDirectory, "owner.json");
 const lockGraceMs = 5_000;
 const lockDeadlineMs = 120_000;
-const nativePackages = ["@lydell/node-pty", "@parcel/watcher", "@opencode-ai/pty"];
 
 let pending;
 
@@ -63,7 +63,7 @@ async function buildServerBundle() {
       renameSync(buildingManifest, manifestPath);
     }
     stagePackageClosure(
-      [...dependencies, ...dynamicRuntimeImports(serverDirectory)],
+      [...dependencies, ...openCodeRuntimeDependencies(serverDirectory).imports],
       runtimeDirectory,
       {
         mode: "link",
@@ -112,42 +112,6 @@ function validatePinnedVersion(serverDirectory) {
   )?.[1];
   if (expected === undefined || actual !== expected) {
     throw new Error(`@opencode/server ${actual} does not match the pinned OpenCode ${expected}`);
-  }
-}
-
-// These packages are loaded from paths or native bindings that esbuild cannot
-// analyze, and they resolve relative to the bundle, so stage them explicitly.
-function dynamicRuntimeImports(serverDirectory) {
-  const coreDirectory = findPackage("@opencode/core", serverDirectory);
-  const platformPackages = nativePackages
-    .map((name) => platformPackageName(name, coreDirectory))
-    .filter((name) => name !== undefined);
-  return [
-    ...nativePackages,
-    "@silvia-odwyer/photon-node",
-    "web-tree-sitter",
-    "tree-sitter-bash",
-    "tree-sitter-powershell",
-    ...platformPackages,
-  ].map((specifier) => ({ specifier, from: coreDirectory }));
-}
-
-function platformPackageName(name, from) {
-  try {
-    const manifest = JSON.parse(
-      readFileSync(join(findPackage(name, from), "package.json"), "utf8"),
-    );
-    const suffix = `-${process.platform}-${process.arch}`;
-    const candidates = Object.keys(manifest.optionalDependencies ?? {}).filter(
-      (key) => key.endsWith(suffix) || key.includes(`${suffix}-`),
-    );
-    const plain = candidates.find((key) => key.endsWith(suffix));
-    if (plain !== undefined) return plain;
-    if (process.platform !== "linux") return candidates[0];
-    const glibc = process.report.getReport().header.glibcVersionRuntime !== undefined;
-    return candidates.find((key) => (glibc ? /-(gnu|glibc)$/u.test(key) : key.endsWith("-musl")));
-  } catch {
-    return undefined;
   }
 }
 

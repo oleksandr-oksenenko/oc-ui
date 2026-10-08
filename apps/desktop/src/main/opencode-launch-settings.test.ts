@@ -3,14 +3,40 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import { configureOpenCodeLaunch } from "./opencode-launch-settings.ts";
 
+const { resolve } = vi.hoisted(() => ({
+  resolve: vi.fn<(specifier: string) => string>(() => "/runtime/native/bin/opencode-pty"),
+}));
+
 vi.mock("@opencode/util/global", () => ({
   Global: { Path: { data: "/shared/opencode-data" } },
 }));
 vi.mock("node:module", () => ({
-  createRequire: () => ({ resolve: () => "/runtime/native/bin/opencode-pty" }),
+  createRequire: () => ({ resolve }),
 }));
 
 describe("owned OpenCode launch settings", () => {
+  it.each([
+    ["linux", "x64", "@opencode-ai/pty-linux-x64-gnu/bin/opencode-pty"],
+    ["darwin", "arm64", "@opencode-ai/pty-darwin-arm64/bin/opencode-pty"],
+  ])(
+    "resolves the staged PTY binary on %s %s before library startup",
+    async (platform, arch, binary) => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+      const originalArch = Object.getOwnPropertyDescriptor(process, "arch")!;
+      Object.defineProperty(process, "platform", { value: platform });
+      Object.defineProperty(process, "arch", { value: arch });
+      try {
+        const env: NodeJS.ProcessEnv = {};
+        await configureOpenCodeLaunch("/ocui", env);
+        expect(resolve).toHaveBeenLastCalledWith(binary);
+        expect(env.OPENCODE_PTY_BIN).toBe("/runtime/native/bin/opencode-pty");
+      } finally {
+        Object.defineProperty(process, "platform", originalPlatform);
+        Object.defineProperty(process, "arch", originalArch);
+      }
+    },
+  );
+
   it("separates user config while retaining the normal environment and shared database", async () => {
     const env: NodeJS.ProcessEnv = {
       HOME: "/real-home",

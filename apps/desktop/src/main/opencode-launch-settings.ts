@@ -10,7 +10,7 @@ export async function configureOpenCodeLaunch(userDataPath: string, env = proces
   env.OPENCODE_CLIENT = "oc-ui";
   // Resolve only the staged pinned native package, never a global PATH command.
   env.OPENCODE_PTY_BIN = createRequire(import.meta.url).resolve(
-    `@opencode-ai/pty-${process.platform}-${process.arch}/bin/opencode-pty`,
+    `@opencode-ai/pty-${process.platform}-${process.arch}${process.platform === "linux" ? "-gnu" : ""}/bin/opencode-pty`,
   );
 
   const { Global } = await import("@opencode/util/global");
