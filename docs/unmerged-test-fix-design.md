@@ -240,6 +240,14 @@ Frozen installation, root `pnpm check`, all 1,575 fast tests and all 391 compone
 cases pass locally after this follow-up. Fresh CI is required to establish the
 CodeQL result and Linux component outcome.
 
+The second CI run passed CodeQL, Components, fast and both native jobs, but
+Integration timed out waiting for the ready/SIGTERM inspection process to exit.
+Every recorded cleanup phase had completed, including profile removal. All four
+inspection cases and 20 instrumented signal/shutdown attempts pass locally; the
+remaining resource is not established. Phase records now include elapsed time,
+and a one-shot unreferenced timer reports active resource types if the process
+survives cleanup. It neither extends the exit deadline nor forces process exit.
+
 Full heavier component/integration/build/packaged CI evidence for this candidate
 is pending. Packaged native actions were type-checked; their changed diagnostics
 were not executed in a packaged app locally. No budget increase or repeated
@@ -248,9 +256,9 @@ mutation is used as a repair.
 ### Complexity accounting
 
 Production (including the underlying pinned-core patch): **+93/-37, net +56**.
-Configuration: **+9/-2, net +7**. Tests/stories/fixtures: **+1,422/-372, net +1,050**.
-Documentation for the complete PR (including the original report): **+865/-0,
-net +865**. Generated lockfile:
+Configuration: **+9/-2, net +7**. Tests/stories/fixtures: **+1,437/-372, net +1,065**.
+Documentation for the complete PR (including the original report): **+873/-0,
+net +873**. Generated lockfile:
 **+5/-4, net +1**. Stored patch: **+15/-0**, including its diff envelope; the
 underlying core code is already included in the production count above.
 
