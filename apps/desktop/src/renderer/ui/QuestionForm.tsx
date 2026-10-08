@@ -11,7 +11,7 @@ import { Button } from "@opencode/ui/button";
 import { Card } from "@opencode/ui/card";
 import { Checkbox } from "@opencode/ui/checkbox";
 import { Field } from "@opencode/ui/field";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "./Loader.tsx";
 import { RadioGroup, RadioItem } from "@opencode/ui/radio";
 import { TextInput } from "@opencode/ui/text-input";
 import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on } from "solid-js";

@@ -2,7 +2,7 @@ import type { SessionAttention } from "./createSessionAttention.ts";
 import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
 import { ScrollView } from "@opencode/ui/scroll-view";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../ui/Loader.tsx";
 import { TextInput } from "@opencode/ui/text-input";
 import type { Project, SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";

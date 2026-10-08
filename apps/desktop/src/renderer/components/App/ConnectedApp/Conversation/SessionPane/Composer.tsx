@@ -4,7 +4,7 @@ import type { PromptEditorControl } from "./Composer/PromptEditor.tsx";
 import { Icon } from "@opencode/ui/icon";
 import { Button } from "@opencode/ui/button";
 import { IconButton } from "@opencode/ui/icon-button";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../../ui/Loader.tsx";
 import { Tooltip } from "@opencode/ui/tooltip";
 import { For, Show, createEffect, createSignal, on, onCleanup, onMount, type JSX } from "solid-js";
 

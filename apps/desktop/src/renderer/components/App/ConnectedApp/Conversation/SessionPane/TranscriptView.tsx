@@ -5,7 +5,7 @@ import type { DataSessionStatus } from "@opencode/client/solid";
 import { Button } from "@opencode/ui/button";
 import { createAutoScroll } from "@opencode/ui/hooks";
 import { Icon } from "@opencode/ui/icon";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../../ui/Loader.tsx";
 import {
   createEffect,
   createMemo,

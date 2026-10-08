@@ -9,7 +9,7 @@ import {
 } from "@opencode/ui/dialog";
 import { useDialog } from "@opencode/ui/context/dialog";
 import { Icon } from "@opencode/ui/icon";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../../../ui/Loader.tsx";
 import { Show, createEffect, createSignal, on } from "solid-js";
 
 import type { WorkspaceOwner } from "../../../../../../workspace-owner.ts";

@@ -1,0 +1,43 @@
+/* Rotate the HTML box so Electron can composite the animation without
+ * recalculating SVG styles every frame. */
+[data-slot="loader-v2-root"] {
+  display: inline-flex;
+  flex-shrink: 0;
+  vertical-align: middle;
+  animation: oc-loader-spin 900ms linear infinite;
+  transform-origin: center;
+}
+
+[data-component="loader-v2"] {
+  display: block;
+  flex-shrink: 0;
+  color: var(--oc-text-muted);
+}
+
+[data-slot="loader-v2-root"] > [data-component="loader-v2"] {
+  animation: none;
+}
+
+[data-component="loader-v2"] [data-slot="loader-v2-background"] {
+  stroke: currentcolor;
+  opacity: 0.2;
+}
+
+[data-component="loader-v2"] [data-slot="loader-v2-progress"] {
+  stroke: currentcolor;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+@keyframes oc-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="loader-v2-root"] {
+    animation: none;
+  }
+}

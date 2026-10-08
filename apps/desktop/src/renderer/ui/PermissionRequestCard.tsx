@@ -1,7 +1,7 @@
 import type { PermissionReply, PermissionRequest } from "@opencode/client";
 import { Button } from "@opencode/ui/button";
 import { Card } from "@opencode/ui/card";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "./Loader.tsx";
 import { For, Show, createUniqueId, type JSX } from "solid-js";
 
 import "./PermissionRequestCard.css";

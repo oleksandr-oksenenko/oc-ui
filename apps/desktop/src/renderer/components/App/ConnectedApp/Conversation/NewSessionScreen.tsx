@@ -1,5 +1,5 @@
 import { Show, type JSX } from "solid-js";
-import { Loader } from "@opencode/ui/loader";
+import { Loader } from "../../../../ui/Loader.tsx";
 import { Icon } from "@opencode/ui/icon";
 import { Button } from "@opencode/ui/button";
 import { NewSessionSetup, type NewSessionSetupProps } from "./NewSessionScreen/NewSessionSetup.tsx";
