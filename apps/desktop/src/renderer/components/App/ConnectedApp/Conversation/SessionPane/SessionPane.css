@@ -406,6 +406,10 @@
   font-size: var(--oc-type-body-size);
 }
 
+.transcript-message-failure[role="status"] {
+  color: var(--oc-text-muted);
+}
+
 .transcript-tool-call {
   border: 0;
 }

@@ -78,6 +78,7 @@ export type TranscriptViewProps = {
   /** Reader disclosure choices survive transcript remounts during navigation. */
   readonly activityOpen?: Map<string, boolean>;
   readonly sessionStatus: DataSessionStatus;
+  readonly connected?: boolean;
   readonly loading?: boolean;
   readonly error?: string;
   readonly workingLabel?: string;
@@ -597,6 +598,7 @@ function renderMessage(
     TranscriptViewProps,
     | "sessionID"
     | "sessionStatus"
+    | "connected"
     | "onOpenAnnotation"
     | "readFileImage"
     | "directory"
@@ -618,6 +620,7 @@ function renderMessage(
           chainedTo={row()?.chainedTo}
           sessionID={props.sessionID}
           sessionStatus={props.sessionStatus}
+          connected={props.connected}
           turnActive={activeTurnMessages().has(message.id)}
           activityLive={
             liveActivityMessages().has(message.id) ||

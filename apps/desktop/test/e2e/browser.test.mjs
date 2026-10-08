@@ -1132,6 +1132,21 @@ describe.sequential("production browser app", () => {
     await transcript("Acceptance provider rejected this prompt");
     await idle();
     expect(await page.locator(".transcript-assistant-failed").count()).toBeGreaterThan(0);
+    await send("E2E_PROVIDER_RETRY browser");
+    const recovery = page
+      .locator(".transcript-message-failure")
+      .filter({ hasText: "Retrying, attempt 2" });
+    await recovery.waitFor();
+    expect(await recovery.textContent()).toBe("Retrying, attempt 2");
+    expect(await recovery.getAttribute("role")).toBe("status");
+    await transcript("Acceptance completed with stream.");
+    await idle();
+    expect(await recovery.count()).toBe(0);
+    expect(
+      (await providerState()).requests.filter(
+        (request) => request.model !== "title" && request.prompt === "E2E_PROVIDER_RETRY browser",
+      ),
+    ).toHaveLength(2);
     const previousCancelled = (await providerState()).cancelledStreams;
     await send("E2E_STOP browser");
     await transcript("Acceptance stream is waiting for cancellation.");
