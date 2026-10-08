@@ -54,6 +54,7 @@ export function projectSessionTree(
   sessions: readonly SessionInfo[],
   query: string,
   now = DateTime.toEpochMillis(DateTime.nowUnsafe()),
+  isRunning: (sessionID: string) => boolean = () => false,
 ): SessionTreeProjection {
   const byID = new Map(sessions.map((session) => [session.id, session]));
   const childrenByID = new Map<string, SessionInfo[]>();
@@ -81,9 +82,15 @@ export function projectSessionTree(
     return { session, children };
   };
 
+  const subtreeRunning = (session: SessionInfo): boolean =>
+    isRunning(session.id) || (childrenByID.get(session.id) ?? []).some(subtreeRunning);
+  const runningRootIDs = new Set(roots.filter(subtreeRunning).map((session) => session.id));
   const filteredRoots = roots
     .map(buildNode)
-    .filter((root): root is SessionTreeNode => root !== undefined);
+    .filter((root): root is SessionTreeNode => root !== undefined)
+    .toSorted(
+      (a, b) => Number(runningRootIDs.has(b.session.id)) - Number(runningRootIDs.has(a.session.id)),
+    );
 
   const subtreeTimes = (session: SessionInfo, key: "created" | "updated"): number[] => [
     ...(validTimestamp(session.time[key]) ? [session.time[key]] : []),
@@ -103,7 +110,10 @@ export function projectSessionTree(
       id,
       label: groupLabels[id],
       roots: filteredRoots.filter(
-        (root) => groupForTimestamp(subtreeTime(root.session), todayStart, weekStart) === id,
+        (root) =>
+          (runningRootIDs.has(root.session.id)
+            ? "today"
+            : groupForTimestamp(subtreeTime(root.session), todayStart, weekStart)) === id,
       ),
     }))
     .filter((group) => group.roots.length > 0);

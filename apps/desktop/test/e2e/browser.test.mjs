@@ -1086,8 +1086,36 @@ describe.sequential("production browser app", () => {
     const previousCancelled = (await providerState()).cancelledStreams;
     await send("E2E_STOP browser");
     await transcript("Acceptance stream is waiting for cancellation.");
-    await page.getByRole("button", { name: "Stop", exact: true }).click();
-    await idle();
+    const newerIdle = await api.session.create({ title: "Newer idle session while another runs" });
+    try {
+      const todayTitles = () =>
+        page.locator("#shell-session-group-today + div .shell-session-title").allTextContents();
+      await selectSession(newerIdle.title);
+      await expect.poll(todayTitles).toContain(newerIdle.title);
+      await expect.poll(async () => (await todayTitles())[0]).toBe("Browser fixture one");
+      await selectSession("Browser fixture one");
+      await expect.poll(async () => (await todayTitles())[0]).toBe("Browser fixture one");
+      const idleDelete = page.getByRole("button", {
+        name: `Delete ${newerIdle.title}`,
+        exact: true,
+      });
+      await idleDelete.focus();
+      const focusedControl = await idleDelete.elementHandle();
+      try {
+        // Dispatch the Stop action without moving focus away from the unrelated row.
+        await page.getByRole("button", { name: "Stop", exact: true }).dispatchEvent("click");
+        await idle();
+        await expect
+          .poll(() =>
+            focusedControl.evaluate((node) => node.isConnected && document.activeElement === node),
+          )
+          .toBe(true);
+      } finally {
+        await focusedControl.dispose();
+      }
+    } finally {
+      await api.session.remove({ sessionID: newerIdle.id });
+    }
     await expect
       .poll(async () => (await (await fetch(`${provider.url}/_state`)).json()).cancelledStreams)
       .toBeGreaterThan(previousCancelled);

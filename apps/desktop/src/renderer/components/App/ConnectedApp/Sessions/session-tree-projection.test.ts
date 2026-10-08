@@ -101,6 +101,46 @@ describe("projectSessionTree", () => {
     expect(projection.groups.map((group) => group.id)).toEqual(["today", "this-week", "earlier"]);
   });
 
+  it("pins running roots ahead of idle Today roots while preserving order within each set", () => {
+    const projection = projectSessionTree(
+      [
+        session("idle-a", "Idle A", undefined, now),
+        session("running-a", "Running A", undefined, now - 14 * day),
+        session("idle-b", "Idle B", undefined, now),
+        session("running-b", "Running B", undefined, now - day),
+        session("earlier", "Earlier", undefined, now - 14 * day),
+      ],
+      "",
+      now,
+      (id) => id.startsWith("running"),
+    );
+    expect(projection.groups.map((group) => group.id)).toEqual(["today", "earlier"]);
+    expect(ids(projection.groups[0]?.roots ?? [])).toEqual([
+      "running-a",
+      "running-b",
+      "idle-a",
+      "idle-b",
+    ]);
+    expect(ids(projection.groups[1]?.roots ?? [])).toEqual(["earlier"]);
+  });
+
+  it("uses running descendants from the full tree even when search hides them", () => {
+    const projection = projectSessionTree(
+      [
+        session("today", "Matching today", undefined, now),
+        session("old", "Matching old root", undefined, now - 14 * day),
+        session("parent", "Hidden parent", "old", now - 14 * day),
+        session("running", "Hidden running child", "parent", now - 14 * day),
+      ],
+      "matching",
+      now,
+      (id) => id === "running",
+    );
+    expect(projection.groups.map((group) => group.id)).toEqual(["today"]);
+    expect(ids(projection.groups[0]?.roots ?? [])).toEqual(["old", "today"]);
+    expect(projection.groups[0]?.roots[0]?.children).toEqual([]);
+  });
+
   it("returns no roots or groups when nothing matches", () => {
     const projection = projectSessionTree([session("one", "One", undefined, now)], "missing", now);
     expect(projection.roots).toEqual([]);

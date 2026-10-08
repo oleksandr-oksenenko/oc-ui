@@ -398,6 +398,101 @@ describe("SessionTree", () => {
     dispose();
   });
 
+  it("pins running trees above idle Today sessions and restores date groups when they finish", () => {
+    const [runningIDs, setRunningIDs] = createSignal(["old-running", "child"]);
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({
+          now: fixedNow,
+          sessions: [
+            session("today", "Idle today", undefined, fixedNow),
+            session("old-root", "Old root"),
+            session("child", "Running child", "old-root"),
+            session("old-running", "Old running"),
+          ],
+          expandedIDs: ["old-root"],
+        })}
+        statusForSession={(id) => (runningIDs().includes(id) ? "running" : "idle")}
+      />
+    ));
+    const titles = (group: string) =>
+      [...host.querySelectorAll(`#shell-session-group-${group} + div .shell-session-title`)].map(
+        (title) => title.textContent,
+      );
+
+    expect(titles("today")).toEqual(["Old root", "Running child", "Old running", "Idle today"]);
+    expect(titles("earlier")).toEqual([]);
+    setRunningIDs(["old-running"]);
+    expect(titles("today")).toEqual(["Old running", "Idle today"]);
+    expect(titles("earlier")).toEqual(["Old root", "Running child"]);
+    setRunningIDs([]);
+    expect(titles("today")).toEqual(["Idle today"]);
+    expect(titles("earlier")).toEqual(["Old root", "Running child", "Old running"]);
+    dispose();
+  });
+
+  it.each(["title", "delete"])(
+    "keeps an unrelated focused %s control mounted across running status changes",
+    (control) => {
+      const [running, setRunning] = createSignal(false);
+      const { host, dispose } = mount(() => (
+        <SessionSidebar
+          {...sidebarProps({
+            now: fixedNow,
+            sessions: [
+              session("idle", "Idle today", undefined, fixedNow),
+              session("other", "Other today", undefined, fixedNow),
+              session("old", "Old session"),
+            ],
+          })}
+          statusForSession={(id) => (id !== "idle" && running() ? "running" : "idle")}
+        />
+      ));
+      const selector =
+        control === "title"
+          ? '[aria-label="Idle today, Idle"]'
+          : '[aria-label="Delete Idle today"]';
+      const button = host.querySelector<HTMLButtonElement>(selector)!;
+      const today = host.querySelector("#shell-session-group-today")!.parentElement;
+      button.focus();
+      expect(document.activeElement).toBe(button);
+
+      for (const status of [true, false]) {
+        setRunning(status);
+        expect(host.querySelector("#shell-session-group-today")!.parentElement).toBe(today);
+        expect(host.querySelector(selector)).toBe(button);
+        expect(button.isConnected).toBe(true);
+        expect(document.activeElement).toBe(button);
+      }
+      dispose();
+    },
+  );
+
+  it("updates retained rows and child lists when session data changes", () => {
+    const [sessions, setSessions] = createSignal([
+      session("root", "Original", undefined, fixedNow),
+      session("child", "Child", "root", fixedNow),
+    ]);
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({ now: fixedNow, expandedIDs: ["root"] })}
+        sessions={sessions()}
+      />
+    ));
+    const button = host.querySelector<HTMLButtonElement>('[aria-label="Original, Idle"]')!;
+    setSessions([
+      session("root", "Renamed", undefined, fixedNow),
+      session("child", "Renamed child", "root", fixedNow),
+    ]);
+    expect(host.querySelector('[aria-label="Renamed, Idle"]')).toBe(button);
+    expect(host.querySelector('[aria-label="Renamed child, Idle"]')).not.toBeNull();
+    setSessions([session("root", "Renamed", undefined, fixedNow)]);
+    expect(host.querySelector('[aria-label="Renamed, Idle"]')).toBe(button);
+    expect(host.querySelector(".shell-session-children")).toBeNull();
+    expect(host.querySelector(".shell-session-disclosure")).toBeNull();
+    dispose();
+  });
+
   it("shows runtime status without an expansion control for leaf titles", () => {
     const host = document.createElement("div");
     const dispose = render(
