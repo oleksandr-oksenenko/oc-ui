@@ -136,7 +136,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
           </div>
         </Show>
 
-        <Show when={props.sessions.length > 0 && !props.error}>
+        <Show when={props.sessions.length > 0}>
           <SessionTree
             attentionForSession={props.attentionForSession}
             sessions={props.sessions}
