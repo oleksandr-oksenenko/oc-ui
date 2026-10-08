@@ -388,19 +388,35 @@ async function ownedWorkerPids(): Promise<number[]> {
 }
 
 async function resizeWindow(width: number, height: number): Promise<void> {
-  await browser.electron.execute(
+  const [contentWidth, contentHeight] = await browser.electron.execute(
     (electron, nextWidth, nextHeight) => {
       const window = electron.BrowserWindow.getAllWindows()[0];
       if (window === undefined) throw new Error("Acceptance window is missing");
-      window.setContentSize(nextWidth, nextHeight);
+      const bounds = window.getBounds();
+      const content = window.getContentBounds();
+      const { workAreaSize } = electron.screen.getDisplayMatching(bounds);
+      // CI displays can be smaller than the wide viewport. Allow room for the
+      // native frame (including Linux decorations), then require that exact size.
+      const targetWidth = Math.min(nextWidth, workAreaSize.width - (bounds.width - content.width));
+      const targetHeight = Math.min(
+        nextHeight,
+        workAreaSize.height - (bounds.height - content.height),
+      );
+      window.setContentSize(targetWidth, targetHeight);
+      return [targetWidth, targetHeight];
     },
     width,
     height,
   );
-  await browser.waitUntil(async () => {
-    const viewport = await browser.execute(() => [window.innerWidth, window.innerHeight]);
-    return viewport[0] === width && viewport[1] === height;
-  });
+  await browser.waitUntil(
+    async () => {
+      const viewport = await browser.execute(() => [window.innerWidth, window.innerHeight]);
+      return viewport[0] === contentWidth && viewport[1] === contentHeight;
+    },
+    {
+      timeoutMsg: `Renderer did not settle at ${contentWidth}×${contentHeight} (requested ${width}×${height})`,
+    },
+  );
 }
 
 async function recordWorker(): Promise<number> {
