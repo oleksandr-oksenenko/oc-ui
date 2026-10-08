@@ -17,8 +17,16 @@ if (args.some((arg) => arg !== "--smoke")) {
 }
 let stopping = false;
 let requestStop;
+const startedAt = performance.now();
 const phase = (name, state) =>
-  console.info(JSON.stringify({ status: "phase", phase: name, state }));
+  console.info(
+    JSON.stringify({
+      status: "phase",
+      phase: name,
+      state,
+      elapsedMs: Math.round(performance.now() - startedAt),
+    }),
+  );
 const acquire = async (name, start) => {
   phase(name, "start");
   const resource = await start();
@@ -160,4 +168,11 @@ try {
   }
   process.off("SIGINT", requestStop);
   process.off("SIGTERM", requestStop);
+  // Do not keep the process alive or force exit: expose resource types only if
+  // something survives completed cleanup, without dumping paths or credentials.
+  setTimeout(() => {
+    console.error(
+      JSON.stringify({ status: "exit-pending", resources: process.getActiveResourcesInfo() }),
+    );
+  }, 1_000).unref();
 }
