@@ -200,6 +200,7 @@ export default defineConfig({
           "apps/desktop/test/owned-process.test.mjs",
           "apps/desktop/test/e2e-profile.test.mjs",
           "apps/desktop/test/packaged-artifacts.test.mjs",
+          "apps/desktop/test/runner-path.test.mjs",
           "apps/desktop/test/style-tokens.test.mjs",
         ],
         rules: {

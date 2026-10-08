@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access, readFile, readdir, stat } from "node:fs/promises";
+import { access, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -109,13 +109,18 @@ export async function verifyPackagedApplication(artifacts, signal, runCommand = 
   await Promise.all([
     ...artifacts.executables.map((path) => access(path, constants.X_OK)),
     ...[...artifacts.executables, ...artifacts.bindings, ...artifacts.assets].map(async (path) => {
-      const entry = await stat(path);
-      if (!entry.isFile()) throw new Error(`Packaged asset is not a file: ${path}`);
-      if (path === join(artifacts.resources, "app.asar") && entry.size === 0) {
-        throw new Error(`Invalid packaged app.asar at ${path}`);
-      }
-      if (path.endsWith(".wasm") && !WebAssembly.validate(await readFile(path, { signal }))) {
-        throw new Error(`Invalid packaged WASM at ${path}`);
+      const file = await open(path, "r");
+      try {
+        const entry = await file.stat();
+        if (!entry.isFile()) throw new Error(`Packaged asset is not a file: ${path}`);
+        if (path === join(artifacts.resources, "app.asar") && entry.size === 0) {
+          throw new Error(`Invalid packaged app.asar at ${path}`);
+        }
+        if (path.endsWith(".wasm") && !WebAssembly.validate(await file.readFile({ signal }))) {
+          throw new Error(`Invalid packaged WASM at ${path}`);
+        }
+      } finally {
+        await file.close();
       }
     }),
   ]);
