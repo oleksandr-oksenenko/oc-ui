@@ -15,6 +15,7 @@ import { verifyConnectionSettings } from "./connection-flows.ts";
 import { verifyProjectFlows } from "./project-flows.ts";
 import { verifyProviderFlows } from "./provider-flows.ts";
 import { verifySessionTools } from "./session-tools-flows.ts";
+import { isOwnedProcessRunning } from "./owned-process.ts";
 
 declare global {
   interface Window {
@@ -485,12 +486,7 @@ async function verifyHealth(expectedPid: number): Promise<void> {
 async function waitForProcessExit(pid: number): Promise<void> {
   const deadline = Date.now() + SHUTDOWN_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    try {
-      globalThis.process.kill(pid, 0);
-    } catch (cause) {
-      if (cause instanceof Error && "code" in cause && cause.code === "ESRCH") return;
-      throw cause;
-    }
+    if (!(await isOwnedProcessRunning(pid))) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   const state =

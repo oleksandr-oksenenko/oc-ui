@@ -31,7 +31,14 @@ const capabilities: Capabilities.TestrunnerCapabilities = [
       appBinaryPath,
       appArgs: [
         ...(globalThis.process.platform === "linux"
-          ? ["--no-sandbox", "--password-store=basic"]
+          ? [
+              "--no-sandbox",
+              "--password-store=basic",
+              // Xvfb has no GPU. Keep WebGL available through Chromium's CPU renderer.
+              "--use-gl=angle",
+              "--use-angle=swiftshader",
+              "--enable-unsafe-swiftshader",
+            ]
           : ["--use-mock-keychain"]),
         `${USER_DATA_PATH_ARGUMENT_PREFIX}${userDataPath}`,
         `--user-data-dir=${resolveSessionDataPath(userDataPath)}`,
