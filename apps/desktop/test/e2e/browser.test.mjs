@@ -42,6 +42,7 @@ const artifacts = new URL("../../dist/web-artifacts/", import.meta.url).pathname
 const modelRoute = (url) => url.pathname === "/api/model";
 const modelDefaultRoute = (url) => url.pathname === "/api/model/default";
 const agentRoute = (url) => url.pathname === "/api/agent";
+const promptRoute = (url) => /\/session\/[^/]+\/prompt$/u.test(url.pathname);
 const failCatalog = (route) =>
   route.fulfill({ status: 503, json: { message: "Catalog unavailable" } });
 const failFont = (route) => route.fulfill({ status: 503, body: "Temporary font failure" });
@@ -1167,6 +1168,76 @@ describe.sequential("production browser app", () => {
     await expect
       .poll(async () => (await (await fetch(`${provider.url}/_state`)).json()).cancelledStreams)
       .toBeGreaterThan(previousCancelled);
+    // Hold admission so the optimistic placement is observable before the
+    // server consumes the inbox item. An idle send must never be shown as steering.
+    for (const delivery of ["steer", "queue"]) {
+      const stoppedPrompt = `E2E_QUEUE_HOLD stopped session ${delivery}`;
+      const placement = await page.evaluateHandle((text) => {
+        const observation = { flashed: false };
+        const observer = new MutationObserver((records) => {
+          for (const record of records) {
+            for (const node of [record.target, ...record.addedNodes]) {
+              const element = node instanceof Element ? node : node.parentElement;
+              const pending =
+                element?.closest(".pending-messages") ??
+                element?.querySelector(".pending-messages");
+              if (pending?.textContent?.includes(text)) observation.flashed = true;
+            }
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        return { observation, observer };
+      }, stoppedPrompt);
+      let releasePrompt;
+      const promptGate = new Promise((resolve) => (releasePrompt = resolve));
+      await page.route(promptRoute, async (route) => {
+        await promptGate;
+        await route.continue();
+      });
+      try {
+        const completed = page.locator(".transcript-assistant-complete");
+        const completedBefore = await completed.count();
+        await page.getByRole("textbox", { name: "Prompt", exact: true }).fill(stoppedPrompt);
+        await page
+          .getByRole("textbox", { name: "Prompt", exact: true })
+          .press(
+            delivery === "queue"
+              ? process.platform === "darwin"
+                ? "Meta+Enter"
+                : "Control+Enter"
+              : "Enter",
+          );
+        await transcript(stoppedPrompt);
+        expect(await page.getByRole("region", { name: "Pending messages" }).count()).toBe(0);
+        releasePrompt();
+        await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
+        await expect
+          .poll(async () =>
+            (await providerState()).requests.some(
+              (request) => request.model !== "title" && request.prompt.includes(stoppedPrompt),
+            ),
+          )
+          .toBe(true);
+        await transcript(stoppedPrompt);
+        expect(await page.getByRole("region", { name: "Pending messages" }).count()).toBe(0);
+        provider.releaseHeld();
+        await expect.poll(() => completed.count()).toBeGreaterThan(completedBefore);
+        await idle();
+        await selectSession("Browser fixture two");
+        await selectSession("Browser fixture one");
+        await transcript(stoppedPrompt);
+        expect(
+          await page.locator(".transcript-user-message").filter({ hasText: stoppedPrompt }).count(),
+        ).toBe(1);
+        expect(await placement.evaluate(({ observation }) => observation.flashed)).toBe(false);
+      } finally {
+        releasePrompt();
+        provider.releaseHeld();
+        await page.unroute(promptRoute);
+        await placement.evaluate(({ observer }) => observer.disconnect());
+        await placement.dispose();
+      }
+    }
     proxy.disconnect();
     await page.getByRole("button", { name: /Select server, .*Reconnecting/u }).waitFor();
     proxy.reconnect();

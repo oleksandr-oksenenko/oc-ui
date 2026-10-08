@@ -55,7 +55,14 @@ function Content(props: { readonly effects: WorkspaceOwner; readonly prompt: Pro
     effects: props.effects,
     runtime: {
       api: { session: { command: () => Promise.resolve() } },
-      data: { session: { prompt: props.prompt, message: { get: () => undefined } } },
+      data: {
+        session: {
+          prompt: props.prompt,
+          status: () => "idle",
+          pending: { list: () => [] },
+          message: { get: () => undefined },
+        },
+      },
     },
     commands: () => ({ state: "ready", items: [] }),
     selectedID: () => "browser-composer-story",

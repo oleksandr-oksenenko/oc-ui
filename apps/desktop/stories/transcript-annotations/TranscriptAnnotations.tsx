@@ -153,6 +153,8 @@ function TranscriptAnnotationsContent(
       },
       data: {
         session: {
+          status: () => (running() ? "running" : "idle"),
+          pending: { list: () => [] },
           message: {
             get: (id, messageID) => messages()[id]?.find((message) => message.id === messageID),
           },

@@ -69,7 +69,8 @@ function setup(
 ) {
   return withTestWorkspace((effects, dispose) => {
     const [selectedID, setSelectedID] = createSignal<string>();
-    const [, setRunning] = createSignal(false);
+    const [running, setRunning] = createSignal(false);
+    const [pending, setPending] = createSignal<readonly SessionInboxUser[]>([]);
     const [transcriptLoading, setTranscriptLoading] = createSignal(false);
     const [transcriptError, setTranscriptError] = createSignal<string>();
     const [connected, setConnected] = createSignal(true);
@@ -96,6 +97,8 @@ function setup(
           data: {
             session: {
               prompt,
+              status: () => (running() ? "running" : "idle"),
+              pending: { list: (id) => pending().filter((item) => item.sessionID === id) },
               message: {
                 get: (sessionID, messageID) => {
                   messageRevision();
@@ -123,6 +126,7 @@ function setup(
       composer,
       setSelectedID,
       setRunning,
+      setPending,
       setTranscriptLoading,
       setTranscriptError,
       setConnected,
@@ -154,6 +158,127 @@ function seedReview(
 }
 
 describe("createSessionComposer", () => {
+  it.each(["steer", "queue"] as const)(
+    "keeps a stopped-session %s prompt in the transcript through admission, running and navigation",
+    async (delivery) => {
+      let finish!: (result: PromptResult) => void;
+      const prompt = vi.fn<Prompt>(() => new Promise((resolve) => (finish = resolve)));
+      const root = setup(prompt);
+      root.setSelectedID("session");
+      root.composer.input("Resume this session");
+      const submitted = root.composer.submit(delivery);
+      await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+      const input = prompt.mock.calls[0]![0];
+      const item = { ...promptResult(input), id: input.id!, delivery };
+      try {
+        expect(root.composer.transcriptPromptIDs()).toEqual([item.id]);
+        root.setPending([item]);
+        root.setRunning(true);
+        finish(item);
+        await submitted;
+        expect(root.composer.transcriptPromptIDs()).toEqual([item.id]);
+        root.setSelectedID("other");
+        expect(root.composer.transcriptPromptIDs()).toEqual([]);
+        root.setSelectedID("session");
+        expect(root.composer.transcriptPromptIDs()).toEqual([item.id]);
+        root.setPending([]);
+        expect(root.composer.transcriptPromptIDs()).toEqual([]);
+      } finally {
+        finish(item);
+        await submitted;
+        root.dispose();
+      }
+    },
+  );
+
+  it.each([
+    { running: true, delivery: "steer" as const },
+    { running: true, delivery: "queue" as const },
+  ])("keeps $delivery delivery pending when running=$running", async ({ running, delivery }) => {
+    const root = setup();
+    root.setSelectedID("session");
+    root.setRunning(running);
+    root.composer.input("Next task");
+    await root.composer.submit(delivery);
+    expect(root.composer.transcriptPromptIDs()).toEqual([]);
+    root.dispose();
+  });
+
+  it.each(["steer", "queue"] as const)(
+    "keeps stopped-%s placement when acknowledgement arrives after rejection",
+    async (delivery) => {
+      const prompt = vi.fn<Prompt>().mockRejectedValue(new Error("offline"));
+      const root = setup(prompt);
+      root.setSelectedID("session");
+      root.composer.input("Retry this prompt");
+      await root.composer.submit(delivery);
+      const input = prompt.mock.calls[0]![0];
+      expect(root.composer.transcriptPromptIDs()).toEqual([input.id]);
+      expect(root.composer.value()).toBe("Retry this prompt");
+      root.setRunning(true);
+      root.setPending([{ ...promptResult(input), id: input.id!, delivery }]);
+      root.setMessage("session", {
+        id: input.id!,
+        type: "user",
+        text: input.text,
+        metadata: input.metadata,
+        time: { created: 1 },
+      });
+      expect(root.composer.value()).toBe("");
+      expect(root.composer.error()).toBeUndefined();
+      expect(root.composer.transcriptPromptIDs()).toEqual([input.id]);
+      root.setPending([]);
+      expect(root.composer.transcriptPromptIDs()).toEqual([]);
+      root.dispose();
+    },
+  );
+
+  it("retires uncertain stopped-send placement when the request is superseded or cleared", async () => {
+    const prompt = vi.fn<Prompt>().mockRejectedValue(new Error("offline"));
+    const root = setup(prompt);
+    root.setSelectedID("session");
+    root.composer.input("First attempt");
+    await root.composer.submit();
+    const firstID = prompt.mock.calls[0]![0].id;
+    expect(root.composer.transcriptPromptIDs()).toEqual([firstID]);
+    root.composer.input("Replacement attempt");
+    await root.composer.submit();
+    const nextID = prompt.mock.calls[1]![0].id;
+    expect(nextID).not.toBe(firstID);
+    expect(root.composer.transcriptPromptIDs()).toEqual([nextID]);
+    root.composer.clear("session");
+    expect(root.composer.transcriptPromptIDs()).toEqual([]);
+    root.dispose();
+  });
+
+  it.each(["steer", "queue"] as const)(
+    "preserves stopped-%s placement when an uncertain attempt retries after the session starts",
+    async (delivery) => {
+      const prompt = vi.fn<Prompt>().mockRejectedValue(new Error("response lost"));
+      const root = setup(prompt);
+      root.setSelectedID("session");
+      root.composer.input("Retry after startup");
+      await root.composer.submit(delivery);
+      const firstID = prompt.mock.calls[0]![0].id;
+      root.setRunning(true);
+      let placementDuringRetry: readonly string[] = [];
+      prompt.mockImplementation(async (input) => {
+        placementDuringRetry = root.composer.transcriptPromptIDs();
+        const item = { ...promptResult(input), id: input.id!, delivery };
+        root.setPending([item]);
+        return item;
+      });
+      await root.composer.submit(delivery);
+      expect(prompt.mock.calls[1]![0].id).toBe(firstID);
+      expect(placementDuringRetry).toEqual([firstID]);
+      expect(root.composer.error()).toBeUndefined();
+      expect(root.composer.transcriptPromptIDs()).toEqual([firstID]);
+      root.setPending([]);
+      expect(root.composer.transcriptPromptIDs()).toEqual([]);
+      root.dispose();
+    },
+  );
+
   it("preserves delivery on retry and creates a new ID when delivery changes", async () => {
     const prompt = vi.fn<Prompt>().mockRejectedValue(new Error("offline"));
     const root = setup(prompt);

@@ -120,6 +120,7 @@ type AttachmentNotice = {
 
 type AdmissionState = {
   active: Readonly<Record<string, SubmissionRequest | undefined>>;
+  transcriptPrompts: Readonly<Record<string, string>>;
   error: PromptSubmission | undefined;
   commandNotice: CommandNotice | undefined;
   attachmentNotice: AttachmentNotice | undefined;
@@ -133,7 +134,8 @@ type SessionComposerOptions = {
       readonly session: Pick<ConnectedRuntime["api"]["session"], "command">;
     };
     readonly data: {
-      readonly session: Pick<ConnectedRuntime["data"]["session"], "prompt"> & {
+      readonly session: Pick<ConnectedRuntime["data"]["session"], "prompt" | "status"> & {
+        readonly pending: Pick<ConnectedRuntime["data"]["session"]["pending"], "list">;
         readonly message: Pick<ConnectedRuntime["data"]["session"]["message"], "get">;
       };
     };
@@ -177,6 +179,8 @@ export type SessionComposerController = {
   ) => void;
   readonly disabled: Accessor<boolean>;
   readonly submitting: Accessor<boolean>;
+  /** Placement only; the SDK still owns prompt contents and reconciliation. */
+  readonly transcriptPromptIDs: Accessor<readonly string[]>;
   readonly error: Accessor<string | undefined>;
   readonly review: Accessor<ComposerReview | undefined>;
   /** The recognized command invocation for the current draft, if any. */
@@ -342,6 +346,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
   };
   const admission = Atom.make<AdmissionState>({
     active: {},
+    transcriptPrompts: {},
     error: undefined,
     commandNotice: undefined,
     attachmentNotice: undefined,
@@ -359,6 +364,14 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     effects.registry.set(admission, {
       ...current,
       active: { ...current.active, [sessionID]: active },
+      // Transfer retry ownership in one update so its placement cannot be retired
+      // between clearing the failed request and admitting the new attempt.
+      failed:
+        active?.kind === "prompt" ? { ...current.failed, [sessionID]: undefined } : current.failed,
+      transcriptPrompts:
+        active?.kind === "prompt" && options.runtime.data.session.status(sessionID) !== "running"
+          ? { ...current.transcriptPrompts, [active.id]: sessionID }
+          : current.transcriptPrompts,
     });
   };
   const setErrorRequest = (error: PromptSubmission | undefined): void => {
@@ -456,6 +469,32 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     const sessionID = options.selectedID();
     return sessionID !== undefined && state().active[sessionID] !== undefined;
   });
+
+  // Keep idle-send placement through acknowledgement and the running transition.
+  // An uncertain failure still owns its ID: a late echo must keep this placement.
+  // Retire it once admission, failure recovery and the SDK inbox release the ID.
+  createEffect(() => {
+    const current = state();
+    const entries = Object.entries(current.transcriptPrompts);
+    const retained = entries.filter(([id, sessionID]) => {
+      const active = current.active[sessionID];
+      return (
+        (active?.kind === "prompt" && active.id === id) ||
+        current.failed[sessionID]?.id === id ||
+        options.runtime.data.session.pending.list(sessionID).some((item) => item.id === id)
+      );
+    });
+    if (retained.length !== entries.length)
+      effects.registry.set(admission, {
+        ...effects.registry.get(admission),
+        transcriptPrompts: Object.fromEntries(retained),
+      });
+  });
+  const transcriptPromptIDs = createMemo(() =>
+    Object.entries(state().transcriptPrompts)
+      .filter(([, sessionID]) => sessionID === options.selectedID())
+      .map(([id]) => id),
+  );
 
   const activeReviewKey = (): ReviewDraftKey | undefined => {
     const sessionID = options.selectedID();
@@ -628,7 +667,6 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     setCommandNotice(sessionID, undefined);
     clearAttachmentNotice(sessionID);
     setErrorRequest(undefined);
-    setFailedRequest(sessionID, undefined);
     setActiveRequest(request);
     return admit(request, submitSessionInput(effects, options.runtime, request));
   };
@@ -694,6 +732,7 @@ export function createSessionComposer(options: SessionComposerOptions): SessionC
     appendBatch,
     disabled,
     submitting,
+    transcriptPromptIDs,
     error: () => {
       const notice = state().commandNotice;
       if (notice !== undefined && notice.sessionID === options.selectedID()) {
