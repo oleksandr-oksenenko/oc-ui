@@ -185,6 +185,12 @@ function respondScriptedPrompt({ modelName, prompt, response, send, finish, onCa
 }
 
 function requestedTool(prompt) {
+  if (prompt.includes("E2E_BACKGROUND_PROCESS")) {
+    return {
+      name: "shell",
+      input: { command: "printf 'Background acceptance output\\n'", background: true },
+    };
+  }
   if (prompt.includes("E2E_CREATE_SESSION")) {
     return { name: "session_create", input: { prompt: "Independent acceptance task" } };
   }
@@ -327,11 +333,13 @@ function respondTool(prompt, toolReply, body, send, finish, requestID) {
     return true;
   }
   if (toolReply) {
-    const label = prompt.includes("E2E_CREATE_SESSION")
-      ? "Acceptance session created"
-      : prompt.includes("E2E_SUBAGENT_BUBBLE")
-        ? "Acceptance bubbling verified"
-        : "Acceptance question resolved";
+    const label = prompt.includes("E2E_BACKGROUND_PROCESS")
+      ? "Acceptance background process started"
+      : prompt.includes("E2E_CREATE_SESSION")
+        ? "Acceptance session created"
+        : prompt.includes("E2E_SUBAGENT_BUBBLE")
+          ? "Acceptance bubbling verified"
+          : "Acceptance question resolved";
     send({ content: `${label}: ${JSON.stringify(toolReply.content)}` });
     finish();
     return true;

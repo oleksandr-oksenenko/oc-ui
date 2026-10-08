@@ -678,6 +678,18 @@
   font-size: var(--oc-type-metadata-size);
 }
 
+.transcript-background-message .transcript-context-detail {
+  flex: 1;
+}
+
+.transcript-background-command {
+  margin: 0;
+  color: var(--oc-text-base);
+  font-family: var(--oc-font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .transcript-timeline-row {
   display: flex;
   align-items: center;
