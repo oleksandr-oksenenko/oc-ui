@@ -229,6 +229,17 @@ PR preparation rebased onto `d768b3b`, preserving main's platform/artifact paths
 Linux keyring checks and lint boundaries. Frozen installation, root checks/tests,
 and seven focused permission/image/terminal browser cases pass on this result.
 
+The first PR CI run passed fast, integration and both Linux/macOS native jobs.
+The static Storybook build passed, but Components failed `Captured Dark` in the
+unchanged BrowserAnnotations story with `aria-hidden-focus` after preview closure.
+Its nine focused cases pass locally; this is not evidence that the intermittent
+failure is repaired. CodeQL flagged two existing environment-derived startup reads
+moved by the PR. Those reads now use the existing `runnerPath` validator against
+Electron's reported user-data path. The follow-up rebases onto `c3b70d0`.
+Frozen installation, root `pnpm check`, all 1,575 fast tests and all 391 component
+cases pass locally after this follow-up. Fresh CI is required to establish the
+CodeQL result and Linux component outcome.
+
 Full heavier component/integration/build/packaged CI evidence for this candidate
 is pending. Packaged native actions were type-checked; their changed diagnostics
 were not executed in a packaged app locally. No budget increase or repeated
@@ -237,9 +248,9 @@ mutation is used as a repair.
 ### Complexity accounting
 
 Production (including the underlying pinned-core patch): **+93/-37, net +56**.
-Configuration: **+9/-2, net +7**. Tests/stories/fixtures: **+1,418/-372, net +1,046**.
-Documentation for the complete PR (including the original report): **+854/-0,
-net +854**. Generated lockfile:
+Configuration: **+9/-2, net +7**. Tests/stories/fixtures: **+1,422/-372, net +1,050**.
+Documentation for the complete PR (including the original report): **+865/-0,
+net +865**. Generated lockfile:
 **+5/-4, net +1**. Stored patch: **+15/-0**, including its diff envelope; the
 underlying core code is already included in the production count above.
 
