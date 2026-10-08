@@ -704,6 +704,8 @@ export const LongPathTooltip: Story = {
     await step("keeps the disclosure operable under the tooltip trigger", async () => {
       const disclosure = paths()[0]?.closest(".diff-file-toggle");
       await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+      // Exercise a click that can settle before Pierre's next render frame.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       await userEvent.click(paths()[0]!);
       // CodeView updates the header in its queued animation-frame render.
       await waitFor(() => expect(disclosure).toHaveAttribute("aria-expanded", "false"), {
