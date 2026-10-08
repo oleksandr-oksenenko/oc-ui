@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { startScriptedProvider } from "./scripted-provider.mjs";
 import { assertElfX64, packagedArtifacts } from "./packaged-artifacts.mjs";
+import { isOwnedProcessRunning } from "./owned-process.ts";
 
 const desktopRoot = fileURLToPath(new URL("../..", import.meta.url));
 const execFileAsync = promisify(execFile);
@@ -202,7 +203,9 @@ const assertWorkersStopped = async (appPath) => {
   if (!Array.isArray(pids) || pids.some((pid) => !Number.isSafeInteger(pid) || pid <= 0)) {
     throw new Error("Invalid acceptance worker PID record");
   }
-  if (pids.some(isAlive)) throw new Error("An acceptance worker is still alive");
+  for (const pid of pids) {
+    if (await isOwnedProcessRunning(pid)) throw new Error("An acceptance worker is still alive");
+  }
 };
 
 const isAlive = (pid) => {
