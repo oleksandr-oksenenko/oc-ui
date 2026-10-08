@@ -24,7 +24,7 @@
     "preview:web": "vp preview --config vite.web.config.ts",
     "preview": "electron-vite preview",
     "stage:opencode": "node ../../tools/stage-opencode.mjs",
-    "storybook": "storybook dev --port 6006 --disable-telemetry",
+    "storybook": "storybook dev --port 6006 --disable-telemetry --no-open",
     "storybook:preview": "vp preview --outDir storybook-static --host 127.0.0.1 --port 4174",
     "test:acceptance:mac": "pnpm run package:mac && node test/e2e/run-packaged.mjs startup",
     "test:acceptance:chat:mac": "pnpm run package:mac && node test/e2e/run-packaged.mjs chat",
