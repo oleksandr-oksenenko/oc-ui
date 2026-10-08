@@ -38,94 +38,154 @@ const workerPids: number[] = [];
 const terminalPids: number[] = [];
 let artifactDirectory = fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
 const projectDirectory = join(userDataPath, "acceptance-project");
+const fixtureSessionIDs: string[] = [];
+let startupStage = "automatic connection";
+let startupSelector = "";
+let startupReady = false;
+let startupFailure: Error | undefined;
+
+async function startupClick(stage: string, selector: string, timeout?: number): Promise<void> {
+  startupStage = stage;
+  startupSelector = selector;
+  await $(selector).waitForClickable(timeout === undefined ? undefined : { timeout });
+  // Readiness can span a render; query the current target for the single action.
+  await $(selector).click();
+}
 
 describe("packaged owned OpenCode", () => {
+  beforeEach(function () {
+    if (this.currentTest?.title.startsWith("starts automatically")) return;
+    if (!startupReady)
+      throw new Error(`Packaged startup prerequisite failed during ${startupStage}`, {
+        cause: startupFailure,
+      });
+  });
+
   it("starts automatically without a chooser and creates sessions in the bundled worker default directory", async () => {
-    const runtime = await browser.electron.execute(async (electron) => {
-      await electron.app.whenReady();
-      return {
-        isPackaged: electron.app.isPackaged,
-        userData: electron.app.getPath("userData"),
-        mockKeychain: electron.app.commandLine.hasSwitch("use-mock-keychain"),
-        noSandbox: electron.app.commandLine.hasSwitch("no-sandbox"),
-        passwordStore: electron.app.commandLine.getSwitchValue("password-store"),
-        encryptionAvailable: electron.safeStorage.isEncryptionAvailable(),
-        storageBackend:
-          process.platform === "linux"
-            ? electron.safeStorage.getSelectedStorageBackend()
-            : undefined,
-        platform: process.platform,
-        arch: process.arch,
-        executable: process.execPath,
-        resources: process.resourcesPath,
-        appPath: electron.app.getAppPath(),
-        databasePath: process.env.OPENCODE_DB,
-      };
-    });
-    assert.equal(runtime.isPackaged, true);
-    assert.equal(runtime.userData, userDataPath);
-    assert.equal(runtime.platform, globalThis.process.env.OCUI_E2E_PLATFORM);
-    assert.equal(runtime.arch, globalThis.process.env.OCUI_E2E_ARCH);
-    const expectedArtifacts = packagedArtifacts(
-      fileURLToPath(new URL("../..", import.meta.url)),
-      globalThis.process.platform,
-      globalThis.process.arch,
-      globalThis.process.platform === "linux"
-        ? Schema.decodeUnknownSync(
-            Schema.Struct({
-              header: Schema.Struct({ glibcVersionRuntime: Schema.NonEmptyString }),
-            }),
-          )(globalThis.process.report.getReport()).header.glibcVersionRuntime
-        : undefined,
-    );
-    assert.equal(
-      await realpath(runtime.executable),
-      await realpath(
-        runnerPath(
-          globalThis.process.env.OCUI_E2E_APP_BINARY_PATH,
-          expectedArtifacts.appBinaryPath,
-        ),
-      ),
-    );
-    assert.equal(
-      await realpath(runtime.resources),
-      await realpath(
-        runnerPath(globalThis.process.env.OCUI_E2E_RESOURCES_PATH, expectedArtifacts.resources),
-      ),
-    );
-    const configuredArtifacts = globalThis.process.env.OCUI_E2E_ARTIFACT_DIRECTORY;
-    if (configuredArtifacts !== undefined) {
-      artifactDirectory = runnerPath(
-        configuredArtifacts,
-        join(dirname(runtime.userData), "artifacts"),
+    try {
+      const runtime = await browser.electron.execute(async (electron) => {
+        await electron.app.whenReady();
+        return {
+          isPackaged: electron.app.isPackaged,
+          userData: electron.app.getPath("userData"),
+          mockKeychain: electron.app.commandLine.hasSwitch("use-mock-keychain"),
+          noSandbox: electron.app.commandLine.hasSwitch("no-sandbox"),
+          passwordStore: electron.app.commandLine.getSwitchValue("password-store"),
+          encryptionAvailable: electron.safeStorage.isEncryptionAvailable(),
+          storageBackend:
+            process.platform === "linux"
+              ? electron.safeStorage.getSelectedStorageBackend()
+              : undefined,
+          platform: process.platform,
+          arch: process.arch,
+          executable: process.execPath,
+          resources: process.resourcesPath,
+          appPath: electron.app.getAppPath(),
+          databasePath: process.env.OPENCODE_DB,
+        };
+      });
+      assert.equal(runtime.isPackaged, true);
+      assert.equal(runtime.userData, userDataPath);
+      assert.equal(runtime.platform, globalThis.process.env.OCUI_E2E_PLATFORM);
+      assert.equal(runtime.arch, globalThis.process.env.OCUI_E2E_ARCH);
+      const expectedArtifacts = packagedArtifacts(
+        fileURLToPath(new URL("../..", import.meta.url)),
+        globalThis.process.platform,
+        globalThis.process.arch,
+        globalThis.process.platform === "linux"
+          ? Schema.decodeUnknownSync(
+              Schema.Struct({
+                header: Schema.Struct({ glibcVersionRuntime: Schema.NonEmptyString }),
+              }),
+            )(globalThis.process.report.getReport()).header.glibcVersionRuntime
+          : undefined,
       );
+      assert.equal(
+        await realpath(runtime.executable),
+        await realpath(
+          runnerPath(
+            globalThis.process.env.OCUI_E2E_APP_BINARY_PATH,
+            expectedArtifacts.appBinaryPath,
+          ),
+        ),
+      );
+      assert.equal(
+        await realpath(runtime.resources),
+        await realpath(
+          runnerPath(globalThis.process.env.OCUI_E2E_RESOURCES_PATH, expectedArtifacts.resources),
+        ),
+      );
+      const configuredArtifacts = globalThis.process.env.OCUI_E2E_ARTIFACT_DIRECTORY;
+      if (configuredArtifacts !== undefined) {
+        artifactDirectory = runnerPath(
+          configuredArtifacts,
+          join(dirname(runtime.userData), "artifacts"),
+        );
+      }
+      await mkdir(artifactDirectory, { recursive: true });
+      assert.equal(runtime.appPath, join(runtime.resources, "app.asar"));
+      assert.equal(runtime.mockKeychain, runtime.platform === "darwin");
+      assert.equal(runtime.encryptionAvailable, true);
+      if (runtime.platform === "linux") {
+        assert.equal(runtime.noSandbox, globalThis.process.env.OCUI_E2E_NO_SANDBOX === "1");
+        assert.equal(runtime.passwordStore, "gnome-libsecret");
+        assert.equal(runtime.storageBackend, "gnome_libsecret");
+      }
+      assert.equal(runtime.databasePath, globalThis.process.env.OPENCODE_DB);
+      startupStage = "automatic connection";
+      await waitForLocalConnection();
+      assert.equal(await $("#connection-form-title").isExisting(), false);
+      startupStage = "narrow native window";
+      await resizeWindow(430, 600);
+      assert.equal(
+        await browser.execute(() => document.documentElement.scrollWidth <= window.innerWidth),
+        true,
+      );
+      await browser.saveScreenshot(join(artifactDirectory, "owned-runtime-narrow.png"));
+      startupStage = "wide native window";
+      await resizeWindow(1280, 860);
+      startupStage = "worker identity and health";
+      const firstPid = await recordWorker();
+      await verifyHealth(firstPid);
+      assert.deepEqual(JSON.parse(await readFile(settingsPath, "utf8")), { kind: "local" });
+      await assert.rejects(access(join(userDataPath, "opencode", "service.json")), {
+        code: "ENOENT",
+      });
+      await createBundledSessions();
+      startupReady = true;
+    } catch (cause) {
+      startupFailure = new Error(`Packaged startup failed during ${startupStage}`, { cause });
+      // Keep the first failure's safe state, rather than overwriting it with
+      // later missing-fixture screenshots or dumping credentials/prompt text.
+      try {
+        const targetConnected = startupSelector ? await $(startupSelector).isExisting() : false;
+        const state = await browser.execute(() => {
+          const active = document.activeElement;
+          const selected = document.querySelector('.shell-session-main[aria-current="page"]');
+          const title = selected?.querySelector(".shell-session-title")?.textContent;
+          return {
+            active: active ? { tag: active.tagName, id: active.id } : undefined,
+            dialog: document.querySelector('[role="dialog"]') !== null,
+            menu: document.querySelector('[role="menu"], [role="listbox"]') !== null,
+            selectedFixture:
+              title === "Native fixture one" || title === "Native fixture two" ? title : "other",
+          };
+        });
+        console.error("Packaged startup first failure", {
+          stage: startupStage,
+          selector: startupSelector,
+          targetConnected,
+          fixtureSessionIDs,
+          state,
+        });
+      } catch (diagnosticError) {
+        console.error("Packaged startup diagnostics unavailable", {
+          stage: startupStage,
+          diagnosticError,
+        });
+      }
+      throw startupFailure;
     }
-    await mkdir(artifactDirectory, { recursive: true });
-    assert.equal(runtime.appPath, join(runtime.resources, "app.asar"));
-    assert.equal(runtime.mockKeychain, runtime.platform === "darwin");
-    assert.equal(runtime.encryptionAvailable, true);
-    if (runtime.platform === "linux") {
-      assert.equal(runtime.noSandbox, globalThis.process.env.OCUI_E2E_NO_SANDBOX === "1");
-      assert.equal(runtime.passwordStore, "gnome-libsecret");
-      assert.equal(runtime.storageBackend, "gnome_libsecret");
-    }
-    assert.equal(runtime.databasePath, globalThis.process.env.OPENCODE_DB);
-    await waitForLocalConnection();
-    assert.equal(await $("#connection-form-title").isExisting(), false);
-    await resizeWindow(430, 600);
-    assert.equal(
-      await browser.execute(() => document.documentElement.scrollWidth <= window.innerWidth),
-      true,
-    );
-    await browser.saveScreenshot(join(artifactDirectory, "owned-runtime-narrow.png"));
-    await resizeWindow(1280, 860);
-    const firstPid = await recordWorker();
-    await verifyHealth(firstPid);
-    assert.deepEqual(JSON.parse(await readFile(settingsPath, "utf8")), { kind: "local" });
-    await assert.rejects(access(join(userDataPath, "opencode", "service.json")), {
-      code: "ENOENT",
-    });
-    await createBundledSessions();
   });
 
   it("validates connections, saves encrypted credentials, reconnects, and forgets them", async () => {
@@ -426,17 +486,15 @@ async function verifyBundledTerminal(): Promise<void> {
 
 /** Supply the two sessions needed by later native-boundary checks. */
 async function createBundledSessions(): Promise<void> {
-  await $('[aria-label="Create session"]').waitForClickable({ timeout: STARTUP_TIMEOUT_MS });
-  await $('[aria-label="Create session"]').click();
+  await startupClick("open new session", '[aria-label="Create session"]', STARTUP_TIMEOUT_MS);
   await $(".new-session-screen").waitForDisplayed();
-  await $('button[aria-label^="Project:"]').click();
-  await $("button=Add project…").click();
+  await startupClick("open project picker", 'button[aria-label^="Project:"]');
+  await startupClick("open directory browser", "button=Add project…");
   assert.equal(
     await $(".server-directory-browser-path").getText(),
     await realpath(projectDirectory),
   );
-  await $('.server-flow-dialog button[type="submit"]').waitForClickable();
-  await $('.server-flow-dialog button[type="submit"]').click();
+  await startupClick("register project", '.server-flow-dialog button[type="submit"]');
   await $(".server-flow-dialog").waitForExist({ reverse: true });
   // Submission is the next slice. Seed existing sessions for the native flows.
   const result = await browser.execute(() => window.desktop.localOpenCode.connect());
@@ -447,10 +505,12 @@ async function createBundledSessions(): Promise<void> {
       Authorization: `Basic ${Buffer.from(`opencode:${result.connection.password}`).toString("base64")}`,
     },
   });
-  await api.session.create({ title: "Native fixture one" });
-  await api.session.create({ title: "Native fixture two" });
-  await $(".shell-session-title=Native fixture one").waitForClickable();
-  await $(".shell-session-title=Native fixture one").click();
+  for (const title of ["Native fixture one", "Native fixture two"]) {
+    startupStage = `seed ${title}`;
+    fixtureSessionIDs.push((await api.session.create({ title })).id);
+  }
+  await startupClick("select first fixture", ".shell-session-title=Native fixture one");
+  startupStage = "first fixture transcript";
   await $(".transcript-empty-state").waitForDisplayed();
 }
 

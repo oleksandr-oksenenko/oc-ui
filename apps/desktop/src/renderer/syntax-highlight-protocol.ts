@@ -20,8 +20,28 @@ export type HighlightTokens = typeof HighlightTokens.Type;
 
 export class SyntaxHighlightError extends Schema.TaggedError<SyntaxHighlightError>()(
   "SyntaxHighlightError",
-  { cause: Schema.Defect() },
-) {}
+  {
+    cause: Schema.Defect(),
+    stage: Schema.optional(
+      Schema.Literals([
+        "construction",
+        "posting",
+        "worker",
+        "message-decoding",
+        "response-decoding",
+        "tokenizer",
+        "response-timeout",
+      ]),
+    ),
+  },
+) {
+  // Schema errors can contain source/token payloads. Keep the printable failure
+  // boundary and cause type, while retaining the complete cause on the error.
+  override get message(): string {
+    const cause = this.cause instanceof Error ? this.cause.name : "worker-reported failure";
+    return `Syntax highlighting failed during ${this.stage ?? "unknown"} (${cause})`;
+  }
+}
 
 export const HighlightResponse = Schema.Union([
   Schema.Struct({ tokens: HighlightTokens }),

@@ -120,4 +120,5 @@ minimumReleaseAgeExclude:
 
 patchedDependencies:
   "@opencode/client@2.0.3": patches/@opencode__client@2.0.3.patch
+  "@opencode/core@2.0.3": patches/@opencode__core@2.0.3.patch
   "@opencode/ui@2.0.3": patches/@opencode__ui@2.0.3.patch

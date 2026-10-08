@@ -2,6 +2,7 @@ import { Deferred, Effect, Schema } from "effect";
 import { SessionID } from "@opencode/schema/session-id";
 import { SessionMessage } from "@opencode/schema";
 import type { LocationRef } from "@opencode/client";
+import { locationKey } from "@opencode/client/solid";
 import type { ConnectedRuntime } from "../opencode/runtime.ts";
 import { WorkspaceRequestError } from "../workspace-owner.ts";
 import {
@@ -26,6 +27,7 @@ export type DraftSubmissionRuntime = Pick<ConnectedRuntime, "effects"> & {
     session: Pick<ConnectedRuntime["data"]["session"], "create" | "prompt" | "remember">;
   };
   api: Pick<ConnectedRuntime["api"], "location" | "worktree"> & {
+    agent: Pick<ConnectedRuntime["api"]["agent"], "list">;
     config: Pick<ConnectedRuntime["api"]["config"], "shells">;
     shell: Pick<ConnectedRuntime["api"]["shell"], "create" | "get" | "output" | "remove">;
     plugin: Pick<ConnectedRuntime["api"]["plugin"], "awaitActivation">;
@@ -177,24 +179,23 @@ export function createDraftSubmission(
     if (changes.some((path) => /(^|\/)\.(agents|opencode|claude)\/skills\//u.test(path)))
       needed.add("skill.updated");
     const ready = yield* Deferred.make<void>();
-    const stopConfig = data.on("config.updated", (event) => {
-      if (event.location?.directory === location.directory) {
-        needed.delete("config.updated");
-        if (!needed.size) Deferred.doneUnsafe(ready, Effect.void);
-      }
-    });
-    const stops = [
-      stopConfig,
-      ...(["agent.updated", "catalog.updated", "command.updated", "skill.updated"] as const).map(
-        (type) =>
-          data.on(type, (event) => {
-            if (event.location?.directory === location.directory) {
-              needed.delete(type);
-              if (!needed.size) Deferred.doneUnsafe(ready, Effect.void);
-            }
-          }),
-      ),
-    ];
+    const required = [...needed];
+    const stops = (
+      [
+        "config.updated",
+        "agent.updated",
+        "catalog.updated",
+        "command.updated",
+        "skill.updated",
+      ] as const
+    ).map((type) =>
+      data.on(type, (event) => {
+        if (event.location && locationKey(event.location) === locationKey(location)) {
+          needed.delete(type);
+          if (!needed.size) Deferred.doneUnsafe(ready, Effect.void);
+        }
+      }),
+    );
     yield* Effect.gen(function* () {
       yield* run(
         branch.kind === "new"
@@ -204,12 +205,35 @@ export function createDraftSubmission(
       if (needed.size)
         yield* Deferred.await(ready).pipe(
           Effect.timeout("10 seconds"),
-          Effect.mapError(
-            () =>
-              new DraftSubmissionError({
+          Effect.catchTag("TimeoutError", () =>
+            Effect.gen(function* () {
+              const pending = [...needed];
+              const observed = required.filter((type) => !needed.has(type));
+              const agents = yield* effects
+                .request((signal) =>
+                  api.agent.list({ location: requestLocation(location) }, { signal }),
+                )
+                .pipe(Effect.timeout("2 seconds"), Effect.result);
+              yield* Effect.logWarning("Draft checkout configuration refresh not confirmed", {
+                location,
+                branch: branch.name,
+                commit,
+                required,
+                observed,
+                pending,
+                // A snapshot is diagnostic evidence, never permission to Send.
+                agents:
+                  agents._tag === "Success"
+                    ? agents.success.data
+                        .slice(0, 20)
+                        .map(({ id, hidden, mode }) => ({ id, hidden, mode }))
+                    : { failure: agents.failure._tag },
+              });
+              return yield* new DraftSubmissionError({
                 message:
                   "The checkout changed, but its configuration refresh could not be confirmed. Nothing was sent.",
-              }),
+              });
+            }),
           ),
         );
     }).pipe(Effect.ensuring(Effect.sync(() => stops.forEach((unsubscribe) => unsubscribe()))));

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { access, mkdir, realpath, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
+import { createConnection, createServer } from "node:net";
 import { dirname, join } from "node:path";
 
 import { OpenCode } from "@opencode/client";
@@ -65,15 +65,12 @@ function waitForLines(child, patterns, timeoutMs = 30_000) {
   });
 }
 
-function exitOutcome(child, timeoutMs = 15_000) {
+function exitOutcome(runner, timeoutMs = 15_000) {
   let timer;
-  const exited = new Promise((resolve) => {
-    child.once("exit", (code, signal) => resolve({ code, signal }));
-  });
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => resolve("timeout"), timeoutMs);
   });
-  return Promise.race([exited, timeout]).finally(() => clearTimeout(timer));
+  return Promise.race([runner.exited, timeout]).finally(() => clearTimeout(timer));
 }
 
 async function configEntries(server) {
@@ -82,14 +79,16 @@ async function configEntries(server) {
   return response.json();
 }
 
-async function stopChild(child) {
+async function stopChild(runner) {
+  const { child } = runner;
+  if (!child.pid) return;
   if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
   const force = setTimeout(() => {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
   }, 10_000);
   try {
     if (child.exitCode === null && child.signalCode === null) {
-      await new Promise((resolve) => child.once("exit", resolve));
+      await runner.exited;
     }
   } finally {
     clearTimeout(force);
@@ -99,6 +98,30 @@ async function stopChild(child) {
 describe.sequential("standalone OpenCode server runner", () => {
   let profile;
   let serverScript;
+
+  // Drain output and register exit at spawn, before any readiness wait or signal.
+  const startRunner = (args = [], extraEnv = {}) => {
+    const child = spawn(process.execPath, [serverScript, ...args], {
+      cwd: profile.paths.app,
+      env: { ...profile.env, ...extraEnv },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    const read = (chunk) => {
+      output = (output + chunk.toString()).slice(-8192);
+    };
+    child.stdout.on("data", read);
+    child.stderr.on("data", read);
+    const exited = new Promise((resolve) => {
+      child.once("exit", (code, signal) => resolve({ code, signal }));
+      child.once("error", (error) => resolve({ error: error.message }));
+    });
+    return {
+      child,
+      exited,
+      output: () => output.replace(/^server password .*$/gmu, "server password [redacted]"),
+    };
+  };
 
   beforeAll(async () => {
     profile = await createProfile("ocui-server-runner-");
@@ -274,28 +297,42 @@ describe.sequential("standalone OpenCode server runner", () => {
   });
 
   it("exits nonzero when the port is already in use", async () => {
-    const blocker = createServer();
+    const blocker = createServer((socket) => socket.end("blocker still owns this port"));
     await new Promise((resolve) => blocker.listen(0, "127.0.0.1", resolve));
     const port = blocker.address().port;
-    const child = spawn(process.execPath, [serverScript, "--port", String(port)], {
-      cwd: profile.paths.app,
-      env: { ...profile.env, OPENCODE_SERVER_PASSWORD: "port-pass" },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const runner = startRunner(["--port", String(port)], { OPENCODE_SERVER_PASSWORD: "port-pass" });
     try {
-      expect(await exitOutcome(child)).toEqual({ code: 1, signal: null });
+      expect(await exitOutcome(runner), runner.output()).toEqual({ code: 1, signal: null });
+      expect(runner.output()).not.toContain("server listening on");
+      const probe = createConnection({ host: "127.0.0.1", port });
+      try {
+        probe.setTimeout(1000, () => probe.destroy(new Error("Blocker probe timed out")));
+        const reply = await new Promise((resolve, reject) => {
+          probe.once("data", (data) => resolve(data.toString()));
+          probe.once("error", reject);
+        });
+        expect(reply).toBe("blocker still owns this port");
+      } finally {
+        probe.destroy();
+      }
     } finally {
-      await stopChild(child);
+      await stopChild(runner);
       await new Promise((resolve) => blocker.close(resolve));
+    }
+    const released = createServer();
+    try {
+      await new Promise((resolve, reject) => {
+        released.once("error", reject);
+        released.listen(port, "127.0.0.1", resolve);
+      });
+    } finally {
+      await new Promise((resolve) => released.close(resolve));
     }
   });
 
   it("generates and prints a password when none is provided", async () => {
-    const child = spawn(process.execPath, [serverScript], {
-      cwd: profile.paths.app,
-      env: { ...profile.env },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const runner = startRunner();
+    const { child } = runner;
     try {
       const [passwordMatch, urlMatch] = await waitForLines(child, [passwordLine, listeningLine]);
       const authorization = `Basic ${Buffer.from(`opencode:${passwordMatch[1]}`).toString("base64")}`;
@@ -303,26 +340,23 @@ describe.sequential("standalone OpenCode server runner", () => {
       expect(health.status).toBe(200);
 
       child.kill("SIGTERM");
-      expect(await exitOutcome(child)).toEqual({ code: 0, signal: null });
+      expect(await exitOutcome(runner), runner.output()).toEqual({ code: 0, signal: null });
     } finally {
-      await stopChild(child);
+      await stopChild(runner);
     }
   });
 
   it.skipIf(process.platform === "win32")(
     "exits cleanly when terminated during startup",
     async () => {
-      const child = spawn(process.execPath, [serverScript], {
-        cwd: profile.paths.app,
-        env: { ...profile.env, OPENCODE_SERVER_PASSWORD: "startup-pass" },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      const runner = startRunner([], { OPENCODE_SERVER_PASSWORD: "startup-pass" });
+      const { child } = runner;
       try {
         await waitForLines(child, [startingLine]);
         child.kill("SIGTERM");
-        expect(await exitOutcome(child)).toEqual({ code: 0, signal: null });
+        expect(await exitOutcome(runner), runner.output()).toEqual({ code: 0, signal: null });
       } finally {
-        await stopChild(child);
+        await stopChild(runner);
       }
     },
   );
