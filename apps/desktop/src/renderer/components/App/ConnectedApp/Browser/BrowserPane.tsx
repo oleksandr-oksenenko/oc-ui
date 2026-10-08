@@ -1,3 +1,4 @@
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- Scrollable browser status and error content needs keyboard access. */
 import { Button } from "@opencode/ui/button";
 import { Icon } from "@opencode/ui/icon";
 import { IconButton } from "@opencode/ui/icon-button";
@@ -36,7 +37,7 @@ export function BrowserPane(props: BrowserPaneProps) {
       <Show
         when={props.state.status === "connected"}
         fallback={
-          <div class="browser-empty">
+          <div class="browser-empty oc-focus-inset" tabIndex={0}>
             <strong>Session browser</strong>
             <p>
               {props.sessionSelected
@@ -154,7 +155,7 @@ export function BrowserPane(props: BrowserPaneProps) {
         <Show
           when={tab()}
           fallback={
-            <div class="browser-empty">
+            <div class="browser-empty oc-focus-inset" tabIndex={0}>
               <p>No tabs open.</p>
               <Button onClick={() => props.onCommand({ type: "tabs.open" })}>New tab</Button>
             </div>
@@ -167,7 +168,7 @@ export function BrowserPane(props: BrowserPaneProps) {
         </footer>
       </Show>
       <Show when={props.state.error}>
-        <p class="browser-error" role="alert">
+        <p class="browser-error oc-focus-inset" role="alert" tabIndex={0}>
           {props.state.error}
         </p>
       </Show>

@@ -320,7 +320,8 @@ describe("createAnnotationHighlights", () => {
       '<article data-message-id="two"><p data-annotation-block="b">beta</p></article>' +
       '<article data-message-id="three"><p data-annotation-block="c">gamma</p></article>';
     document.body.append(root);
-    const onOpen = vi.fn<(keys: readonly string[], target: HTMLElement, anchor: DOMRect) => void>();
+    const onOpen =
+      vi.fn<(keys: readonly string[], target: HTMLElement, anchor: () => DOMRect) => void>();
     const result = createRoot((dispose) => {
       const [sources] = createSignal<readonly AnnotationHighlight[]>([
         {
@@ -381,7 +382,8 @@ describe("createAnnotationHighlights", () => {
     root.innerHTML =
       '<article data-message-id="one"><p data-annotation-block="a">alpha</p></article>';
     document.body.append(root);
-    const onOpen = vi.fn<(keys: readonly string[], target: HTMLElement, anchor: DOMRect) => void>();
+    const onOpen =
+      vi.fn<(keys: readonly string[], target: HTMLElement, anchor: () => DOMRect) => void>();
     const result = createRoot((dispose) => {
       const [sources] = createSignal<readonly AnnotationHighlight[]>([
         {

@@ -201,7 +201,6 @@
   border-radius: var(--oc-radius);
   color: var(--oc-text-contrast);
   background: transparent;
-  font: inherit;
 }
 
 .composer-model-trigger span {
@@ -225,6 +224,13 @@
 
 .composer-model-trigger:hover:not(:disabled) {
   background: var(--oc-surface-control);
+}
+
+.composer-model-list.selection-list [data-slot="list-header"] {
+  color: var(--oc-text-strong);
+  font-size: var(--oc-type-tab-size);
+  font-weight: var(--oc-type-tab-weight);
+  line-height: var(--oc-type-tab-line-height);
 }
 
 .composer-picker > [data-component="select-v2-root"] {
@@ -263,8 +269,6 @@
   border-radius: inherit;
   color: var(--oc-text-contrast);
   background: transparent;
-  font: inherit;
-  line-height: var(--oc-type-metadata-line-height);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -372,4 +376,17 @@
 .composer > .attachment-pills {
   max-height: 168px;
   overflow-y: auto;
+}
+
+/* Composer selections share a metadata role, overriding the global select control role. */
+:root
+  :is(
+    .composer-model-trigger,
+    .composer-picker-control[data-component="select-v2"][data-appearance]
+      [data-slot="select-v2-value-text"]
+  ) {
+  font-family: inherit;
+  font-size: var(--oc-type-metadata-size);
+  font-weight: var(--oc-type-metadata-weight);
+  line-height: var(--oc-type-metadata-line-height);
 }

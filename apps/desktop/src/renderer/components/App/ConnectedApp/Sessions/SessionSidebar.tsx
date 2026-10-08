@@ -4,7 +4,7 @@ import { Icon } from "@opencode/ui/icon";
 import { ScrollView } from "@opencode/ui/scroll-view";
 import { Loader } from "@opencode/ui/loader";
 import { TextInput } from "@opencode/ui/text-input";
-import type { SessionInfo } from "@opencode/client";
+import type { Project, SessionInfo } from "@opencode/client";
 import type { DataSessionStatus } from "@opencode/client/solid";
 import { Show, createSignal, type JSX } from "solid-js";
 
@@ -20,6 +20,7 @@ type SessionSidebarStatus = "connected" | "reconnecting" | "failed";
 export type SessionSidebarProps = {
   readonly attentionForSession?: (sessionID: string) => SessionAttention | undefined;
   readonly sessions: readonly SessionInfo[];
+  readonly projects?: readonly Project[];
   readonly now?: number;
   readonly statusForSession: (sessionID: string) => DataSessionStatus;
   readonly selectedID?: string;
@@ -84,6 +85,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
           {(drafts) => (
             <DraftList
               {...drafts()}
+              projects={props.projects}
               drafts={drafts().drafts.filter((draft) =>
                 draft.title.toLowerCase().includes(filter().toLowerCase()),
               )}
@@ -138,6 +140,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
           <SessionTree
             attentionForSession={props.attentionForSession}
             sessions={props.sessions}
+            projects={props.projects}
             now={props.now}
             statusForSession={props.statusForSession}
             selectedID={props.selectedID}

@@ -1,4 +1,4 @@
-import type { SessionInfo } from "@opencode/client";
+import type { Project, SessionInfo } from "@opencode/client";
 import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -55,6 +55,61 @@ const inputEvent = (input: HTMLInputElement, value: string) => {
 const fixedNow = 1788004800000;
 
 describe("SessionTree", () => {
+  it("labels every admitted descendant from its own project and reacts to SDK catalog changes", async () => {
+    const [projects, setProjects] = createSignal<readonly Project[]>([]);
+    const { host, dispose } = mount(() => (
+      <SessionSidebar
+        {...sidebarProps({
+          sessions: [
+            session("root", "Root"),
+            {
+              ...session("child", "Child", "root"),
+              projectID: "other",
+              location: { directory: "D:\\work\\child", workspaceID: "remote" },
+            },
+          ],
+          expandedIDs: ["root"],
+          drafts: {
+            drafts: [
+              {
+                id: "chosen",
+                title: "Chosen draft",
+                project: { id: "project", location: { directory: "/project" } },
+              },
+              { id: "empty", title: "Unchosen draft" },
+            ],
+            onSelect: () => undefined,
+            onDelete: () => undefined,
+          },
+        })}
+        projects={projects()}
+      />
+    ));
+    await vi.waitFor(() => expect(host.querySelectorAll(".shell-session-project")).toHaveLength(4));
+    expect(
+      [...host.querySelectorAll(".shell-session-project")].map((node) => node.textContent),
+    ).toEqual(["Unknown project", "No project selected", "Unknown project", "Unknown project"]);
+    setProjects([
+      {
+        id: "project",
+        canonical: "/canonical/repo",
+        name: "SDK project",
+        time: { created: 1, updated: 1 },
+        sandboxes: [],
+      },
+    ]);
+    expect(
+      [...host.querySelectorAll(".shell-session-project")].map((node) => node.textContent),
+    ).toEqual(["SDK project", "No project selected", "SDK project", "Unknown project"]);
+    expect(host.querySelector('[aria-label="Root, Idle"]')?.getAttribute("aria-description")).toBe(
+      "SDK project",
+    );
+    expect(host.querySelector('[aria-label="Child, Idle"]')?.getAttribute("aria-description")).toBe(
+      "Unknown project",
+    );
+    dispose();
+  });
+
   it("dismisses a focused title tooltip when its sidebar is hidden", async () => {
     const [visible, setVisible] = createSignal(true);
     const { host, dispose } = mount(() => (
@@ -80,8 +135,8 @@ describe("SessionTree", () => {
       selector === ":focus-visible" ? true : matches(selector),
     );
     title.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
-    expect(document.querySelector('[data-component="tooltip-v2"]')?.textContent).toContain(
-      "Add configuration options",
+    expect(document.querySelector('[data-component="tooltip-v2"]')?.textContent).toBe(
+      "Add configuration options for remote development server connections",
     );
     setVisible(false);
     expect(document.querySelector('[data-component="tooltip-v2"]')).toBeNull();
@@ -337,7 +392,7 @@ describe("SessionTree", () => {
 
     expect(
       [...host.querySelectorAll<HTMLButtonElement>(".shell-session-main")].map(
-        (button) => button.textContent,
+        (button) => button.querySelector(".shell-session-title")?.textContent,
       ),
     ).toEqual(["New root", "New child", "Old child", "Orphan", "Old root"]);
 

@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/async-function -- Storybook interaction tests use Promise APIs. */
 import { createSignal } from "solid-js";
-import type { SessionInfo } from "@opencode/client";
+import type { Project, SessionInfo } from "@opencode/client";
 import { expect, userEvent, within } from "storybook/test";
 import type { Meta } from "storybook-solidjs-vite";
 
@@ -72,6 +72,56 @@ const longContentSessions: readonly SessionInfo[] = [
   ),
 ];
 
+const identityProjects: readonly Project[] = [
+  {
+    id: "storybook",
+    canonical: "/srv/products/renderer-with-a-very-long-project-directory",
+    name: "Renderer with an unusually long project name",
+    time: { created: 1, updated: 1 },
+    sandboxes: [],
+  },
+  {
+    id: "drive",
+    canonical: "D:\\teams\\frontend\\app",
+    name: "App",
+    time: { created: 1, updated: 1 },
+    sandboxes: [],
+  },
+  {
+    id: "unc",
+    canonical: "\\\\build-host\\shared-projects\\app",
+    name: "App",
+    time: { created: 1, updated: 1 },
+    sandboxes: [],
+  },
+];
+const identitySessions: readonly SessionInfo[] = [
+  {
+    ...longContentSessions[0]!,
+    location: { directory: "/srv/worktrees/fix/packages/renderer", workspaceID: "remote-posix" },
+  },
+  {
+    ...longContentSessions[1]!,
+    projectID: "drive",
+    location: { directory: "D:\\worktrees\\fix\\ui", workspaceID: "remote-windows" },
+  },
+  {
+    ...updated(storySession("unc", "Inspect a shared project", "long-child"), storyNow),
+    projectID: "unc",
+    location: { directory: "\\\\build-host\\shared-projects\\app" },
+  },
+  {
+    ...updated(storySession("unknown", "Unregistered project"), storyNow),
+    projectID: "missing",
+    location: { directory: "//remote/share/unregistered-project/", workspaceID: "remote-unc" },
+  },
+  {
+    ...updated(storySession("global", "Outside a repository"), storyNow),
+    projectID: "global",
+    location: { directory: "/" },
+  },
+];
+
 const meta = {
   title: "Sessions/SessionSidebar",
   component: SessionSidebar,
@@ -82,7 +132,7 @@ export default meta;
 type StoryOptions = Partial<
   Pick<
     SessionSidebarProps,
-    "loading" | "error" | "canCreate" | "canDelete" | "showHeader" | "drafts"
+    "loading" | "error" | "canCreate" | "canDelete" | "showHeader" | "drafts" | "projects"
   >
 > & {
   readonly selectedID?: string;
@@ -143,6 +193,7 @@ function interactiveSidebar(sessions: readonly SessionInfo[], options: StoryOpti
       }}
     >
       <SessionSidebar
+        projects={options.projects}
         drafts={options.drafts}
         sessions={visibleSessions()}
         now={storyNow}
@@ -402,7 +453,120 @@ export const LongContentAtProductionWidth = {
       expandedIDs: ["long-parent"],
       runningIDs: ["long-parent"],
       serverName: "remote-development-server-with-a-long-hostname.example.internal:4096",
+      width: "248px",
     }),
+};
+
+function projectIdentityStory(width: string) {
+  return {
+    render: () =>
+      interactiveSidebar(identitySessions, {
+        projects: identityProjects,
+        selectedID: "long-child",
+        expandedIDs: ["long-parent", "long-child"],
+        runningIDs: ["long-parent"],
+        width,
+        height: "560px",
+        drafts: {
+          drafts: [
+            {
+              id: "chosen",
+              title: "Draft for the renderer project",
+              project: { id: "storybook", location: { directory: identityProjects[0]!.canonical } },
+            },
+            { id: "unchosen", title: "Draft without a project" },
+          ],
+          onSelect: () => undefined,
+          onDelete: () => undefined,
+        },
+      }),
+    play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+      const canvas = within(canvasElement);
+      const rows = canvasElement.querySelectorAll<HTMLElement>(".shell-session-row");
+      await expect(rows).toHaveLength(7);
+      for (const row of rows) {
+        const title = row.querySelector<HTMLElement>(".shell-session-title")!;
+        const subtitle = row.querySelector<HTMLElement>(".shell-session-project")!;
+        const main = row.querySelector<HTMLButtonElement>(".shell-session-main")!;
+        await expect(subtitle.textContent?.length).toBeGreaterThan(0);
+        await expect(subtitle.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+          title.getBoundingClientRect().bottom,
+        );
+        await expect(subtitle.getBoundingClientRect().right).toBeLessThanOrEqual(
+          row.getBoundingClientRect().right,
+        );
+        await expect(subtitle.clientHeight).toBe(16);
+        await expect(main).toHaveAttribute("aria-description");
+        const chevron = row.querySelector<HTMLElement>('[data-slot="collapsible-arrow"]');
+        if (chevron) {
+          const titleBounds = title.getBoundingClientRect();
+          const chevronBounds = chevron.getBoundingClientRect();
+          await expect(
+            Math.abs(
+              chevronBounds.top +
+                chevronBounds.height / 2 -
+                (titleBounds.top + titleBounds.height / 2),
+            ),
+          ).toBeLessThanOrEqual(0.5);
+        }
+        const remove = row.querySelector<HTMLButtonElement>(".shell-session-delete");
+        if (remove) {
+          const titleBounds = title.getBoundingClientRect();
+          const removeBounds = remove.getBoundingClientRect();
+          await expect(
+            Math.abs(
+              removeBounds.top +
+                removeBounds.height / 2 -
+                (titleBounds.top + titleBounds.height / 2),
+            ),
+          ).toBeLessThanOrEqual(0.5);
+        }
+      }
+      const child = canvas.getByRole("button", {
+        name: /Compare the complete server-provided workspace location.*Idle/,
+      });
+      await expect(child).toHaveAttribute("aria-current", "page");
+      await expect(child.querySelector(".shell-session-project")).toHaveTextContent("App");
+      await expect(child).toHaveAttribute("aria-description", "App");
+      child.focus();
+      await userEvent.keyboard("{Tab}");
+      const remove = child
+        .closest(".shell-session-row")!
+        .querySelector<HTMLButtonElement>(".shell-session-delete")!;
+      await expect(remove).toHaveFocus();
+      await expect(getComputedStyle(remove).opacity).toBe("1");
+      child.focus();
+      await userEvent.keyboard("{Enter}");
+      await expect(
+        canvas.queryByRole("button", { name: "Inspect a shared project, Idle" }),
+      ).not.toBeInTheDocument();
+      await userEvent.keyboard("{Enter}");
+      await expect(
+        canvas.getByRole("button", { name: "Inspect a shared project, Idle" }),
+      ).toBeVisible();
+      const viewport = canvasElement.querySelector<HTMLElement>(".scroll-view__viewport")!;
+      await expect(viewport.scrollWidth).toBe(viewport.clientWidth);
+    },
+  };
+}
+
+export const ProjectIdentity = projectIdentityStory("248px");
+export const ProjectIdentityDark = { ...projectIdentityStory("248px"), globals: { theme: "dark" } };
+export const ProjectIdentityNarrow = {
+  ...projectIdentityStory("196px"),
+  globals: { viewport: { value: "narrow", isRotated: false } },
+};
+export const ProjectIdentityNarrowDark = {
+  ...ProjectIdentityNarrow,
+  globals: { theme: "dark", viewport: { value: "narrow", isRotated: false } },
+};
+export const ProjectIdentityMinimumWidth = {
+  ...projectIdentityStory("172px"),
+  globals: { viewport: { value: "mobile", isRotated: false } },
+};
+export const ProjectIdentityMinimumWidthDark = {
+  ...ProjectIdentityMinimumWidth,
+  globals: { theme: "dark", viewport: { value: "mobile", isRotated: false } },
 };
 
 export const FilterFocused = {

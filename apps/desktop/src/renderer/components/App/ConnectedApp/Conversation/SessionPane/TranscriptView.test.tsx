@@ -109,6 +109,7 @@ function stubResizeObservers() {
     },
   );
   return {
+    notifyViewport: () => notifiers[0]!(),
     notify: () => {
       for (const notify of notifiers) notify();
     },
@@ -1740,42 +1741,152 @@ describe("TranscriptView", () => {
     }
   });
 
-  it("shows the control when the viewport shrinks below the reading position", () => {
-    vi.useFakeTimers();
-    const resize = stubResizeObservers();
-    const frames = stubAnimationFrames();
-    const messages = userMessages("m", 20);
-    const { host, dispose } = mount(() => (
-      <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
-    ));
-    const view = host.querySelector<HTMLElement>(".transcript-view")!;
-    Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
-    let clientHeight = 100;
-    Object.defineProperty(view, "clientHeight", {
-      get: () => clientHeight,
-      configurable: true,
-    });
-    const control = () => host.querySelector<HTMLButtonElement>(".transcript-scroll-to-bottom");
-    try {
-      frames.runAll();
-      vi.advanceTimersByTime(400);
-      view.scrollTop = 400;
-      view.dispatchEvent(new Event("scroll"));
-      expect(control()).toBeNull();
+  it.each([false, true])(
+    "keeps idle latest content above a growing composer (selection: %s)",
+    (selected) => {
+      vi.useFakeTimers();
+      const resize = stubResizeObservers();
+      const frames = stubAnimationFrames();
+      const messages = userMessages("m", 20);
+      const { host, dispose } = mount(() => (
+        <TranscriptView sessionID="session" messages={messages} sessionStatus="idle" />
+      ));
+      const view = host.querySelector<HTMLElement>(".transcript-view")!;
+      Object.defineProperty(view, "scrollHeight", { get: () => 500, configurable: true });
+      let clientHeight = 100;
+      Object.defineProperty(view, "clientHeight", {
+        get: () => clientHeight,
+        configurable: true,
+      });
+      const control = () => host.querySelector<HTMLButtonElement>(".transcript-scroll-to-bottom");
+      try {
+        frames.runAll();
+        resize.notify();
+        vi.advanceTimersByTime(400);
+        view.scrollTop = 400;
+        view.dispatchEvent(new Event("scroll"));
+        expect(control()).toBeNull();
 
-      // A window resize shrinks the viewport; the document and scroll
-      // position are unchanged, and no scroll event fires.
-      clientHeight = 60;
-      resize.notify();
-      expect(control()).toBeNull();
-      vi.advanceTimersByTime(300);
-      expect(control()).not.toBeNull();
-    } finally {
-      dispose();
-      vi.unstubAllGlobals();
-      vi.useRealTimers();
-    }
-  });
+        if (selected) selectNodeContents(host.querySelector('[data-message-id="m19"]')!);
+
+        // Composer growth shrinks only the viewport; the document does not resize.
+        clientHeight = 60;
+        resize.notify();
+        expect(view.scrollTop).toBe(500);
+        expect(control()).toBeNull();
+        vi.advanceTimersByTime(300);
+        expect(control()).toBeNull();
+
+        // The layout adjustment must not resume content following for a selection.
+        expect(view.style.overflowAnchor).toBe(selected ? "auto" : "none");
+      } finally {
+        window.getSelection()?.removeAllRanges();
+        dispose();
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each(["older reading", "simultaneous content growth"] as const)(
+    "preserves the reading position during composer growth with %s",
+    (scenario) => {
+      vi.useFakeTimers();
+      const resize = stubResizeObservers();
+      const frames = stubAnimationFrames();
+      const { host, dispose } = mount(() => (
+        <TranscriptView sessionID="session" messages={userMessages("m", 20)} sessionStatus="idle" />
+      ));
+      const view = host.querySelector<HTMLElement>(".transcript-view")!;
+      let clientHeight = 100;
+      let scrollHeight = 500;
+      Object.defineProperty(view, "scrollHeight", { get: () => scrollHeight, configurable: true });
+      Object.defineProperty(view, "clientHeight", { get: () => clientHeight, configurable: true });
+      try {
+        frames.runAll();
+        resize.notify();
+        vi.advanceTimersByTime(400);
+        view.scrollTop = 400;
+        view.dispatchEvent(new Event("scroll"));
+        if (scenario === "older reading") {
+          wheelAt(view, { deltaY: -100 });
+          view.scrollTop = 200;
+          view.dispatchEvent(new Event("scroll"));
+        } else {
+          selectNodeContents(host.querySelector('[data-message-id="m19"]')!);
+          scrollHeight = 800;
+        }
+
+        clientHeight = 60;
+        resize.notify();
+        expect(view.scrollTop).toBe(scenario === "older reading" ? 200 : 400);
+        vi.advanceTimersByTime(300);
+        expect(host.querySelector(".transcript-scroll-to-bottom")).not.toBeNull();
+      } finally {
+        window.getSelection()?.removeAllRanges();
+        dispose();
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each(["following", "selection", "older navigation"] as const)(
+    "preserves %s when content arrives before a layout scroll event",
+    (mode) => {
+      vi.useFakeTimers();
+      const resize = stubResizeObservers();
+      const frames = stubAnimationFrames();
+      const { host, dispose } = mount(() => (
+        <TranscriptView
+          sessionID="session"
+          messages={userMessages("m", 20)}
+          sessionStatus="running"
+        />
+      ));
+      const view = host.querySelector<HTMLElement>(".transcript-view")!;
+      let contentHeight = 500;
+      let viewportHeight = 100;
+      let top = 0;
+      Object.defineProperties(view, {
+        scrollHeight: { configurable: true, get: () => contentHeight },
+        clientHeight: { configurable: true, get: () => viewportHeight },
+        scrollTop: {
+          configurable: true,
+          get: () => top,
+          set: (value: number) => {
+            top = Math.max(0, Math.min(value, contentHeight - viewportHeight));
+          },
+        },
+      });
+      try {
+        frames.runAll();
+        resize.notify();
+        vi.advanceTimersByTime(400);
+        expect(top).toBe(400);
+        if (mode === "selection")
+          selectNodeContents(host.querySelector('[data-message-id="m19"]')!);
+        if (mode === "older navigation") wheelAt(view, { deltaY: -100 });
+
+        viewportHeight = 60;
+        // A composer resize changes only the viewport, not the observed document.
+        resize.notifyViewport();
+        expect(top).toBe(mode === "older navigation" ? 400 : 440);
+
+        // A streamed fragment lands before the adjustment's queued scroll event.
+        contentHeight = 550;
+        view.dispatchEvent(new Event("scroll"));
+        resize.notify();
+        expect(top).toBe(mode === "following" ? 490 : mode === "selection" ? 440 : 400);
+        expect(view.style.overflowAnchor).toBe(mode === "following" ? "none" : "auto");
+      } finally {
+        window.getSelection()?.removeAllRanges();
+        dispose();
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it("keeps the control hidden when growth is followed to the bottom", () => {
     vi.useFakeTimers();

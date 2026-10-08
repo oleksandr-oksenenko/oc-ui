@@ -10,6 +10,7 @@ import { createTranscriptAnnotations } from "./createTranscriptAnnotations.ts";
 function setup(
   messages: Accessor<readonly SessionMessageInfo[]> = () => [],
   enabled: Accessor<boolean> = () => true,
+  readAnchor: () => DOMRect = () => new DOMRect(0, 0, 100, 20),
 ) {
   const host = document.createElement("div");
   host.innerHTML =
@@ -31,7 +32,7 @@ function setup(
     const range = document.createRange();
     range.selectNodeContents(host.querySelector("p")!);
     // JSDOM has selection ranges but no layout measurements.
-    Object.assign(range, { getBoundingClientRect: () => new DOMRect(0, 0, 100, 20) });
+    Object.assign(range, { getBoundingClientRect: readAnchor });
     window.getSelection()!.removeAllRanges();
     window.getSelection()!.addRange(range);
     document.dispatchEvent(new Event("selectionchange"));
@@ -82,6 +83,106 @@ describe("createTranscriptAnnotations", () => {
       root.dispose();
     }
   });
+
+  it("remeasures selection and editor anchors across layout scrolls without canceling an opening", async () => {
+    let finish!: (value: ArrayBuffer) => void;
+    const digest = vi.fn<SubtleCrypto["digest"]>(
+      () =>
+        new Promise<ArrayBuffer>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal("crypto", { randomUUID: crypto.randomUUID.bind(crypto), subtle: { digest } });
+    let top = 100;
+    const root = setup(
+      () => [],
+      () => true,
+      () => new DOMRect(0, top, 100, 20),
+    );
+    try {
+      root.select();
+      expect(root.controller.selection()?.anchor.top).toBe(100);
+      top = 60;
+      root.controller.handleLayoutScroll();
+      expect(root.controller.selection()?.anchor.top).toBe(60);
+
+      const opening = root.controller.openCandidate();
+      top = 30;
+      root.controller.handleLayoutScroll();
+      root.host.dispatchEvent(new Event("scroll"));
+      expect(root.controller.selection()).toMatchObject({ pending: true, anchor: { top: 30 } });
+      finish(new Uint8Array(32).buffer);
+      await opening;
+      const draft = root.drafts.get("first")[0]!;
+      root.controller.updateBody(draft.id, "Keep this note and its editor.");
+      top = 10;
+      root.controller.handleLayoutScroll();
+      root.host.dispatchEvent(new Event("scroll"));
+      expect(root.controller.state()).toMatchObject({
+        kind: "comments",
+        anchor: { top: 10 },
+        editingID: draft.id,
+        comments: [{ annotation: { body: "Keep this note and its editor." } }],
+      });
+
+      // The layout exception must not swallow subsequent reader navigation.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      root.host.dispatchEvent(new Event("scroll"));
+      expect(root.controller.state().kind).toBe("closed");
+      expect(root.drafts.get("first")[0]?.body).toBe("Keep this note and its editor.");
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it.each(["draft", "sent"] as const)(
+    "remeasures the %s annotation pill anchor after layout",
+    (kind) => {
+      const annotation = {
+        source: {
+          messageID: "message",
+          block: "text",
+          textDigest: "a".repeat(64),
+          start: 0,
+          end: 6,
+        },
+        quote: "A useful passage.",
+        body: "Explain this.",
+      };
+      const prompt = createSessionPrompt({
+        instruction: "Review the passage.",
+        reviewComments: [],
+        annotations: [{ ...annotation, id: "note" }],
+      });
+      const root = setup(() => [
+        {
+          id: "sent",
+          type: "user",
+          time: { created: 1 },
+          text: prompt.text,
+          metadata: prompt.metadata,
+        },
+      ]);
+      const opener = document.createElement("button");
+      document.body.append(opener);
+      let top = 100;
+      opener.getBoundingClientRect = () => new DOMRect(0, top, 100, 20);
+      try {
+        if (kind === "draft") {
+          root.drafts.add("first", annotation);
+          root.controller.toggleDrafts(opener);
+        } else root.controller.openSent("sent", "note", opener);
+        expect(root.controller.state()).toMatchObject({ kind: "comments", anchor: { top: 100 } });
+        top = 60;
+        root.controller.handleLayoutScroll();
+        root.host.dispatchEvent(new Event("scroll"));
+        expect(root.controller.state()).toMatchObject({ kind: "comments", anchor: { top: 60 } });
+      } finally {
+        opener.remove();
+        root.dispose();
+      }
+    },
+  );
 
   it.each(["resize", "scroll"])(
     "keeps typed new comments when %s dismisses the popup",

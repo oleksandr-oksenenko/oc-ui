@@ -368,7 +368,7 @@ function permissionCard(requestID) {
   return page.locator(`[data-permission-request-id="${requestID}"]`);
 }
 
-async function addAnnotation(body) {
+async function addAnnotation(body, onEdit) {
   const block = page.locator(".transcript-assistant-message [data-annotation-block]").first();
   await block.scrollIntoViewIfNeeded();
   // Scrolling dismisses selection, so let those events settle before selecting text.
@@ -384,7 +384,9 @@ async function addAnnotation(body) {
     document.dispatchEvent(new Event("selectionchange"));
   });
   await page.locator(".annotation-selection-action button").click();
-  await page.getByPlaceholder("Write a question or note…").fill(body);
+  const editor = page.getByPlaceholder("Write a question or note…");
+  await editor.fill(body);
+  await onEdit?.(block, editor);
   await page.keyboard.press("Enter");
   await page.locator(".annotation-inline-editor").waitFor({ state: "hidden" });
   await page.getByLabel("Prompt", { exact: true }).click();
@@ -778,6 +780,9 @@ describe.sequential("production browser app", () => {
       .poll(() => page.locator(".session-drafts .shell-session-title").allTextContents())
       .toContain("hello,");
     expect(await prompt.textContent()).toBe("hello, ");
+    await expect
+      .poll(() => page.locator(".session-drafts .shell-session-project").first().textContent())
+      .toBe("acceptance-project");
     await prompt.fill("Persistent first draft");
     await prompt.press("End");
     await prompt.pressSequentially(" /rev");
@@ -867,6 +872,39 @@ describe.sequential("production browser app", () => {
     await api.session.create({ title: "Browser fixture one" });
     await api.session.create({ title: "Browser fixture two" });
     await selectSession("Browser fixture one");
+    await expect
+      .poll(() =>
+        page
+          .locator('.shell-session-main[aria-current="page"] .shell-session-project')
+          .textContent(),
+      )
+      .toBe("acceptance-project");
+    expect(
+      await page
+        .locator('.shell-session-main[aria-current="page"]')
+        .getAttribute("aria-description"),
+    ).toBe("acceptance-project");
+    const selectedRow = page.locator(
+      '.shell-session-row:has(.shell-session-main[aria-current="page"])',
+    );
+    const selectedRemove = selectedRow.getByRole("button", {
+      name: "Delete Browser fixture one",
+      exact: true,
+    });
+    await selectedRow.hover();
+    expect(await selectedRemove.evaluate((button) => getComputedStyle(button).opacity)).toBe("1");
+    expect(
+      await selectedRow.evaluate((row) => {
+        const title = row.querySelector(".shell-session-title").getBoundingClientRect();
+        const remove = row.querySelector(".shell-session-delete").getBoundingClientRect();
+        return Math.abs(title.top + title.height / 2 - (remove.top + remove.height / 2));
+      }),
+    ).toBeLessThanOrEqual(0.5);
+    await page.getByLabel("Prompt", { exact: true }).hover();
+    await selectedRow.locator(".shell-session-main").focus();
+    await page.keyboard.press("Tab");
+    expect(await selectedRemove.evaluate((button) => button === document.activeElement)).toBe(true);
+    expect(await selectedRemove.evaluate((button) => getComputedStyle(button).opacity)).toBe("1");
     await page.getByLabel("Prompt", { exact: true }).fill("Independent draft");
     expect(await page.evaluate(() => document.documentElement.dataset.host)).toBe("browser");
   });
@@ -1753,6 +1791,91 @@ describe.sequential("production browser app", () => {
     expect(Buffer.from(message.files[1].data, "base64").toString()).toBe(
       "Clipboard document contents",
     );
+  });
+
+  it("keeps the latest transcript above composer growth from drafts, annotations and steering", async () => {
+    await ensureConnected();
+    const previous = page.locator('.shell-session-main[aria-current="page"] .shell-session-title');
+    const previousTitle = (await previous.count()) ? await previous.textContent() : undefined;
+    const session = await api.session.create({
+      title: "Composer growth anchoring",
+      location: { directory: await realpath(project) },
+    });
+    await selectSession(session.title);
+    await send(`E2E_STREAM composer layout\n${"Transcript history line.\n".repeat(80)}`);
+    await transcript("Acceptance completed with stream.");
+    await idle();
+    const view = page.locator(".transcript-view");
+    const composer = page.locator(".session-pane-composer");
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    const assertLatest = async () => {
+      await expect
+        .poll(() => view.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop))
+        .toBeLessThan(2);
+      expect(
+        await page.getByRole("button", { name: "Scroll to bottom", exact: true }).count(),
+      ).toBe(0);
+      const latest = await page.locator(".transcript-document > :last-child").boundingBox();
+      const composerBox = await composer.boundingBox();
+      expect(latest.y + latest.height).toBeLessThanOrEqual(composerBox.y);
+    };
+    await assertLatest();
+    const height = await composer.evaluate((node) => node.clientHeight);
+    await prompt.fill("Multiline draft\n".repeat(6));
+    await expect.poll(() => composer.evaluate((node) => node.clientHeight)).toBeGreaterThan(height);
+    await assertLatest();
+    await prompt.fill("");
+    await assertLatest();
+
+    await addAnnotation(
+      "Keep the latest message visible above this annotation.",
+      async (block, editor) => {
+        await assertLatest();
+        await expect
+          .poll(async () => {
+            const source = await block.evaluate((node) => {
+              const range = document.createRange();
+              range.selectNodeContents(node);
+              const rect = range.getBoundingClientRect();
+              return { top: rect.top, bottom: rect.bottom };
+            });
+            const popup = await page.locator(".annotation-popover").boundingBox();
+            return Math.min(
+              Math.abs(popup.y + popup.height - (source.top - 5)),
+              Math.abs(popup.y - (source.bottom + 5)),
+            );
+          })
+          .toBeLessThan(2);
+        expect(await editor.evaluate((node) => node === document.activeElement)).toBe(true);
+        expect(await editor.inputValue()).toBe(
+          "Keep the latest message visible above this annotation.",
+        );
+      },
+    );
+    await expect.poll(() => composer.evaluate((node) => node.clientHeight)).toBeGreaterThan(height);
+    await assertLatest();
+    await page.getByLabel("Discard 1 annotations").click();
+    // A deliberate return resumes the content-follow pause from text selection.
+    await view.press("End");
+    await send("E2E_QUEUE_HOLD composer layout");
+    await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
+    await expect
+      .poll(async () =>
+        (await providerState()).requests.some(
+          (request) =>
+            request.model !== "title" && request.prompt.includes("E2E_QUEUE_HOLD composer layout"),
+        ),
+      )
+      .toBe(true);
+    await prompt.fill("Keep this steering message above the composer.");
+    await prompt.press("Enter");
+    await page.getByRole("region", { name: "Pending messages" }).waitFor();
+    await assertLatest();
+    provider.releaseHeld();
+    await page.getByRole("region", { name: "Pending messages" }).waitFor({ state: "hidden" });
+    await idle();
+    if (previousTitle) await selectSession(previousTitle);
+    await api.session.remove({ sessionID: session.id });
   });
 
   it("attaches oversized pasted text and sends its bytes", async () => {

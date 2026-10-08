@@ -8,7 +8,7 @@ export type AnnotationSelection = {
   readonly block: HTMLElement;
   readonly text: string;
   readonly quote: string;
-  readonly anchor: DOMRect;
+  readonly anchor: Accessor<DOMRect>;
 };
 
 export type AnnotationHighlight = {
@@ -20,7 +20,11 @@ type AnnotationHighlightsInput = {
   readonly sources: Accessor<readonly AnnotationHighlight[]>;
   readonly canSelect: () => boolean;
   readonly onSelection: (value: AnnotationSelection | undefined) => void;
-  readonly onOpen: (keys: readonly string[], target: HTMLElement, anchor: DOMRect) => void;
+  readonly onOpen: (
+    keys: readonly string[],
+    target: HTMLElement,
+    anchor: Accessor<DOMRect>,
+  ) => void;
   readonly onDismiss: () => void;
   /** A transcript mutation that may invalidate an open popup's anchor. */
   readonly onMutation?: () => void;
@@ -203,7 +207,7 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
       block,
       text: projection.text,
       quote,
-      anchor: range.getBoundingClientRect(),
+      anchor: () => range.getBoundingClientRect(),
     };
   };
 
@@ -346,7 +350,7 @@ export function createAnnotationHighlights(input: AnnotationHighlightsInput) {
       input.onOpen(
         hits.map((item) => item.key),
         block,
-        range.getBoundingClientRect(),
+        () => range.getBoundingClientRect(),
       );
     suppressClick = false;
   };
