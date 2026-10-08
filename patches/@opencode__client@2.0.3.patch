@@ -1,0 +1,168 @@
+diff --git a/dist/solid/data.js b/dist/solid/data.js
+index 9b9ee9b5557af3fe5d6a6bd5f2f30c4ad8dfe30f..c5ff06322a1b1d8b1239538c6b3627b2be57e31b 100644
+--- a/dist/solid/data.js
++++ b/dist/solid/data.js
+@@ -71,12 +71,12 @@ function createSync() {
+             const active = state.get(key);
+             return active !== undefined && active !== true;
+         },
+-        invalidate(key) {
++        invalidate(key, includeQueued = false) {
+             if (key) {
+                 const active = state.get(key);
+                 if (active === true)
+                     state.delete(key);
+-                if (active !== undefined && active !== true && active.started)
++                if (active !== undefined && active !== true && (active.started || includeQueued))
+                     active.invalidated = true;
+                 return;
+             }
+@@ -136,6 +136,25 @@ export function createData(config) {
+     const sessions = createMemo(() => Object.values(store.session.info).toSorted((a, b) => b.time.updated - a.time.updated));
+     const messageIndex = new Map();
+     const sync = createSync();
++    // Tokens also own loaders queued behind an invalidated read. Events dirty a
++    // snapshot; losing ownership retires it without rehydrating an evicted owner.
++    const pendingReads = new Map();
++    function retirePendingRead(sessionID) {
++        const read = pendingReads.get(sessionID);
++        pendingReads.delete(sessionID);
++        read?.controller.abort();
++        sync.invalidate(`session.pending:${sessionID}`, true);
++    }
++    function retirePendingReads() {
++        for (const sessionID of pendingReads.keys())
++            retirePendingRead(sessionID);
++    }
++    function dirtyPendingRead(sessionID) {
++        const read = pendingReads.get(sessionID);
++        if (read)
++            read.dirty = true;
++    }
++    onCleanup(retirePendingReads);
+     let activeUpdates;
+     function setSessionActive(sessionID, status) {
+         activeUpdates?.set(sessionID, status);
+@@ -396,7 +415,7 @@ export function createData(config) {
+     function evictSession(sessionID) {
+         if (sessionOutbox.has(sessionID))
+             return;
+-        sync.invalidate(`session.pending:${sessionID}`);
++        retirePendingRead(sessionID);
+         sync.invalidate(`session.message:${sessionID}`);
+         messageLoads.delete(sessionID);
+         // Keep unacknowledged submissions until their echo or rollback settles them.
+@@ -417,6 +436,7 @@ export function createData(config) {
+         }));
+     }
+     function removeSession(sessionID) {
++        retirePendingRead(sessionID);
+         activeUpdates?.set(sessionID, undefined);
+         store.session.pending[sessionID]?.forEach((item) => outbox.delete(item.id));
+         messageIndex.delete(sessionID);
+@@ -447,6 +467,7 @@ export function createData(config) {
+     function handleEvent(event) {
+         switch (event.type) {
+             case "server.connected": {
++                retirePendingReads();
+                 const updates = new Map();
+                 activeUpdates = updates;
+                 refresh(() => api()
+@@ -602,6 +623,7 @@ export function createData(config) {
+                 return;
+             }
+             case "session.inbox.delivered": {
++                dirtyPendingRead(event.data.sessionID);
+                 const admitted = result.session.input.has(event.data.sessionID, event.data.inboxID);
+                 removePending(event.data.sessionID, event.data.inboxID);
+                 message.update(event.data.sessionID, (draft, index) => {
+@@ -620,14 +642,17 @@ export function createData(config) {
+                 return;
+             }
+             case "session.inbox.delivery.changed":
++                dirtyPendingRead(event.data.sessionID);
+                 updatePending(event.data.sessionID, event.data.inboxID, event.data.delivery);
+                 return;
+             case "session.inbox.cancelled": {
++                dirtyPendingRead(event.data.sessionID);
+                 retractLocal(event.data.sessionID, event.data.inboxID);
+                 compacting.get(event.data.sessionID)?.observed.add(event.data.inboxID);
+                 return;
+             }
+             case "session.inbox.enqueued": {
++                dirtyPendingRead(event.data.sessionID);
+                 outbox.delete(event.data.inboxID);
+                 admitLocal({
+                     id: event.data.inboxID,
+@@ -930,6 +955,7 @@ export function createData(config) {
+                     setStore("session", "info", event.data.sessionID, "revert", undefined);
+                 return;
+             case "session.revert.committed":
++                dirtyPendingRead(event.data.sessionID);
+                 if (store.session.info[event.data.sessionID]) {
+                     setStore("session", "info", event.data.sessionID, "revert", undefined);
+                 }
+@@ -1238,8 +1264,38 @@ export function createData(config) {
+                     return store.session.pending[sessionID] ?? [];
+                 },
+                 sync(sessionID) {
+-                    return sync.run(`session.pending:${sessionID}`, async () => {
+-                        const pending = await api().session.inbox.list({ sessionID });
++                    const key = `session.pending:${sessionID}`;
++                    // Sync entries settle before outer token cleanup; a fresh
++                    // loader must never inherit the finishing read's token.
++                    const active = sync.pending(key) ? pendingReads.get(sessionID) : undefined;
++                    const read = active ?? { dirty: false, controller: new AbortController() };
++                    pendingReads.set(sessionID, read);
++                    const current = () => !disposed && pendingReads.get(sessionID) === read &&
++                        (!config.connection || config.connection.status() === "connected");
++                    return sync.run(key, async () => {
++                        let pending;
++                        while (true) {
++                            if (!current()) {
++                                // A retired queued loader must not mark this key cached.
++                                sync.invalidate(key);
++                                return;
++                            }
++                            read.dirty = false;
++                            try {
++                                pending = await api().session.inbox.list({ sessionID }, { signal: read.controller.signal });
++                            } catch (error) {
++                                if (current())
++                                    throw error;
++                                sync.invalidate(key);
++                                return;
++                            }
++                            if (!current()) {
++                                sync.invalidate(key);
++                                return;
++                            }
++                            if (!read.dirty)
++                                break;
++                        }
+                         // A positive read acknowledges admission even when its SSE echo is delayed.
+                         pending.forEach((item) => outbox.delete(item.id));
+                         // Compactions also coalesce by Session, not just by the proposed ID.
+@@ -1256,10 +1312,13 @@ export function createData(config) {
+                             setStore("session", "pending", sessionID, reconcile(merged));
+                             merged.forEach(materializeInboxMessage);
+                         });
++                    }).finally(() => {
++                        if (pendingReads.get(sessionID) === read)
++                            pendingReads.delete(sessionID);
+                     });
+                 },
+                 invalidate(sessionID) {
+-                    sync.invalidate(`session.pending:${sessionID}`);
++                    retirePendingRead(sessionID);
+                 },
+             },
+             // Optimistic session creation: admit a local record under a
+@@ -1733,6 +1792,7 @@ export function createData(config) {
+     createEffect(() => {
+         if (config.connection?.status() === "connected")
+             return;
++        retirePendingReads();
+         sync.invalidate();
+     });
+     onCleanup(config.event.listen(({ details }) => {

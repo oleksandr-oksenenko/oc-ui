@@ -1,0 +1,99 @@
+diff --git a/dist/overlays/dialog/dialog.d.ts b/dist/overlays/dialog/dialog.d.ts
+index 6d1caa2fece6f101f6e1482c1ec63d3795803891..5bfc8d2145fe61033df13d26dc05b6718c2ca365 100644
+--- a/dist/overlays/dialog/dialog.d.ts
++++ b/dist/overlays/dialog/dialog.d.ts
+@@ -1,3 +1,4 @@
++import { Content } from "@kobalte/core/dialog";
+ import { type ComponentProps, type JSXElement, type ParentProps } from "solid-js";
+ import "./dialog.css";
+ export interface DialogProps extends ParentProps {
+@@ -7,6 +8,7 @@ export interface DialogProps extends ParentProps {
+     containerClass?: ComponentProps<"div">["class"];
+     classList?: ComponentProps<"div">["classList"];
+     fit?: boolean;
++    onCloseAutoFocus?: ComponentProps<typeof Content>["onCloseAutoFocus"];
+ }
+ export interface DialogHeaderProps extends ParentProps {
+     closeLabel?: string;
+diff --git a/src/context/dialog.tsx b/src/context/dialog.tsx
+index 70e6c1f40bf70e5b813d5ea15539fb1f9c219ebf..71c71437af7d1bce605b57a26f83edeef33697ca 100644
+--- a/src/context/dialog.tsx
++++ b/src/context/dialog.tsx
+@@ -32,12 +32,14 @@ const Context = createContext<ReturnType<typeof init>>()
+ function init() {
+   const [stack, setStack] = createSignal<Active[]>([])
+   const timer = { current: undefined as ReturnType<typeof setTimeout> | undefined }
++  let finishClose: (() => void) | undefined
+   const lock = { value: false }
+ 
+   onCleanup(() => {
+     if (timer.current === undefined) return
+     clearTimeout(timer.current)
+     timer.current = undefined
++    finishClose = undefined
+   })
+ 
+   const close = (id?: string) => {
+@@ -54,12 +56,14 @@ function init() {
+       timer.current = undefined
+     }
+ 
+-    timer.current = setTimeout(() => {
++    finishClose = () => {
++      finishClose = undefined
+       timer.current = undefined
+       current.dispose()
+       setStack((items) => items.filter((item) => item.id !== closed))
+       lock.value = false
+-    }, 100)
++    }
++    timer.current = setTimeout(finishClose, 100)
+   }
+ 
+   createEffect(() => {
+@@ -131,7 +135,7 @@ function init() {
+   const push = (element: DialogElement, owner: Owner, onClose?: () => void) => {
+     if (timer.current !== undefined) {
+       clearTimeout(timer.current)
+-      timer.current = undefined
++      finishClose?.()
+     }
+     lock.value = false
+     mount(element, owner, onClose, stack().length)
+@@ -144,6 +148,7 @@ function init() {
+       clearTimeout(timer.current)
+       timer.current = undefined
+     }
++    finishClose = undefined
+     lock.value = false
+     mount(element, owner, onClose, 0)
+   }
+diff --git a/src/overlays/dialog/dialog.tsx b/src/overlays/dialog/dialog.tsx
+index 646e2e3c043e17b5957bbe8c6a82bb4bb8a7829a..edd827410b7512e52af64abec9ff89f5cc166c95 100644
+--- a/src/overlays/dialog/dialog.tsx
++++ b/src/overlays/dialog/dialog.tsx
+@@ -10,6 +10,7 @@ export interface DialogProps extends ParentProps {
+   containerClass?: ComponentProps<"div">["class"]
+   classList?: ComponentProps<"div">["classList"]
+   fit?: boolean
++  onCloseAutoFocus?: ComponentProps<typeof Content>["onCloseAutoFocus"]
+ }
+ 
+ export interface DialogHeaderProps extends ParentProps {
+@@ -82,7 +83,7 @@ export function DialogHeader(props: DialogHeaderProps) {
+ }
+ 
+ export function Dialog(props: DialogProps) {
+-  const [local] = splitProps(props, ["size", "variant", "class", "containerClass", "classList", "fit", "children"])
++  const [local] = splitProps(props, ["size", "variant", "class", "containerClass", "classList", "fit", "onCloseAutoFocus", "children"])
+ 
+   return (
+     <div
+@@ -94,6 +95,7 @@ export function Dialog(props: DialogProps) {
+       <div data-slot="dialog-container" class={local.containerClass}>
+         <Content
+           data-slot="dialog-content"
++          onCloseAutoFocus={local.onCloseAutoFocus}
+           classList={{
+             ...local.classList,
+             [local.class ?? ""]: !!local.class,

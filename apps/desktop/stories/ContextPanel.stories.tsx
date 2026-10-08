@@ -409,7 +409,7 @@ export const GutterRangeSelection: Story = {
           const stable = current > 0 && current === previous;
           previous = current;
           await new Promise((resolve) => setTimeout(resolve, 200));
-          return stable;
+          await expect(stable).toBe(true);
         },
         { timeout: 10_000 },
       );

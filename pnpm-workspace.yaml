@@ -117,3 +117,7 @@ minimumReleaseAgeExclude:
   - "@effect/tsgo-win32-arm64@0.38.0"
   - "@effect/tsgo-win32-x64@0.38.0"
   - "@effect/tsgo@0.38.0"
+
+patchedDependencies:
+  "@opencode/client@2.0.3": patches/@opencode__client@2.0.3.patch
+  "@opencode/ui@2.0.3": patches/@opencode__ui@2.0.3.patch

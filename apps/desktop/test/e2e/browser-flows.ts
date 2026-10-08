@@ -263,25 +263,67 @@ export async function verifyBrowserFlows(artifacts: string): Promise<void> {
     },
     { timeout: TIMEOUT, timeoutMsg: "Annotated message did not reach the provider" },
   );
-  // Structured browser metadata groups the screenshot into the Browser pill.
-  const browserPill = $(
-    ".transcript-user-message .attachment-pill-browser .attachment-pill-trigger",
-  );
-  await browserPill.waitForClickable({ timeout: TIMEOUT });
-  await browserPill.click();
-  const userImage = $('.attachment-detail-popover [aria-label="Enlarge Browser annotation 1"] img');
-  await userImage.waitForExist({ timeout: TIMEOUT });
-  await userImage.scrollIntoView();
-  await browser.waitUntil(
-    () =>
-      browser.execute(() => {
-        const image = document.querySelector<HTMLImageElement>(
-          '.attachment-detail-popover [aria-label="Enlarge Browser annotation 1"] img',
-        );
-        return image?.complete === true && image.naturalWidth > 0;
-      }),
-    { timeout: TIMEOUT, timeoutMsg: "Annotated screenshot did not render in the transcript" },
-  );
+  await $('[aria-label="Send"]').waitForDisplayed({ timeout: TIMEOUT });
+  // Files are absent from optimistic rows. This specific, completed user row
+  // establishes the durable attachment boundary before opening its popover.
+  const messageID = await browser.execute((text) => {
+    const messages = Array.from(document.querySelectorAll(".transcript-user-message"));
+    return messages
+      .filter((message) => message.textContent?.includes(text))
+      .at(-1)
+      ?.getAttribute("data-message-id");
+  }, instruction);
+  assert.ok(messageID);
+  const pillSelector = `.transcript-user-message[data-message-id=${JSON.stringify(messageID)}] .attachment-pill-browser .attachment-pill-trigger`;
+  const browserPill = $(pillSelector);
+  try {
+    await browserPill.waitForClickable({ timeout: TIMEOUT });
+    await browserPill.click();
+    await browser.waitUntil(
+      () => browserPill.getAttribute("aria-expanded").then((value) => value === "true"),
+      {
+        timeout: TIMEOUT,
+        timeoutMsg: "Sent browser attachment popover did not open",
+      },
+    );
+    const controls = await browserPill.getAttribute("aria-controls");
+    assert.ok(controls);
+    const imageSelector = `[id=${JSON.stringify(controls)}] [aria-label="Enlarge Browser annotation 1"] img`;
+    await $(`[id=${JSON.stringify(controls)}]`).waitForDisplayed({ timeout: TIMEOUT });
+    const userImage = $(imageSelector);
+    await userImage.waitForExist({ timeout: TIMEOUT });
+    await userImage.scrollIntoView();
+    await browser.waitUntil(
+      () =>
+        browser.execute((selector) => {
+          const image = document.querySelector<HTMLImageElement>(selector);
+          return image?.complete === true && image.naturalWidth > 0;
+        }, imageSelector),
+      { timeout: TIMEOUT, timeoutMsg: "Annotated screenshot did not render in the transcript" },
+    );
+  } catch (cause) {
+    const state = await browser.execute((selector) => {
+      const trigger = document.querySelector(selector);
+      const controls = trigger?.getAttribute("aria-controls");
+      const content = controls ? document.getElementById(controls) : undefined;
+      const active = document.activeElement;
+      return {
+        connected: trigger?.isConnected === true,
+        expanded: trigger?.getAttribute("aria-expanded"),
+        controls,
+        contentPresent: content?.isConnected === true,
+        images: content?.querySelectorAll("img").length ?? 0,
+        imageSourcePresent:
+          content?.querySelector("img")?.getAttribute("src")?.startsWith("data:image/") === true,
+        focus: { tag: active?.tagName, role: active?.getAttribute("role") },
+      };
+    }, pillSelector);
+    const native = (await nativePages()).map(({ id, visible }) => ({ id, visible }));
+    throw new Error(
+      `Sent browser attachment failed: ${JSON.stringify({ messageID, state, native })}`,
+      { cause },
+    );
+  }
   await browser.saveScreenshot(join(artifacts, "browser-annotation-sent.png"));
   await browser.keys("Escape");
 

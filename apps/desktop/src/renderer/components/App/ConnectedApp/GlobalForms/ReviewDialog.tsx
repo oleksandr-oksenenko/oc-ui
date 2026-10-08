@@ -10,7 +10,16 @@ import {
   DialogTitleGroup,
 } from "@opencode/ui/dialog";
 import { Icon } from "@opencode/ui/icon";
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, type JSX } from "solid-js";
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  type ComponentProps,
+  type JSX,
+} from "solid-js";
 
 import { QuestionForm } from "../../../../ui/QuestionForm.tsx";
 import { useServerFlowDismissBlock } from "../../../../ui/ServerFlowDialogProvider.tsx";
@@ -20,6 +29,7 @@ export type ReviewDialogProps = {
   readonly controller: GlobalFormsController;
   readonly onOpenExternal?: (url: string) => void;
   readonly initialFormID?: string;
+  readonly onCloseAutoFocus?: ComponentProps<typeof Dialog>["onCloseAutoFocus"];
 };
 
 export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
@@ -116,7 +126,11 @@ export function ReviewDialog(props: ReviewDialogProps): JSX.Element {
   };
 
   return (
-    <Dialog size="x-large" containerClass="global-forms-region-dialog">
+    <Dialog
+      size="x-large"
+      containerClass="global-forms-region-dialog"
+      onCloseAutoFocus={props.onCloseAutoFocus}
+    >
       <DialogHeader closeLabel="Close requests dialog" hideClose={props.controller.pending()}>
         <DialogTitleGroup
           title={

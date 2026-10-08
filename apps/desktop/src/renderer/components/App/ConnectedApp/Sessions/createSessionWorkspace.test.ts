@@ -145,6 +145,48 @@ function mountWithPanels(fixture: ReturnType<typeof setup>) {
 }
 
 describe("createSessionWorkspace", () => {
+  it("publishes transcript ownership and the SDK list together through selection and updates", async () => {
+    const fixture = setup([session("one", 1), session("two", 2)]);
+    const one: SessionMessageInfo[] = [
+      { id: "one-message", type: "user", text: "One", time: { created: 1 } },
+    ];
+    const two: SessionMessageInfo[] = [
+      { id: "two-message", type: "user", text: "Two", time: { created: 1 } },
+    ];
+    const [lists, setLists] = createSignal(
+      new Map([
+        ["one", one],
+        ["two", two],
+      ]),
+    );
+    fixture.runtime.data.session.message.list = (id) => lists().get(id) ?? [];
+    const { workspace, dispose } = mount(fixture);
+    try {
+      await vi.waitFor(() => expect(workspace.selectedID()).toBe("two"));
+      expect(workspace.transcriptSnapshot()).toEqual({ sessionID: "two", messages: two });
+      expect(workspace.transcriptSnapshot().messages).toBe(two);
+      workspace.select("one");
+      await vi.waitFor(() => expect(workspace.transcriptSnapshot().sessionID).toBe("one"));
+      expect(workspace.transcriptSnapshot().messages).toBe(one);
+      const updated: SessionMessageInfo[] = [
+        { id: "one-message", type: "user", text: "Acknowledged one", time: { created: 1 } },
+      ];
+      setLists(
+        new Map([
+          ["one", updated],
+          ["two", two],
+        ]),
+      );
+      expect(workspace.transcriptSnapshot()).toEqual({ sessionID: "one", messages: updated });
+      expect(workspace.transcript()).toBe(updated);
+      workspace.selectDraft("draft");
+      await vi.waitFor(() => expect(workspace.transcriptSnapshot().sessionID).toBeUndefined());
+      expect(workspace.transcriptSnapshot().messages).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
   it("retains draft selection across catalog refresh and clears session context", async () => {
     const fixture = setup([session("older", 1), session("newer", 2)]);
     const { workspace, dispose } = mount(fixture);

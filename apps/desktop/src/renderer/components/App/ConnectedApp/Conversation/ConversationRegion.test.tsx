@@ -116,6 +116,7 @@ function setup(
     running: () => false,
     stopError: () => undefined,
     transcript: options.transcript ?? (() => []),
+    transcriptSnapshot: () => ({ sessionID: selectedID(), messages: options.transcript?.() ?? [] }),
     transcriptStatus: () => "idle",
     transcriptLoading: () => false,
     transcriptError: () => undefined,

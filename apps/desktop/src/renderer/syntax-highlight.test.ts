@@ -120,8 +120,11 @@ describe("SyntaxHighlight worker pool", () => {
       signal: queued.signal,
     });
     try {
-      await vi.waitFor(() => expect(TestWorker.instances).toHaveLength(2));
-      expect(TestWorker.instances.every((w) => w.postMessage.mock.calls.length === 1)).toBe(true);
+      await vi.waitFor(() => {
+        expect(TestWorker.instances).toHaveLength(2);
+        for (const worker of TestWorker.instances)
+          expect(worker.postMessage).toHaveBeenCalledOnce();
+      });
       queued.abort();
       expect((await c)._tag).toBe("Failure");
       active.abort();
@@ -151,30 +154,66 @@ describe("SyntaxHighlight worker pool", () => {
     for (const worker of TestWorker.instances) expect(worker.terminate).toHaveBeenCalledOnce();
   });
 
-  it.each(["error", "messageerror", "malformed"])(
+  it.each(["error", "messageerror", "malformed", "error response"])(
     "settles %s failures and retries with a new worker",
     async (kind) => {
       const owner = runtime();
       try {
-        const failed = owner.runPromiseExit(highlight());
+        const failed = owner.runPromise(Effect.result(highlight()));
         await vi.waitFor(() => expect(TestWorker.instances[0]?.postMessage).toHaveBeenCalledOnce());
         TestWorker.instances[0]!.dispatchEvent(
-          kind === "malformed"
-            ? new MessageEvent("message", { data: { tokens: "invalid" } })
-            : kind === "error"
-              ? new ErrorEvent("error", { message: "load failed" })
-              : new MessageEvent("messageerror"),
+          kind === "error response"
+            ? new MessageEvent("message", { data: { error: "grammar failed" } })
+            : kind === "malformed"
+              ? new MessageEvent("message", { data: { tokens: "invalid" } })
+              : kind === "error"
+                ? new ErrorEvent("error", { message: "load failed" })
+                : new MessageEvent("messageerror"),
         );
-        expect((await failed)._tag).toBe("Failure");
+        const expected =
+          kind === "error response"
+            ? { _tag: "SyntaxHighlightError", cause: "grammar failed" }
+            : { _tag: "SyntaxHighlightError" };
+        expect(await failed).toMatchObject({ _tag: "Failure", failure: expected });
+        expect(TestWorker.instances[0]!.terminate).toHaveBeenCalledOnce();
         const retry = owner.runPromise(highlight());
-        await vi.waitFor(() => expect(TestWorker.instances).toHaveLength(2));
+        await vi.waitFor(() => expect(TestWorker.instances[1]?.postMessage).toHaveBeenCalledOnce());
         TestWorker.instances[1]!.respond();
         expect(await retry).toBeDefined();
       } finally {
         await owner.dispose();
       }
+      for (const worker of TestWorker.instances) expect(worker.terminate).toHaveBeenCalledOnce();
     },
   );
+
+  it("settles a synchronous postMessage failure and succeeds with a replacement worker", async () => {
+    const owner = runtime();
+    vi.stubGlobal(
+      "Worker",
+      class extends TestWorker {
+        constructor() {
+          super();
+          if (TestWorker.instances.length === 1)
+            this.postMessage.mockImplementationOnce(() => {
+              throw new Error("posting failed");
+            });
+        }
+      },
+    );
+    try {
+      expect((await owner.runPromiseExit(highlight()))._tag).toBe("Failure");
+      expect(TestWorker.instances[0]!.postMessage).toHaveBeenCalledOnce();
+      expect(TestWorker.instances[0]!.terminate).toHaveBeenCalledOnce();
+      const retry = owner.runPromise(highlight());
+      await vi.waitFor(() => expect(TestWorker.instances[1]?.postMessage).toHaveBeenCalledOnce());
+      TestWorker.instances[1]!.respond();
+      expect(await retry).toBeDefined();
+    } finally {
+      await owner.dispose();
+    }
+    for (const worker of TestWorker.instances) expect(worker.terminate).toHaveBeenCalledOnce();
+  });
 
   it("times out a worker that never responds and releases its slot", async () => {
     vi.useFakeTimers();
@@ -197,8 +236,15 @@ describe("SyntaxHighlight worker pool", () => {
       owner.runPromiseExit(highlight()),
       owner.runPromiseExit(highlight({ ...snippet, code: "other" })),
     ];
-    await vi.waitFor(() => expect(TestWorker.instances).toHaveLength(2));
-    await owner.dispose();
+    try {
+      await vi.waitFor(() => {
+        expect(TestWorker.instances).toHaveLength(2);
+        for (const worker of TestWorker.instances)
+          expect(worker.postMessage).toHaveBeenCalledOnce();
+      });
+    } finally {
+      await owner.dispose();
+    }
     for (const call of calls) expect((await call)._tag).toBe("Failure");
     for (const worker of TestWorker.instances) expect(worker.terminate).toHaveBeenCalledOnce();
   });

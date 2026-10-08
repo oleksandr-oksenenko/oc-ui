@@ -11,9 +11,11 @@ import {
   createMemo,
   createSignal,
   For,
+  Match,
   on,
   onCleanup,
   Show,
+  Switch,
   untrack,
   type JSX,
 } from "solid-js";
@@ -66,6 +68,8 @@ function navigationWheel(event: WheelEvent): boolean {
 
 export type TranscriptViewProps = {
   readonly sessionID: string;
+  /** Required when selection and its message list are published separately. */
+  readonly messagesSessionID?: string;
   /** Resolves `file:` images in assistant Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
   /** Filesystem root of the session; tool path parameters inside it are shown relative. */
@@ -108,6 +112,10 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   let awayTimer: number | undefined;
   const working = () => props.sessionStatus === "running";
   const loading = createMemo(() => props.loading === true);
+  const messages = () =>
+    props.messagesSessionID === undefined || props.messagesSessionID === props.sessionID
+      ? props.messages
+      : [];
 
   const selectionInViewport = () => {
     if (viewport === undefined) return false;
@@ -122,7 +130,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   // selection interaction latches the pause again.
   const materialization = createTranscriptMaterialization({
     sessionID: () => props.sessionID,
-    messages: () => props.messages,
+    messages,
     paused: readerPaused,
   });
   // Pausing withholds every follow reason, so a paused reader cannot be pinned
@@ -440,23 +448,25 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 
   const visibleProjection = createMemo(() => {
     const start = materialization.startIndex();
-    const messages = props.messages;
-    const visible = start === 0 ? messages : messages.slice(start);
+    const list = messages();
+    const visible = start === 0 ? list : list.slice(start);
     return projectTranscriptRows(visible);
   });
-  // Keep original SDK message objects as For keys; projection rows are rebuilt
-  // as new work events arrive and must not remount existing transcript content.
-  const visibleMessages = createMemo(() => visibleProjection().map((row) => row.message));
-  const rowsByID = createMemo(
-    () => new Map(visibleProjection().map((row) => [row.message.id, row])),
+  // Durable acknowledgement can replace an SDK object without changing its ID.
+  const rowsByKey = createMemo(
+    () =>
+      new Map(
+        visibleProjection().map((row) => [JSON.stringify([props.sessionID, row.message.id]), row]),
+      ),
   );
+  const visibleMessageKeys = createMemo(() => [...rowsByKey().keys()]);
   // A message can finish while its turn keeps running. The last user/idle
   // marker, rather than message completion, owns the live activity boundary.
   const activeTurnMessages = createMemo(() => {
     if (!working()) return new Set<string>();
     const active = new Set<string>();
-    for (let index = props.messages.length - 1; index >= 0; index--) {
-      const message = props.messages[index]!;
+    for (let index = messages().length - 1; index >= 0; index--) {
+      const message = messages()[index]!;
       if (message.type === "idle" || message.type === "user") break;
       active.add(message.id);
     }
@@ -466,8 +476,8 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
   // activity run, including runs chained across assistant messages.
   const liveActivityMessages = createMemo(() => {
     const live = new Set<string>();
-    for (let index = props.messages.length - 1; index >= 0; index--) {
-      const message = props.messages[index]!;
+    for (let index = messages().length - 1; index >= 0; index--) {
+      const message = messages()[index]!;
       if (!activeTurnMessages().has(message.id)) break;
       live.add(message.id);
       if (
@@ -517,7 +527,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
       onPointerUp={endTouch}
       onPointerCancel={endTouch}
     >
-      <Show when={props.loading === true && props.messages.length === 0}>
+      <Show when={props.loading === true && messages().length === 0}>
         <output class="transcript-state" aria-live="polite">
           <Loader class="transcript-state-loader" width={18} height={18} aria-hidden="true" />
           <span>Loading transcript</span>
@@ -540,7 +550,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
         when={
           props.loading !== true &&
           props.error === undefined &&
-          props.messages.length === 0 &&
+          messages().length === 0 &&
           props.pendingInteraction === undefined
         }
       >
@@ -549,7 +559,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
         </div>
       </Show>
 
-      <Show when={props.messages.length > 0 || working() || props.pendingInteraction !== undefined}>
+      <Show when={messages().length > 0 || working() || props.pendingInteraction !== undefined}>
         <div
           ref={(element) => {
             pauseObserver.observe(element);
@@ -557,10 +567,10 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
           }}
           class="transcript-document"
         >
-          <For each={visibleMessages()}>
-            {(message) =>
-              renderMessage(message, props, activeTurnMessages, liveActivityMessages, () =>
-                rowsByID().get(message.id),
+          <For each={visibleMessageKeys()}>
+            {(key) =>
+              renderMessage(props, activeTurnMessages, liveActivityMessages, () =>
+                rowsByKey().get(key),
               )
             }
           </For>
@@ -593,7 +603,6 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
 }
 
 function renderMessage(
-  message: Exclude<SessionMessageInfo, { readonly type: "idle" }>,
   props: Pick<
     TranscriptViewProps,
     | "sessionID"
@@ -608,48 +617,69 @@ function renderMessage(
   liveActivityMessages: () => ReadonlySet<string>,
   row: () => TranscriptRow | undefined,
 ): JSX.Element {
-  switch (message.type) {
-    case "user":
-      return <UserMessage message={message} onOpenAnnotation={props.onOpenAnnotation} />;
-    case "assistant":
-      return (
-        <AssistantMessage
-          message={message}
-          workDetails={row()?.workDetails}
-          continuations={row()?.continuations}
-          chainedTo={row()?.chainedTo}
-          sessionID={props.sessionID}
-          sessionStatus={props.sessionStatus}
-          connected={props.connected}
-          turnActive={activeTurnMessages().has(message.id)}
-          activityLive={
-            liveActivityMessages().has(message.id) ||
-            row()?.continuations?.some((item) => liveActivityMessages().has(item.message.id))
-          }
-          activityOpen={props.activityOpen}
-          readFileImage={props.readFileImage}
-          directory={props.directory}
-        />
-      );
-    default:
-      return (
-        <Show
-          when={row()?.activityGroup ? row()?.workDetails : undefined}
-          fallback={<WorkDetailMessage message={message} />}
-        >
-          {(details) => (
-            <ActivityBlock
-              content={[]}
-              start={0}
-              workDetails={details()}
-              active={activeTurnMessages().has(message.id)}
-              live={liveActivityMessages().has(message.id)}
-              disclosureKey={JSON.stringify([props.sessionID, message.id, "work-details"])}
-              activityOpen={props.activityOpen}
-              directory={props.directory}
-            />
-          )}
-        </Show>
-      );
-  }
+  const user = () => {
+    const message = row()?.message;
+    return message?.type === "user" ? message : undefined;
+  };
+  const assistant = () => {
+    const message = row()?.message;
+    return message?.type === "assistant" ? message : undefined;
+  };
+  const work = () => {
+    const message = row()?.message;
+    return message && message.type !== "user" && message.type !== "assistant" ? message : undefined;
+  };
+  return (
+    <Switch>
+      <Match when={user()}>
+        {(message) => <UserMessage message={message()} onOpenAnnotation={props.onOpenAnnotation} />}
+      </Match>
+      <Match when={assistant()}>
+        {(message) => (
+          <AssistantMessage
+            message={message()}
+            workDetails={row()?.workDetails}
+            continuations={row()?.continuations}
+            chainedTo={row()?.chainedTo}
+            sessionID={props.sessionID}
+            sessionStatus={props.sessionStatus}
+            connected={props.connected}
+            turnActive={activeTurnMessages().has(message().id)}
+            activityLive={
+              liveActivityMessages().has(message().id) ||
+              row()?.continuations?.some((item) => liveActivityMessages().has(item.message.id))
+            }
+            activityOpen={props.activityOpen}
+            readFileImage={props.readFileImage}
+            directory={props.directory}
+          />
+        )}
+      </Match>
+      <Match when={work()}>
+        {(message) => (
+          <Show
+            when={row()?.activityGroup ? row()?.workDetails : undefined}
+            fallback={
+              <Show keyed when={message()}>
+                {(detail) => <WorkDetailMessage message={detail} />}
+              </Show>
+            }
+          >
+            {(details) => (
+              <ActivityBlock
+                content={[]}
+                start={0}
+                workDetails={details()}
+                active={activeTurnMessages().has(message().id)}
+                live={liveActivityMessages().has(message().id)}
+                disclosureKey={JSON.stringify([props.sessionID, message().id, "work-details"])}
+                activityOpen={props.activityOpen}
+                directory={props.directory}
+              />
+            )}
+          </Show>
+        )}
+      </Match>
+    </Switch>
+  );
 }

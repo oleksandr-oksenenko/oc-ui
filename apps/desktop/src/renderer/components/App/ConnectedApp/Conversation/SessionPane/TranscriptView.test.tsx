@@ -179,6 +179,78 @@ function stubAnimationFrames() {
 }
 
 describe("TranscriptView", () => {
+  it("updates same-ID assistant records while preserving rows across insertion and movement", () => {
+    stubResizeObserver();
+    const first = textAssistantMessage("reply", "Before acknowledgement");
+    const [messages, setMessages] = createSignal<SessionMessageInfo[]>([first]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="session" messages={messages()} sessionStatus="running" />
+    ));
+    try {
+      const article = host.querySelector('[data-message-id="reply"]');
+      expect(article?.getAttribute("data-state")).toBe("streaming");
+      setMessages([
+        {
+          id: "context",
+          type: "system",
+          time: base,
+          text: "New context",
+          description: "New context",
+        },
+        { ...textAssistantMessage("reply", "Acknowledged response"), finish: "error" },
+      ]);
+      expect(host.querySelector('[data-message-id="reply"]')).toBe(article);
+      expect(article?.textContent).toContain("Acknowledged response");
+      expect(article?.getAttribute("data-state")).toBe("failed");
+      expect(article?.querySelector('[role="alert"]')).not.toBeNull();
+      setMessages([
+        { ...textAssistantMessage("reply", "Recovered response"), time: { ...base, completed: 2 } },
+        {
+          id: "context",
+          type: "system",
+          time: base,
+          text: "Updated context",
+          description: "Updated context",
+        },
+      ]);
+      expect(host.querySelector('[data-message-id="reply"]')).toBe(article);
+      expect(article?.textContent).toContain("Recovered response");
+      expect(article?.getAttribute("data-state")).toBe("complete");
+      expect(article?.querySelector('[role="alert"]')).toBeNull();
+      expect(host.textContent).toContain("Updated context");
+      expect(host.textContent).not.toContain("New context");
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("disposes row-local state on session changes and removal without replacing the viewport", () => {
+    stubResizeObserver();
+    const [sessionID, setSessionID] = createSignal("first");
+    const [messages, setMessages] = createSignal<SessionMessageInfo[]>([
+      textAssistantMessage("shared-id", "Response"),
+    ]);
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID={sessionID()} messages={messages()} sessionStatus="idle" />
+    ));
+    try {
+      const viewport = host.querySelector(".transcript-view");
+      const first = host.querySelector('[data-message-id="shared-id"]');
+      setSessionID("second");
+      expect(first?.isConnected).toBe(false);
+      expect(host.querySelector('[data-message-id="shared-id"]')).not.toBe(first);
+      expect(host.querySelector(".transcript-view")).toBe(viewport);
+      const second = host.querySelector('[data-message-id="shared-id"]');
+      setMessages([]);
+      expect(second?.isConnected).toBe(false);
+      expect(host.querySelector('[data-message-id="shared-id"]')).toBeNull();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it.each(["status", "idle marker", "next user", "prose"] as const)(
     "keeps completed activity live until %s ends it",
     (ending) => {
@@ -3073,11 +3145,19 @@ describe("TranscriptView", () => {
     const first = userMessages("a", 120);
     const second = userMessages("b", 120);
     const [sessionID, setSessionID] = createSignal("a");
-    const [messages, setMessages] = createSignal<readonly SessionMessageInfo[]>(first);
+    const [snapshot, setSnapshot] = createSignal<{
+      sessionID: string;
+      messages: readonly SessionMessageInfo[];
+    }>({ sessionID: "a", messages: first });
     const attribute = vi.spyOn(Element.prototype, "setAttribute");
     try {
-      const { dispose } = mount(() => (
-        <TranscriptView sessionID={sessionID()} messages={messages()} sessionStatus="idle" />
+      const { host, dispose } = mount(() => (
+        <TranscriptView
+          sessionID={sessionID()}
+          messagesSessionID={snapshot().sessionID}
+          messages={snapshot().messages}
+          sessionStatus="idle"
+        />
       ));
       frames.runAll();
 
@@ -3085,9 +3165,17 @@ describe("TranscriptView", () => {
       const switchTo = (session: string, list: readonly SessionMessageInfo[]) => {
         attribute.mockClear();
         setSessionID(session);
-        setMessages(list);
+        expect(host.querySelectorAll("[data-message-id]")).toHaveLength(0);
+        expect(attribute.mock.calls.filter(([name]) => name === "data-message-id")).toHaveLength(0);
+        setSnapshot({ sessionID: session, messages: list });
         const rows = attribute.mock.calls.filter(([name]) => name === "data-message-id").length;
+        const visible = Array.from(host.querySelectorAll("[data-message-id]"));
+        expect(visible.map((element) => element.getAttribute("data-message-id"))).toEqual(
+          list.slice(-20).map((message) => message.id),
+        );
+        expect(visible.at(-1)?.textContent).toContain(`${session}119`);
         frames.runAll();
+        expect(host.querySelectorAll("[data-message-id]")).toHaveLength(120);
         return rows;
       };
 

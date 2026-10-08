@@ -65,12 +65,16 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
   });
   const visibleTranscript = createMemo(() => {
     const pending = new Set(pendingMessages().map((item) => item.id));
-    return props.workspace.transcript().filter((message) => !pending.has(message.id));
+    const snapshot = props.workspace.transcriptSnapshot();
+    return {
+      sessionID: snapshot.sessionID,
+      messages: snapshot.messages.filter((message) => !pending.has(message.id)),
+    };
   });
   let annotationButton: HTMLButtonElement | undefined;
   const annotationUI = createTranscriptAnnotations({
     sessionID: props.workspace.selectedID,
-    messages: visibleTranscript,
+    messages: () => visibleTranscript().messages,
     drafts: props.annotationDrafts,
     fallbackFocus: () => annotationButton,
     // Annotation work is idle-only: adding, editing and removal stay disabled
@@ -364,7 +368,8 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               annotationRootRef={annotationUI.attach}
               onLayoutScroll={annotationUI.handleLayoutScroll}
               onOpenAnnotation={annotationUI.openSent}
-              messages={visibleTranscript()}
+              messages={visibleTranscript().messages}
+              messagesSessionID={visibleTranscript().sessionID}
               activityOpen={activityOpen}
               sessionStatus={props.workspace.transcriptStatus()}
               connected={props.connected()}
