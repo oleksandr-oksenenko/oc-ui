@@ -32,21 +32,42 @@ const settingsPath = join(userDataPath, "connection-settings.json");
 const pidRecordPath = join(userDataPath, "acceptance-worker-pids.json");
 const workerPids: number[] = [];
 const terminalPids: number[] = [];
-const artifactDirectory = fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
+const artifactDirectory =
+  globalThis.process.env.OCUI_E2E_ARTIFACT_DIRECTORY ??
+  fileURLToPath(new URL("../../dist/wdio-artifacts/", import.meta.url));
 const projectDirectory = join(userDataPath, "acceptance-project");
 
 describe("packaged owned OpenCode", () => {
   it("starts automatically without a chooser and creates sessions in the bundled worker default directory", async () => {
     await mkdir(artifactDirectory, { recursive: true });
-    const runtime = await browser.electron.execute((electron) => ({
-      isPackaged: electron.app.isPackaged,
-      userData: electron.app.getPath("userData"),
-      mockKeychain: electron.app.commandLine.hasSwitch("use-mock-keychain"),
-      databasePath: process.env.OPENCODE_DB,
-    }));
+    const runtime = await browser.electron.execute(async (electron) => {
+      await electron.app.whenReady();
+      // Test-only credential substitute for the isolated, headless Linux profile.
+      if (process.platform === "linux") electron.safeStorage.setUsePlainTextEncryption(true);
+      return {
+        isPackaged: electron.app.isPackaged,
+        userData: electron.app.getPath("userData"),
+        mockKeychain: electron.app.commandLine.hasSwitch("use-mock-keychain"),
+        noSandbox: electron.app.commandLine.hasSwitch("no-sandbox"),
+        passwordStore: electron.app.commandLine.getSwitchValue("password-store"),
+        encryptionAvailable: electron.safeStorage.isEncryptionAvailable(),
+        storageBackend:
+          process.platform === "linux"
+            ? electron.safeStorage.getSelectedStorageBackend()
+            : undefined,
+        databasePath: process.env.OPENCODE_DB,
+      };
+    });
     assert.equal(runtime.isPackaged, true);
     assert.equal(runtime.userData, userDataPath);
-    assert.equal(runtime.mockKeychain, true);
+    if (globalThis.process.platform === "linux") {
+      assert.equal(runtime.noSandbox, true);
+      assert.equal(runtime.passwordStore, "basic");
+      assert.equal(runtime.storageBackend, "basic_text");
+      assert.equal(runtime.encryptionAvailable, true);
+    } else {
+      assert.equal(runtime.mockKeychain, true);
+    }
     assert.equal(runtime.databasePath, globalThis.process.env.OPENCODE_DB);
     await waitForLocalConnection();
     assert.equal(await $("#connection-form-title").isExisting(), false);
@@ -373,12 +394,15 @@ async function resizeWindow(width: number, height: number): Promise<void> {
     (electron, nextWidth, nextHeight) => {
       const window = electron.BrowserWindow.getAllWindows()[0];
       if (window === undefined) throw new Error("Acceptance window is missing");
-      window.setSize(nextWidth, nextHeight);
+      window.setContentSize(nextWidth, nextHeight);
     },
     width,
     height,
   );
-  await browser.waitUntil(async () => (await browser.execute(() => window.innerWidth)) <= width);
+  await browser.waitUntil(async () => {
+    const viewport = await browser.execute(() => [window.innerWidth, window.innerHeight]);
+    return viewport[0] === width && viewport[1] === height;
+  });
 }
 
 async function recordWorker(): Promise<number> {

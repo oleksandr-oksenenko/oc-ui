@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 ```
 
 The local default (`pnpm ready`) runs static checks and unit tests. GitHub Actions
-runs the heavier component, integration, build, and packaged macOS checks. See
+runs the heavier component, integration, build, and packaged desktop checks. See
 [verification tiers](docs/app-verification.md#verification-tiers) for execution policy.
 
 Opt-in local component and integration tests require Chromium to be provisioned
@@ -89,8 +89,10 @@ pnpm test:integration   # Tier 2: browser acceptance and real-server lifecycle t
 pnpm test:all           # Opt in to all non-packaged test tiers (0–2)
 pnpm ready:ci           # Opt in to checks, tiers 0–2, and all three builds
 pnpm package:mac        # Build an unpacked macOS arm64 .app in apps/desktop/dist
+pnpm package:linux      # Build an unpacked Linux x64/glibc app in apps/desktop/dist
 pnpm make:mac           # Build the unpacked .app and a macOS arm64 DMG
 pnpm test:acceptance:mac # Package and test the macOS arm64 app with WebdriverIO
+pnpm test:acceptance:linux # Package and test the Linux x64/glibc app with WebdriverIO
 ```
 
 `pnpm verify:browser` prints a UI URL, server address, disposable credentials,
@@ -98,7 +100,8 @@ and a test project. It uses a scripted provider and does not run UI assertions.
 See [App verification](docs/app-verification.md) for inspection, cleanup, and
 which automated checks to run for a change.
 
-Packaged macOS acceptance (tier 3) runs on pushes to `main` and manual CI dispatch.
+Packaged desktop acceptance (tier 3) runs on both platforms on pushes to `main`
+and manual CI dispatch.
 It is separate from `pnpm test`, `pnpm ready`, and `pnpm ready:ci`.
 
 ### Local tests and CI
@@ -120,9 +123,9 @@ arm64 (`macos-15`) runners provision the pinned Node.js and pnpm versions.
 Static checks, unit tests, components, integrations, and builds have independent
 jobs; Chromium is installed only for component and integration jobs:
 
-- Linux and macOS: tiers 0–2, browser builds, and Storybook builds on PRs and `main`.
-- macOS: desktop builds on PRs and `main`; packaged acceptance on `main` and manual
-  dispatch. Desktop runtime staging and packaging currently require macOS arm64.
+- Linux and macOS: tiers 0–2 and desktop/browser/Storybook builds on PRs and `main`.
+- Linux and macOS: the same packaged acceptance suite on `main` and manual
+  dispatch. Packaging supports macOS arm64 and Linux x64/glibc.
 
 CI invokes Vite+ tasks through `vp run --no-cache -w` so every run executes those
 tasks. GitHub Actions dependency
@@ -132,14 +135,24 @@ diagnostics stay on the disposable runner; test output is available in the job l
 Packaged live-provider chat tests are opt-in and require credentials; CI uses the
 self-contained scripted provider.
 
-## macOS packaging
+## Desktop packaging
 
-Packaging is local macOS arm64 only. `pnpm package:mac` and `pnpm make:mac`
-build `out/`, stage the pinned server library and native/WASM assets, and run
-electron-builder. The app is written to `apps/desktop/dist/`; the server runtime
-is bundled at `Contents/Resources/opencode-runtime`.
+Packaging supports macOS arm64 and Linux x64 with glibc, building on the target
+platform. `pnpm package:mac`, `pnpm make:mac`, and `pnpm package:linux` build `out/`,
+stage the pinned server library and native/WASM assets, and run electron-builder.
+The macOS app is written to `apps/desktop/dist/mac-arm64/Ocui.app`, with the server
+runtime at `Contents/Resources/opencode-runtime`. The Linux executable is
+`apps/desktop/dist/linux-unpacked/ocui`, with the server runtime at
+`resources/opencode-runtime`.
 
-By default the app uses ad-hoc signing for local testing. To use
+Linux packaged acceptance needs Electron's system libraries, `xvfb`, and `xauth`.
+The native CI job installs these dependencies; WebdriverIO manages the virtual
+display. Linux acceptance launches use `--no-sandbox` and Electron's basic
+password-store test substitute. macOS uses a mock keychain. These exercise
+credential persistence rather than real OS secret-store protection; production
+launch arguments and secure-storage behavior are unchanged.
+
+By default the macOS app uses ad-hoc signing for local testing. To use
 an installed Apple Development identity, provide its exact name through
 `CSC_NAME`, for example:
 

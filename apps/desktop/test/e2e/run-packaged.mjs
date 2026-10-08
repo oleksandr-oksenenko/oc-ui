@@ -1,18 +1,16 @@
 import { prepareProjectFixture } from "./project-fixture.ts";
 import { createProfile } from "./profile.mjs";
 import { constants } from "node:fs";
-import { access, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, open, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { startScriptedProvider } from "./scripted-provider.mjs";
+import { assertElfX64, packagedArtifacts } from "./packaged-artifacts.mjs";
 
 const desktopRoot = fileURLToPath(new URL("../..", import.meta.url));
-const appBundlePath = join(desktopRoot, "dist", "mac-arm64", "Ocui.app");
-const appBinaryPath = join(appBundlePath, "Contents", "MacOS", "Ocui");
-const runtimePath = join(appBundlePath, "Contents", "Resources", "opencode-runtime");
 const execFileAsync = promisify(execFile);
 
 const main = async () => {
@@ -31,13 +29,21 @@ const main = async () => {
   let profile;
   const failures = [];
   try {
-    await verifyPackagedApplication(interruption.signal);
+    const artifacts = packagedArtifacts(
+      desktopRoot,
+      process.platform,
+      process.arch,
+      process.platform === "linux"
+        ? process.report.getReport().header.glibcVersionRuntime
+        : undefined,
+    );
+    await verifyPackagedApplication(artifacts, interruption.signal);
     interruption.signal.throwIfAborted();
     profile = await createProfile("ocui-packaged-e2e-");
     const { root, paths, env } = profile;
     Object.assign(env, {
       pnpm_config_verify_deps_before_run: "false",
-      OCUI_E2E_APP_BINARY_PATH: appBinaryPath,
+      OCUI_E2E_APP_BINARY_PATH: artifacts.appBinaryPath,
       OCUI_E2E_USER_DATA_PATH: paths.app,
       OCUI_E2E_ARTIFACT_DIRECTORY: join(root, "artifacts"),
     });
@@ -145,29 +151,36 @@ const main = async () => {
   if (failures.length > 1) throw new AggregateError(failures, "Packaged acceptance failed");
 };
 
-const verifyPackagedApplication = async (signal) => {
-  if (process.platform !== "darwin" || process.arch !== "arm64") {
-    throw new Error("Packaged acceptance requires macOS arm64");
-  }
-  const ptyPath = join(
-    runtimePath,
-    "node_modules",
-    "@opencode-ai",
-    "pty-darwin-arm64",
-    "bin",
-    "opencode-pty",
-  );
+const verifyPackagedApplication = async (artifacts, signal) => {
   await Promise.all([
-    access(appBinaryPath, constants.X_OK),
-    access(join(runtimePath, "opencode-worker.mjs")),
-    access(join(runtimePath, "session-tools", "index.js")),
-    access(ptyPath, constants.X_OK),
+    ...artifacts.executables.map((path) => access(path, constants.X_OK)),
+    ...[...artifacts.executables, ...artifacts.bindings, ...artifacts.assets].map(async (path) => {
+      if (!(await stat(path)).isFile()) throw new Error(`Packaged asset is not a file: ${path}`);
+    }),
   ]);
-  await execFileAsync("codesign", ["--verify", "--deep", "--strict", appBundlePath], {
-    signal,
-    timeout: 60_000,
-  });
-  await Promise.all([assertArm64(appBinaryPath, signal), assertArm64(ptyPath, signal)]);
+  signal.throwIfAborted();
+  const nativeFiles = [...artifacts.executables, ...artifacts.bindings];
+  if (process.platform === "darwin") {
+    await execFileAsync("codesign", ["--verify", "--deep", "--strict", artifacts.appDirectory], {
+      signal,
+      timeout: 60_000,
+    });
+    await Promise.all(nativeFiles.map((path) => assertArm64(path, signal)));
+  } else {
+    await Promise.all(
+      nativeFiles.map(async (path) => {
+        const file = await open(path, "r");
+        try {
+          const header = Buffer.alloc(64);
+          const { bytesRead } = await file.read(header, 0, header.length, 0);
+          signal.throwIfAborted();
+          assertElfX64(header.subarray(0, bytesRead), path);
+        } finally {
+          await file.close();
+        }
+      }),
+    );
+  }
 };
 
 const assertArm64 = async (path, signal) => {

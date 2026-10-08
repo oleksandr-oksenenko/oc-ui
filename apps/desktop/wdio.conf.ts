@@ -30,7 +30,9 @@ const capabilities: Capabilities.TestrunnerCapabilities = [
     "wdio:electronServiceOptions": {
       appBinaryPath,
       appArgs: [
-        "--use-mock-keychain",
+        ...(globalThis.process.platform === "linux"
+          ? ["--no-sandbox", "--password-store=basic"]
+          : ["--use-mock-keychain"]),
         `${USER_DATA_PATH_ARGUMENT_PREFIX}${userDataPath}`,
         `--user-data-dir=${resolveSessionDataPath(userDataPath)}`,
       ],
@@ -42,6 +44,9 @@ const capabilities: Capabilities.TestrunnerCapabilities = [
 
 export const config: WebdriverIO.Config = {
   runner: "local",
+  // The isolated profile omits DISPLAY. WDIO owns Xvfb per worker on Linux.
+  autoXvfb: globalThis.process.platform === "linux",
+  xvfbAutoInstall: false,
   rootDir: desktopRoot,
   specs: [join(desktopRoot, "test", "e2e", "packaged-startup.e2e.ts")],
   maxInstances: 1,
