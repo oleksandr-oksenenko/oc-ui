@@ -126,9 +126,10 @@ new test that merely restates its CSS or markup.
 - **Unit and controller tests:** the `unit` Vitest project uses JSDOM and controlled
   dependencies. Use it for calculations, state transitions, and difficult timing
   cases. It does not establish browser layout or real Electron behavior.
-- **Storybook:** `pnpm storybook` opens the existing component catalog on port 6006.
-  Use the Codex in-app browser for inspection. Its automated Chromium interaction
-  and accessibility tests already run in `pnpm test`. See
+- **Storybook:** `pnpm storybook` serves the existing component catalog on port 6006
+  without opening a browser. Open the printed URL in the Codex in-app browser for
+  inspection. Its automated Chromium interaction and accessibility tests already
+  run in `pnpm test`. See
   [Storybook verification](storybook-verification.md) for setup and focused runs.
 - **Full browser app:** `pnpm dev:web` serves the real application for in-app browser
   inspection. Connect to an independently running pinned server. The `web` Vitest
