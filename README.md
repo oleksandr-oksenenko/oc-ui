@@ -15,11 +15,11 @@ pnpm install --frozen-lockfile
 
 The local default (`pnpm ready`) runs static checks and unit tests. GitHub Actions
 runs component and integration checks on Linux, plus packaged checks on Linux
-x64 and macOS arm64. Each heavier tier owns its production build. See
+x64 and macOS arm64. E2E tests are CI-only, including focused scenarios and
+diagnostic reproductions. Each heavier tier owns its production build. See
 [verification tiers](docs/app-verification.md#verification-tiers) for execution policy.
 
-Opt-in local component and integration tests require Chromium to be provisioned
-once per machine (integration fixtures also use OpenSSL and zsh):
+Focused local component tests require Chromium to be provisioned once per machine:
 
 ```sh
 pnpm --filter desktop exec playwright install chromium
@@ -86,14 +86,14 @@ pnpm test               # Tier 0: unit/controller, prompt-editor, and session-to
 pnpm test:local         # Compatibility alias for pnpm test
 pnpm ready              # Local gate: static checks and tier 0 tests
 pnpm test:components    # Tier 1: Storybook/accessibility and Chromium storage tests
-pnpm test:integration   # Tier 2: browser acceptance and real-server lifecycle tests
-pnpm test:all           # Opt in to all non-packaged test tiers (0–2)
-pnpm ready:ci           # Opt in to checks, tiers 0–2, and all three builds
+pnpm test:integration   # CI only: tier 2 browser acceptance and real-server lifecycle tests
+pnpm test:all           # CI only: all non-packaged test tiers (0–2)
+pnpm ready:ci           # CI only: checks, tiers 0–2, and all three builds
 pnpm package:mac        # Build an unpacked macOS arm64 .app in apps/desktop/dist
 pnpm package:linux      # Build an unpacked Linux x64/glibc app in apps/desktop/dist
 pnpm make:mac           # Build the unpacked .app and a macOS arm64 DMG
-pnpm test:acceptance:mac # Package and test the macOS arm64 app with WebdriverIO
-pnpm test:acceptance:linux # Package and test the Linux x64/glibc app with WebdriverIO
+pnpm test:acceptance:mac # CI only: package and test the macOS arm64 app with WebdriverIO
+pnpm test:acceptance:linux # CI only: package and test the Linux x64/glibc app with WebdriverIO
 ```
 
 `pnpm verify:browser` prints a UI URL, server address, disposable credentials,
@@ -101,11 +101,11 @@ and a test project. It uses a scripted provider and does not run UI assertions.
 See [App verification](docs/app-verification.md) for inspection, cleanup, and
 which automated checks to run for a change.
 
-Packaged Linux x64 and macOS arm64 acceptance (tier 3) runs on every PR, push to
-`main`, and manual CI dispatch.
+Packaged Linux x64 and macOS arm64 acceptance (tier 3) runs only in CI on every PR,
+push to `main`, and manual CI dispatch.
 It is separate from `pnpm test`, `pnpm ready`, and `pnpm ready:ci`.
-For a local Linux run, install the Electron libraries and Xvfb/D-Bus/keyring
-fixture prerequisites and use the wrapper in
+The Native CI job owns the Linux Electron libraries and Xvfb/D-Bus/keyring
+fixture prerequisites and wrapper described in
 [App verification](docs/app-verification.md#packaged-electron-webdriverio).
 
 ### Local tests and CI
@@ -117,9 +117,13 @@ the desktop `unit` project, without needing Chromium. For a single desktop test:
 pnpm --filter desktop exec vp test run --project=unit <test-file>
 ```
 
-Run affected browser or Storybook projects when developing those features; see
-[App verification](docs/app-verification.md) for the focused commands. Before
-completing an implementation, run the root `pnpm check` and `pnpm test` gates.
+Run focused Storybook component tests or manually inspect the app when developing
+those features. Do not run browser integration or packaged E2E tests locally,
+even for a single scenario, smoke test, retry, or diagnostic reproduction. This
+includes direct runners and aggregate commands that include E2E tests. See
+[App verification](docs/app-verification.md#e2e-execution-policy) for the policy.
+Before completing an implementation, run the root `pnpm check` and `pnpm test`
+gates.
 
 The [CI workflow](.github/workflows/ci.yml) runs on every pull request and push to
 `main`, and can also be started manually. Both Linux x64 (`ubuntu-24.04`) and macOS
@@ -141,8 +145,8 @@ tasks. GitHub Actions dependency
 caching is disabled, and CI does not upload artifacts. Build outputs and test
 diagnostics stay on the disposable runner; test output is available in the job logs.
 
-Packaged live-provider chat tests are opt-in and require credentials; CI uses the
-self-contained scripted provider.
+Packaged live-provider chat tests are CI-only and require credentials; the default
+CI workflow uses the self-contained scripted provider.
 
 ## Desktop packaging
 
@@ -161,7 +165,7 @@ dependencies; the outer wrapper owns the display and private D-Bus session, and
 the packaged runner owns an isolated gnome-keyring fixture for libsecret storage.
 Linux acceptance launches use test-only `--no-sandbox`; macOS uses a mock keychain.
 See [App verification](docs/app-verification.md#packaged-electron-webdriverio)
-for the local prerequisites and wrapper.
+for the CI prerequisites and wrapper.
 
 By default the macOS app uses ad-hoc signing for local testing. To use
 an installed Apple Development identity, provide its exact name through
