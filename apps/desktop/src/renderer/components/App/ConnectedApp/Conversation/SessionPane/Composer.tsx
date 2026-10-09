@@ -20,6 +20,7 @@ import {
 import { ReviewAttachmentDetails } from "../../../../../ui/ReviewAttachmentDetails.tsx";
 import "./Composer/Composer.css";
 import { AgentPicker } from "./Composer/AgentPicker.tsx";
+import { PermissionToggle, type PermissionToggleProps } from "./Composer/PermissionToggle.tsx";
 import type { AgentPickerOption } from "./Composer/AgentPicker.tsx";
 import { ContextMeter } from "./Composer/ContextMeter.tsx";
 import type { ContextUsage } from "./Composer/context-usage.ts";
@@ -61,6 +62,7 @@ export type ComposerCatalog = {
 const isMacPlatform = () => document.documentElement.dataset.platform === "macos";
 
 export type ComposerProps = {
+  readonly permissions?: PermissionToggleProps;
   readonly value: string;
   /** Keep submitted setup content visible without allowing edits. */
   readonly readOnly?: boolean;
@@ -125,12 +127,16 @@ export type ComposerProps = {
 };
 
 function selectionControls(
-  props: Pick<ComposerProps, "action" | "agentSelection" | "modelSelection" | "contextUsage">,
+  props: Pick<
+    ComposerProps,
+    "action" | "agentSelection" | "modelSelection" | "contextUsage" | "permissions"
+  >,
   attachButton: JSX.Element,
 ) {
   return (
     <div class="composer-picker-row">
       {attachButton}
+      <PermissionToggle control={props.permissions} />
       {props.agentSelection.state === "ready" ? (
         <AgentPicker
           placeholder="Default agent"

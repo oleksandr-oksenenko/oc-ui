@@ -323,6 +323,124 @@ describe("createPermissions", () => {
   });
 });
 
+describe("createPermissions automatic approval", () => {
+  it("approves existing and arriving requests once, and restores prompts when disabled", async () => {
+    const existing = permission("existing", "one", ["*"]);
+    const fixture = setup({ selectedID: "one", listed: { one: [existing] } });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    expect(fixture.reply).not.toHaveBeenCalled();
+    fixture.permissions.setAutoAccept(true);
+    await vi.waitFor(() => expect(fixture.permissions.pending()).toBe(false));
+    expect(fixture.reply).toHaveBeenCalledExactlyOnceWith({
+      sessionID: "one",
+      requestID: "existing",
+      reply: "once",
+    });
+    const arriving = permission("arriving", "one");
+    fixture.setListed("one", [arriving]);
+    fixture.emitAsked(asked(arriving));
+    await vi.waitFor(() => expect(fixture.reply).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(fixture.permissions.pending()).toBe(false));
+    fixture.permissions.setAutoAccept(false);
+    fixture.setListed("one", [permission("manual", "one")]);
+    await Promise.resolve();
+    expect(fixture.reply).toHaveBeenCalledTimes(2);
+    expect(fixture.permissions.requests().map((request) => request.id)).toEqual(["manual"]);
+    fixture.dispose();
+  });
+
+  it("retains a session's mode and background approvals across navigation and reconnect", async () => {
+    const fixture = setup({ selectedID: "one", listed: { one: [], two: [] } });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    fixture.permissions.setAutoAccept(true);
+    fixture.setSelectedID("two");
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    expect(fixture.permissions.autoAccept()).toBe(false);
+    const background = permission("background", "one");
+    fixture.setListed("one", [background]);
+    fixture.emitAsked(asked(background));
+    await vi.waitFor(() => expect(fixture.reply).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(fixture.permissions.pending()).toBe(false));
+    fixture.setConnected(false);
+    fixture.setListed("one", [permission("reconnected", "one")]);
+    await Promise.resolve();
+    expect(fixture.reply).toHaveBeenCalledOnce();
+    fixture.setConnected(true);
+    await vi.waitFor(() => expect(fixture.reply).toHaveBeenCalledTimes(2));
+    fixture.setSelectedID("one");
+    expect(fixture.permissions.autoAccept()).toBe(true);
+    fixture.dispose();
+  });
+
+  it("serializes approvals and leaves queued requests untouched when switched off", async () => {
+    const response = deferred();
+    const fixture = setup({
+      selectedID: "one",
+      listed: { one: [permission("first", "one"), permission("second", "one")] },
+    });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    fixture.reply.mockImplementationOnce((input) =>
+      response.promise.then(() => {
+        fixture.setListed(input.sessionID, [permission("second", "one")]);
+        return undefined;
+      }),
+    );
+    fixture.permissions.setAutoAccept(true);
+    await vi.waitFor(() => expect(fixture.reply).toHaveBeenCalledOnce());
+    await fixture.permissions.reply("first", "once");
+    fixture.permissions.setAutoAccept(false);
+    response.resolve();
+    await vi.waitFor(() => expect(fixture.permissions.pending()).toBe(false));
+    expect(fixture.reply).toHaveBeenCalledOnce();
+    expect(fixture.permissions.requests().map((request) => request.id)).toEqual(["second"]);
+    fixture.dispose();
+  });
+
+  it("pauses on a failed response and leaves recovery to a manual reply", async () => {
+    const fixture = setup({ selectedID: "one", listed: { one: [permission("failed", "one")] } });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    fixture.reply.mockRejectedValueOnce(new Error("offline"));
+    fixture.permissions.setAutoAccept(true);
+    await vi.waitFor(() => expect(fixture.permissions.autoAccept()).toBe(false));
+    expect(fixture.reply).toHaveBeenCalledOnce();
+    expect(fixture.permissions.errorFor("failed")).toContain("could not be sent");
+    await fixture.permissions.reply("failed", "once");
+    expect(fixture.permissions.requests()).toEqual([]);
+    fixture.dispose();
+  });
+
+  it("does not repeat an approved request republished by a stale snapshot", async () => {
+    const fixture = setup({ selectedID: "one", listed: { one: [permission("stale", "one")] } });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    fixture.reply.mockResolvedValue(undefined);
+    fixture.permissions.setAutoAccept(true);
+    await vi.waitFor(() => expect(fixture.permissions.pending()).toBe(false));
+    expect(fixture.reply).toHaveBeenCalledOnce();
+    expect(fixture.permissions.requests()).toEqual([]);
+    fixture.setListed("one", [permission("stale", "one")]);
+    await Promise.resolve();
+    expect(fixture.reply).toHaveBeenCalledOnce();
+    fixture.dispose();
+  });
+
+  it("retains in-flight automatic reply I/O until workspace shutdown settles", async () => {
+    const response = deferred();
+    const fixture = setup({ selectedID: "one", listed: { one: [permission("owned", "one")] } });
+    await vi.waitFor(() => expect(fixture.permissions.state()).toBe("ready"));
+    fixture.reply.mockReturnValueOnce(response.promise);
+    fixture.permissions.setAutoAccept(true);
+    await vi.waitFor(() => expect(fixture.reply).toHaveBeenCalledOnce());
+    fixture.dispose();
+    const closed = vi.fn<() => void>();
+    const shutdown = Effect.runPromise(Scope.close(fixture.effects.scope, Exit.void)).then(closed);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(closed).not.toHaveBeenCalled();
+    response.resolve();
+    await shutdown;
+    expect(closed).toHaveBeenCalledOnce();
+  });
+});
+
 describe("createPermissions subagent bubbling", () => {
   it("projects subagent requests after the selected session's own and hides unrelated sessions", async () => {
     const own = permission("own", "one");

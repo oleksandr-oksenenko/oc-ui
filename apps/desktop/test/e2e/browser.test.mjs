@@ -428,6 +428,7 @@ async function createPermission(sessionID, action, options = {}) {
     locationRequestOptions(directory),
   );
   expect(result).toEqual({ id, effect: "ask" });
+  if (options.autoAccept) return id;
   await expect
     .poll(async () =>
       (await api.permission.list({ sessionID }, locationRequestOptions(directory))).some(
@@ -2496,6 +2497,45 @@ describe.sequential("production browser app", () => {
       reply: "once",
     });
     await expectPermissionSettled(permissionSession.id, external);
+    expect(errors).toEqual([]);
+  });
+
+  it("toggles session auto-approval and keeps it active across session navigation", async () => {
+    await ensureConnected();
+    const title = "Auto-approval acceptance";
+    const session = await createPermissionSession(title);
+    await selectSession(title);
+    const toggle = page.getByRole("button", { name: "Auto-approve permissions", exact: true });
+    await expect.poll(() => toggle.getAttribute("aria-pressed")).toBe("false");
+    const pending = await createPermission(session.id, "acceptance.auto.pending", { save: ["*"] });
+    await permissionCard(pending).waitFor();
+    await toggle.click();
+    await expectPermissionSettled(session.id, pending);
+    const live = await createPermission(session.id, "acceptance.auto.live", { autoAccept: true });
+    await expectPermissionSettled(session.id, live);
+    expect(
+      (await api.permission.saved.list()).some((rule) =>
+        rule.action.startsWith("acceptance.auto."),
+      ),
+    ).toBe(false);
+
+    const otherTitle = "Auto-approval navigation target";
+    await createPermissionSession(otherTitle);
+    await selectSession(otherTitle);
+    await expect.poll(() => toggle.getAttribute("aria-pressed")).toBe("false");
+    const background = await createPermission(session.id, "acceptance.auto.background", {
+      autoAccept: true,
+    });
+    await expectPermissionSettled(session.id, background);
+    await selectSession(title);
+    await expect.poll(() => toggle.getAttribute("aria-pressed")).toBe("true");
+    await toggle.focus();
+    await page.keyboard.press("Space");
+    await expect.poll(() => toggle.getAttribute("aria-pressed")).toBe("false");
+    const manual = await createPermission(session.id, "acceptance.auto.manual");
+    await permissionCard(manual).waitFor();
+    await permissionCard(manual).getByRole("button", { name: "Allow once", exact: true }).click();
+    await expectPermissionSettled(session.id, manual);
     expect(errors).toEqual([]);
   });
 
