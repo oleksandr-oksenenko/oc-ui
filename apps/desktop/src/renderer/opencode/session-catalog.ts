@@ -152,7 +152,12 @@ export const syncActiveStatuses = Effect.fn("syncActiveStatuses")(function* (inp
   readonly data: { readonly session: Pick<Data["session"], "setStatus"> };
   readonly sessionIDs: readonly string[];
 }) {
-  for (const sessionID of input.sessionIDs) input.data.session.setStatus(sessionID, "idle");
+  // Publish each status snapshot together so sidebar projections run once per phase.
+  batch(() => {
+    for (const sessionID of input.sessionIDs) input.data.session.setStatus(sessionID, "idle");
+  });
   const active = yield* input.effects.request((signal) => input.api.session.active({ signal }));
-  for (const sessionID of Object.keys(active)) input.data.session.setStatus(sessionID, "running");
+  batch(() => {
+    for (const sessionID of Object.keys(active)) input.data.session.setStatus(sessionID, "running");
+  });
 });
