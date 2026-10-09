@@ -145,6 +145,8 @@ const renderConversation =
         },
       },
       permissions: {
+        autoAccept: () => false,
+        setAutoAccept: () => undefined,
         requests,
         state: () => state,
         error: () => "Permissions could not be loaded.",

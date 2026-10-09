@@ -399,6 +399,11 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
               onSteer={props.inbox.steer}
             />
             <Composer
+              permissions={{
+                enabled: props.permissions.autoAccept(),
+                disabled: !props.connected(),
+                onChange: props.permissions.setAutoAccept,
+              }}
               value={props.composer.value()}
               skills={props.composer.skills()}
               catalog={props.catalog}

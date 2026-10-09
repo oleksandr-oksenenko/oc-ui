@@ -159,6 +159,38 @@ export const IdleDark: Story = {
   globals: { theme: "dark" },
 };
 
+export const PermissionModes: Story = {
+  render: () => {
+    const [enabled, setEnabled] = createSignal(false);
+    return (
+      <Composer
+        {...composerPasteProps}
+        value=""
+        disabled={false}
+        action="send"
+        permissions={{ enabled: enabled(), onChange: setEnabled }}
+        modelSelection={composerModelSelection()}
+        agentSelection={composerAgentSelection()}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+      />
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole("button", { name: "Auto-approve permissions" });
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle.querySelector("use")).toHaveAttribute("href", "#opencode-v2-icon-shield");
+    toggle.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(toggle).toHaveFocus();
+    await expect(canvas.getByRole("textbox", { name: "Prompt" })).toHaveTextContent("");
+  },
+};
+
 export const PastedFiles: Story = {
   render: () => {
     const [files, setFiles] = createSignal<readonly File[]>([

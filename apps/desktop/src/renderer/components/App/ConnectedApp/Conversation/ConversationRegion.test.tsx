@@ -91,6 +91,8 @@ function setup(
     cancel: vi.fn<SessionFormsController["cancel"]>(async () => undefined),
   };
   const permissionsController: SessionPermissionsController = {
+    autoAccept: () => false,
+    setAutoAccept: vi.fn<SessionPermissionsController["setAutoAccept"]>(),
     requests: permissions,
     state: permissionsState,
     error: () =>

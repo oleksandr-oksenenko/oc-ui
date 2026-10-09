@@ -31,6 +31,8 @@ export type PermissionsInput = {
 };
 
 export type SessionPermissionsController = {
+  readonly autoAccept: Accessor<boolean>;
+  readonly setAutoAccept: (enabled: boolean) => void;
   readonly requests: Accessor<readonly PermissionRequest[]>;
   readonly state: Accessor<PermissionsState>;
   readonly error: Accessor<string | undefined>;
@@ -80,15 +82,18 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
     replyErrors: new Map(),
   });
   const subagentFailures = Atom.make(new Set<string>());
+  const autoAcceptSessions = Atom.make<ReadonlySet<string>>(new Set<string>());
   effects.mount(selectedStatus);
   effects.mount(fences);
   effects.mount(mutation);
   effects.mount(subagentFailures);
+  effects.mount(autoAcceptSessions);
 
   const selectedCurrent = useAtomValue(() => selectedStatus);
   const fenced = useAtomValue(() => fences);
   const mutationState = useAtomValue(() => mutation);
   const subagentFailureSet = useAtomValue(() => subagentFailures);
+  const autoAccepting = useAtomValue(() => autoAcceptSessions);
   const selectedRead = effects.latest<boolean>();
   const hydration = effects.latest();
   const descendantPermits = Semaphore.makeUnsafe(4);
@@ -114,6 +119,12 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
   });
 
   const updateMutation = (next: MutationState) => effects.registry.set(mutation, next);
+  const setSessionAutoAccept = (sessionID: string, enabled: boolean) => {
+    const next = new Set(effects.registry.get(autoAcceptSessions));
+    if (enabled) next.add(sessionID);
+    else next.delete(sessionID);
+    effects.registry.set(autoAcceptSessions, next);
+  };
   const setFence = (key: string) => {
     effects.registry.set(fences, new Map(effects.registry.get(fences)).set(key, true));
   };
@@ -309,25 +320,30 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
     request: PermissionRequest | undefined,
     reply: PermissionReply,
     state: MutationState,
+    automatic = false,
   ): request is PermissionRequest =>
-    input.selectedID() !== undefined &&
     selection !== undefined &&
     input.connected() &&
     !state.pending &&
     request !== undefined &&
-    (request.sessionID === input.selectedID()
-      ? selectedCurrent().state === "ready"
-      : input.subagentIDs().includes(request.sessionID)) &&
+    (automatic
+      ? autoAccepting().has(request.sessionID)
+      : input.selectedID() !== undefined &&
+        (request.sessionID === input.selectedID()
+          ? selectedCurrent().state === "ready"
+          : input.subagentIDs().includes(request.sessionID))) &&
     (reply !== "always" ||
       (!!request.save?.length && request.save.every((pattern) => pattern.length > 0)));
 
   const respond = Effect.fn("permissions.reply")(function* (
     requestID: string,
     reply: PermissionReply,
+    automaticRequest?: PermissionRequest,
   ) {
     const state = effects.registry.get(mutation);
-    const request = requests().find((candidate) => candidate.id === requestID);
-    if (request === undefined || !canReply(request, reply, state)) return;
+    const request = automaticRequest ?? requests().find((candidate) => candidate.id === requestID);
+    if (request === undefined || !canReply(request, reply, state, automaticRequest !== undefined))
+      return;
     const sessionID = request.sessionID;
 
     const identity: ReplyIdentity = {
@@ -353,6 +369,10 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
       input.selectedID() === sessionID ? selection : undefined,
     );
     const latest = effects.registry.get(mutation);
+    // A failed or ambiguous mutation needs manual recovery, never automatic retry.
+    if (automaticRequest !== undefined && (!replied || !reconciled)) {
+      setSessionAutoAccept(sessionID, false);
+    }
     if (!reconciled) {
       const replyErrorsAfterFailure = new Map(latest.replyErrors);
       if (!replied) replyErrorsAfterFailure.set(identity.key, REPLY_FAILURE);
@@ -368,6 +388,7 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
     const stillPending = (input.data.session.permission.list(sessionID) ?? []).some(
       (candidate) => candidate.id === request.id,
     );
+    if (automaticRequest !== undefined && replied && stillPending) setFence(identity.key);
     const nextErrors = new Map(latest.replyErrors);
     if (!replied && stillPending) nextErrors.set(identity.key, REPLY_FAILURE);
     else nextErrors.delete(identity.key);
@@ -378,6 +399,7 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
     const sessionID = event.data.sessionID;
     input.data.session.permission.invalidate(sessionID);
     if (sessionID === input.selectedID()) startSelectedRefresh();
+    else if (autoAccepting().has(sessionID)) effects.runFork(syncSession(sessionID));
     else syncSubagent(sessionID);
   });
   const stopReplied = input.data.on("permission.replied", (event) => {
@@ -386,6 +408,7 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
     if (
       sessionID === input.selectedID() ||
       input.subagentIDs().includes(sessionID) ||
+      autoAccepting().has(sessionID) ||
       current.submitting?.sessionID === sessionID ||
       current.blocked?.sessionID === sessionID
     ) {
@@ -393,7 +416,34 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
     }
     input.data.session.permission.invalidate(sessionID);
     if (sessionID === input.selectedID()) startSelectedRefresh();
+    else if (autoAccepting().has(sessionID)) effects.runFork(syncSession(sessionID));
     else syncSubagent(sessionID);
+  });
+
+  // The workspace owns automatic replies even when the composer/session is unmounted.
+  // Reuse the manual mutation lock, recovery, and SDK cache rather than a second queue.
+  createEffect(() => {
+    if (!input.connected() || mutationState().pending || selection === undefined) return;
+    for (const sessionID of autoAccepting()) {
+      if (sessionID === input.selectedID() && selectedCurrent().state !== "ready") continue;
+      const request = visibleRequests(sessionID).find(
+        (candidate) => !mutationState().replyErrors.has(replyKey(sessionID, candidate.id)),
+      );
+      if (!request) continue;
+      effects.runFork(respond(request.id, "once", request));
+      break;
+    }
+  });
+  createEffect(
+    on(input.connected, (connected) => {
+      if (!connected) return;
+      for (const sessionID of autoAccepting()) {
+        if (sessionID !== input.selectedID()) effects.runFork(syncSession(sessionID));
+      }
+    }),
+  );
+  const stopDeleted = input.data.on("session.deleted", (event) => {
+    setSessionAutoAccept(event.data.sessionID, false);
   });
 
   createEffect(
@@ -426,6 +476,7 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
     hydration.cancel();
     stopAsked();
     stopReplied();
+    stopDeleted();
   });
 
   const replyState = (requestID: string) => {
@@ -435,6 +486,16 @@ export function createPermissions(input: PermissionsInput): SessionPermissionsCo
       : { state: mutationState(), key: replyKey(request.sessionID, requestID) };
   };
   return {
+    autoAccept: () => {
+      const sessionID = input.selectedID();
+      return sessionID !== undefined && autoAccepting().has(sessionID);
+    },
+    setAutoAccept: (enabled) => {
+      const sessionID = input.selectedID();
+      if (sessionID === undefined || !input.connected() || selection === undefined) return;
+      setSessionAutoAccept(sessionID, enabled);
+      if (enabled) startSelectedRefresh();
+    },
     requests,
     state: () => selectedCurrent().state,
     error: () => selectedCurrent().error,

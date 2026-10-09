@@ -119,6 +119,17 @@
   color: var(--oc-text-muted);
 }
 
+.composer-permissions[data-component="icon-button-v2"] {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  color: var(--oc-text-muted);
+}
+
+.composer-permissions[data-component="icon-button-v2"][aria-pressed="true"] {
+  color: var(--oc-text-contrast);
+  background: var(--oc-surface-control);
+}
+
 .composer-drop-overlay {
   position: absolute;
   inset: 0;
