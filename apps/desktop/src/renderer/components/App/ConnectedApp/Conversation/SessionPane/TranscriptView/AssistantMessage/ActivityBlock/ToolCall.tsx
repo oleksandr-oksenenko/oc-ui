@@ -17,6 +17,7 @@ import { createDeferredCollapsibleMount } from "../../createDeferredCollapsibleM
 
 import { toolParameter } from "../toolParameter.ts";
 import { shellCommandOutcome } from "./activitySummary.ts";
+import { generatedImageAttachment, toolImageSource } from "../../generatedImages.ts";
 
 export type ToolCallProps = {
   readonly tool: SessionMessageAssistantTool;
@@ -126,21 +127,6 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
   }
 }
 
-function toolImageSource(content: ToolContent | undefined): string | undefined {
-  if (content?.type !== "file") return undefined;
-  if (
-    content.mime.startsWith("image/") &&
-    /^data:image\/(?:png|jpeg|webp|gif);base64,/.test(content.uri)
-  )
-    return content.uri;
-  if (
-    content.mime === "application/octet-stream" &&
-    content.uri.startsWith("data:application/octet-stream;base64,iVBORw0KGgo")
-  )
-    return content.uri.replace("data:application/octet-stream;", "data:image/png;");
-  return undefined;
-}
-
 function pairedOriginal(
   preview: ToolContent | undefined,
   original: ToolContent | undefined,
@@ -159,6 +145,7 @@ function pairedOriginal(
 
 function renderToolContents(contents: readonly ToolContent[], toolID: string): JSX.Element[] {
   return contents.flatMap((content, index) => {
+    if (generatedImageAttachment(content)) return [];
     // Normalization may change the preview MIME or omit it. Pair by the retained
     // filename, and keep unmatched originals independently viewable.
     if (pairedOriginal(contents[index - 1], content)) return [];

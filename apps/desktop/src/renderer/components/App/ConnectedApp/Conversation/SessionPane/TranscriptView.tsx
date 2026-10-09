@@ -31,6 +31,7 @@ import {
   type TranscriptRow,
 } from "./TranscriptView/workDetailProjection.ts";
 import { WorkDetailMessage } from "./TranscriptView/AssistantMessage/ActivityBlock/WorkDetailMessage.tsx";
+import { projectGeneratedImages } from "./TranscriptView/generatedImages.ts";
 
 import "./SessionPane.css";
 
@@ -446,6 +447,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
     resumeFrame = frame;
   });
 
+  const generatedImages = createMemo(() => projectGeneratedImages(messages()));
   const visibleProjection = createMemo(() => {
     const start = materialization.startIndex();
     const list = messages();
@@ -569,7 +571,7 @@ export function TranscriptView(props: TranscriptViewProps): JSX.Element {
         >
           <For each={visibleMessageKeys()}>
             {(key) =>
-              renderMessage(props, activeTurnMessages, liveActivityMessages, () =>
+              renderMessage(props, activeTurnMessages, liveActivityMessages, generatedImages, () =>
                 rowsByKey().get(key),
               )
             }
@@ -615,6 +617,7 @@ function renderMessage(
   >,
   activeTurnMessages: () => ReadonlySet<string>,
   liveActivityMessages: () => ReadonlySet<string>,
+  generatedImages: () => ReturnType<typeof projectGeneratedImages>,
   row: () => TranscriptRow | undefined,
 ): JSX.Element {
   const user = () => {
@@ -641,6 +644,10 @@ function renderMessage(
             workDetails={row()?.workDetails}
             continuations={row()?.continuations}
             chainedTo={row()?.chainedTo}
+            generatedImages={generatedImages().fallback.get(message().id)}
+            resolveAttachment={(index, reference) =>
+              generatedImages().resolve(message().id, index, reference)
+            }
             sessionID={props.sessionID}
             sessionStatus={props.sessionStatus}
             connected={props.connected}

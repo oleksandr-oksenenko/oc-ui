@@ -32,6 +32,7 @@ const markdownTags = [
 
 /** Attribute that carries a `file:` image URL past sanitization without making it loadable. */
 const FILE_IMAGE_SOURCE_ATTRIBUTE = "data-file-src";
+const ATTACHMENT_IMAGE_SOURCE_ATTRIBUTE = "data-attachment-src";
 
 /**
  * A module-private instance keeps this hook from mutating any other consumer's
@@ -56,7 +57,13 @@ purifier.addHook("uponSanitizeElement", (node, data) => {
   if (data.tagName !== "img" || !(node instanceof Element)) return;
   // Messages must not supply the carrier; only the accepted file source below adds it.
   node.removeAttribute(FILE_IMAGE_SOURCE_ATTRIBUTE);
+  node.removeAttribute(ATTACHMENT_IMAGE_SOURCE_ATTRIBUTE);
   const source = node.getAttribute("src");
+  if (source !== null && /^attachment:/i.test(source.trim())) {
+    node.setAttribute(ATTACHMENT_IMAGE_SOURCE_ATTRIBUTE, source);
+    node.removeAttribute("src");
+    return;
+  }
   if (source === null || !/^file:/i.test(source.trim())) return;
   node.setAttribute(FILE_IMAGE_SOURCE_ATTRIBUTE, source);
   node.removeAttribute("src");
@@ -143,3 +150,13 @@ export function createMarkdownCache(
 }
 
 export const renderMarkdownCached = createMarkdownCache(renderMarkdown);
+
+/** Use the same sanitized interpretation for presentation and fallback consumption. */
+export function attachmentImageReferences(source: string): string[] {
+  if (!/attachment:/i.test(source)) return [];
+  const template = document.createElement("template");
+  template.innerHTML = renderMarkdownCached(source);
+  return [...template.content.querySelectorAll("img[data-attachment-src]")].map((image) =>
+    image.getAttribute(ATTACHMENT_IMAGE_SOURCE_ATTRIBUTE)!,
+  );
+}

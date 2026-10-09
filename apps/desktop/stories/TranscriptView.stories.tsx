@@ -91,6 +91,113 @@ export const Rich: Story = {
   render: renderTranscript,
 };
 
+export const GeneratedImagesInline: Story = {
+  args: {
+    sessionStatus: "idle",
+    messages: [
+      { id: "image-user", type: "user", time: { created: 1 }, text: "Generate two test images." },
+      {
+        id: "image-thinking",
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "test", id: "test" },
+        time: { created: 2, completed: 3 },
+        content: [{ type: "reasoning", text: "Generate the requested images." }],
+      },
+      {
+        id: "image-producing",
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "test", id: "test" },
+        time: { created: 3, completed: 4 },
+        content: [
+          {
+            type: "tool",
+            id: "image-execute",
+            name: "execute",
+            time: { created: 3 },
+            state: {
+              status: "completed",
+              input: { code: "Generate two images" },
+              content: [
+                { type: "text", text: "Generated two images. Other tool output stays in details." },
+                {
+                  type: "file",
+                  name: "ocui-image-00000000000000000000000001.png",
+                  mime: "image/png",
+                  uri: `data:image/png;base64,${previewImageBase64}`,
+                },
+                {
+                  type: "file",
+                  name: "ocui-image-00000000000000000000000001.original.png",
+                  mime: "application/octet-stream",
+                  uri: `data:application/octet-stream;base64,${previewImageBase64}`,
+                },
+                {
+                  type: "file",
+                  name: "ocui-image-00000000000000000000000002.original.png",
+                  mime: "application/octet-stream",
+                  uri: `data:application/octet-stream;base64,${previewImageBase64}`,
+                },
+                {
+                  type: "file",
+                  name: "browser-capture.png",
+                  mime: "image/png",
+                  uri: `data:image/png;base64,${previewImageBase64}`,
+                },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        id: "image-answer",
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "test", id: "test" },
+        time: { created: 4, completed: 5 },
+        finish: "stop",
+        content: [
+          {
+            type: "text",
+            text: "Here is the first image:\n\n[Image notes ![Generated gradient](attachment:ocui-image-00000000000000000000000001) more notes](https://example.test/images)\n\nThe second image remains visible above because it was not referenced.\n\n![Missing image](attachment:unknown)",
+          },
+        ],
+      },
+      { id: "image-idle", type: "idle", time: { created: 6 }, outcome: "succeeded" },
+    ],
+  },
+  render: renderTranscript,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const inline = await canvas.findByRole("button", { name: "Enlarge Generated gradient" });
+    await expect(canvas.getByRole("link", { name: "Image notes" })).toHaveAttribute(
+      "href",
+      "https://example.test/images",
+    );
+    await expect(canvas.getByRole("link", { name: "more notes" })).toHaveAttribute(
+      "href",
+      "https://example.test/images",
+    );
+    await expect(canvas.getByRole("button", { name: "Enlarge Generated image" })).toBeVisible();
+    await expect(canvas.getByText("Missing image — image unavailable")).toBeVisible();
+    inline.focus();
+    await userEvent.keyboard("{Enter}");
+    await screen.findByRole("dialog", { name: "Preview of Generated gradient" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(inline).toHaveFocus());
+    await userEvent.click(
+      canvasElement.querySelector<HTMLButtonElement>(".transcript-activity-trigger")!,
+    );
+    await userEvent.click(await canvas.findByRole("button", { name: /execute/ }));
+    await expect(canvas.getByRole("button", { name: "Enlarge browser-capture.png" })).toBeVisible();
+    await expect(canvasElement.querySelectorAll(".transcript-generated-image")).toHaveLength(2);
+    await expect(canvasElement.querySelectorAll(".transcript-tool-image-thumbnail")).toHaveLength(
+      1,
+    );
+  },
+};
+
 export const BrowserAttachmentDurableUpdate: Story = {
   args: { messages: [browserMessage], sessionStatus: "idle" },
   render: (args) => {

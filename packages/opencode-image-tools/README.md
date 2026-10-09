@@ -57,12 +57,19 @@ account. Transparent-background behavior was not established by those probes.
 
 ## Results and recovery
 
-Results containing image bytes include a preview and an original PNG attachment.
+Results containing image bytes include a preview and an original PNG attachment,
+plus an `attachment` reference. Display it inline in the response with
+`![Descriptive alternative text](attachment:ocui-image-<id>)`, using the exact
+returned reference rather than the saved filesystem path. Each invocation has a
+distinct identity even when Code Mode batches calls or destinations share a basename.
 The original uses `application/octet-stream` with a `.original.png` name to bypass image
 normalization. Code Mode collects both attachments automatically, including when
-later JavaScript throws or returns only part of the tool result. In oc-ui, clicking
-the preview opens the original image from the persisted attachment, including
-after reload. Return the tool result
+later JavaScript throws or returns only part of the tool result. In oc-ui, the
+inline preview opens the original persisted PNG, including after reload or deletion
+of the saved file. Images omitted from the response remain visible beside their
+producing message. Generated attachments use reserved `ocui-image-<id>.png` /
+`ocui-image-<id>.original.png` transport names; the actual saved filename is
+retained in the structured result. Return the tool result
 as shown above to persist its structured data in the `execute` output text. If
 saving fails after generation, the result has `saved: false`, `requestedPath`, a warning, and
 the original PNG attachment for recovery. Structured output contains no base64 image
