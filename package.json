@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:opencode": "node tools/build-local-opencode.mjs",
     "build": "vp run desktop#build",
     "check": "vp check && tsc -p apps/desktop/tsconfig.wdio.json --noEmit && pnpm lint:styles && pnpm check:components && knip",
     "check:components": "node tools/check-component-layout.mjs",

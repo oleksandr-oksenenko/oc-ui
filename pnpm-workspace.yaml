@@ -12,10 +12,10 @@ catalog:
   "@kobalte/core": 0.13.13
   "@opencode-ai/pty": 0.1.13
   "@opencode/ai": 2.0.3
-  "@opencode/core": 2.0.3
+  "@opencode/core": file:vendor/opencode/opencode-core-2.0.3.tgz
   "@opencode/client": 2.0.3
-  "@opencode/plugin": 2.0.3
-  "@opencode/schema": 2.0.3
+  "@opencode/plugin": file:vendor/opencode/opencode-plugin-2.0.3.tgz
+  "@opencode/schema": file:vendor/opencode/opencode-schema-2.0.3.tgz
   "@opencode/server": 2.0.3
   "@opencode/ui": 2.0.3
   "@opencode/util": 2.0.3
@@ -70,6 +70,10 @@ catalog:
   shiki: 4.2.0
 
 overrides:
+  "@opencode/core": file:vendor/opencode/opencode-core-2.0.3.tgz
+  "@opencode/plugin": file:vendor/opencode/opencode-plugin-2.0.3.tgz
+  "@opencode/schema": file:vendor/opencode/opencode-schema-2.0.3.tgz
+  "@opencode/protocol": file:vendor/opencode/opencode-protocol-2.0.3.tgz
   vite@*: "catalog:"
 
 peerDependencyRules:
@@ -123,5 +127,4 @@ minimumReleaseAgeExclude:
 
 patchedDependencies:
   "@opencode/client@2.0.3": patches/@opencode__client@2.0.3.patch
-  "@opencode/core@2.0.3": patches/@opencode__core@2.0.3.patch
   "@opencode/ui@2.0.3": patches/@opencode__ui@2.0.3.patch

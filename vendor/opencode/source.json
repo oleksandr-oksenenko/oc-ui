@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/anomalyco/opencode.git",
+  "baseTag": "v2.0.3",
+  "base": "d44b52ca66b6bf69626c0384626d1a9cd9555977",
+  "revision": "878a3498e137b4e72162b00a125f0c97b362a982",
+  "bun": "1.4.2",
+  "version": "2.0.3",
+  "packages": ["schema", "protocol", "plugin", "core"],
+  "upstreamCommits": [
+    "d9af025ec38dbd56da40a11f384b98fbf331f7d7",
+    "984603c31a8a35173adcd3ea9a69556b7f06642c",
+    "b81cb5cc3efef8b5557ae7199537fdeb0541cf3d"
+  ]
+}
