@@ -18,6 +18,36 @@ describe("renderMarkdown", () => {
     );
   });
 
+  it("preserves filesystem link targets only as inert carriers and retains web links and fragments", () => {
+    const html = renderMarkdown(
+      "[PNG](/private/tmp/a.png) [file](file:///tmp/a.png) [drive](C:/tmp/a.png) [relative](./a.txt) [web](https://example.test) [network](//example.test/a) [fragment](#intro)",
+    );
+    for (const target of ["/private/tmp/a.png", "file:///tmp/a.png", "C:/tmp/a.png", "./a.txt"]) {
+      expect(html).toContain(`data-server-file-href="${target}"`);
+    }
+    expect(html).not.toMatch(/\shref="(?:file:|C:|\/private|\.\/)/);
+    expect(html).toContain('href="https://example.test"');
+    expect(html).toContain('href="https://example.test/a"');
+    expect(html).toContain('href="#intro"');
+  });
+
+  it("discards forged file-link carriers and unsupported schemes", () => {
+    const html = renderMarkdown(
+      '<a href="https://example.test" data-server-file-href="/tmp/forged">web</a><a href="javascript:alert(1)" data-server-file-href="/tmp/forged">unsafe</a>',
+    );
+    expect(html).not.toContain("data-server-file-href");
+    expect(html).not.toContain("javascript:");
+    expect(html).toContain('href="https://example.test"');
+  });
+
+  it("retains Marked's encoded Windows drive and properly escaped UNC destinations", () => {
+    const html = renderMarkdown(
+      String.raw`[drive](<C:\tmp\a.png>) [UNC](<\\\\server\share\a.png>)`,
+    );
+    expect(html).toContain('data-server-file-href="C:%5Ctmp%5Ca.png"');
+    expect(html).toContain('data-server-file-href="%5C%5Cserver%5Cshare%5Ca.png"');
+    expect(html).not.toMatch(/\shref="(?:C:|%5C)/);
+  });
   it("keeps file image sources inert for server resolution and preserves alt text", () => {
     const html = renderMarkdown("![Tool states](file:///Users/alex/project/tool-states.png)");
 

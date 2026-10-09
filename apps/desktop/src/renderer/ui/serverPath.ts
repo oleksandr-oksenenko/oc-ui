@@ -97,6 +97,28 @@ export function serverPathParent(directory: string): string {
   return nativeSeparators(parent, separator);
 }
 
+/** Resolve dot segments using the server path's shape, never the host OS. */
+export function serverPathResolve(directory: string, path: string): string | undefined {
+  const drive = /^[a-zA-Z]:[\\/]/.test(path);
+  const unc = path.startsWith("\\\\") || path.startsWith("//");
+  const absolute = drive || unc || path.startsWith("/");
+  const windows = drive || unc || (!absolute && /^[a-zA-Z]:[\\/]|^\\\\|^\/\//.test(directory));
+  const source = absolute ? path : `${directory}/${path}`;
+  const normalized = windows ? source.replaceAll("\\", "/") : source;
+  const root = serverPathRoot(normalized);
+  if (root === "" || root === "//") return undefined;
+  const parts: string[] = [];
+  for (const part of normalized.slice(root.length).split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") {
+      parts.pop();
+    } else {
+      parts.push(part);
+    }
+  }
+  return `${root}${root.endsWith("/") || parts.length === 0 ? "" : "/"}${parts.join("/")}`;
+}
+
 function serverPathSeparator(directory: string): "/" | "\\" {
   if (directory.startsWith("/")) return "/";
   return directory.includes("\\") ? "\\" : "/";

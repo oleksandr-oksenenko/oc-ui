@@ -1,4 +1,6 @@
 import { Button } from "@opencode/ui/button";
+import { showToast } from "@opencode/ui/toast";
+import { Schema } from "effect";
 import { Loader } from "../../../../ui/Loader.tsx";
 import { For, Show, createMemo, onCleanup, type JSX } from "solid-js";
 
@@ -12,6 +14,11 @@ import {
   type ServerFileImageReader,
 } from "../../../../opencode/file-images.ts";
 import { useServerRuntimeOptional } from "../../../../opencode/index.ts";
+import {
+  ServerFileDownloadError,
+  type ServerFileDownload,
+} from "../../../../opencode/file-downloads.ts";
+import { transcriptFilePath } from "../../../../ui/transcriptLinks.ts";
 import type { SessionAgentSelectionController } from "./createSessionAgentSelection.ts";
 import type { SessionComposerController } from "./createSessionComposer.ts";
 import type { SessionFormsController } from "./createSessionForms.ts";
@@ -100,6 +107,34 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
     // location they were requested for.
     const location = serverFileImageLocation(session.location);
     return (fileUrl) => runtime.fileImages.read(fileUrl, location);
+  });
+  const downloadFile = createMemo<ServerFileDownload | undefined>(() => {
+    const session = props.workspace.selectedSession();
+    if (runtime === undefined || session === undefined) return undefined;
+    const location = serverFileImageLocation(session.location);
+    const start = (href: string): void => {
+      const path = transcriptFilePath(href, location.directory) ?? href;
+      const copyPath = () => {
+        void navigator.clipboard
+          .writeText(path)
+          .catch(() =>
+            showToast({ title: "Copy server path", description: "The path could not be copied." }),
+          );
+      };
+      void runtime.fileDownloads.download(href, location).catch((error) =>
+        showToast({
+          title: "Download file",
+          description: Schema.is(ServerFileDownloadError)(error)
+            ? error.message
+            : "The file could not be downloaded. Check the connection, path, and destination, then try again.",
+          actions: [
+            { label: "Retry", onClick: () => start(href) },
+            { label: "Copy server path", onClick: copyPath, variant: "secondary" },
+          ],
+        }),
+      );
+    };
+    return start;
   });
   const requestFor = (key: string) =>
     props.permissions.requests().find((item) => permissionRenderKey(item) === key);
@@ -364,6 +399,7 @@ export function ConversationRegion(props: ConversationRegionProps): JSX.Element 
             <TranscriptView
               sessionID={props.workspace.selectedID()!}
               readFileImage={readFileImage()}
+              downloadFile={downloadFile()}
               directory={props.workspace.selectedSession()?.location.directory}
               annotationRootRef={annotationUI.attach}
               onLayoutScroll={annotationUI.handleLayoutScroll}

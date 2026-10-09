@@ -3,6 +3,16 @@ import type { BrowserApi } from "./browser-api.ts";
 
 export const OPENCODE_VERSION = "2.0.3" as const;
 
+export function suggestedDownloadName(name: string): string {
+  return name.replace(/[<>:"/\\|?*\p{Cc}]/gu, "_").replace(/[. ]+$/, "") || "download";
+}
+
+const SaveFileInputSchema = Schema.Struct({
+  name: Schema.String,
+  bytes: Schema.instanceOf(Uint8Array),
+});
+export type SaveFileInput = typeof SaveFileInputSchema.Type;
+
 const LocalTargetSchema = Schema.Struct({ kind: Schema.Literal("local") });
 const RemoteTargetSchema = Schema.Struct({
   kind: Schema.Literal("remote"),
@@ -46,6 +56,8 @@ export type DesktopApi = {
   };
   /** Hands a web URL to the operating system's default handler. */
   readonly openExternal: (url: string) => Promise<void>;
+  /** Saves supplied server bytes; it never reads a server path on the host. */
+  readonly saveFile: (input: SaveFileInput) => Promise<void>;
 };
 
 export const IPC_CHANNELS = {
@@ -55,6 +67,7 @@ export const IPC_CHANNELS = {
   localOpenCodeConnect: "desktop:local-opencode:connect",
   localOpenCodeUnavailable: "desktop:local-opencode:unavailable",
   openExternal: "desktop:open-external",
+  saveFile: "desktop:save-file",
 } as const;
 
 /**
@@ -75,6 +88,8 @@ const ExternalUrlSchema = Schema.URLFromString.check(
 export const parseOpenExternalUrl = Schema.decodeUnknownSync(ExternalUrlSchema);
 
 const ipcParseOptions = { onExcessProperty: "error" } as const;
+
+export const parseSaveFileInput = Schema.decodeUnknownSync(SaveFileInputSchema, ipcParseOptions);
 
 export const parseSaveTargetInput = Schema.decodeUnknownSync(OpenCodeTargetSchema, ipcParseOptions);
 export const parseTargetLoadResult = Schema.decodeUnknownSync(

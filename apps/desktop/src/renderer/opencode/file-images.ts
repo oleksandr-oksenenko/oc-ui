@@ -1,12 +1,8 @@
 import type { LocationRef, OpenCodeClient } from "@opencode/client";
 import { Effect, Schema, Semaphore } from "effect";
 
-import {
-  serverFilePathFromFileUrl,
-  serverPathEntryName,
-  serverPathParent,
-  serverPathRelative,
-} from "../ui/serverPath.ts";
+import { serverFilePathFromFileUrl } from "../ui/serverPath.ts";
+import { readServerFile } from "./server-files.ts";
 import type { WorkspaceOwner } from "../workspace-owner.ts";
 
 /**
@@ -142,27 +138,7 @@ export function createServerFileImages(input: {
 
     const request = input.effects
       .runPromise(
-        Effect.gen(function* () {
-          const requestLocation =
-            requested.workspaceID === undefined
-              ? { directory: requested.directory }
-              : { directory: requested.directory, workspace: requested.workspaceID };
-          let readLocation = requestLocation;
-          let readPath = path;
-          if (serverPathRelative(requested.directory, path) === path) {
-            const parent = serverPathParent(path);
-            yield* input.effects.request((signal) =>
-              input.fileList({ path: parent, location: requestLocation }, { signal }),
-            );
-            // Listing's response location is the original context, not the
-            // listed directory. Keep workspace identity when selecting parent.
-            readLocation = { ...requestLocation, directory: parent };
-            readPath = serverPathEntryName(parent, path);
-          }
-          return yield* input.effects.request((signal) =>
-            input.fileRead({ path: readPath, location: readLocation }, { signal }),
-          );
-        }).pipe(
+        readServerFile(input, path, requested).pipe(
           // One permit and deadline cover both listing and reading. On
           // interruption the active request aborts and settles before release.
           Effect.timeoutOrElse({

@@ -60,6 +60,7 @@ const desktopApi: DesktopApi = {
     },
   },
   openExternal,
+  saveFile: (input) => ipcRenderer.invoke(IPC_CHANNELS.saveFile, input).then(parseVoidResult),
 };
 
 contextBridge.exposeInMainWorld("desktop", desktopApi);

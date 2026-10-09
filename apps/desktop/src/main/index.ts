@@ -24,7 +24,14 @@ import { resolveDevProfiling } from "./dev-profiling.ts";
 import { BROWSER_CHANNELS, BrowserRequest } from "../shared/browser-api.ts";
 
 import type { SaveTargetInput } from "../shared/desktop-api.ts";
-import { IPC_CHANNELS, parseOpenExternalUrl, parseSaveTargetInput } from "../shared/desktop-api.ts";
+import {
+  IPC_CHANNELS,
+  parseOpenExternalUrl,
+  parseSaveFileInput,
+  parseSaveTargetInput,
+  suggestedDownloadName,
+} from "../shared/desktop-api.ts";
+import { saveFile } from "./save-file.ts";
 import { LocalOpenCode, LocalOpenCodeUnavailableError } from "./local-opencode.ts";
 import { allowsClipboardAccess } from "./permissions.ts";
 import { settingsLayer, Settings } from "./settings.ts";
@@ -173,6 +180,20 @@ const assertTrustedIpcSender = (event: IpcMainInvokeEvent): void => {
 };
 
 const installIpcHandlers = (): void => {
+  ipcMain.handle(IPC_CHANNELS.saveFile, (event, rawInput) => {
+    assertTrustedIpcSender(event);
+    if (quitHandler.isQuitting()) return Promise.reject(new Error("Ocui is closing."));
+    const input = parseSaveFileInput(rawInput);
+    return trackPending(
+      saveFile(input, async (name) => {
+        const result = await dialog.showSaveDialog(mainWindow!, {
+          title: "Save server file",
+          defaultPath: suggestedDownloadName(name),
+        });
+        return result.canceled ? undefined : result.filePath;
+      }),
+    );
+  });
   ipcMain.handle(IPC_CHANNELS.targetLoad, (event, ...args: unknown[]) => {
     assertTrustedIpcSender(event);
     if (args.length !== 0) {
@@ -390,9 +411,6 @@ const configurePermissions = (): void => {
 
 const createMainWindow = async (): Promise<void> => {
   const { rendererUrl: developmentUrl } = resolveDesktopRuntimeEnvironment();
-  const developmentOrigin =
-    developmentUrl === undefined ? undefined : new URL(developmentUrl).origin;
-
   const windowOptions: BrowserWindowConstructorOptions = {
     width: 1_280,
     height: 860,
@@ -411,15 +429,13 @@ const createMainWindow = async (): Promise<void> => {
   mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (!isRendererUrl(url, developmentOrigin)) {
-      event.preventDefault();
-    }
+  mainWindow.webContents.on("will-navigate", (event) => {
+    // App navigation is state-driven. User links must never replace its
+    // document, including same-origin paths. loadURL/reload are app-controlled.
+    event.preventDefault();
   });
-  mainWindow.webContents.on("will-redirect", (event, url) => {
-    if (!isRendererUrl(url, developmentOrigin)) {
-      event.preventDefault();
-    }
+  mainWindow.webContents.on("will-redirect", (event) => {
+    event.preventDefault();
   });
 
   if (developmentUrl !== undefined) {

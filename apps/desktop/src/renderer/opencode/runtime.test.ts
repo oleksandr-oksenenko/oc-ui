@@ -44,6 +44,7 @@ const setup = () =>
       api: OpenCode.make({ baseUrl: "http://runtime.test" }),
       serverUrl: "http://runtime.test",
       defaultLocation: { directory: "/workspace" },
+      saveFile: vi.fn<() => Promise<void>>(async () => {}),
     }),
   }));
 const connected = () => sdk.emit({ id: "connected", type: "server.connected", data: {} });

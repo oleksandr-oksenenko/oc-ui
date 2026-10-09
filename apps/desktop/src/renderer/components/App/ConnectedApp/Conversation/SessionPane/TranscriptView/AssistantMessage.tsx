@@ -4,6 +4,7 @@ import { For, Show, type JSX } from "solid-js";
 
 import { annotationBlock } from "../../annotation-source.ts";
 import type { ServerFileImageReader } from "../../../../../../opencode/file-images.ts";
+import type { ServerFileDownload } from "../../../../../../opencode/file-downloads.ts";
 
 import { Markdown } from "./AssistantMessage/Markdown.tsx";
 import { ActivityBlock } from "./AssistantMessage/ActivityBlock.tsx";
@@ -24,6 +25,7 @@ export type AssistantMessageProps = {
   readonly chainedTo?: string;
   /** Resolves `file:` images in Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
+  readonly downloadFile?: ServerFileDownload;
   readonly directory?: string;
   readonly generatedImages?: readonly GeneratedImage[];
   readonly resolveAttachment?: (index: number, reference: string) => GeneratedImage | undefined;
@@ -139,6 +141,7 @@ function renderContent(
           annotationBlock={annotationBlock("content", index(), "text")}
           readFileImage={props.readFileImage}
           resolveAttachment={(reference) => props.resolveAttachment?.(index(), reference)}
+          downloadFile={props.downloadFile}
         />
       );
     case "reasoning":

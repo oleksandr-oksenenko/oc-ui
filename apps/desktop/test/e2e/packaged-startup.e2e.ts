@@ -197,6 +197,65 @@ describe("packaged owned OpenCode", () => {
     assert.deepEqual(await ownedWorkerPids(), [workerPids[0]]);
   });
 
+  it("keeps the main document when a same-origin filesystem anchor is activated", async () => {
+    await $(".shell-session-title=Native fixture one").waitForClickable();
+    await $(".shell-session-title=Native fixture one").click();
+    await $(".transcript-empty-state").waitForDisplayed();
+    const initialUrl = await browser.getUrl();
+    await browser.execute(() => {
+      const link = document.createElement("a");
+      link.id = "acceptance-file-navigation";
+      link.href = "/private/tmp/not-an-ocui-asset.png";
+      link.textContent = "Filesystem navigation regression";
+      document.querySelector(".transcript-empty-state")!.append(link);
+    });
+    try {
+      await $("#acceptance-file-navigation").click();
+      assert.equal(await browser.getUrl(), initialUrl);
+      await $(".shell-server-selector").waitForDisplayed();
+      await browser.execute(() => {
+        document.querySelector<HTMLAnchorElement>("#acceptance-file-navigation")!.href =
+          "#acceptance-fragment";
+      });
+      await $("#acceptance-file-navigation").click();
+      assert.equal(new URL(await browser.getUrl()).hash, "#acceptance-fragment");
+    } finally {
+      await browser.execute((url) => {
+        document.getElementById("acceptance-file-navigation")?.remove();
+        history.replaceState(null, "", url);
+      }, initialUrl);
+    }
+  });
+
+  it("saves supplied download bytes through trusted IPC and treats Save dialog cancellation normally", async () => {
+    const destination = join(userDataPath, "acceptance-download.bin");
+    const saveDialog = await browser.electron.mock("dialog", "showSaveDialog");
+    try {
+      await saveDialog.mockResolvedValue({ canceled: false, filePath: destination });
+      assert.equal(
+        await browser.execute(async () => {
+          await window.desktop.saveFile({
+            name: "capture.bin",
+            bytes: Uint8Array.from([0, 1, 255]),
+          });
+          return true;
+        }),
+        true,
+      );
+      assert.deepEqual(new Uint8Array(await readFile(destination)), Uint8Array.from([0, 1, 255]));
+      await saveDialog.mockResolvedValue({ canceled: true, filePath: "" });
+      assert.equal(
+        await browser.execute(async () => {
+          await window.desktop.saveFile({ name: "cancelled.bin", bytes: Uint8Array.from([3]) });
+          return true;
+        }),
+        true,
+      );
+    } finally {
+      await browser.electron.restoreAllMocks("dialog");
+    }
+  });
+
   it("recovers the bundled-server transcript across renderer reload and reconnect", async () => {
     await verifyProviderFlows();
     await browser.saveScreenshot(join(artifactDirectory, "provider-flows-complete.png"));
