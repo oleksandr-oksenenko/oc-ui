@@ -3,11 +3,31 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createBrowserHost } from "./browser-host.ts";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   localStorage.clear();
 });
 
 describe("browser connection settings", () => {
+  it("hands bytes to a Blob download and retains its URL until the handoff settles", async () => {
+    vi.useFakeTimers();
+    const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:download");
+    const revoke = vi.spyOn(URL, "revokeObjectURL");
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const saving = createBrowserHost().saveFile({
+      name: "capture.png",
+      bytes: Uint8Array.from([0, 255]),
+    });
+    const anchor = document.querySelector<HTMLAnchorElement>('a[download="capture.png"]');
+    expect(anchor?.getAttribute("href")).toBe("blob:download");
+    expect(click).toHaveBeenCalledOnce();
+    expect(create).toHaveBeenCalledWith(expect.any(Blob));
+    expect(revoke).not.toHaveBeenCalled();
+    await vi.runAllTimersAsync();
+    await expect(saving).resolves.toBeUndefined();
+    expect(anchor?.isConnected).toBe(false);
+    expect(revoke).toHaveBeenCalledWith("blob:download");
+  });
   it("remembers only the normalized address across host instances", async () => {
     const host = createBrowserHost();
     expect(await host.target.load()).toBeUndefined();

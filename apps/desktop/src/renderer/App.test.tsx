@@ -81,6 +81,7 @@ const makeDesktop = (options: {
 }): Extract<AppHost, { kind: "desktop" }> => ({
   kind: "desktop",
   openExternal: vi.fn<(url: string) => Promise<void>>(() => Promise.resolve()),
+  saveFile: vi.fn<DesktopApi["saveFile"]>(() => Promise.resolve()),
   target: {
     load: options.load,
     saveLocal: vi.fn<() => Promise<void>>(() => Promise.resolve()),

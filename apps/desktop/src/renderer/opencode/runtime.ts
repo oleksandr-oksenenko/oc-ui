@@ -7,6 +7,8 @@ import { createEffect, getOwner, onCleanup } from "solid-js";
 import { createOpenCodeEventSource } from "./event-source";
 import { mapConnectionFailure, type OpenCodeConnectionError } from "./connection";
 import { createServerFileImages, type ServerFileImages } from "./file-images";
+import { createServerFileDownloads } from "./file-downloads.ts";
+import type { DesktopApi } from "../../shared/desktop-api.ts";
 import { createSessionCatalog } from "./session-catalog";
 import type { SessionCatalog } from "./session-catalog";
 import { createSessionReads } from "./session-reads";
@@ -23,6 +25,7 @@ type RuntimeConnection = {
   readonly api: OpenCodeClient;
   readonly serverUrl: string;
   readonly defaultLocation: LocationRef;
+  readonly saveFile: DesktopApi["saveFile"];
 };
 
 export type ConnectedRuntime = {
@@ -42,6 +45,7 @@ export type ConnectedRuntime = {
   readonly diffs: VcsDiffStore;
   /** Reads `file:` image URLs from the connected server's filesystem. */
   readonly fileImages: ServerFileImages;
+  readonly fileDownloads: ReturnType<typeof createServerFileDownloads>;
   /** Resolves after the initial stream handshake and default location synchronization. */
   readonly ready: Promise<void>;
   readonly loader: TranscriptLoader;
@@ -78,6 +82,16 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     fileRead: input.api.file.read,
     fileList: input.api.file.list,
     effects: input.effects,
+  });
+  const fileDownloads = createServerFileDownloads({
+    fileRead: input.api.file.read,
+    fileList: input.api.file.list,
+    effects: input.effects,
+    saveFile: input.saveFile,
+    connected: () => stream.status() === "connected",
+  });
+  createEffect(() => {
+    if (stream.status() !== "connected") fileDownloads.cancel();
   });
 
   const handshake = Deferred.makeUnsafe<void, OpenCodeConnectionError>();
@@ -136,6 +150,7 @@ export function createConnectedRuntime(input: RuntimeConnection): ConnectedRunti
     memory,
     diffs,
     fileImages,
+    fileDownloads,
     ready,
     loader,
   };

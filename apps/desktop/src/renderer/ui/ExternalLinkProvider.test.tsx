@@ -11,6 +11,20 @@ const activate = (target: Element, type: "click" | "auxclick", init: MouseEventI
 const preventDefault = (event: MouseEvent) => event.preventDefault();
 
 describe("ExternalLinkProvider", () => {
+  it("normalizes protocol-relative web links to HTTPS independently of the renderer scheme", () => {
+    const open = vi.fn<(url: string) => void>();
+    const { host, dispose } = mount(() => (
+      <ExternalLinkProvider open={open}>
+        <a href="//example.test/path">web</a>
+      </ExternalLinkProvider>
+    ));
+    try {
+      expect(activate(host.querySelector("a")!, "click")).toBe(false);
+      expect(open).toHaveBeenCalledWith("https://example.test/path");
+    } finally {
+      dispose();
+    }
+  });
   it("opens absolute web links and leaves relative, fragment, and unsafe targets alone", () => {
     const open = vi.fn<(url: string) => void>();
     const { host, dispose } = mount(() => (

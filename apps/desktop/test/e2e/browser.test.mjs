@@ -3104,6 +3104,67 @@ describe.sequential("production browser app", () => {
     },
   );
 
+  it("downloads assistant filesystem links from the server without leaving the conversation", async () => {
+    await ensureConnected();
+    const directory = await realpath(project);
+    const captures = join(profile.paths.app, "download captures");
+    await mkdir(captures);
+    const external = join(captures, "capture #1.png");
+    await writeFile(external, acceptancePng);
+    const fileUrlTarget = join(captures, "file-url.png");
+    await writeFile(fileUrlTarget, acceptancePng);
+    await writeFile(join(directory, ".git", "download-relative.png"), acceptancePng);
+    const location = { directory };
+    const session = await api.session.create({ title: "Server file downloads", location });
+    await selectSession(session.title);
+    const initialUrl = page.url();
+    for (const target of [
+      pathToFileURL(external).pathname,
+      ".git/download-relative.png",
+      pathToFileURL(fileUrlTarget).href,
+    ]) {
+      await send(`E2E_FILE_LINK ${encodeURIComponent(target)}`);
+      await idle();
+      const link = page.locator(
+        `.transcript-markdown a[data-server-file-href=${JSON.stringify(target)}]`,
+      );
+      await link.waitFor();
+      expect(await link.getAttribute("href")).toBe("#");
+      const downloadEvent = page.waitForEvent("download");
+      // Exercise real keyboard activation as well as pointer clicks.
+      if (target.startsWith("file:")) {
+        await link.focus();
+        await page.keyboard.press("Enter");
+      } else await link.click();
+      const download = await downloadEvent;
+      expect(await download.failure()).toBeNull();
+      expect(await readFile(await download.path())).toEqual(acceptancePng);
+      expect(download.suggestedFilename()).toBe(
+        target.startsWith(".git/")
+          ? "download-relative.png"
+          : target.startsWith("file:")
+            ? "file-url.png"
+            : "capture #1.png",
+      );
+      expect(page.url()).toBe(initialUrl);
+      expect((await api.session.get({ sessionID: session.id })).location).toEqual(location);
+    }
+    const missing = pathToFileURL(join(captures, "missing.png")).pathname;
+    await send(`E2E_FILE_LINK ${encodeURIComponent(missing)}`);
+    await idle();
+    await page
+      .locator(`.transcript-markdown a[data-server-file-href=${JSON.stringify(missing)}]`)
+      .click();
+    await page
+      .getByText(
+        "The file could not be downloaded. Check the connection, path, and destination, then try again.",
+        { exact: true },
+      )
+      .waitFor();
+    expect(page.url()).toBe(initialUrl);
+    expect(errors).toEqual([]);
+  });
+
   it("remembers the context panel per session across reloads", async () => {
     await ensureConnected();
     const location = { directory: await realpath(project) };

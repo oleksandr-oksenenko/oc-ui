@@ -1,5 +1,6 @@
 import createDOMPurify from "dompurify";
 import { marked } from "marked";
+import { transcriptLinkKind } from "../../../../../../../../ui/transcriptLinks.ts";
 
 const markdownTags = [
   "a",
@@ -49,12 +50,31 @@ const purifier = createDOMPurify(window);
  * allowed tag, and allowed attribute stays in force for everything else.
  */
 purifier.addHook("uponSanitizeElement", (node, data) => {
-  if (data.tagName === "code" && node instanceof Element) {
+  if (!(node instanceof Element)) return;
+  node.removeAttribute("data-server-file-href");
+  if (data.tagName === "a") {
+    const href = node.getAttribute("href");
+    if (href !== null) {
+      const kind = transcriptLinkKind(href);
+      if (kind === "file") {
+        node.setAttribute("data-server-file-href", href);
+        node.setAttribute("href", "#");
+        node.setAttribute("aria-description", "Download this file from the session's server");
+        if (!node.hasAttribute("title"))
+          node.setAttribute("title", `Download server file: ${href}`);
+      } else if (kind === "unsupported") {
+        node.removeAttribute("href");
+      } else if (kind === "web" && href.trim().startsWith("//")) {
+        node.setAttribute("href", `https:${href.trim()}`);
+      }
+    }
+  }
+  if (data.tagName === "code") {
     node.removeAttribute("data-code-language");
     const language = node.getAttribute("class")?.match(/^language-([\w+#.-]+)$/)?.[1];
     if (language) node.setAttribute("data-code-language", language);
   }
-  if (data.tagName !== "img" || !(node instanceof Element)) return;
+  if (data.tagName !== "img") return;
   // Messages must not supply the carrier; only the accepted file source below adds it.
   node.removeAttribute(FILE_IMAGE_SOURCE_ATTRIBUTE);
   node.removeAttribute(ATTACHMENT_IMAGE_SOURCE_ATTRIBUTE);

@@ -142,6 +142,7 @@ const makeConnection = Effect.fn("Connection.make")(function* (
                       serverUrl: server.serverUrl,
                       defaultLocation: server.location,
                       effects: owner,
+                      saveFile: host.saveFile,
                     });
                     model = createWorkspaceModel(
                       runtime,

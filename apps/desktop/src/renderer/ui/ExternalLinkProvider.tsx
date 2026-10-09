@@ -12,7 +12,7 @@ export type ExternalLinkProviderProps = ParentProps<{
 function webUrl(href: string): string | undefined {
   let url: URL;
   try {
-    url = href.startsWith("//") ? new URL(href, window.location.href) : new URL(href);
+    url = new URL(href.startsWith("//") ? `https:${href}` : href);
   } catch {
     return undefined;
   }

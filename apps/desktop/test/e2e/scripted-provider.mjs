@@ -200,6 +200,13 @@ function respondScriptedPrompt({ modelName, prompt, response, send, finish, onCa
     finish();
     return true;
   }
+  if (prompt.includes("E2E_FILE_LINK")) {
+    const target = prompt.match(/E2E_FILE_LINK ([^\s"\\]+)/u)?.[1];
+    if (!target) throw new Error("File link target missing from prompt");
+    send({ content: `[Download the file](<${decodeURIComponent(target)}>)` });
+    finish();
+    return true;
+  }
   if (prompt.includes("E2E_FILE_IMAGE")) {
     const fileUrl = prompt.match(/file:\/\/[^\s"\\]+/u)?.[0];
     if (!fileUrl) throw new Error("File image URL missing from prompt");

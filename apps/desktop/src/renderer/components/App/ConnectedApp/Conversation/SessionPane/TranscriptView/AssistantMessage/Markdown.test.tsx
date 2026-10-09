@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ServerFileImageReader } from "../../../../../../../opencode/file-images.ts";
 import { mount } from "../../../../../../../test/mount.ts";
 import { Markdown } from "./Markdown.tsx";
+import { ExternalLinkProvider } from "../../../../../../../ui/ExternalLinkProvider.tsx";
 
 const createObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
 const revokeObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
@@ -198,6 +199,92 @@ describe("Markdown", () => {
     }
   });
 
+  it("downloads server links for primary, keyboard-style, modifier and middle activations without opening externally", () => {
+    const downloadFile = vi.fn<(href: string) => void>();
+    const open = vi.fn<(url: string) => void>();
+    const { host, dispose } = mount(() => (
+      <ExternalLinkProvider open={open}>
+        <Markdown
+          text={"[Download **PNG**](/private/tmp/a.png) [web](https://example.test/a)"}
+          downloadFile={downloadFile}
+        />
+      </ExternalLinkProvider>
+    ));
+    const target = host.querySelector("a strong")!;
+    for (const init of [
+      {},
+      { detail: 0 },
+      { ctrlKey: true },
+      { metaKey: true },
+      { shiftKey: true },
+      { altKey: true },
+    ]) {
+      expect(
+        target.dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...init }),
+        ),
+      ).toBe(false);
+    }
+    expect(
+      target.dispatchEvent(
+        new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }),
+      ),
+    ).toBe(false);
+    expect(downloadFile).toHaveBeenCalledTimes(7);
+    expect(downloadFile).toHaveBeenLastCalledWith("/private/tmp/a.png");
+    expect(open).not.toHaveBeenCalled();
+    target.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    expect(downloadFile).toHaveBeenCalledTimes(7);
+    host.querySelector<HTMLAnchorElement>('a[href="https://example.test/a"]')!.click();
+    expect(open).toHaveBeenCalledWith("https://example.test/a");
+    dispose();
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    expect(downloadFile).toHaveBeenCalledTimes(7);
+  });
+
+  it("keeps file links inert without a server handler and updates handlers across rerenders", () => {
+    const download = vi.fn<(href: string) => void>();
+    const [handler, setHandler] = createSignal<typeof download>();
+    const [text, setText] = createSignal("[file](file:///tmp/a.png)");
+    const { host, dispose } = mount(() => <Markdown text={text()} downloadFile={handler()} />);
+    expect(host.querySelector("a")!.getAttribute("href")).toBe("#");
+    expect(
+      host
+        .querySelector("a")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })),
+    ).toBe(false);
+    setHandler(() => download);
+    setText("[file](../b.txt)");
+    host.querySelector<HTMLAnchorElement>("a")!.click();
+    expect(download).toHaveBeenCalledWith("../b.txt");
+    dispose();
+  });
+
+  it("keeps file downloads separate from inline attachment preview activation", () => {
+    const download = vi.fn<(href: string) => void>();
+    const { host, dispose } = mount(() => (
+      <Markdown
+        text={"[Before ![Image](attachment:known) after](./output.png)"}
+        downloadFile={download}
+        resolveAttachment={(reference) => ({ reference, src: "data:image/png;base64,IMAGE" })}
+      />
+    ));
+    try {
+      expect(host.querySelector("a button")).toBeNull();
+      host.querySelector<HTMLButtonElement>(".transcript-generated-image")!.click();
+      expect(document.querySelector(".image-preview-content")).not.toBeNull();
+      expect(download).not.toHaveBeenCalled();
+      document.querySelector<HTMLButtonElement>(".image-preview-close")!.click();
+      const links = [...host.querySelectorAll<HTMLAnchorElement>("a[data-server-file-href]")];
+      expect(links.map((link) => link.textContent?.trim())).toEqual(["Before", "after"]);
+      for (const link of links) link.click();
+      expect(download).toHaveBeenCalledTimes(2);
+      expect(download).toHaveBeenLastCalledWith("./output.png");
+    } finally {
+      dispose();
+    }
+  });
   afterEach(() => {
     restoreProperty("createObjectURL", createObjectURLDescriptor);
     restoreProperty("revokeObjectURL", revokeObjectURLDescriptor);

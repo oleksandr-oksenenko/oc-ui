@@ -21,6 +21,7 @@ import {
 } from "solid-js";
 
 import type { ServerFileImageReader } from "../../../../../opencode/file-images.ts";
+import type { ServerFileDownload } from "../../../../../opencode/file-downloads.ts";
 import { AssistantMessage } from "./TranscriptView/AssistantMessage.tsx";
 import { ActivityBlock } from "./TranscriptView/AssistantMessage/ActivityBlock.tsx";
 import type { UserMessageProps } from "./TranscriptView/UserMessage.tsx";
@@ -73,6 +74,7 @@ export type TranscriptViewProps = {
   readonly messagesSessionID?: string;
   /** Resolves `file:` images in assistant Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
+  readonly downloadFile?: ServerFileDownload;
   /** Filesystem root of the session; tool path parameters inside it are shown relative. */
   readonly directory?: string;
   readonly annotationRootRef?: (element: HTMLDivElement) => (() => void) | void;
@@ -612,6 +614,7 @@ function renderMessage(
     | "connected"
     | "onOpenAnnotation"
     | "readFileImage"
+    | "downloadFile"
     | "directory"
     | "activityOpen"
   >,
@@ -658,6 +661,7 @@ function renderMessage(
             }
             activityOpen={props.activityOpen}
             readFileImage={props.readFileImage}
+            downloadFile={props.downloadFile}
             directory={props.directory}
           />
         )}

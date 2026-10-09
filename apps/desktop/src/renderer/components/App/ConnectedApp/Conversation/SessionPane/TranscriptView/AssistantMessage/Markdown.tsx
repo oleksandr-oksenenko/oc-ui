@@ -1,7 +1,9 @@
 import { createEffect, createSignal, For, Show, onCleanup, untrack, type JSX } from "solid-js";
 import { insert, Portal } from "solid-js/web";
+import { showToast } from "@opencode/ui/toast";
 
 import type { ServerFileImageReader } from "../../../../../../../opencode/file-images.ts";
+import type { ServerFileDownload } from "../../../../../../../opencode/file-downloads.ts";
 import { TranscriptCodeBlock } from "./Markdown/TranscriptCodeBlock.tsx";
 import { renderMarkdownCached } from "./Markdown/markdown.ts";
 import { ImagePreview } from "../../../../../../../ui/ImagePreview.tsx";
@@ -13,6 +15,7 @@ export type MarkdownProps = {
   /** Resolves `file:` image sources through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
   readonly resolveAttachment?: (reference: string) => GeneratedImage | undefined;
+  readonly downloadFile?: ServerFileDownload;
 };
 
 /**
@@ -33,6 +36,29 @@ export function Markdown(props: MarkdownProps): JSX.Element {
   >([]);
   let activeReader: ServerFileImageReader | undefined;
   let generation = 0;
+
+  const activateFile = (event: MouseEvent): void => {
+    if (
+      event.defaultPrevented ||
+      !(
+        (event.type === "click" && event.button === 0) ||
+        (event.type === "auxclick" && event.button === 1)
+      )
+    )
+      return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest<HTMLAnchorElement>("a[data-server-file-href]");
+    if (anchor === null) return;
+    const href = anchor.dataset.serverFileHref!;
+    event.preventDefault();
+    if (props.downloadFile) props.downloadFile(href);
+    else
+      showToast({
+        title: "Download file",
+        description: "Reconnect to the file's server to download it.",
+      });
+  };
 
   const revokeObjectUrls = (): void => {
     for (const url of objectUrls.values()) URL.revokeObjectURL(url);
@@ -153,6 +179,13 @@ export function Markdown(props: MarkdownProps): JSX.Element {
       <div
         ref={(element) => {
           root = element;
+          // Native root listeners run before the document-level web opener.
+          root.addEventListener("click", activateFile);
+          root.addEventListener("auxclick", activateFile);
+          onCleanup(() => {
+            root.removeEventListener("click", activateFile);
+            root.removeEventListener("auxclick", activateFile);
+          });
         }}
         data-annotation-block={props.annotationBlock}
         class="transcript-markdown"

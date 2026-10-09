@@ -7,9 +7,21 @@ import {
   parseTargetLoadResult,
   parseTargetSaveResult,
   parseVoidResult,
+  parseSaveFileInput,
+  suggestedDownloadName,
 } from "./desktop-api.ts";
 
 describe("desktop IPC result parsing", () => {
+  it("accepts byte downloads and rejects malformed IPC payloads", () => {
+    const input = { name: "capture.png", bytes: Uint8Array.from([1, 2]) };
+    expect(parseSaveFileInput(input)).toEqual(input);
+    expect(() => parseSaveFileInput({ ...input, path: "/tmp/capture.png" })).toThrow(
+      "Expected no excess property",
+    );
+    expect(() => parseSaveFileInput({ ...input, bytes: [1, 2] })).toThrow('at ["bytes"]');
+    expect(suggestedDownloadName("a?b.png")).toBe("a_b.png");
+    expect(suggestedDownloadName("..")).toBe("download");
+  });
   it("accepts valid target and sidecar results", () => {
     expect(parseTargetLoadResult(undefined)).toBeUndefined();
     expect(parseTargetLoadResult({ kind: "local" })).toEqual({ kind: "local" });
