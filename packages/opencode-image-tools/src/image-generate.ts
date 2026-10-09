@@ -28,6 +28,12 @@ import { generateImage } from "./codex-images.js";
 const Text = Schema.String.check(Schema.isPattern(/\S/));
 export const Input = Schema.Struct({
   prompt: Text,
+  model: Schema.optionalKey(
+    Schema.Literals(["gpt-image-2.5-sunburst", "gpt-image-2.5-flare"]).annotate({
+      description:
+        "Sunburst prioritizes quality and precise editing; Flare prioritizes speed. Omit to use the configured default (Flare unless overridden).",
+    }),
+  ),
   outputPath: Schema.optionalKey(Text),
   referencePaths: Schema.optionalKey(Schema.Array(Text).check(Schema.isMaxLength(5))),
   background: Schema.optionalKey(Schema.Literals(["auto", "opaque", "transparent"])),
@@ -112,7 +118,8 @@ const readReference = Effect.fn("ImageTools.readReference")(function* (
 });
 
 export const run = Effect.fn("ImageTools.run")(
-  function* (ctx: Client, model: string, input: typeof Input.Type, tool: Tool.Context) {
+  function* (ctx: Client, defaultModel: string, input: typeof Input.Type, tool: Tool.Context) {
+    const model = input.model ?? defaultModel;
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const caller = yield* ctx.session.get({ sessionID: tool.sessionID });
@@ -303,7 +310,7 @@ export const run = Effect.fn("ImageTools.run")(
   ),
 );
 
-export function makeImageTool(ctx: Client, model: string) {
+export function makeImageTool(ctx: Client, defaultModel = "gpt-image-2.5-flare") {
   return {
     name: "image_generate",
     description:
@@ -312,7 +319,7 @@ export function makeImageTool(ctx: Client, model: string) {
     output: Output,
     options: { codemode: true },
     execute: (input, tool) =>
-      run(ctx, model, input, tool).pipe(
+      run(ctx, defaultModel, input, tool).pipe(
         // oxlint-disable-next-line effecttsgo/strict-effect-provide -- Each tool invocation is an entry point with its own HTTP and filesystem scope.
         Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, FetchHttpClient.layer)),
       ),

@@ -42,9 +42,7 @@ export default Plugin.define({
   id: "oc-ui.image-tools",
   effect: Effect.fn("ImageTools.setup")(function* (ctx) {
     const options = yield* Schema.decodeEffect(Options)(ctx.options).pipe(Effect.orDie);
-    yield* ctx.tool.transform((editor) =>
-      editor.add(makeImageTool(ctx, options.model ?? "gpt-image-2")),
-    );
+    yield* ctx.tool.transform((editor) => editor.add(makeImageTool(ctx, options.model)));
     for (const kind of ["context", "compaction", "generate", "title"] as const)
       yield* ctx.session.hook(kind, (event) =>
         Effect.sync(() => {

@@ -13,6 +13,7 @@ signature discoverable through Code Mode search. Inside `execute`, call:
 ```ts
 return await tools.image_generate({
   prompt: "An otter reading a book",
+  model: "gpt-image-2.5-sunburst", // optional; overrides the plugin default
   outputPath: "illustrations/otter.png", // optional
   referencePaths: ["reference.png"], // optional; selects editing
   background: "auto", // auto | opaque | transparent
@@ -44,14 +45,23 @@ pinned Node version. Point an OpenCode **2.0.3** server at the resulting directo
   "plugins": [
     {
       "package": "file:///absolute/path/to/packages/opencode-image-tools/dist/",
-      "options": { "model": "gpt-image-2" },
+      "options": { "model": "gpt-image-2.5-flare" },
     },
   ],
 }
 ```
 
-The model is a plugin option, defaulting to `gpt-image-2`. Generation and editing
-were live-tested with `gpt-image-2`, `gpt-image-2.5-sunburst`, and
+The plugin defaults to `gpt-image-2.5-flare`; its `model` option changes that
+default. Each call can override it with the optional `model` enum:
+
+- `gpt-image-2.5-sunburst`: higher quality and precise editing, with longer generation times.
+- `gpt-image-2.5-flare`: faster everyday generation and iteration.
+
+Both models support generation and editing. Omit `model` to use the plugin's
+configured default. See [OpenAI's model guidance](https://developers.openai.com/api/docs/guides/image-prompting)
+for their tradeoffs.
+
+Generation and editing were live-tested with `gpt-image-2`, `gpt-image-2.5-sunburst`, and
 `gpt-image-2.5-flare` on October 9, 2026. Availability depends on the connected
 account. Transparent-background behavior was not established by those probes.
 
