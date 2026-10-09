@@ -4,6 +4,10 @@ const configuredIdentity = globalThis.process.env.CSC_NAME?.trim() || undefined;
 export default {
   appId: "net.oksenenko.ocui",
   productName: "Ocui",
+  // Bundles and staged package closures own runtime dependencies. With the pinned
+  // builder, returning false also skips node_modules collection; npmRebuild: false
+  // only skips rebuilding and would still scan the excluded workspace install.
+  beforeBuild: () => false,
   beforePack: ({ electronPlatformName, arch }) => {
     assertRuntimePackagingTarget({ platform: electronPlatformName, arch: Arch[arch] });
   },
