@@ -135,6 +135,11 @@ beforeAll(async () => {
     },
     agents: {
       ...provider.config.agents,
+      "tool-policy-denied": {
+        mode: "primary",
+        description: "Code Mode permission fixture",
+        permissions: [{ action: "grep", resource: "*", effect: "deny" }],
+      },
       "permission-review": {
         mode: "primary",
         description: "Permission acceptance agent",
@@ -152,8 +157,7 @@ beforeAll(async () => {
       ...provider.config,
       plugins: [
         {
-          package: new URL("../../../../packages/opencode-session-tools/dist/", import.meta.url)
-            .href,
+          package: new URL("../../../../packages/opencode-tools/dist/", import.meta.url).href,
         },
         {
           package: new URL("../../../../packages/opencode-image-tools/dist/", import.meta.url).href,
@@ -1213,6 +1217,13 @@ describe.sequential("production browser app", () => {
   });
 
   it("streams prompts, resolves questions, stops real provider work, and reconnects after transport loss", async () => {
+    await ensureConnected();
+    const sessions = (await api.session.list({ limit: 100 })).data;
+    for (const title of ["Browser fixture one", "Browser fixture two"]) {
+      if (!sessions.some((session) => session.title === title))
+        await api.session.create({ title, location: { directory: await realpath(project) } });
+    }
+    await selectSession("Browser fixture one");
     await send("E2E_STREAM browser");
     await transcript("Acceptance first streamed fragment.");
     await page.getByRole("button", { name: "Stop", exact: true }).waitFor();
@@ -2945,6 +2956,52 @@ describe.sequential("production browser app", () => {
         if (connection.type === "credential")
           await api.credential.remove({ location, credentialID: connection.id });
     }
+  });
+
+  it("keeps a minimal direct surface and discovers executable auxiliary tools with their permissions", async () => {
+    await ensureConnected();
+    const directory = await realpath(project);
+    for (const denied of [false, true]) {
+      const title = `Tool surface ${denied ? "denied" : "available"}`;
+      const session = await api.session.create({
+        title,
+        location: { directory },
+        agent: denied ? "tool-policy-denied" : "build",
+        model: { providerID: "acceptance", id: "stream" },
+      });
+      await selectSession(title);
+      const prompt = `E2E_TOOL_SURFACE ${denied ? "denied" : "available"} ${provider.url}/browser-data`;
+      await send(prompt);
+      await transcript("Acceptance tool surface resolved:");
+      await idle();
+      const request = (await providerState()).requests.find(
+        (item) => item.prompt === prompt && item.tools?.length,
+      );
+      expect(request.tools.toSorted()).toEqual(["edit", "execute", "read", "shell", "write"]);
+      const messages = (await api.message.list({ sessionID: session.id, order: "asc" })).data;
+      const executed = messages
+        .filter((message) => message.type === "assistant")
+        .flatMap((message) => message.content)
+        .find((part) => part.type === "tool" && part.name === "execute");
+      expect(executed.state.status).toBe("completed");
+      expect(executed.state.metadata.error).toBeUndefined();
+      const output = JSON.parse(executed.state.content.find((part) => part.type === "text").text);
+      if (denied) expect(output).toEqual({ denied: true });
+      else {
+        expect(JSON.stringify(output.files)).toContain("working.txt");
+        expect(JSON.stringify(output.matches)).toContain("working content");
+        expect(JSON.stringify(output.page)).toContain("connected-server");
+        expect(executed.state.metadata.toolCalls.map((call) => call.tool)).toEqual([
+          "search",
+          "glob",
+          "grep",
+          "webfetch",
+          "skill",
+        ]);
+        expect(output.skill.output).toContain("Acceptance review instructions.");
+      }
+    }
+    expect(errors).toEqual([]);
   });
 
   it("creates an independent session through the plugin and admits it to the session catalog", async () => {

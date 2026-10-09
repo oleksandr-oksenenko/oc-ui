@@ -15,7 +15,7 @@ configuration seam is proposed. Test count is not a success metric.
 
 ## Baseline and limits
 
-The review run of `pnpm test` passed 813 tests: 12 in session-tools and 801 in
+The review run of `pnpm test` passed 813 tests: 12 in opencode-tools and 801 in
 desktop. Desktop reported 98 files and 69.67 seconds elapsed. These are one-run
 observations, not stable performance budgets. Packaged Electron was inspected,
 not executed. The initial worktree dependency installation is not part of the
@@ -352,7 +352,7 @@ browser acceptance, which also gained transferred assertions. Logs are
 
 - `pnpm check`: passed, including formatter, lint/types, WDIO types, styles,
   component layout, and unused-code checks.
-- `pnpm test`: passed 810 cases (12 session-tools; 798 desktop in 98 files).
+- `pnpm test`: passed 810 cases (12 opencode-tools; 798 desktop in 98 files).
   Browser and Storybook are included. Root command wall time was 66.79 seconds;
   desktop reported 61.66 seconds, compared with the single initial 69.67-second
   review observation. These full-run observations are not a median benchmark.

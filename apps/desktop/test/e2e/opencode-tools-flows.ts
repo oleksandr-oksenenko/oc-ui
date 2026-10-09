@@ -6,7 +6,7 @@ import { $, browser } from "@wdio/globals";
 
 import { git } from "./project-fixture.ts";
 
-export async function verifySessionTools(project: string): Promise<void> {
+export async function verifyOpenCodeTools(project: string): Promise<void> {
   const connection = await browser.execute(async () => {
     const result = await window.desktop.localOpenCode.connect();
     if (result.status !== "connected") throw new Error(result.message);
@@ -21,9 +21,7 @@ export async function verifySessionTools(project: string): Promise<void> {
   const directory = await realpath(project);
   const plugins = await api.plugin.list({ location: { directory } });
   assert.ok(
-    plugins.data.some(
-      (plugin) => plugin.id === "oc-ui.session-tools" && plugin.state.status === "active",
-    ),
+    plugins.data.some((plugin) => plugin.id === "oc-ui.tools" && plugin.state.status === "active"),
     JSON.stringify(plugins.data.filter((plugin) => plugin.source.type !== "builtin")),
   );
   assert.ok(

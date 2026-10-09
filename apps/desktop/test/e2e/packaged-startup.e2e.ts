@@ -15,7 +15,7 @@ import { verifyBrowserFlows } from "./browser-flows.ts";
 import { verifyConnectionSettings } from "./connection-flows.ts";
 import { verifyProjectFlows } from "./project-flows.ts";
 import { verifyProviderFlows } from "./provider-flows.ts";
-import { verifySessionTools } from "./session-tools-flows.ts";
+import { verifyOpenCodeTools } from "./opencode-tools-flows.ts";
 import { isOwnedProcessRunning } from "./owned-process.ts";
 import { packagedArtifacts } from "./packaged-artifacts.mjs";
 import { runnerPath } from "./runner-path.ts";
@@ -280,7 +280,7 @@ describe("packaged owned OpenCode", () => {
   });
 
   it("loads the bundled session tool and creates independent worktree sessions", async () => {
-    await verifySessionTools(projectDirectory);
+    await verifyOpenCodeTools(projectDirectory);
   });
 
   it("keeps the worker across renderer reload and restarts only on request", async () => {

@@ -9,7 +9,7 @@
     "src/shared/**/*.ts",
     "scripts/**/*.ts",
     "electron.vite.config.ts",
-    "../../packages/opencode-session-tools/build.ts",
+    "../../packages/opencode-tools/build.ts",
     "../../packages/opencode-image-tools/build.ts",
     "../../tools/build-opencode-plugin.ts",
     "vite.config.ts",

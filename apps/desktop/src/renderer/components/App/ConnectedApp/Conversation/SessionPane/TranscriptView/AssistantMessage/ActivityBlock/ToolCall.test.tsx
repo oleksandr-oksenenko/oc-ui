@@ -49,6 +49,34 @@ describe("tool image attachments", () => {
     }
   });
 
+  it("shows a nested Code Mode failure as an error while retaining its output", () => {
+    const tool: SessionMessageAssistantTool = {
+      type: "tool",
+      id: "cancelled-question",
+      name: "execute",
+      time: { created: 1 },
+      state: {
+        status: "completed",
+        input: { code: "return await tools.question({questions: []});" },
+        metadata: { error: true, toolCalls: [{ tool: "question", status: "error" }] },
+        content: [{ type: "text", text: "The user dismissed this question" }],
+      },
+    };
+    const mounted = mount(() => <ToolCall tool={tool} />);
+    try {
+      const header = mounted.host.querySelector<HTMLButtonElement>(
+        ".transcript-tool-error .transcript-tool-header",
+      );
+      expect(header?.textContent).toContain("Error");
+      header!.click();
+      expect(mounted.host.querySelector(".transcript-tool-details")?.textContent).toContain(
+        "The user dismissed this question",
+      );
+    } finally {
+      mounted.dispose();
+    }
+  });
+
   it("pairs PNG and JPEG-normalized previews with their own distinct originals", () => {
     const mounted = renderContents([
       preview("first"),

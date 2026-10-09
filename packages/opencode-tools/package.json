@@ -1,7 +1,7 @@
 {
-  "name": "@oc-ui/opencode-session-tools",
+  "name": "@oc-ui/opencode-tools",
   "version": "0.1.0",
-  "description": "Create independent OpenCode sessions in project worktrees.",
+  "description": "OpenCode tools and a minimal direct tool surface with Code Mode discovery.",
   "files": [
     "dist",
     "README.md"

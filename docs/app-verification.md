@@ -25,7 +25,7 @@ starts a manual inspection environment; it does not execute an E2E test suite.
 
 | Tier            | Contents                                                                                                                                                         | Commands from the root                                     | Execution policy                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------- |
-| 0 — Fast        | Formatting, lint, types, style/layout/unused-code checks; prompt-editor, session-tools, and desktop unit/controller tests                                        | `pnpm check` + `pnpm test`, or `pnpm ready`                | Locally after implementation; Linux x64 CI on PR/main/manual         |
+| 0 — Fast        | Formatting, lint, types, style/layout/unused-code checks; prompt-editor, opencode-tools, and desktop unit/controller tests                                        | `pnpm check` + `pnpm test`, or `pnpm ready`                | Locally after implementation; Linux x64 CI on PR/main/manual         |
 | 1 — Components  | Static Storybook build, interaction/accessibility tests, and real Chromium storage tests (`storybook`, `storage`)                                                | `pnpm build-storybook` + `pnpm test:components`            | Linux x64 CI on PR/main/manual                                       |
 | 2 — Integration | Renderer typecheck, production browser build/acceptance, pinned-server contracts, inspection and shutdown checks (`web`)                                         | `pnpm test:integration`                                    | CI only: Linux x64 on PR/main/manual                                 |
 | 3 — Native      | Desktop build/package, macOS arm64 signature/architecture and Linux x64/glibc ELF/assets; Electron/IPC/settings/server lifetime and scripted-provider acceptance | `pnpm test:acceptance:linux` or `pnpm test:acceptance:mac` | CI only: Linux x64 and macOS arm64; required before desktop delivery |
@@ -259,7 +259,7 @@ the UI; use API or filesystem reads to establish resulting server state where
 relevant. Do not bypass the action under test by calling its implementation.
 
 GitHub Actions runs the integration tier from the root. This CI-only command
-builds the session-tools plugin needed by the disposable server first:
+builds the opencode-tools plugin needed by the disposable server first:
 
 ```sh
 pnpm test:integration

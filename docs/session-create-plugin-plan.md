@@ -87,7 +87,7 @@ access. Keep findings narrowly tied to this contract.
 
 ## 2. Implement the workspace package
 
-Create `packages/opencode-session-tools` with an ESM plugin entry, input/output
+Create `packages/opencode-tools` with an ESM plugin entry, input/output
 schemas, one creation workflow, and focused tests. Use
 `@opencode/plugin/effect` pinned alongside the other OpenCode packages.
 
@@ -192,7 +192,7 @@ coordinator is being replaced by this additive feature.
 
 ## Implementation results
 
-The package is `packages/opencode-session-tools`. Its scoped Effect tool validates
+The package is `packages/opencode-tools`. Its scoped Effect tool validates
 selections and locations, creates or reuses a worktree, creates a session without
 a parent, and submits only the supplied prompt. Creation survives caller
 interruption; plugin shutdown owns cleanup. Mutations are never retried and
