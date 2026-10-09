@@ -1,0 +1,23 @@
+{
+  "revision": "878a3498e137b4e72162b00a125f0c97b362a982",
+  "node": "24.20.0",
+  "bun": "1.4.2",
+  "archives": {
+    "@opencode/schema": {
+      "file": "opencode-schema-2.0.3.tgz",
+      "sha256": "2d09a797c9cc500f379267017824462288638a2d4cff35803bcab1d422fe9908"
+    },
+    "@opencode/protocol": {
+      "file": "opencode-protocol-2.0.3.tgz",
+      "sha256": "9e274795d1c6775fc5dbc2b77d9d9a0e4472c086c9328958a1f4b1c7be102da1"
+    },
+    "@opencode/plugin": {
+      "file": "opencode-plugin-2.0.3.tgz",
+      "sha256": "186dcf30e14696350923154f0e0fcb341eaa987257d388b03df7dce949ecdc82"
+    },
+    "@opencode/core": {
+      "file": "opencode-core-2.0.3.tgz",
+      "sha256": "20a6c50f133c1e89242832024ebe5127b2e8ffff1d2e9d43d9c419357949bfa5"
+    }
+  }
+}

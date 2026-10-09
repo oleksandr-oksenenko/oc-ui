@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access, open, readdir } from "node:fs/promises";
+import { access, open, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
@@ -60,6 +60,7 @@ export function packagedArtifacts(desktopRoot, platform, arch, glibcVersion) {
     assets: [
       join(resources, "app.asar"),
       join(runtimePath, "opencode-worker.mjs"),
+      join(runtimePath, "source.json"),
       join(runtimePath, "tools", "index.js"),
       join(runtimePath, "image-tools", "index.js"),
       join(modules, "@opencode", "core", "package.json"),
@@ -98,7 +99,7 @@ async function nativeAddons(artifacts) {
       const tags = [
         ...path
           .slice(root.length)
-          .matchAll(/(darwin|linux|win32)[-_.](arm64|x64|ia32|arm)(?=[-_./]|$)/gu),
+          .matchAll(/(darwin|linux|win32|android|freebsd)[-_.](arm64|x64|ia32|arm)(?=[-_./]|$)/gu),
       ];
       return (
         tags.every((tag) => tag[1] === artifacts.platform && tag[2] === artifacts.arch) &&
@@ -127,6 +128,17 @@ export async function verifyPackagedApplication(artifacts, signal, runCommand = 
       }
     }),
   ]);
+  const provenance = JSON.parse(
+    await readFile(join(artifacts.runtimePath, "source.json"), { encoding: "utf8", signal }),
+  );
+  const core = JSON.parse(
+    await readFile(join(artifacts.runtimePath, "node_modules/@opencode/core/package.json"), {
+      encoding: "utf8",
+      signal,
+    }),
+  );
+  if (!provenance.revision || core.ocuiSource !== provenance.revision)
+    throw new Error("Packaged OpenCode Core does not match the local build provenance");
   if (artifacts.platform === "darwin") {
     await runCommand("codesign", ["--verify", "--deep", "--strict", artifacts.appDirectory], {
       signal,

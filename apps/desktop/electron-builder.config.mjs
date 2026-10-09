@@ -18,6 +18,7 @@ export default {
   asar: true,
   extraResources: [
     { from: "src/main/browser/upstream/LICENSE", to: "licenses/opencode-browser-LICENSE" },
+    { from: "out/opencode-runtime/source.json", to: "opencode-runtime/source.json" },
     {
       from: "out/opencode-runtime/tools",
       to: "opencode-runtime/tools",

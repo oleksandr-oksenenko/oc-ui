@@ -121,6 +121,14 @@ async function fixture(platform = "linux") {
       { mode: 0o755 },
     );
   }
+  await writeFile(
+    join(artifacts.runtimePath, "source.json"),
+    JSON.stringify({ revision: "local-source" }),
+  );
+  await writeFile(
+    join(artifacts.runtimePath, "node_modules/@opencode/core/package.json"),
+    JSON.stringify({ ocuiSource: "local-source" }),
+  );
   return artifacts;
 }
 
@@ -148,6 +156,8 @@ it("validates additional host-native and untagged bindings while skipping foreig
     join(root, "darwin-arm64", "binding.node"),
     join(root, "linux-arm64", "binding.node"),
     join(root, "linux-x64-musl", "binding.node"),
+    join(root, "android-arm64", "binding.node"),
+    join(root, "freebsd-x64", "binding.node"),
   ];
   for (const path of [...selected, ...foreign]) {
     await mkdir(dirname(path), { recursive: true });
@@ -210,6 +220,19 @@ it("rejects a missing packaged core dependency even when the image plugin file e
   await expect(
     verifyPackagedApplication(artifacts, new AbortController().signal, run),
   ).rejects.toThrow("package.json");
+  expect(run).not.toHaveBeenCalled();
+});
+
+it("rejects a packaged registry Core in place of the recorded local build", async () => {
+  const artifacts = await fixture();
+  await writeFile(
+    join(artifacts.runtimePath, "node_modules/@opencode/core/package.json"),
+    JSON.stringify({ version: "2.0.3" }),
+  );
+  const run = vi.fn();
+  await expect(
+    verifyPackagedApplication(artifacts, new AbortController().signal, run),
+  ).rejects.toThrow("local build provenance");
   expect(run).not.toHaveBeenCalled();
 });
 
