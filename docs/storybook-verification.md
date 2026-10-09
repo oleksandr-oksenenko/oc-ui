@@ -46,6 +46,6 @@ weakening the catalog-wide gate. The shared viewport toolbar provides these name
 - `narrow`: 820 × 900
 - `mobile`: 390 × 760
 
-The static Storybook build runs in the Linux Components job and in the opt-in root
-`pnpm ready:ci` command. Local `pnpm ready` runs static checks and unit tests only;
-it does not require Chromium.
+The static Storybook build runs in the Linux Components job and in the CI-only
+`pnpm ready:ci` aggregate, which also includes E2E tests. Local `pnpm ready` runs
+static checks and unit tests only; it does not require Chromium.

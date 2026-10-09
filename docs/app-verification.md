@@ -3,17 +3,32 @@
 Choose checks from the behavior and boundaries a change can affect. Use small,
 repeatable tests for detailed failure cases and reusable acceptance tests against
 the real app and server for final behavioral verification. Run the fast tier
-locally and let GitHub Actions run the full heavier tiers. Use browser-use for
-exploration and visual questions that those tests do not answer.
+locally and let GitHub Actions run the full heavier tiers. E2E tests run only in
+GitHub Actions. Use browser-use for exploration and visual questions that those
+tests do not answer.
+
+## E2E execution policy
+
+Do not run E2E tests locally, including focused scenarios, smoke tests, retries,
+or diagnostic reproductions. Browser integration (the `web` Vitest project) and
+all packaged acceptance (`test:acceptance:*`) are CI-only. This also applies to
+direct Playwright/WebdriverIO or packaged-runner invocations and aggregate
+commands that include E2E tests, such as `pnpm test:all` and `pnpm ready:ci`.
+There is no local E2E exception. Inspect CI logs and add diagnostics or regression
+coverage for subsequent CI runs when investigating failures.
+
+Local unit/controller tests, focused component tests, builds, artifact inspection,
+and manual browser/native inspection remain available. `pnpm verify:browser`
+starts a manual inspection environment; it does not execute an E2E test suite.
 
 ## Verification tiers
 
-| Tier            | Contents                                                                                                                                                         | Commands from the root                                     | Default execution                                                       |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
-| 0 — Fast        | Formatting, lint, types, style/layout/unused-code checks; prompt-editor, session-tools, and desktop unit/controller tests                                        | `pnpm check` + `pnpm test`, or `pnpm ready`                | Locally after implementation; Linux x64 CI on PR/main/manual            |
-| 1 — Components  | Static Storybook build, interaction/accessibility tests, and real Chromium storage tests (`storybook`, `storage`)                                                | `pnpm build-storybook` + `pnpm test:components`            | Linux x64 CI on PR/main/manual                                          |
-| 2 — Integration | Renderer typecheck, production browser build/acceptance, pinned-server contracts, inspection and shutdown checks (`web`)                                         | `pnpm test:integration`                                    | Linux x64 CI on PR/main/manual                                          |
-| 3 — Native      | Desktop build/package, macOS arm64 signature/architecture and Linux x64/glibc ELF/assets; Electron/IPC/settings/server lifetime and scripted-provider acceptance | `pnpm test:acceptance:linux` or `pnpm test:acceptance:mac` | Linux x64 and macOS arm64 CI on PR/main/manual; before desktop delivery |
+| Tier            | Contents                                                                                                                                                         | Commands from the root                                     | Execution policy                                                     |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------- |
+| 0 — Fast        | Formatting, lint, types, style/layout/unused-code checks; prompt-editor, session-tools, and desktop unit/controller tests                                        | `pnpm check` + `pnpm test`, or `pnpm ready`                | Locally after implementation; Linux x64 CI on PR/main/manual         |
+| 1 — Components  | Static Storybook build, interaction/accessibility tests, and real Chromium storage tests (`storybook`, `storage`)                                                | `pnpm build-storybook` + `pnpm test:components`            | Linux x64 CI on PR/main/manual                                       |
+| 2 — Integration | Renderer typecheck, production browser build/acceptance, pinned-server contracts, inspection and shutdown checks (`web`)                                         | `pnpm test:integration`                                    | CI only: Linux x64 on PR/main/manual                                 |
+| 3 — Native      | Desktop build/package, macOS arm64 signature/architecture and Linux x64/glibc ELF/assets; Electron/IPC/settings/server lifetime and scripted-provider acceptance | `pnpm test:acceptance:linux` or `pnpm test:acceptance:mac` | CI only: Linux x64 and macOS arm64; required before desktop delivery |
 
 [CI workflow](../.github/workflows/ci.yml) runs Fast, Components, and Integration
 only on Linux x64 (`ubuntu-24.04`), and Native on Linux x64 and macOS arm64
@@ -38,18 +53,18 @@ GitHub ruleset `24677793` requires these checks:
 
 `pnpm test` runs only tier 0 tests: no Chromium, app server, or packaged app is
 started. `pnpm ready` is the local completion gate (`check` + `test`), with no
-builds. `pnpm test:local` remains an alias for `pnpm test`. `pnpm test:all` opts
-into tiers 0–2; `pnpm ready:ci` also includes static
-checks and all three builds. Neither includes packaged acceptance or the
+builds. `pnpm test:local` remains an alias for `pnpm test`. The CI-only aggregates
+`pnpm test:all` and `pnpm ready:ci` include tiers 0–2; `pnpm ready:ci` also includes
+static checks and all three builds. Neither includes packaged acceptance or the
 credential-dependent `test:acceptance:chat:mac` live-provider run.
 
-During edits, run the smallest relevant test. After implementation, run tier 0
-once locally and rely on CI for full heavier suites. Run focused stories or an
-integration scenario locally when diagnosing a failure, developing new coverage,
-or resolving a question before CI is available. Native/visual questions that
-automation cannot establish still need targeted inspection. The affected-boundary
-table below describes required coverage, not a requirement to launch every
-applicable full suite locally.
+During edits, run the smallest relevant unit/controller or component test locally.
+After implementation, run tier 0 once locally and rely on CI for E2E tests and
+full heavier suites. Focused stories and manual inspection can help diagnose a
+failure, develop coverage, or resolve a question before CI is available.
+Native/visual questions that automation cannot establish still need targeted
+inspection. The affected-boundary table below describes required coverage;
+E2E coverage must come from CI.
 
 Heavy suites are not skipped in CI based on changed paths. A local tier 0 pass is
 local evidence only; report heavier tiers as pending until their CI jobs pass on
@@ -79,8 +94,9 @@ When a behavior needs lasting coverage, turn the meaningful scenario into a test
 in the existing suite. Do not save every exploratory click as a regression test.
 
 For final behavioral verification, use the applicable reusable tests on the
-completed candidate, normally through CI. A passing automated browser flow against the real server
-satisfies that behavioral check; do not repeat it through browser-use by default.
+completed candidate, with all E2E tests executed in CI. A passing CI browser flow
+against the real server satisfies that behavioral check; do not repeat it through
+browser-use by default.
 Use targeted visual or native inspection for remaining questions such as spacing,
 clipping, usability, or OS dialogs covered by test substitutes. State that question
 and its result. An uncovered important behavior needs a reusable regression test;
@@ -151,7 +167,9 @@ requires another run. Neither shorter output nor fewer waits reduces coverage.
 
 For implementation changes, always run `pnpm check` and `pnpm test` from the
 repository root after the final edit. Ensure coverage for every applicable row
-through the CI tiers; use focused local runs and inspection as described above:
+through the CI tiers; use focused local unit/component runs and manual inspection
+as described above. All browser integration and packaged acceptance in this table
+run only in CI:
 
 | Change                                                                             | Focused evidence                                                                             | Runtime evidence                                                                                                          |
 | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -180,17 +198,19 @@ new test that merely restates its CSS or markup.
   without opening a browser. Open the printed URL in the Codex in-app browser for
   inspection. Its automated Chromium interaction and accessibility tests run in
   `pnpm test:components` (tier 1). See
-  [Storybook verification](storybook-verification.md) for setup and focused runs.
+  [Storybook verification](storybook-verification.md) for setup and focused
+  component runs.
 - **Full browser app:** `pnpm dev:web` serves the real application for in-app browser
   inspection. Connect to an independently running pinned server. The `web` Vitest
   project runs a production build against its own disposable server, provider,
-  and Git fixtures as part of `pnpm test:integration` (tier 2). It requires OpenSSL
-  for its TLS fixture and zsh for server shell/terminal scenarios.
+  and Git fixtures in CI as part of `pnpm test:integration` (tier 2). It requires
+  OpenSSL for its TLS fixture and zsh for server shell/terminal scenarios.
 - **Electron:** launch with `pnpm dev` from the root for native integration and
   host-dependent layout. The in-app browser cannot attach to the Electron window.
-  Use existing WebdriverIO acceptance for repeatable DOM interaction and computer
-  use for exploratory native checks. Every `pnpm dev` launch exposes localhost
-  profiling attach points (set a port variable to an empty string to opt out):
+  Use existing WebdriverIO acceptance in CI for repeatable DOM interaction and
+  computer use locally for exploratory native checks. Every `pnpm dev` launch
+  exposes localhost profiling attach points (set a port variable to an empty
+  string to opt out):
   - renderer: Chrome DevTools Protocol at `http://127.0.0.1:9222` (`REMOTE_DEBUGGING_PORT`)
   - main process: V8 inspector at `127.0.0.1:9229` (`V8_INSPECTOR_PORT`)
   - built-in OpenCode child: V8 inspector at `127.0.0.1:9230` (`OCUI_OPENCODE_INSPECTOR_PORT`)
@@ -204,8 +224,8 @@ new test that merely restates its CSS or markup.
   `pnpm test:acceptance:mac` build and test the Linux x64/glibc and macOS arm64 apps
   using WebdriverIO, the real pinned OpenCode server, disposable state, and a
   scripted local provider (tier 3). They are separate from `pnpm test` and
-  `pnpm ready:ci` and run on PRs, `main`, and manual CI dispatch. Linux uses an
-  isolated keyring fixture with gnome-keyring and libsecret; the outer wrapper
+  `pnpm ready:ci` and run only in CI on PRs, `main`, and manual dispatch. Linux uses
+  an isolated keyring fixture with gnome-keyring and libsecret; the outer wrapper
   owns the virtual display and private D-Bus session. Native dialogs and macOS
   keychain behavior use test substitutes. This does not prove native dialog
   appearance or integration with a user's keychain.
@@ -238,19 +258,17 @@ Use Playwright role/label locators and observable state waits. Follow the suite'
 the UI; use API or filesystem reads to establish resulting server state where
 relevant. Do not bypass the action under test by calling its implementation.
 
-Run the integration tier from the root when a local full run is useful. This
-command builds the session-tools plugin needed by the disposable server first:
+GitHub Actions runs the integration tier from the root. This CI-only command
+builds the session-tools plugin needed by the disposable server first:
 
 ```sh
 pnpm test:integration
 ```
 
-For one scenario, build the plugins with
-`pnpm --filter @oc-ui/opencode-session-tools build` and
-`pnpm --filter @oc-ui/opencode-image-tools build`, then run
-`pnpm --filter desktop exec vp test run --project=web -t '<scenario>'`.
-The full tier runs in CI. Preserve the existing failure screenshot and profile
-handling; inspect those artifacts before reproducing a failure manually.
+Filtered `--project=web` scenarios are also CI-only. Add focused diagnostics to
+the suite and use a PR or manual workflow dispatch for reproduction. Preserve
+the existing failure screenshot and profile handling; inspect CI logs before
+making another diagnostic change.
 
 ### Packaged Electron: WebdriverIO
 
@@ -268,9 +286,9 @@ evidence that DOM interaction cannot provide, such as owned process state. Keep
 native substitutes explicit: mocked native dialogs and keychain behavior cannot
 prove the appearance of a native dialog or real OS credential integration.
 
-From the root, run `pnpm test:acceptance:mac` on macOS arm64 for the packaged
-scripted-provider suite. On Linux x64/glibc, provision Electron's libraries and the
-fixture tools first. For Ubuntu 24.04, matching CI:
+The macOS arm64 Native CI job runs `pnpm test:acceptance:mac` from the root for the
+packaged scripted-provider suite. The Linux x64/glibc Native CI job provisions
+Electron's libraries and fixture tools first. Its Ubuntu 24.04 setup is:
 
 ```sh
 sudo apt-get update
@@ -286,9 +304,9 @@ foreground gnome-keyring fixture, waits for readiness with `gdbus`, and cleans u
 both inside that session. `binutils` supplies `readelf` for packaged architecture
 verification. Linux acceptance supplies `--no-sandbox` for the disposable CI
 environment; it does not establish production sandbox behavior.
-These commands are separate from `pnpm test`. The `test:acceptance:chat:mac`
-command uses a live provider and credentials; it is not the default regression
-command.
+These commands are CI-only and separate from `pnpm test`. The
+`test:acceptance:chat:mac` command also falls under the CI-only E2E policy; it uses
+a live provider and credentials and is not part of the default CI workflow.
 
 ### Make each scenario useful
 
@@ -302,9 +320,10 @@ scenarios independent where possible and explicit about any shared setup.
 For a regression, establish that the assertion detects the original failure when
 practical, then verify the fix. Confirm the runner actually discovered and ran the
 scenario; a filtered run with no tests is not evidence. Reuse fixture cleanup and
-bounded failure artifacts. Run focused tests during edits, then the required root
-gates and rely on the applicable CI tiers on the completed candidate. Browser-use is
-useful to investigate a failure, but the reusable test must pass after the fix.
+bounded failure artifacts. Run focused unit/component tests during edits, then
+the required root gates locally; execute E2E tests only in CI on the completed
+candidate. Browser-use is useful to investigate a failure, but the reusable E2E
+test must pass in CI after the fix.
 
 ## Check affected UI
 
@@ -327,9 +346,10 @@ Cover repeatable interactions with assertions in stories or acceptance tests.
 Keep the existing Storybook accessibility failure gate enabled. Use stories for
 the detailed state matrix and automated full-app tests for renderer workflows.
 After the final change, inspect only visual or usability questions that remain
-unresolved by those tests. Use packaged WebdriverIO acceptance for affected native,
-preload, settings, built-in server ownership, or packaging behavior; add targeted
-native inspection where test substitutes or host-dependent appearance leave gaps.
+unresolved by those tests. Use CI packaged WebdriverIO acceptance for affected
+native, preload, settings, built-in server ownership, or packaging behavior; add
+targeted native inspection where test substitutes or host-dependent appearance
+leave gaps.
 
 ## Check workflows and resources
 
@@ -366,11 +386,11 @@ without exposing credentials. Select only processes belonging to the test run.
   Components, and desktop packages in Linux x64/macOS arm64 Native on every PR,
   push to `main`, and manual dispatch. Run an affected build locally when debugging
   bundling, entrypoints, dependency resolution, or delivered assets.
-  `pnpm ready:ci` combines root checks, tiers 0–2, and these builds for an opt-in
-  full local run; `pnpm ready` stays fast.
+  The CI-only `pnpm ready:ci` aggregate combines root checks, tiers 0–2, and these
+  builds; `pnpm ready` stays fast and local.
 - Use tier 3 CI evidence for native integration rows above. Before delivering a
-  desktop app, run the target host's `pnpm test:acceptance:linux` (with the Linux
-  wrapper above) or `pnpm test:acceptance:mac` on the delivery candidate.
+  desktop app, require a passing target-platform Native CI job on the delivery
+  candidate; do not run packaged acceptance locally.
   macOS checks the packaged signature and ARM64 architecture; Linux checks
   executable permissions and x86-64 ELF assets. Both run the same runtime
   scenarios; a development launch cannot establish packaging.
