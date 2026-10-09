@@ -377,6 +377,47 @@ describe("session catalog reconciliation", () => {
       ["child", "running"],
     ]);
   });
+
+  it.each(["success", "failure"])(
+    "publishes status refresh snapshots without per-session sidebar updates on %s",
+    async (outcome) => {
+      const response = deferred<Awaited<ReturnType<OpenCodeClient["session"]["active"]>>>();
+      const api = OpenCode.make({ baseUrl: "http://catalog.test" });
+      const active = vi.spyOn(api.session, "active").mockReturnValue(response.promise);
+      const sessionIDs = Array.from({ length: 100 }, (_, index) => `session-${index}`);
+      const observed: number[] = [];
+      const refreshing = withTestWorkspace((effects) => {
+        const data = createData({
+          api: () => api,
+          directory: location.directory,
+          event: createOpenCodeEventSource(),
+          connection: { status: () => "connected" },
+        });
+        for (const id of sessionIDs) data.session.setStatus(id, "running");
+        createComputed(() =>
+          observed.push(sessionIDs.filter((id) => data.session.status(id) === "running").length),
+        );
+        return effects.runPromise(syncActiveStatuses({ effects, api, data, sessionIDs }));
+      });
+      const settled = Promise.allSettled([refreshing]);
+      try {
+        await vi.waitFor(() => expect(active).toHaveBeenCalledOnce());
+        expect(observed).toEqual([100, 0]);
+      } finally {
+        if (outcome === "failure") response.reject(new Error("offline"));
+        else
+          response.resolve({
+            "session-0": { type: "running" },
+            "session-42": { type: "running" },
+            "session-99": { type: "running" },
+          });
+        await settled;
+      }
+      expect((await settled)[0]?.status).toBe(outcome === "success" ? "fulfilled" : "rejected");
+      expect(observed).toEqual(outcome === "success" ? [100, 0, 3] : [100, 0]);
+    },
+  );
+
   it("shares a failed refresh, then allows a new explicit refresh", async () => {
     const page = deferred<Awaited<ReturnType<OpenCodeClient["session"]["list"]>>>();
     const list = vi.fn<OpenCodeClient["session"]["list"]>(() => page.promise);
