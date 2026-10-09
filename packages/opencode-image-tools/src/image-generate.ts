@@ -36,6 +36,7 @@ const Output = Schema.Struct({
   saved: Schema.Boolean,
   model: Schema.String,
   mime: Schema.String,
+  attachment: Schema.String,
   path: Schema.optionalKey(Schema.String),
   requestedPath: Schema.optionalKey(Schema.String),
   warning: Schema.optionalKey(Schema.String),
@@ -245,10 +246,13 @@ export const run = Effect.fn("ImageTools.run")(
       }),
     );
     const saved = result.saved;
+    const attachmentName = `ocui-image-${Identifier.ascending()}`;
+    const attachment = `attachment:${attachmentName}`;
     const output: Types.Mutable<typeof Output.Type> = {
       saved,
       model,
       mime: "image/png",
+      attachment,
       ...(saved
         ? { path: destination }
         : {
@@ -261,7 +265,7 @@ export const run = Effect.fn("ImageTools.run")(
     const content: Tool.Content[] = [
       {
         type: "text",
-        text: saved ? `Saved image to ${destination}` : (output.warning ?? "Image was not saved."),
+        text: `${saved ? `Saved image to ${destination}` : (output.warning ?? "Image was not saved.")}\nDisplay inline with ![Descriptive alternative text](${attachment}).`,
       },
     ];
     content.push(
@@ -269,7 +273,7 @@ export const run = Effect.fn("ImageTools.run")(
         type: "file",
         uri: result.imageUri,
         mime: "image/png",
-        name: path.basename(destination),
+        name: `${attachmentName}.png`,
       },
       {
         type: "file",
@@ -277,7 +281,7 @@ export const run = Effect.fn("ImageTools.run")(
         // A binary PNG bypasses preview normalization and retains exact bytes.
         uri: result.imageUri.replace("data:image/png;", "data:application/octet-stream;"),
         mime: "application/octet-stream",
-        name: path.basename(destination).replace(/\.png$/i, ".original.png"),
+        name: `${attachmentName}.original.png`,
       },
     );
     return {
@@ -303,7 +307,7 @@ export function makeImageTool(ctx: Client, model: string) {
   return {
     name: "image_generate",
     description:
-      "Generate one PNG image, or edit it using up to five referencePaths. Paths are on the server and relative to the calling session. Existing output files are never overwritten. Returns the saved path and image. On an uncertain failure or save failure, recover the result before requesting another generation.",
+      "Generate one PNG image, or edit it using up to five referencePaths. Paths are on the server and relative to the calling session. Existing output files are never overwritten. Returns the saved path, image, and attachment reference. Display the image inline in your response with ![Descriptive alternative text](<attachment value>); use the returned attachment value, not the filesystem path. On an uncertain failure or save failure, recover the result before requesting another generation.",
     input: Input,
     output: Output,
     options: { codemode: true },

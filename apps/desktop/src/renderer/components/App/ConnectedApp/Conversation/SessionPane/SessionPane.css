@@ -411,6 +411,22 @@
   height: auto;
 }
 
+.transcript-generated-image {
+  display: inline-block;
+  width: min(100%, 384px);
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.transcript-generated-image img {
+  height: auto;
+  max-height: 384px;
+}
+
+.transcript-generated-image-fallback {
+  margin-top: 12px;
+}
+
 .transcript-message-failure {
   max-width: 700px;
   margin: 12px 0 0;

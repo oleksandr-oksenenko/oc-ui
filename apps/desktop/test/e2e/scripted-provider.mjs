@@ -258,7 +258,7 @@ function requestedTool(prompt) {
       return {
         name: "execute",
         input: {
-          code: 'return await Promise.all([tools.image_generate({prompt: "First acceptance otter"}), tools.image_generate({prompt: "Second acceptance otter"})]);',
+          code: 'return await Promise.all([tools.image_generate({prompt: "First acceptance otter", outputPath: "first/otter.png"}), tools.image_generate({prompt: "Second acceptance otter", outputPath: "second/otter.png"})]);',
         },
       };
     const input = { prompt: "An acceptance otter", outputPath: "acceptance-generated.png" };
@@ -448,7 +448,26 @@ function respondTool(prompt, toolReply, body, send, finish, requestID, response,
           : prompt.includes("E2E_SUBAGENT_BUBBLE")
             ? "Acceptance bubbling verified"
             : "Acceptance question resolved";
-    send({ content: `${label}: ${JSON.stringify(toolReply.content)}` });
+    let images = "";
+    if (prompt.includes("E2E_IMAGE") && !prompt.includes("edit")) {
+      try {
+        // The text-only fixture model receives a capability note after the JSON.
+        const output = JSON.parse(toolReply.content.split("\nERROR: Cannot read ")[0]);
+        images = (Array.isArray(output) ? output : [output])
+          .filter((result) => result.attachment)
+          .map(
+            (result, index) => `![Acceptance generated image ${index + 1}](${result.attachment})`,
+          )
+          .join("\n\n");
+      } catch {
+        // A post-generation Code Mode error deliberately exercises visible fallback.
+      }
+    }
+    send({
+      content: images
+        ? `${label}\n\n${images}\n\nImage shown inline.`
+        : `${label}: ${JSON.stringify(toolReply.content)}`,
+    });
     finish();
     return true;
   }

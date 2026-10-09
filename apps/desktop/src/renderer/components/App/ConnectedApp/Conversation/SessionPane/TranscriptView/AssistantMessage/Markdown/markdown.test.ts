@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { createMarkdownCache, renderMarkdown } from "./markdown.ts";
 
 describe("renderMarkdown", () => {
+  it("keeps attachment image references inert without accepting forged carriers", () => {
+    const html = renderMarkdown("Before ![Generated image](attachment:ocui-image-test.png) after");
+    expect(html).toContain('data-attachment-src="attachment:ocui-image-test.png"');
+    expect(html).toContain('alt="Generated image"');
+    expect(html).not.toMatch(/\ssrc="attachment:/);
+    const forged = renderMarkdown(
+      '<img src="https://example.test/a.png" data-attachment-src="attachment:ocui-image-test.png" alt="forged">',
+    );
+    expect(forged).not.toContain("data-attachment-src");
+    expect(forged).toContain('src="https://example.test/a.png"');
+    expect(renderMarkdown("[Not an image](attachment:ocui-image-test.png)")).not.toContain(
+      'href="attachment:',
+    );
+  });
+
   it("keeps file image sources inert for server resolution and preserves alt text", () => {
     const html = renderMarkdown("![Tool states](file:///Users/alex/project/tool-states.png)");
 

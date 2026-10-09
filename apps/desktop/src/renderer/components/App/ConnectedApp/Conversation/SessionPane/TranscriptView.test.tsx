@@ -179,6 +179,137 @@ function stubAnimationFrames() {
 }
 
 describe("TranscriptView", () => {
+  it("keeps an open fallback preview on its own image when earlier images move inline", () => {
+    stubResizeObserver();
+    const first = "ocui-image-00000000000000000000000001";
+    const second = "ocui-image-00000000000000000000000002";
+    const producer: SessionMessageAssistant = {
+      ...toolAssistantMessage("producer", "images"),
+      content: [
+        {
+          type: "tool",
+          id: "images",
+          name: "execute",
+          time: base,
+          state: {
+            status: "completed",
+            input: {},
+            content: [
+              {
+                type: "file",
+                name: `${first}.original.png`,
+                mime: "application/octet-stream",
+                uri: "data:application/octet-stream;base64,iVBORw0KGgoFIRST",
+              },
+              {
+                type: "file",
+                name: `${second}.original.png`,
+                mime: "application/octet-stream",
+                uri: "data:application/octet-stream;base64,iVBORw0KGgoSECOND",
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const [reply, setReply] = createSignal(textAssistantMessage("answer", "Writing the response"));
+    const { host, dispose } = mount(() => (
+      <TranscriptView sessionID="images" messages={[producer, reply()]} sessionStatus="running" />
+    ));
+    try {
+      const secondButton = host.querySelectorAll<HTMLButtonElement>(
+        ".transcript-generated-image-fallback button",
+      )[1]!;
+      secondButton.click();
+      const dialog = document.querySelector(".image-preview-content");
+      setReply(textAssistantMessage("answer", `![First image](attachment:${first})`));
+      expect(host.querySelector(".transcript-generated-image-fallback button")).toBe(secondButton);
+      expect(document.querySelector(".image-preview-content")).toBe(dialog);
+      expect(document.querySelector(".image-preview-image")?.getAttribute("src")).toBe(
+        "data:image/png;base64,iVBORw0KGgoSECOND",
+      );
+      setReply(
+        textAssistantMessage("answer", `![First image](attachment:${first}) with more prose`),
+      );
+      expect(document.querySelector(".image-preview-content")).toBe(dialog);
+      setReply(
+        textAssistantMessage(
+          "answer",
+          `![First](attachment:${first})\n\n![Second](attachment:${second})`,
+        ),
+      );
+      expect(host.querySelector(".transcript-generated-image-fallback")).toBeNull();
+      expect(document.querySelector(".image-preview-content")).toBeNull();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("resolves persisted images outside the mounted suffix and clears previews on session switch", () => {
+    stubResizeObserver();
+    const frames = stubAnimationFrames();
+    const name = "ocui-image-00000000000000000000000001";
+    const producer: SessionMessageAssistant = {
+      ...textAssistantMessage("producer", ""),
+      content: [
+        {
+          type: "tool",
+          id: "image-source",
+          name: "execute",
+          time: base,
+          state: {
+            status: "completed",
+            input: {},
+            content: [
+              {
+                type: "file",
+                name: `${name}.original.png`,
+                mime: "application/octet-stream",
+                uri: "data:application/octet-stream;base64,iVBORw0KGgoIMAGE",
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const reply = textAssistantMessage(
+      "image-reply",
+      `Before ![Earlier image](attachment:${name}) after`,
+    );
+    const [snapshot, setSnapshot] = createSignal<{
+      sessionID: string;
+      messages: SessionMessageInfo[];
+    }>({
+      sessionID: "images",
+      messages: [producer, ...userMessages("middle", 30), reply],
+    });
+    const { host, dispose } = mount(() => (
+      <TranscriptView
+        sessionID={snapshot().sessionID}
+        messages={snapshot().messages}
+        sessionStatus="idle"
+      />
+    ));
+    try {
+      expect(host.querySelector('[data-message-id="producer"]')).toBeNull();
+      const button = host.querySelector<HTMLButtonElement>(".transcript-generated-image")!;
+      expect(button).not.toBeNull();
+      button.click();
+      expect(document.querySelector(".image-preview-image")?.getAttribute("src")).toBe(
+        "data:image/png;base64,iVBORw0KGgoIMAGE",
+      );
+      setSnapshot({ sessionID: "another", messages: [reply] });
+      expect(document.querySelector(".image-preview-content")).toBeNull();
+      expect(host.querySelector(".transcript-generated-image")).toBeNull();
+      expect(host.textContent).toContain("Earlier image — image unavailable");
+      frames.runAll();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("updates same-ID assistant records while preserving rows across insertion and movement", () => {
     stubResizeObserver();
     const first = textAssistantMessage("reply", "Before acknowledgement");

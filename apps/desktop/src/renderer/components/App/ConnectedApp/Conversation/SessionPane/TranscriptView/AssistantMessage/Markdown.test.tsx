@@ -42,6 +42,162 @@ const unsafeMarkdown = (name: string, value: number) =>
   ].join("\n");
 
 describe("Markdown", () => {
+  it("updates attachment previews without rebuilding Markdown or losing selection", () => {
+    const source = {
+      reference: "attachment:known",
+      src: "data:image/png;base64,IMAGE",
+      fullSrc: "data:image/png;base64,FULL",
+    };
+    const [attachment, setAttachment] = createSignal<typeof source | undefined>(undefined);
+    const { host, dispose } = mount(() => (
+      <Markdown
+        text={"Select this text ![Otter](attachment:known)"}
+        resolveAttachment={() => attachment()}
+      />
+    ));
+    const selection = window.getSelection()!;
+    try {
+      expect(host.textContent).toContain("Otter — image unavailable");
+      setAttachment(source);
+      const paragraph = host.querySelector("p")!;
+      const range = document.createRange();
+      range.selectNodeContents(paragraph.firstChild!);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      setAttachment({ ...source });
+      expect(host.querySelector("p")).toBe(paragraph);
+      expect(selection.toString()).toBe("Select this text ");
+      host.querySelector<HTMLButtonElement>(".transcript-generated-image")!.click();
+      const dialog = document.querySelector(".image-preview-content");
+      setAttachment({ ...source, src: "data:image/png;base64,UPDATED" });
+      expect(host.querySelector(".transcript-generated-image img")?.getAttribute("src")).toBe(
+        "data:image/png;base64,UPDATED",
+      );
+      setAttachment({ ...source, fullSrc: "data:image/png;base64,UPDATEDFULL" });
+      expect(document.querySelector(".image-preview-content")).toBe(dialog);
+      expect(document.querySelector(".image-preview-image")?.getAttribute("src")).toBe(
+        "data:image/png;base64,UPDATEDFULL",
+      );
+      setAttachment(undefined);
+      expect(host.textContent).toContain("Otter — image unavailable");
+      expect(document.querySelector(".image-preview-content")).toBeNull();
+    } finally {
+      selection.removeAllRanges();
+      dispose();
+    }
+  });
+
+  it("preserves linked text around nested and multiple attachment images", () => {
+    const { host, dispose } = mount(() => (
+      <Markdown
+        text={
+          "[Before **![One](attachment:one)** after ![Two](attachment:two) tail](https://example.test/notes)"
+        }
+        resolveAttachment={(reference) => ({ reference, src: "data:image/png;base64,IMAGE" })}
+      />
+    ));
+    try {
+      expect(host.querySelector("a button")).toBeNull();
+      const links = [...host.querySelectorAll("a")];
+      expect(links.map((link) => link.textContent?.trim())).toEqual(["Before", "after", "tail"]);
+      expect(
+        links.every((link) => link.getAttribute("href") === "https://example.test/notes"),
+      ).toBe(true);
+      expect(host.querySelectorAll(".transcript-generated-image")).toHaveLength(2);
+    } finally {
+      dispose();
+    }
+  });
+
+  it("retains the correct inline preview when earlier image occurrences are removed", () => {
+    const [text, setText] = createSignal(
+      "![First](attachment:first)\n\n![Second](attachment:second)",
+    );
+    const { host, dispose } = mount(() => (
+      <Markdown
+        text={text()}
+        resolveAttachment={(reference) => ({
+          reference,
+          src: `data:image/png;base64,${reference}`,
+        })}
+      />
+    ));
+    try {
+      const second = host.querySelectorAll<HTMLButtonElement>(".transcript-generated-image")[1]!;
+      second.click();
+      const dialog = document.querySelector(".image-preview-content");
+      setText("![Second](attachment:second)");
+      expect(host.querySelector(".transcript-generated-image")).toBe(second);
+      expect(document.querySelector(".image-preview-content")).toBe(dialog);
+      expect(document.querySelector(".image-preview-image")?.getAttribute("src")).toBe(
+        "data:image/png;base64,attachment:second",
+      );
+      document.querySelector<HTMLButtonElement>(".image-preview-close")!.click();
+      setText("![Second](attachment:second)\n\n![Second](attachment:second)");
+      expect(host.querySelectorAll(".transcript-generated-image")).toHaveLength(2);
+    } finally {
+      dispose();
+    }
+  });
+
+  it("renders attachment images in place and retains an open original preview during streaming", () => {
+    const [text, setText] = createSignal("Before ![Otter](attachment:ocui-image-test) after");
+    const readFileImage = vi.fn<ServerFileImageReader>(async () => new Blob([]));
+    const { host, dispose } = mount(() => (
+      <Markdown
+        text={text()}
+        readFileImage={readFileImage}
+        resolveAttachment={() => ({
+          reference: "attachment:ocui-image-test",
+          src: "data:image/jpeg;base64,PREVIEW",
+          fullSrc: "data:image/png;base64,FULL",
+        })}
+      />
+    ));
+    try {
+      const button = host.querySelector<HTMLButtonElement>(".transcript-generated-image")!;
+      expect(button.closest("p")?.textContent).toBe("Before  after");
+      expect(host.querySelector("p div")).toBeNull();
+      button.click();
+      const dialog = document.querySelector(".image-preview-content");
+      expect(document.querySelector(".image-preview-image")?.getAttribute("src")).toBe(
+        "data:image/png;base64,FULL",
+      );
+      setText("Before ![Otter](attachment:ocui-image-test) after, with more streamed prose.");
+      expect(host.querySelector(".transcript-generated-image")).toBe(button);
+      expect(document.querySelector(".image-preview-content")).toBe(dialog);
+      expect(readFileImage).not.toHaveBeenCalled();
+      document.querySelector<HTMLButtonElement>(".image-preview-close")!.click();
+      setText("No image now");
+      expect(host.querySelector(".transcript-generated-image")).toBeNull();
+    } finally {
+      dispose();
+    }
+  });
+
+  it("shows unavailable references and avoids nesting preview buttons inside links", () => {
+    const { host, dispose } = mount(() => (
+      <Markdown
+        text={
+          "[![Otter](attachment:known)](https://example.test)\n\n![Missing](attachment:unknown)"
+        }
+        resolveAttachment={(reference) =>
+          reference === "attachment:known"
+            ? { reference, src: "data:image/png;base64,IMAGE" }
+            : undefined
+        }
+      />
+    ));
+    try {
+      expect(host.querySelector("a button")).toBeNull();
+      expect(host.querySelector(".transcript-generated-image")).not.toBeNull();
+      expect(host.textContent).toContain("Missing — image unavailable");
+      expect(host.querySelector('img[src^="attachment:"]')).toBeNull();
+    } finally {
+      dispose();
+    }
+  });
+
   afterEach(() => {
     restoreProperty("createObjectURL", createObjectURLDescriptor);
     restoreProperty("revokeObjectURL", revokeObjectURLDescriptor);

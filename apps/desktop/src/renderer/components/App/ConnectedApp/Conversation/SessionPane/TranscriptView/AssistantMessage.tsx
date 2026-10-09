@@ -8,6 +8,8 @@ import type { ServerFileImageReader } from "../../../../../../opencode/file-imag
 import { Markdown } from "./AssistantMessage/Markdown.tsx";
 import { ActivityBlock } from "./AssistantMessage/ActivityBlock.tsx";
 import type { ActivityContinuation, ActivityDetailInfo } from "./workDetailProjection.ts";
+import type { GeneratedImage } from "./generatedImages.ts";
+import { ImagePreview } from "../../../../../../ui/ImagePreview.tsx";
 
 export type AssistantMessageProps = {
   readonly message: SessionMessageAssistant;
@@ -23,6 +25,8 @@ export type AssistantMessageProps = {
   /** Resolves `file:` images in Markdown through the connected server. */
   readonly readFileImage?: ServerFileImageReader;
   readonly directory?: string;
+  readonly generatedImages?: readonly GeneratedImage[];
+  readonly resolveAttachment?: (index: number, reference: string) => GeneratedImage | undefined;
 };
 
 export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
@@ -58,6 +62,7 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
       data-state={state()}
       hidden={
         props.chainedTo !== undefined &&
+        !props.generatedImages?.length &&
         !failed() &&
         !props.message.content.some((part) => part.type === "text")
       }
@@ -65,6 +70,26 @@ export function AssistantMessage(props: AssistantMessageProps): JSX.Element {
       <div class="transcript-assistant-document">
         <For each={props.message.content}>
           {(content, index) => renderContent(content, index, props)}
+        </For>
+        <For each={props.generatedImages?.map((image) => image.reference)}>
+          {(reference) => {
+            const image = () =>
+              props.generatedImages?.find((candidate) => candidate.reference === reference);
+            return (
+              <div class="transcript-generated-image-fallback">
+                <Show when={image()?.src} fallback={<span>Generated image unavailable</span>}>
+                  {(src) => (
+                    <ImagePreview
+                      src={src()}
+                      fullSrc={image()?.fullSrc}
+                      alt="Generated image"
+                      class="transcript-generated-image"
+                    />
+                  )}
+                </Show>
+              </div>
+            );
+          }}
         </For>
         <Show
           when={
@@ -113,6 +138,7 @@ function renderContent(
           text={content.text}
           annotationBlock={annotationBlock("content", index(), "text")}
           readFileImage={props.readFileImage}
+          resolveAttachment={(reference) => props.resolveAttachment?.(index(), reference)}
         />
       );
     case "reasoning":

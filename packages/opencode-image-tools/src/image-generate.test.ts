@@ -169,22 +169,20 @@ layer(authorization)("image_generate", (it) => {
         .execute({ prompt: "An otter" }, f.tool)
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch));
       expect(result.output.saved).toBe(true);
+      expect(result.output.attachment).toMatch(/^attachment:ocui-image-[A-Za-z0-9]{26}$/);
       expect(result.output.path).toMatch(/\/generated_images\/call-image-[A-Za-z0-9]{26}\.png$/);
       expect(Encoding.encodeBase64(yield* f.fs.readFile(result.output.path!))).toBe(pngBase64);
       expect(result.content).toContainEqual({
         type: "file",
         uri: `data:image/png;base64,${pngBase64}`,
         mime: "image/png",
-        name: result.output.path!.split("/").at(-1),
+        name: `${result.output.attachment.slice("attachment:".length)}.png`,
       });
       expect(result.content).toContainEqual({
         type: "file",
         uri: `data:application/octet-stream;base64,${pngBase64}`,
         mime: "application/octet-stream",
-        name: result.output
-          .path!.split("/")
-          .at(-1)!
-          .replace(/\.png$/i, ".original.png"),
+        name: `${result.output.attachment.slice("attachment:".length)}.original.png`,
       });
       expect(f.fetch).toHaveBeenCalledTimes(1);
       const [url, init] = f.fetch.mock.calls[0]!;
@@ -221,6 +219,7 @@ layer(authorization)("image_generate", (it) => {
         ).pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch));
         const filenames = results.map((result) => result.output.path);
         expect(new Set(filenames).size).toBe(2);
+        expect(new Set(results.map((result) => result.output.attachment)).size).toBe(2);
         for (const result of results) {
           expect(result.output.saved).toBe(true);
           expect(Encoding.encodeBase64(yield* f.fs.readFile(result.output.path!))).toBe(pngBase64);
@@ -486,7 +485,7 @@ layer(authorization)("image_generate", (it) => {
           type: "file",
           uri: `data:application/octet-stream;base64,${pngBase64}`,
           mime: "application/octet-stream",
-          name: "partial.original.png",
+          name: `${result.output.attachment.slice("attachment:".length)}.original.png`,
         });
         expect(yield* f.fs.exists(`${f.directory}/partial.png`)).toBe(false);
         expect(f.fetch).toHaveBeenCalledTimes(1);

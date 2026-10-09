@@ -31,6 +31,24 @@ function renderContents(content: [ToolContent, ...ToolContent[]]) {
 }
 
 describe("tool image attachments", () => {
+  it("leaves generated images to the transcript while retaining mixed tool output", () => {
+    const name = "ocui-image-00000000000000000000000001";
+    const mounted = renderContents([
+      preview(name),
+      original(name),
+      { type: "text", text: "Other tool output" },
+      preview("browser-capture"),
+    ]);
+    try {
+      expect(mounted.host.querySelectorAll(".transcript-tool-image-thumbnail")).toHaveLength(1);
+      expect(mounted.host.textContent).toContain("browser-capture.png");
+      expect(mounted.host.textContent).toContain("Other tool output");
+      expect(mounted.host.textContent).not.toContain(name);
+    } finally {
+      mounted.dispose();
+    }
+  });
+
   it("pairs PNG and JPEG-normalized previews with their own distinct originals", () => {
     const mounted = renderContents([
       preview("first"),

@@ -2698,16 +2698,21 @@ describe.sequential("production browser app", () => {
   it("generates and edits images only through Code Mode, persists results, and renders previews", async () => {
     await ensureConnected();
     const location = { directory: await realpath(project) };
+    await expect
+      .poll(async () =>
+        (await api.plugin.list({ location })).data
+          .filter((plugin) => plugin.source.type !== "builtin")
+          .map((plugin) => ({ id: plugin.id, state: plugin.state })),
+      )
+      .toEqual(
+        expect.arrayContaining([
+          {
+            id: "acceptance.image-transport",
+            state: expect.objectContaining({ status: "active" }),
+          },
+        ]),
+      );
     const plugins = await api.plugin.list({ location });
-    expect(
-      plugins.data
-        .filter((plugin) => plugin.source.type !== "builtin")
-        .map((plugin) => ({ id: plugin.id, state: plugin.state })),
-    ).toEqual(
-      expect.arrayContaining([
-        { id: "acceptance.image-transport", state: expect.objectContaining({ status: "active" }) },
-      ]),
-    );
     expect(
       plugins.data.some(
         (plugin) => plugin.id === "oc-ui.image-tools" && plugin.state.status === "active",
@@ -2799,9 +2804,19 @@ describe.sequential("production browser app", () => {
         ).toBe(true);
       }
       expect(new Set(paths).size).toBe(4);
-      const image = page.locator(".transcript-tool-image").first();
+      const image = page.locator(".transcript-generated-image img").first();
+      await expect.poll(() => page.locator(".transcript-generated-image").count()).toBe(6);
+      const inline = page.locator(".transcript-markdown .transcript-generated-image");
+      await expect.poll(() => inline.count()).toBe(4);
+      await expect.poll(() => page.locator(".transcript-generated-image-fallback").count()).toBe(2);
+      const surrounding = await inline
+        .first()
+        .evaluate((element) => element.closest(".transcript-markdown").textContent);
+      expect(surrounding).toContain("Acceptance image generate completed");
+      expect(surrounding).toContain("Image shown inline.");
       await expandImageTools();
-      await expect.poll(() => page.locator(".transcript-tool-image").count()).toBe(6);
+      expect(await page.locator(".transcript-tool-image").count()).toBe(0);
+      expect(await page.locator(".transcript-generated-image").count()).toBe(6);
       await image.scrollIntoViewIfNeeded();
       await expect
         .poll(() => image.evaluate((element) => element.complete && element.naturalWidth > 0))
@@ -2809,7 +2824,7 @@ describe.sequential("production browser app", () => {
       expect(await image.evaluate((element) => element.naturalWidth)).toBeLessThan(
         imageFixtureWidth,
       );
-      await page.locator(".transcript-tool-image-thumbnail").first().click();
+      await page.locator(".transcript-generated-image").first().click();
       const fullImage = page.locator(".image-preview-image");
       await expect
         .poll(() => fullImage.evaluate((element) => element.naturalWidth))
@@ -2818,14 +2833,14 @@ describe.sequential("production browser app", () => {
         `data:image/png;base64,${imageFixtureBase64}`,
       );
       await page.getByRole("button", { name: "Close image preview" }).click();
+      for (const path of paths) await unlink(path);
       await page.reload();
       await ensureConnected();
       await selectSession(session.title);
-      await expandImageTools();
-      await expect.poll(() => page.locator(".transcript-tool-image").count()).toBe(6);
+      await expect.poll(() => page.locator(".transcript-generated-image").count()).toBe(6);
       // The final invocation produced an image and then threw, so its original
       // must come from the collected attachment rather than the returned value.
-      await page.locator(".transcript-tool-image-thumbnail").last().click();
+      await page.locator(".transcript-generated-image").last().click();
       await expect
         .poll(() => fullImage.evaluate((element) => element.naturalWidth))
         .toBe(imageFixtureWidth);
