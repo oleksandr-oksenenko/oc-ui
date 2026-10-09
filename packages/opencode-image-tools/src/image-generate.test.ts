@@ -20,6 +20,7 @@ import {
   Layer,
   PlatformError,
   Schema,
+  type Types,
 } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { expect, vi } from "vite-plus/test";
@@ -109,7 +110,7 @@ layer(authorization)("image_generate", (it) => {
               )
             : Effect.void,
         );
-        const result = yield* makeImageTool(f.ctx, "gpt-image-2")
+        const result = yield* makeImageTool(f.ctx)
           .execute(
             { prompt: "Otter", outputPath: "nested/blocked.png", referencePaths: ["secret.png"] },
             f.tool,
@@ -146,7 +147,7 @@ layer(authorization)("image_generate", (it) => {
   it.effect("fails before dispatch when the host lacks authorization services", () =>
     Effect.gen(function* () {
       const f = yield* fixture();
-      const error = yield* makeImageTool(f.ctx, "gpt-image-2")
+      const error = yield* makeImageTool(f.ctx)
         .execute({ prompt: "Otter" }, f.tool)
         .pipe(
           Effect.updateContext((context: Context.Context<never>) =>
@@ -161,47 +162,58 @@ layer(authorization)("image_generate", (it) => {
     }).pipe(Effect.provide(NodeFileSystem.layer)),
   );
 
-  it.effect("generates once with ChatGPT credentials and persists a PNG and preview", () =>
-    Effect.gen(function* () {
-      const f = yield* fixture();
-      const tool = makeImageTool(f.ctx, "gpt-image-2");
-      const result = yield* tool
-        .execute({ prompt: "An otter" }, f.tool)
-        .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch));
-      expect(result.output.saved).toBe(true);
-      expect(result.output.attachment).toMatch(/^attachment:ocui-image-[A-Za-z0-9]{26}$/);
-      expect(result.output.path).toMatch(/\/generated_images\/call-image-[A-Za-z0-9]{26}\.png$/);
-      expect(Encoding.encodeBase64(yield* f.fs.readFile(result.output.path!))).toBe(pngBase64);
-      expect(result.content).toContainEqual({
-        type: "file",
-        uri: `data:image/png;base64,${pngBase64}`,
-        mime: "image/png",
-        name: `${result.output.attachment.slice("attachment:".length)}.png`,
-      });
-      expect(result.content).toContainEqual({
-        type: "file",
-        uri: `data:application/octet-stream;base64,${pngBase64}`,
-        mime: "application/octet-stream",
-        name: `${result.output.attachment.slice("attachment:".length)}.original.png`,
-      });
-      expect(f.fetch).toHaveBeenCalledTimes(1);
-      const [url, init] = f.fetch.mock.calls[0]!;
-      expect(new Request(url, init).url).toBe(
-        "https://chatgpt.com/backend-api/codex/images/generations",
-      );
-      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-access");
-      expect(new Headers(init?.headers).get("chatgpt-account-id")).toBe("test-account");
-      const body = yield* Effect.promise(() => new Request(url, init).text());
-      expect(yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(body)).toEqual({
-        model: "gpt-image-2",
-        prompt: "An otter",
-        n: 1,
-        quality: "auto",
-        size: "auto",
-        background: "auto",
-      });
-      expect(yield* Schema.decodeEffect(tool.output)(result.output)).toEqual(result.output);
-    }).pipe(Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+  it.effect.each([
+    [undefined, undefined, "gpt-image-2.5-flare"],
+    [undefined, "gpt-image-2.5-sunburst", "gpt-image-2.5-sunburst"],
+    ["gpt-image-2.5-sunburst", "gpt-image-2.5-flare", "gpt-image-2.5-flare"],
+    ["gpt-image-2", undefined, "gpt-image-2"],
+  ] as const)(
+    "generates once with plugin model %s and request model %s, preserving PNG and preview",
+    ([defaultModel, model, expectedModel]) =>
+      Effect.gen(function* () {
+        const f = yield* fixture();
+        const tool = makeImageTool(f.ctx, defaultModel);
+        const progress = vi.fn<Tool.Context["progress"]>(() => Effect.void);
+        const input: Types.Mutable<typeof Input.Type> = { prompt: "An otter" };
+        if (model !== undefined) input.model = model;
+        const result = yield* tool
+          .execute(input, { ...f.tool, progress })
+          .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch));
+        expect(result.output).toMatchObject({ saved: true, model: expectedModel });
+        expect(progress).toHaveBeenCalledWith({ stage: "generation", model: expectedModel });
+        expect(result.output.attachment).toMatch(/^attachment:ocui-image-[A-Za-z0-9]{26}$/);
+        expect(result.output.path).toMatch(/\/generated_images\/call-image-[A-Za-z0-9]{26}\.png$/);
+        expect(Encoding.encodeBase64(yield* f.fs.readFile(result.output.path!))).toBe(pngBase64);
+        expect(result.content).toContainEqual({
+          type: "file",
+          uri: `data:image/png;base64,${pngBase64}`,
+          mime: "image/png",
+          name: `${result.output.attachment.slice("attachment:".length)}.png`,
+        });
+        expect(result.content).toContainEqual({
+          type: "file",
+          uri: `data:application/octet-stream;base64,${pngBase64}`,
+          mime: "application/octet-stream",
+          name: `${result.output.attachment.slice("attachment:".length)}.original.png`,
+        });
+        expect(f.fetch).toHaveBeenCalledTimes(1);
+        const [url, init] = f.fetch.mock.calls[0]!;
+        expect(new Request(url, init).url).toBe(
+          "https://chatgpt.com/backend-api/codex/images/generations",
+        );
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-access");
+        expect(new Headers(init?.headers).get("chatgpt-account-id")).toBe("test-account");
+        const body = yield* Effect.promise(() => new Request(url, init).text());
+        expect(yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(body)).toEqual({
+          model: expectedModel,
+          prompt: "An otter",
+          n: 1,
+          quality: "auto",
+          size: "auto",
+          background: "auto",
+        });
+        expect(yield* Schema.decodeEffect(tool.output)(result.output)).toEqual(result.output);
+      }).pipe(Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
   );
 
   it.effect.each([1, 2])(
@@ -209,7 +221,7 @@ layer(authorization)("image_generate", (it) => {
     (concurrency) =>
       Effect.gen(function* () {
         const f = yield* fixture();
-        const tool = makeImageTool(f.ctx, "gpt-image-2");
+        const tool = makeImageTool(f.ctx);
         const results = yield* Effect.all(
           [
             tool.execute({ prompt: "First otter" }, f.tool),
@@ -236,6 +248,7 @@ layer(authorization)("image_generate", (it) => {
         .execute(
           {
             prompt: "Make it transparent",
+            model: "gpt-image-2.5-sunburst",
             referencePaths: Array.from({ length: count }, () => "reference.bin"),
             outputPath: "edited.png",
             background: "transparent",
@@ -243,13 +256,13 @@ layer(authorization)("image_generate", (it) => {
           f.tool,
         )
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch));
-      expect(result.output.saved).toBe(true);
+      expect(result.output).toMatchObject({ saved: true, model: "gpt-image-2.5-sunburst" });
       const [url, init] = f.fetch.mock.calls[0]!;
       expect(new Request(url, init).url).toBe("https://chatgpt.com/backend-api/codex/images/edits");
       expect(new Headers(init?.headers).get("content-type")).toBe("application/json");
       const body = yield* Effect.promise(() => new Request(url, init).text());
       expect(yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(body)).toEqual({
-        model: "gpt-image-2.5-flare",
+        model: "gpt-image-2.5-sunburst",
         prompt: "Make it transparent",
         n: 1,
         quality: "auto",
@@ -268,7 +281,7 @@ layer(authorization)("image_generate", (it) => {
       const f = yield* fixture();
       const filename = `${f.directory}/existing.png`;
       yield* f.fs.writeFileString(filename, "existing");
-      const exit = yield* makeImageTool(f.ctx, "gpt-image-2")
+      const exit = yield* makeImageTool(f.ctx)
         .execute({ prompt: "Otter", outputPath: "existing.png" }, f.tool)
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.exit);
       expect(Exit.isFailure(exit)).toBe(true);
@@ -291,7 +304,7 @@ layer(authorization)("image_generate", (it) => {
                 : { ...oauth, methodID: Credential.OAuth.fields.methodID.make("other-oauth") },
           ),
         );
-        const exit = yield* makeImageTool(f.ctx, "gpt-image-2")
+        const exit = yield* makeImageTool(f.ctx)
           .execute({ prompt: "Otter", outputPath: "auth.png" }, f.tool)
           .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.exit);
         expect(Exit.isFailure(exit)).toBe(true);
@@ -303,7 +316,7 @@ layer(authorization)("image_generate", (it) => {
   it.effect("resolves refreshed credentials on each invocation, including account changes", () =>
     Effect.gen(function* () {
       const f = yield* fixture();
-      const tool = makeImageTool(f.ctx, "gpt-image-2");
+      const tool = makeImageTool(f.ctx);
       yield* tool
         .execute({ prompt: "One", outputPath: "one.png", referencePaths: [] }, f.tool)
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch));
@@ -338,7 +351,7 @@ layer(authorization)("image_generate", (it) => {
                   ? new Uint8Array([...png.subarray(0, 45), ...new Uint8Array(png.length - 45)])
                   : new Uint8Array(20 * 1024 * 1024 + 1),
           );
-        const exit = yield* makeImageTool(f.ctx, "gpt-image-2")
+        const exit = yield* makeImageTool(f.ctx)
           .execute({ prompt: "Otter", referencePaths: ["bad"] }, f.tool)
           .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.exit);
         expect(Exit.isFailure(exit)).toBe(true);
@@ -356,7 +369,7 @@ layer(authorization)("image_generate", (it) => {
             location: { ...f.caller.location, workspaceID: Workspace.ID.create() },
           }),
       };
-      const exit = yield* makeImageTool(f.ctx, "gpt-image-2")
+      const exit = yield* makeImageTool(f.ctx)
         .execute({ prompt: "Otter" }, f.tool)
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.exit);
       expect(Exit.isFailure(exit)).toBe(true);
@@ -405,7 +418,7 @@ layer(authorization)("image_generate", (it) => {
           ),
         ),
       );
-      const exit = yield* makeImageTool(f.ctx, "gpt-image-2")
+      const exit = yield* makeImageTool(f.ctx)
         .execute({ prompt: "Otter", outputPath: "bad.png" }, f.tool)
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.exit);
       expect(Exit.isFailure(exit)).toBe(true);
@@ -421,7 +434,7 @@ layer(authorization)("image_generate", (it) => {
       f.fetch.mockImplementation(() =>
         Promise.resolve(Response.json({ data: [{ url: "https://example.com/generated.png" }] })),
       );
-      const result = yield* makeImageTool(f.ctx, "gpt-image-2")
+      const result = yield* makeImageTool(f.ctx)
         .execute({ prompt: "Otter", outputPath: "url.png" }, f.tool)
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.flip);
       expect(result.message).toContain("https://example.com/generated.png");
@@ -465,7 +478,7 @@ layer(authorization)("image_generate", (it) => {
         };
         const result = yield* run(
           f.ctx,
-          "gpt-image-2",
+          "gpt-image-2.5-sunburst",
           { prompt: "Otter", outputPath: "partial.png" },
           f.tool,
         ).pipe(
@@ -514,7 +527,7 @@ layer(authorization)("image_generate", (it) => {
           ),
         );
       });
-      const fiber = yield* makeImageTool(f.ctx, "gpt-image-2")
+      const fiber = yield* makeImageTool(f.ctx)
         .execute({ prompt: "Otter", outputPath: "cancel.png" }, f.tool)
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.forkChild);
       yield* Deferred.await(started);
@@ -536,7 +549,7 @@ layer(authorization)("image_generate", (it) => {
           Deferred.doneUnsafe(started, Effect.void);
         });
       });
-      const fiber = yield* makeImageTool(f.ctx, "gpt-image-2")
+      const fiber = yield* makeImageTool(f.ctx)
         .execute({ prompt: "Otter", outputPath: "headers.png" }, f.tool)
         .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.forkChild);
       yield* Deferred.await(started);
@@ -561,7 +574,7 @@ layer(authorization)("image_generate", (it) => {
               ? Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release)))
               : Effect.void,
         };
-        const fiber = yield* makeImageTool(f.ctx, "gpt-image-2")
+        const fiber = yield* makeImageTool(f.ctx)
           .execute({ prompt: "Otter", outputPath: "replacement.png" }, tool)
           .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.forkChild);
         yield* Deferred.await(started);
@@ -624,7 +637,7 @@ layer(authorization)("image_generate", (it) => {
             ),
           );
         });
-        const exit = yield* makeImageTool(f.ctx, "gpt-image-2")
+        const exit = yield* makeImageTool(f.ctx)
           .execute({ prompt: "Otter", outputPath: "overflow.png" }, f.tool)
           .pipe(Effect.provideService(FetchHttpClient.Fetch, f.fetch), Effect.exit);
         expect(Exit.isFailure(exit)).toBe(true);
@@ -662,7 +675,7 @@ layer(authorization)("image_generate", (it) => {
       };
       const fiber = yield* run(
         f.ctx,
-        "gpt-image-2",
+        "gpt-image-2.5-sunburst",
         { prompt: "Otter", outputPath: "commit.png" },
         f.tool,
       ).pipe(
@@ -701,7 +714,7 @@ layer(authorization)("image_generate", (it) => {
         };
         const fiber = yield* run(
           f.ctx,
-          "gpt-image-2",
+          "gpt-image-2.5-sunburst",
           { prompt: "Otter", outputPath: "collision.png" },
           f.tool,
         ).pipe(
@@ -739,6 +752,16 @@ layer(authorization)("image_generate", (it) => {
   );
 
   it("validates the model-facing schema", () => {
+    expect(Schema.decodeSync(Input)({ prompt: "Otter" })).toEqual({ prompt: "Otter" });
+    for (const model of ["gpt-image-2.5-sunburst", "gpt-image-2.5-flare"] as const) {
+      expect(Schema.decodeSync(Input)({ prompt: "Otter", model })).toEqual({
+        prompt: "Otter",
+        model,
+      });
+    }
+    expect(() =>
+      Schema.decodeUnknownSync(Input)({ prompt: "Otter", model: "gpt-image-2" }),
+    ).toThrow();
     expect(() => Schema.decodeSync(Input)({ prompt: " " })).toThrow();
     expect(() =>
       Schema.decodeSync(Input)({ prompt: "Otter", referencePaths: Array(6).fill("image.png") }),
