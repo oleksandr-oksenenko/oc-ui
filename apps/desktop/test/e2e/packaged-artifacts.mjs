@@ -60,7 +60,7 @@ export function packagedArtifacts(desktopRoot, platform, arch, glibcVersion) {
     assets: [
       join(resources, "app.asar"),
       join(runtimePath, "opencode-worker.mjs"),
-      join(runtimePath, "session-tools", "index.js"),
+      join(runtimePath, "tools", "index.js"),
       join(runtimePath, "image-tools", "index.js"),
       join(modules, "@opencode", "core", "package.json"),
       join(modules, "@silvia-odwyer", "photon-node", "photon_rs_bg.wasm"),

@@ -56,7 +56,7 @@ describe("owned OpenCode launch settings", () => {
         project: true,
         content: JSON.stringify({
           plugins: [
-            { package: new URL("./session-tools/", import.meta.url).href },
+            { package: new URL("./tools/", import.meta.url).href },
             { package: new URL("./image-tools/", import.meta.url).href },
           ],
         }),

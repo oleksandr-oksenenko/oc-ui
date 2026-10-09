@@ -28,7 +28,12 @@ export function ToolCall(props: ToolCallProps): JSX.Element {
   const content = createDeferredCollapsibleMount();
   const details = () => toolDetails(props.tool);
   const parameter = () => toolParameter(props.tool, props.directory);
-  const status = () => props.tool.state.status;
+  const status = () =>
+    props.tool.name === "execute" &&
+    props.tool.state.status === "completed" &&
+    props.tool.state.metadata?.error === true
+      ? "error"
+      : props.tool.state.status;
   const outcome = () => shellCommandOutcome(props.tool);
   const settled = () =>
     outcome() !== "running" && (status() === "completed" || status() === "error");

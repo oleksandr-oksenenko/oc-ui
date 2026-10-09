@@ -44,7 +44,7 @@ stagePackageClosure(
   join(desktopDirectory, "out", "main"),
 );
 
-for (const plugin of ["session-tools", "image-tools"]) {
+for (const plugin of ["tools", "image-tools"]) {
   if (!statSync(join(runtimeDirectory, plugin, "index.js")).isFile()) {
     throw new Error(`OpenCode ${plugin} plugin is missing`);
   }

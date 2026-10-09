@@ -851,7 +851,7 @@ builds, are:
 ```sh
 pnpm --filter desktop exec vp test run --project=storybook stories/ContextPanel.stories.tsx
 pnpm --filter desktop exec vp test run --project=storybook stories/TranscriptCodeBlock.stories.tsx
-pnpm --filter @oc-ui/opencode-session-tools build
+pnpm --filter @oc-ui/opencode-tools build
 pnpm --filter desktop exec vp test run --project=web test/browser-inspection.test.mjs
 pnpm --filter desktop exec vp test run --project=web test/e2e/opencode-server.test.mjs
 pnpm --filter desktop exec vp test run --project=web test/e2e/browser.test.mjs

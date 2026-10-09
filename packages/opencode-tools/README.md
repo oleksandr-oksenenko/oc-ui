@@ -1,12 +1,24 @@
-# OpenCode session tools
+# OpenCode tools
 
 An OpenCode V2 server plugin for `2.0.3`, using Effect `4.0.0-rc.112`.
 oc-ui bundles this plugin and loads it automatically on its built-in server.
 
-## Tool
+## Tool surface
+
+The plugin keeps `read`, `shell`, and the model's editing tools (`patch`, or
+`edit` and `write`) directly available. It moves all other tools registered before
+this plugin, including `glob`, `grep`, `webfetch`, `websearch`, `question`, `skill`,
+and `subagent`, into Code Mode. `execute` remains directly available and supplies
+catalog discovery through `search`. Tools retain their original schemas,
+executors, namespaces, and permission checks. The transform is replayed after
+registry refreshes, including MCP changes. Tools added by later plugins retain
+those plugins' exposure options.
+
+`session_create` is also Code Mode-only. Discover its signature using
+`search({ query: "session_create" })`, then invoke it through `execute`:
 
 ```ts
-session_create({ prompt: "Implement connection recovery." });
+return await tools.session_create({ prompt: "Implement connection recovery." });
 ```
 
 Creates a new Git worktree from the calling checkout's `HEAD`, creates an
@@ -18,7 +30,7 @@ Each omitted selection inherits independently from the calling session. For
 example, changing the agent does not change the inherited model or variant:
 
 ```ts
-session_create({
+return await tools.session_create({
   prompt: "Review the alternative implementation.",
   agent: "plan",
   model: { providerID: "your-provider", modelID: "your-model" },
@@ -35,7 +47,7 @@ it with a different variant.
 To use an existing worktree, specify its absolute path on the connected server:
 
 ```ts
-session_create({
+return await tools.session_create({
   prompt: "Continue implementation here.",
   worktree: { existing: { directory: "/server/worktrees/feature" } },
 });
@@ -65,8 +77,8 @@ Run these commands from this repository to build and create an installable archi
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @oc-ui/opencode-session-tools build
-pnpm --filter @oc-ui/opencode-session-tools pack
+pnpm --filter @oc-ui/opencode-tools build
+pnpm --filter @oc-ui/opencode-tools pack
 ```
 
 Copy the resulting archive to the server and install it into a directory dedicated
@@ -74,7 +86,7 @@ to server plugins, using that server's package manager. For example, from that
 directory:
 
 ```sh
-npm install /absolute/path/to/oc-ui-opencode-session-tools-0.1.0.tgz
+npm install /absolute/path/to/oc-ui-opencode-tools-0.1.0.tgz
 ```
 
 Add the installed plugin directory to the server's OpenCode configuration, preserving any
@@ -84,7 +96,7 @@ existing plugin entries:
 {
   "plugins": [
     {
-      "package": "/absolute/plugin-directory/node_modules/@oc-ui/opencode-session-tools/dist"
+      "package": "/absolute/plugin-directory/node_modules/@oc-ui/opencode-tools/dist"
     }
   ]
 }

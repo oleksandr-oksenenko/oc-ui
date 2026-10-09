@@ -19,8 +19,8 @@ export default {
   extraResources: [
     { from: "src/main/browser/upstream/LICENSE", to: "licenses/opencode-browser-LICENSE" },
     {
-      from: "out/opencode-runtime/session-tools",
-      to: "opencode-runtime/session-tools",
+      from: "out/opencode-runtime/tools",
+      to: "opencode-runtime/tools",
       filter: ["**/*"],
     },
     {

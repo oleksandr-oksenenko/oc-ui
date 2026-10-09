@@ -13,6 +13,8 @@ const model = (name) => ({
  */
 const markdownText = (value) => value.replace(/\\([!"#$%&'()*+,-./:;<=>?@[\\\]^_`{|}~])/gu, "$1");
 
+const toolNames = (body) => body.tools?.map((tool) => tool.function?.name);
+
 // The real pinned OpenCode server consumes this local OpenAI chat-completion endpoint.
 // Scenarios are selected by the latest user turn, so transcript history cannot retrigger them.
 export async function startScriptedProvider() {
@@ -52,7 +54,12 @@ export async function startScriptedProvider() {
       );
       const afterUser = messages.slice(lastUser + 1);
       const toolReply = afterUser.find((message) => message.role === "tool");
-      requests.push({ model: body.model, prompt, toolReply: toolReply?.content });
+      requests.push({
+        model: body.model,
+        prompt,
+        toolReply: toolReply?.content,
+        tools: toolNames(body),
+      });
       console.log(`[acceptance provider] ${body.model}: ${prompt.slice(0, 100)}`);
       if (respondRetry(prompt, body.model, requests, response)) return;
       if (prompt.includes("E2E_PROVIDER_ERROR") && body.model !== "title") {
@@ -217,7 +224,37 @@ function respondScriptedPrompt({ modelName, prompt, response, send, finish, onCa
   return false;
 }
 
+function toolSurfaceCall(prompt) {
+  if (prompt.includes("E2E_TOOL_SURFACE")) {
+    const denied = prompt.includes("denied");
+    const url = prompt.match(/https?:\/\/[^\s]+\/browser-data/u)?.[0];
+    return {
+      name: "execute",
+      input: {
+        code: denied
+          ? `const catalog = search({query: "grep", limit: 100});
+             if (catalog.items.some(item => item.path === "tools.grep")) throw new Error("Denied grep is discoverable");
+             try { await tools.grep({pattern: "working", include: "working.txt"}); }
+             catch { return {denied: true}; }
+             throw new Error("Denied grep executed");`
+          : `const catalog = search({limit: 100});
+             const paths = catalog.items.map(item => item.path);
+             for (const name of ["glob", "grep", "webfetch", "websearch", "question", "skill", "subagent", "session_create"])
+               if (!paths.includes("tools." + name)) throw new Error("Missing Code Mode tool: " + name);
+             const files = await tools.glob({pattern: "working.txt"});
+             const matches = await tools.grep({pattern: "working content", include: "working.txt"});
+             const page = await tools.webfetch({url: ${JSON.stringify(url)}, format: "text"});
+             const skill = await tools.skill({id: "review"});
+             return {paths, files, matches, page, skill};`,
+      },
+    };
+  }
+  return undefined;
+}
+
 function requestedTool(prompt) {
+  const surface = toolSurfaceCall(prompt);
+  if (surface) return surface;
   if (prompt.includes("E2E_IMAGE")) {
     if (prompt.includes("permission"))
       return {
@@ -441,20 +478,38 @@ function respondTool(prompt, toolReply, body, send, finish, requestID, response,
       body.tools?.some((tool) => tool.function?.name === "image_generate")
     )
       throw new Error("Image generation must only be offered through Code Mode");
-    send(toolCall(body.tools, requested, requestID));
+    const direct = ["read", "shell", "execute"].includes(requested.name);
+    if (!direct && body.tools?.some((tool) => tool.function?.name === requested.name))
+      throw new Error(`${requested.name} must only be offered through Code Mode`);
+    send(
+      toolCall(
+        body.tools,
+        direct
+          ? requested
+          : {
+              name: "execute",
+              input: {
+                code: `return await tools[${JSON.stringify(requested.name)}](${JSON.stringify(requested.input)});`,
+              },
+            },
+        requestID,
+      ),
+    );
     finish("tool_calls");
     return true;
   }
   if (toolReply) {
-    const label = prompt.includes("E2E_BACKGROUND_PROCESS")
-      ? "Acceptance background process started"
-      : prompt.includes("E2E_IMAGE")
-        ? `Acceptance image ${prompt.match(/E2E_IMAGE\s+(\w+)/)?.[1] ?? "generate"} completed`
-        : prompt.includes("E2E_CREATE_SESSION")
-          ? "Acceptance session created"
-          : prompt.includes("E2E_SUBAGENT_BUBBLE")
-            ? "Acceptance bubbling verified"
-            : "Acceptance question resolved";
+    const label = prompt.includes("E2E_TOOL_SURFACE")
+      ? "Acceptance tool surface resolved"
+      : prompt.includes("E2E_BACKGROUND_PROCESS")
+        ? "Acceptance background process started"
+        : prompt.includes("E2E_IMAGE")
+          ? `Acceptance image ${prompt.match(/E2E_IMAGE\s+(\w+)/)?.[1] ?? "generate"} completed`
+          : prompt.includes("E2E_CREATE_SESSION")
+            ? "Acceptance session created"
+            : prompt.includes("E2E_SUBAGENT_BUBBLE")
+              ? "Acceptance bubbling verified"
+              : "Acceptance question resolved";
     let images = "";
     if (prompt.includes("E2E_IMAGE") && !prompt.includes("edit")) {
       try {

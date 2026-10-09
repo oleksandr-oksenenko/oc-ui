@@ -65,7 +65,7 @@ const requestLocation = (location: Location.Ref) => ({
 });
 
 // Resolve server paths and wait for location-owned agent transforms in one place.
-const resolveLocation = Effect.fn("SessionTools.resolveLocation")(function* (
+const resolveLocation = Effect.fn("OpenCodeTools.resolveLocation")(function* (
   ctx: Client,
   location: Location.Ref,
   projectID: Project.ID,
@@ -89,7 +89,7 @@ const resolveLocation = Effect.fn("SessionTools.resolveLocation")(function* (
   return result.location;
 });
 
-const selections = Effect.fn("SessionTools.selections")(function* (
+const selections = Effect.fn("OpenCodeTools.selections")(function* (
   ctx: Client,
   input: typeof Input.Type,
   caller: Session.Info,
@@ -122,7 +122,7 @@ const selections = Effect.fn("SessionTools.selections")(function* (
   return { agent, model };
 });
 
-const createSession = Effect.fn("SessionTools.createSession")(function* (
+const createSession = Effect.fn("OpenCodeTools.createSession")(function* (
   ctx: Client,
   input: typeof Input.Type,
   tool: Tool.Context,
@@ -245,7 +245,7 @@ const createSession = Effect.fn("SessionTools.createSession")(function* (
   );
 });
 
-export const makeSessionTool = Effect.fn("SessionTools.makeSessionTool")(function* (ctx: Client) {
+export const makeSessionTool = Effect.fn("OpenCodeTools.makeSessionTool")(function* (ctx: Client) {
   const scope = yield* Scope.Scope;
   return {
     name: "session_create",
@@ -257,7 +257,7 @@ export const makeSessionTool = Effect.fn("SessionTools.makeSessionTool")(functio
       "On failure inspect any reported session or worktree before retrying.",
     input: ToolInput,
     output: ToolOutput,
-    options: { codemode: false },
+    options: { codemode: true },
     execute: (input, tool) =>
       createSession(ctx, input, tool).pipe(
         // Creation belongs to the plugin scope, not the caller's tool fiber.

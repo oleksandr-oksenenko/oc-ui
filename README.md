@@ -82,7 +82,7 @@ pnpm dev:opencode       # Start the pinned OpenCode server library
 pnpm storybook          # Start the component catalog at http://localhost:6006
 pnpm build-storybook    # Build the static component catalog
 pnpm verify:browser     # Start an isolated app/server session for manual inspection
-pnpm test               # Tier 0: unit/controller, prompt-editor, and session-tools tests
+pnpm test               # Tier 0: unit/controller, prompt-editor, and opencode-tools tests
 pnpm test:local         # Compatibility alias for pnpm test
 pnpm ready              # Local gate: static checks and tier 0 tests
 pnpm test:components    # Tier 1: Storybook/accessibility and Chromium storage tests
@@ -208,8 +208,8 @@ verified browser target.
 
 - `apps/desktop/` — Electron main and preload, shared Solid renderer, browser
   entrypoint, Storybook stories, and app tests.
-- `packages/opencode-session-tools/` — bundled OpenCode plugin for creating
-  sessions in worktrees; see its [README](packages/opencode-session-tools/README.md).
+- `packages/opencode-tools/` — bundled OpenCode tools and minimal direct tool
+  surface; see its [README](packages/opencode-tools/README.md).
 - `tools/` — packaging and repository checks.
 - `docs/` — architecture, feature designs, and verification guidance.
 
