@@ -11,6 +11,8 @@ import { Tool } from "@opencode/schema/tool";
 import { Worktree } from "@opencode/schema/worktree";
 import { Effect, Fiber, Schema, Scope, Schedule } from "effect";
 
+import { standardSchema } from "./standard-schema.js";
+
 const Text = Schema.String.check(Schema.isNonEmpty(), Schema.isPattern(/\S/));
 
 export const Input = Schema.Struct({
@@ -44,12 +46,8 @@ const Output = Schema.Struct({
 // tool returns must be valid on the encoded (JSON) side. The wrapper also keeps
 // parsing in this plugin instead of the host's own Effect copy, which the
 // standalone CLI embeds.
-const ToolInput = {
-  "~standard": Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(Input))["~standard"],
-};
-const ToolOutput = {
-  "~standard": Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(Output))["~standard"],
-};
+const ToolInput = standardSchema(Input);
+const ToolOutput = standardSchema(Output);
 
 type Client = {
   session: Pick<Plugin.Context["session"], "get" | "context" | "create" | "prompt">;
@@ -130,13 +128,16 @@ const createSession = Effect.fn("OpenCodeTools.createSession")(function* (
   let stage: Stage = "validation";
   let location: Location.Ref | undefined;
   let sessionID: Session.ID | undefined;
+  let messageID: SessionMessage.ID | undefined;
   let uncertain = false;
   // The host records failure metadata inside a JSON event, which rejects
   // explicit undefined values, so omit fields that are not known yet.
   const metadata = () => {
     const base = { stage, uncertain };
     if (location === undefined) return base;
-    return sessionID === undefined ? { ...base, location } : { ...base, location, sessionID };
+    const retained =
+      sessionID === undefined ? { ...base, location } : { ...base, location, sessionID };
+    return messageID === undefined ? retained : { ...retained, messageID };
   };
 
   const run = Effect.gen(function* () {
@@ -211,14 +212,15 @@ const createSession = Effect.fn("OpenCodeTools.createSession")(function* (
         : Location.Ref.make({ directory, workspaceID });
 
     stage = "prompt";
+    messageID = SessionMessage.ID.create();
     uncertain = true;
-    yield* ctx.session
-      .prompt({
-        sessionID: created.id,
-        id: SessionMessage.ID.create(),
-        text: input.prompt,
-      })
-      .pipe(Effect.uninterruptible);
+    // Native admission protects its commit; preparation must remain interruptible
+    // so plugin shutdown can cancel prompt hooks and await their cleanup.
+    yield* ctx.session.prompt({
+      sessionID: created.id,
+      id: messageID,
+      text: input.prompt,
+    });
     uncertain = false;
     const output = Output.make({ sessionID: created.id, location, promptAccepted: true });
     const content = yield* Schema.encodeEffect(Schema.fromJsonString(Output))(output).pipe(
@@ -233,14 +235,16 @@ const createSession = Effect.fn("OpenCodeTools.createSession")(function* (
         new Tool.Error({
           message:
             (error instanceof Error ? error.message : "Session creation failed.") +
-            (stage === "validation" ? "" : " Inspect retained resources before retrying."),
+            (stage === "validation"
+              ? ""
+              : ` Recovery context: ${JSON.stringify(metadata())}. Inspect retained resources before retrying.`),
           error,
           metadata: metadata(),
         }),
     ),
-    Effect.tapCause((cause) => Effect.logError("session_create failed", cause, metadata())),
+    Effect.tapCause((cause) => Effect.logError("session.create failed", cause, metadata())),
     Effect.onInterrupt(() =>
-      Effect.logWarning("session_create interrupted during server shutdown", metadata()),
+      Effect.logWarning("session.create interrupted during server shutdown", metadata()),
     ),
   );
 });
@@ -248,7 +252,7 @@ const createSession = Effect.fn("OpenCodeTools.createSession")(function* (
 export const makeSessionTool = Effect.fn("OpenCodeTools.makeSessionTool")(function* (ctx: Client) {
   const scope = yield* Scope.Scope;
   return {
-    name: "session_create",
+    name: "create",
     description:
       "Create and start a fresh, independent session in another worktree of this project. " +
       "By default create a new worktree from the current checkout's HEAD and inherit the " +
@@ -257,7 +261,7 @@ export const makeSessionTool = Effect.fn("OpenCodeTools.makeSessionTool")(functi
       "On failure inspect any reported session or worktree before retrying.",
     input: ToolInput,
     output: ToolOutput,
-    options: { codemode: true },
+    options: { namespace: "session", codemode: true },
     execute: (input, tool) =>
       createSession(ctx, input, tool).pipe(
         // Creation belongs to the plugin scope, not the caller's tool fiber.

@@ -80,4 +80,40 @@ export async function verifyOpenCodeTools(project: string): Promise<void> {
     (await $(".transcript-view").getText()).includes("E2E_CREATE_SESSION packaged"),
     false,
   );
+  // Exercise the public plugin operations inside the packaged worker, using the
+  // independent worktree session so deletion also proves its files are retained.
+  await $(".shell-session-main*=Packaged session tool caller").click();
+  await $('[aria-label="Prompt"]').setValue(`E2E_SESSION_NATIVE ${created.id}`);
+  await $('button[aria-label="Send"]').click();
+  await browser.waitUntil(
+    async () => (await $(".transcript-view").getText()).includes("native-session-management"),
+    { timeout: 30_000 },
+  );
+  const execution = (await api.message.list({ sessionID: caller.id })).data
+    .filter((message) => message.type === "assistant")
+    .flatMap((message) => message.content)
+    .find(
+      (part) =>
+        part.type === "tool" &&
+        part.name === "execute" &&
+        part.state.status === "completed" &&
+        part.state.content.some(
+          (content) =>
+            content.type === "text" && content.text.includes("native-session-management"),
+        ),
+    );
+  assert.ok(execution?.type === "tool" && execution.state.status === "completed");
+  const text = execution.state.content.find((content) => content.type === "text");
+  assert.ok(text?.type === "text");
+  const result = JSON.parse(text.text);
+  assert.equal(result.admission.accepted, true);
+  assert.equal(result.settled.settled, true);
+  assert.equal(result.settled.session.outcome, "succeeded");
+  assert.equal(result.interrupted.interrupted, false);
+  assert.deepEqual(result.deleted, { sessionID: created.id, deleted: true });
+  await assert.rejects(api.session.get({ sessionID: created.id }));
+  assert.equal(
+    await readFile(join(created.location.directory, "working.txt"), "utf8"),
+    "Original working content\n",
+  );
 }

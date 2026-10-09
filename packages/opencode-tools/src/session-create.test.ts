@@ -316,8 +316,12 @@ describe("session_create", () => {
           stage: "prompt",
           uncertain: true,
           sessionID: f.create.mock.calls[0]?.[0]?.id,
+          messageID: f.prompt.mock.calls[0]?.[0]?.id,
           location: { directory: destination.directory },
         });
+        expect(result.failure.message).toContain(f.create.mock.calls[0]![0]!.id);
+        expect(result.failure.message).toContain(f.prompt.mock.calls[0]![0].id);
+        expect(result.failure.message).toContain(destination.directory);
         yield* Schema.encodeUnknownEffect(Schema.Record(Schema.String, Schema.Json))(
           result.failure.metadata ?? {},
         );
@@ -399,6 +403,35 @@ describe("session_create", () => {
       expect(yield* Deferred.isDone(cleaned)).toBe(true);
       expect(Exit.isFailure(yield* Fiber.await(running))).toBe(true);
       expect(f.create).not.toHaveBeenCalled();
+    }),
+  );
+
+  it.effect("cancels initial prompt preparation and awaits its cleanup on plugin shutdown", () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      const scope = yield* Scope.make();
+      const started = yield* Deferred.make<void>();
+      const released = yield* Deferred.make<void>();
+      const cleaned = yield* Deferred.make<void>();
+      f.prompt.mockImplementation(() =>
+        Deferred.succeed(started, undefined).pipe(
+          Effect.andThen(Deferred.await(released)),
+          Effect.andThen(Effect.die("Prompt preparation should be cancelled")),
+          Effect.onInterrupt(() => Deferred.succeed(cleaned, undefined)),
+        ),
+      );
+      const tool = yield* makeSessionTool(f.ctx).pipe(Scope.provide(scope));
+      const running = yield* tool.execute({ prompt: "Task" }, toolContext).pipe(Effect.forkChild);
+      yield* Deferred.await(started);
+      const closing = yield* Scope.close(scope, Exit.void).pipe(Effect.forkChild);
+      yield* Effect.gen(function* () {
+        yield* Effect.yieldNow;
+        expect(yield* Deferred.isDone(cleaned)).toBe(true);
+      }).pipe(Effect.ensuring(Deferred.succeed(released, undefined)));
+      yield* Fiber.join(closing);
+      expect(Exit.isFailure(yield* Fiber.await(running))).toBe(true);
+      expect(f.create).toHaveBeenCalledOnce();
+      expect(f.prompt).toHaveBeenCalledOnce();
     }),
   );
 

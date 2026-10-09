@@ -3004,6 +3004,140 @@ describe.sequential("production browser app", () => {
     expect(errors).toEqual([]);
   });
 
+  it("lists sessions and pages persisted messages through the locally built plugin API", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const one = await api.session.create({ title: "Session read fixture one", location });
+    const two = await api.session.create({ title: "Session read fixture two", location });
+    for (const sessionID of [one.id, two.id]) {
+      await api.session.synthetic({ sessionID, text: "Stored message fixture one" });
+      await api.session.synthetic({ sessionID, text: "Stored message fixture two" });
+      await api.session.wait({ sessionID });
+    }
+    const caller = await api.session.create({
+      title: "Session read caller",
+      location,
+      agent: "build",
+      model: { providerID: "acceptance", id: "stream" },
+    });
+    await selectSession(caller.title);
+    await send("E2E_SESSION_READS");
+    await idle();
+    await expect
+      .poll(async () => (await api.session.get({ sessionID: caller.id })).outcome)
+      .toBe("succeeded");
+    const executed = (await api.message.list({ sessionID: caller.id })).data
+      .filter((message) => message.type === "assistant")
+      .flatMap((message) => message.content)
+      .find((part) => part.type === "tool" && part.name === "execute");
+    expect(executed.state.metadata.error).toBeUndefined();
+    const output = JSON.parse(executed.state.content.find((part) => part.type === "text").text);
+    expect(output.listedIDs).toEqual(expect.arrayContaining([one.id, two.id]));
+    expect(output.listedIDs).toHaveLength(2);
+    expect(output.timestampsAreNumbers).toBe(true);
+    const persisted = await api.message.list({
+      sessionID: output.listedIDs[0],
+      order: "asc",
+      limit: 2,
+    });
+    expect(output.messages).toEqual(persisted.data);
+    expect(output.messages[0].text).toBe("Stored message fixture one");
+    expect(executed.state.metadata.toolCalls.map((call) => call.tool)).toEqual([
+      "search",
+      "session.list",
+      "session.list",
+      "session.messages",
+      "session.messages",
+    ]);
+    expect(errors).toEqual([]);
+  });
+
+  it("manages sessions through Code Mode with durable sends, bounded waits, interruption, and recursive deletion", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const cancelledBefore = (await providerState()).cancelledStreams;
+    const workingBefore = await readFile(join(project, "working.txt"), "utf8");
+    const make = (title) =>
+      api.session.create({
+        title,
+        location,
+        agent: "build",
+        model: { providerID: "acceptance", id: "stream" },
+      });
+    const target = await make("Managed active target");
+    const deleted = await make("Managed deletion target");
+    const completed = await make("Managed completion target");
+    const caller = await make("Managed caller");
+    try {
+      await selectSession(deleted.title);
+      await send("E2E_MANAGED_CHILD");
+      await expect
+        .poll(async () => (await api.session.get({ sessionID: deleted.id })).outcome)
+        .toBe("succeeded");
+      const children = (await api.session.list({ parentID: deleted.id })).data;
+      expect(children).toHaveLength(1);
+      for (const session of [target, deleted]) {
+        await selectSession(session.title);
+        await send("E2E_STOP managed target");
+        await transcript("Acceptance stream is waiting for cancellation.");
+      }
+      await selectSession(caller.title);
+      await send(
+        `E2E_SESSION_MANAGEMENT ${JSON.stringify({ targetID: target.id, deleteID: deleted.id, idleID: completed.id })}`,
+      );
+      await expect
+        .poll(async () => (await api.session.get({ sessionID: caller.id })).outcome)
+        .toBe("succeeded");
+      await idle();
+      const executed = (await api.message.list({ sessionID: caller.id })).data
+        .filter((message) => message.type === "assistant")
+        .flatMap((message) => message.content)
+        .find((part) => part.type === "tool" && part.name === "execute");
+      expect(executed.state.metadata.error).toBeUndefined();
+      const output = JSON.parse(executed.state.content.find((part) => part.type === "text").text);
+      expect(output.caller.id).toBe(caller.id);
+      expect(output.target.location).toEqual(location);
+      expect(output.rejected).toEqual(["wait", "interrupt", "delete"]);
+      expect(output.blocked.settled).toBe(false);
+      expect(output.admitted).toEqual(output.retried);
+      expect(output.interrupted).toEqual({ sessionID: target.id, interrupted: true });
+      expect(output.settled.settled).toBe(true);
+      expect(output.settled.session.outcome).toBe("interrupted");
+      expect(output.completed.settled).toBe(true);
+      expect(output.completed.session.outcome).toBe("succeeded");
+      expect(output.completedAdmission).toEqual(output.completedRetry);
+      expect(output.deleted).toEqual({ sessionID: deleted.id, deleted: true });
+      const pending = await api.session.inbox.list({ sessionID: target.id });
+      expect(pending.filter((item) => item.type === "user")).toMatchObject([
+        {
+          id: output.admitted.messageID,
+          delivery: "queue",
+          payload: { text: "Managed queued follow up" },
+        },
+      ]);
+      const messages = (await api.message.list({ sessionID: completed.id })).data;
+      expect(
+        messages.filter((message) => message.id === output.completedAdmission.messageID),
+      ).toHaveLength(1);
+      expect(
+        messages.find((message) => message.id === output.completedAdmission.messageID),
+      ).toMatchObject({ type: "user", text: "Managed completed follow up" });
+      expect(output.failedAdmission).toContain(deleted.id);
+      expect(output.failedAdmission).toMatch(/messageID: msg_[a-zA-Z0-9]+/u);
+      for (const sessionID of [deleted.id, children[0].id])
+        await expect(api.session.get({ sessionID })).rejects.toThrow();
+      await expect
+        .poll(async () => (await providerState()).cancelledStreams)
+        .toBe(cancelledBefore + 2);
+      expect(await readFile(join(project, "working.txt"), "utf8")).toBe(workingBefore);
+      expect(errors).toEqual([]);
+    } finally {
+      for (const sessionID of [target.id, deleted.id, completed.id]) {
+        await api.session.interrupt({ sessionID }).catch(() => undefined);
+      }
+    }
+  });
+
   it("creates an independent session through the plugin and admits it to the session catalog", async () => {
     const directory = await realpath(project);
     const caller = await api.session.create({
