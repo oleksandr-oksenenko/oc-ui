@@ -228,7 +228,11 @@ describe("packaged owned OpenCode", () => {
   });
 
   it("saves supplied download bytes through trusted IPC and treats Save dialog cancellation normally", async () => {
-    const destination = join(userDataPath, "acceptance-download.bin");
+    const ownedUserDataPath = runnerPath(
+      userDataPath,
+      await browser.electron.execute((electron) => electron.app.getPath("userData")),
+    );
+    const destination = join(ownedUserDataPath, "acceptance-download.bin");
     const saveDialog = await browser.electron.mock("dialog", "showSaveDialog");
     try {
       await saveDialog.mockResolvedValue({ canceled: false, filePath: destination });
