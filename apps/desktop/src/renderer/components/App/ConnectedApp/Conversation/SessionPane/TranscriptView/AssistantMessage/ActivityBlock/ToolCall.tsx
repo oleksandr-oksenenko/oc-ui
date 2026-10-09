@@ -117,9 +117,7 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
         </pre>,
         ...(tool.state.status === "running"
           ? []
-          : (tool.state.content ?? []).map((content, index) =>
-              renderToolContent(content, tool.id, index),
-            )),
+          : renderToolContents(tool.state.content ?? [], tool.id)),
       ];
     default: {
       const unreachable: never = tool.state;
@@ -128,7 +126,54 @@ function toolDetails(tool: SessionMessageAssistantTool): JSX.Element[] {
   }
 }
 
-function renderToolContent(content: ToolContent, toolID: string, index: number): JSX.Element {
+function toolImageSource(content: ToolContent | undefined): string | undefined {
+  if (content?.type !== "file") return undefined;
+  if (
+    content.mime.startsWith("image/") &&
+    /^data:image\/(?:png|jpeg|webp|gif);base64,/.test(content.uri)
+  )
+    return content.uri;
+  if (
+    content.mime === "application/octet-stream" &&
+    content.uri.startsWith("data:application/octet-stream;base64,iVBORw0KGgo")
+  )
+    return content.uri.replace("data:application/octet-stream;", "data:image/png;");
+  return undefined;
+}
+
+function pairedOriginal(
+  preview: ToolContent | undefined,
+  original: ToolContent | undefined,
+): string | undefined {
+  return preview?.type === "file" &&
+    preview.mime.startsWith("image/") &&
+    preview.name &&
+    /\.png$/i.test(preview.name) &&
+    toolImageSource(preview) &&
+    original?.type === "file" &&
+    original.mime === "application/octet-stream" &&
+    original.name === preview.name.replace(/\.png$/i, ".original.png")
+    ? toolImageSource(original)
+    : undefined;
+}
+
+function renderToolContents(contents: readonly ToolContent[], toolID: string): JSX.Element[] {
+  return contents.flatMap((content, index) => {
+    // Normalization may change the preview MIME or omit it. Pair by the retained
+    // filename, and keep unmatched originals independently viewable.
+    if (pairedOriginal(contents[index - 1], content)) return [];
+    return [
+      renderToolContent(content, toolID, index, pairedOriginal(content, contents[index + 1])),
+    ];
+  });
+}
+
+function renderToolContent(
+  content: ToolContent,
+  toolID: string,
+  index: number,
+  fullSrc?: string,
+): JSX.Element {
   return content.type === "text" ? (
     <pre
       class="transcript-tool-output oc-scrollable"
@@ -154,10 +199,7 @@ function renderToolContent(content: ToolContent, toolID: string, index: number):
         {content.mime}
       </span>
       <Show
-        when={
-          content.mime.startsWith("image/") &&
-          /^data:image\/(?:png|jpeg|webp|gif);base64,/.test(content.uri)
-        }
+        when={toolImageSource(content)}
         fallback={
           <Show when={content.name}>
             <span
@@ -169,12 +211,15 @@ function renderToolContent(content: ToolContent, toolID: string, index: number):
           </Show>
         }
       >
-        <ImagePreview
-          src={content.uri}
-          alt={content.name ?? "Browser capture"}
-          class="transcript-tool-image-thumbnail"
-          imageClass="transcript-tool-image"
-        />
+        {(src) => (
+          <ImagePreview
+            src={src()}
+            fullSrc={fullSrc}
+            alt={content.name ?? "Browser capture"}
+            class="transcript-tool-image-thumbnail"
+            imageClass="transcript-tool-image"
+          />
+        )}
       </Show>
     </div>
   );

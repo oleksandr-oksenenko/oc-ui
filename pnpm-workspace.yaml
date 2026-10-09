@@ -11,6 +11,8 @@ catalog:
   "@effect/vitest": 4.0.0-rc.112
   "@kobalte/core": 0.13.13
   "@opencode-ai/pty": 0.1.13
+  "@opencode/ai": 2.0.3
+  "@opencode/core": 2.0.3
   "@opencode/client": 2.0.3
   "@opencode/plugin": 2.0.3
   "@opencode/schema": 2.0.3
@@ -103,6 +105,7 @@ minimumReleaseAgeExclude:
   - "@voidzero-dev/vite-plus-win32-x64-msvc@0.3.0"
   - "vite-plus@0.3.0"
   - "@opencode/client@2.0.3"
+  - "@opencode/ai@2.0.3"
   - "@opencode/server@2.0.3"
   - "@opencode/util@2.0.3"
   - "@opencode/protocol@2.0.3"

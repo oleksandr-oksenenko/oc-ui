@@ -1,7 +1,7 @@
 {
-  "name": "@oc-ui/opencode-session-tools",
+  "name": "@oc-ui/opencode-image-tools",
   "version": "0.1.0",
-  "description": "Create independent OpenCode sessions in project worktrees.",
+  "description": "Generate and edit images with an OpenCode ChatGPT connection.",
   "files": [
     "dist",
     "README.md"
@@ -13,10 +13,14 @@
     "test": "pnpm build && vp test run"
   },
   "dependencies": {
+    "@opencode/core": "catalog:",
+    "@silvia-odwyer/photon-node": "0.3.4",
     "effect": "4.0.0-rc.112"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
+    "@opencode/ai": "catalog:",
     "@opencode/plugin": "catalog:",
     "@opencode/schema": "catalog:",
     "vite-plus": "catalog:"

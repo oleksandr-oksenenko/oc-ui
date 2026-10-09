@@ -20,6 +20,11 @@ export default {
       filter: ["**/*"],
     },
     {
+      from: "out/opencode-runtime/image-tools",
+      to: "opencode-runtime/image-tools",
+      filter: ["**/*"],
+    },
+    {
       from: "out/opencode-runtime/opencode-worker.mjs",
       to: "opencode-runtime/opencode-worker.mjs",
     },

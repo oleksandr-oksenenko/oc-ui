@@ -28,6 +28,8 @@ export type ImagePreviewSource =
 
 export type ImagePreviewProps = ImagePreviewSource & {
   readonly alt: string;
+  /** Original image to open when the thumbnail uses a reduced preview. */
+  readonly fullSrc?: string;
   /** Extra class for the thumbnail button; callers size the thumbnail here. */
   readonly class?: string;
   /** Extra class for the thumbnail image, for callers that target it directly. */
@@ -77,7 +79,7 @@ export function ImagePreview(props: ImagePreviewProps): JSX.Element {
         >
           <Title class="sr-only">{`Preview of ${props.alt}`}</Title>
           <Show when={open()}>
-            <img class="image-preview-image" src={source()} alt={props.alt} />
+            <img class="image-preview-image" src={props.fullSrc ?? source()} alt={props.alt} />
             <CloseButton class="image-preview-close" aria-label="Close image preview">
               <Icon name="close" size="small" aria-hidden="true" />
             </CloseButton>

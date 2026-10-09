@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { serveImageFixture } from "./image-tools-fixture.mjs";
 
 const model = (name) => ({
   name,
@@ -29,6 +30,7 @@ export async function startScriptedProvider() {
   let cancelledStreams = 0;
   const server = createServer(async (request, response) => {
     if (serveBrowserFixture(request, response)) return;
+    if (await serveImageFixture(request, response, requests)) return;
     if (request.url === "/_state") {
       response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify({ requests, cancelledStreams }));
@@ -209,6 +211,66 @@ function respondScriptedPrompt({ modelName, prompt, response, send, finish, onCa
 }
 
 function requestedTool(prompt) {
+  if (prompt.includes("E2E_IMAGE")) {
+    if (prompt.includes("permission"))
+      return {
+        name: "execute",
+        input: {
+          code: 'return await tools.image_generate({prompt: "An authorized otter", outputPath: "authorized/otter.png"});',
+        },
+      };
+    if (prompt.includes("external"))
+      return {
+        name: "execute",
+        input: {
+          code: `return await tools.image_generate({prompt: "An external reference", outputPath: "external-edit.png", referencePaths: [${JSON.stringify(prompt.split("E2E_IMAGE external ")[1])}]});`,
+        },
+      };
+    if (prompt.includes("read"))
+      return {
+        name: "execute",
+        input: {
+          code: 'return await tools.image_generate({prompt: "An internal reference", outputPath: "read-edit.png", referencePaths: ["acceptance-generated.png"]});',
+        },
+      };
+    if (prompt.includes("url"))
+      return {
+        name: "execute",
+        input: {
+          code: 'await tools.image_generate({prompt: "URL-only response"}); throw new Error("Unreachable after URL-only failure");',
+        },
+      };
+    if (prompt.includes("collision"))
+      return {
+        name: "execute",
+        input: {
+          code: 'return await tools.image_generate({prompt: "Concurrent destination", outputPath: "acceptance-collision.png"});',
+        },
+      };
+    if (prompt.includes("error"))
+      return {
+        name: "execute",
+        input: {
+          code: 'await tools.image_generate({prompt: "An otter before a JavaScript error"}); throw new Error("Intentional post-image failure");',
+        },
+      };
+    if (prompt.includes("batch"))
+      return {
+        name: "execute",
+        input: {
+          code: 'return await Promise.all([tools.image_generate({prompt: "First acceptance otter"}), tools.image_generate({prompt: "Second acceptance otter"})]);',
+        },
+      };
+    const input = { prompt: "An acceptance otter", outputPath: "acceptance-generated.png" };
+    if (prompt.includes("edit")) {
+      input.outputPath = "acceptance-edited.png";
+      input.referencePaths = ["acceptance-generated.png"];
+    }
+    return {
+      name: "execute",
+      input: { code: `return await tools.image_generate(${JSON.stringify(input)});` },
+    };
+  }
   if (prompt.includes("E2E_BACKGROUND_PROCESS")) {
     return {
       name: "shell",
@@ -367,6 +429,11 @@ function respondTool(prompt, toolReply, body, send, finish, requestID, response,
   }
   const requested = requestedTool(prompt);
   if (requested && !toolReply) {
+    if (
+      prompt.includes("E2E_IMAGE") &&
+      body.tools?.some((tool) => tool.function?.name === "image_generate")
+    )
+      throw new Error("Image generation must only be offered through Code Mode");
     send(toolCall(body.tools, requested, requestID));
     finish("tool_calls");
     return true;
@@ -374,11 +441,13 @@ function respondTool(prompt, toolReply, body, send, finish, requestID, response,
   if (toolReply) {
     const label = prompt.includes("E2E_BACKGROUND_PROCESS")
       ? "Acceptance background process started"
-      : prompt.includes("E2E_CREATE_SESSION")
-        ? "Acceptance session created"
-        : prompt.includes("E2E_SUBAGENT_BUBBLE")
-          ? "Acceptance bubbling verified"
-          : "Acceptance question resolved";
+      : prompt.includes("E2E_IMAGE")
+        ? `Acceptance image ${prompt.match(/E2E_IMAGE\s+(\w+)/)?.[1] ?? "generate"} completed`
+        : prompt.includes("E2E_CREATE_SESSION")
+          ? "Acceptance session created"
+          : prompt.includes("E2E_SUBAGENT_BUBBLE")
+            ? "Acceptance bubbling verified"
+            : "Acceptance question resolved";
     send({ content: `${label}: ${JSON.stringify(toolReply.content)}` });
     finish();
     return true;

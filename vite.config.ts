@@ -182,12 +182,19 @@ export default defineConfig({
         },
       },
       {
+        files: ["packages/*/src/**/*.test.ts"],
+        rules: {
+          ...effectPromiseBoundaryRules,
+          "effecttsgo/strict-effect-provide": "off",
+        },
+      },
+      {
         files: ["apps/desktop/src/main/**/*.ts", "apps/desktop/src/preload/**/*.ts"],
         plugins: ["unicorn", "typescript", "oxc", "import", "promise", "node"],
         rules: effectNodeBoundaryRules,
       },
       {
-        files: ["apps/desktop/electron.vite.config.ts", "packages/opencode-session-tools/build.ts"],
+        files: ["apps/desktop/electron.vite.config.ts", "packages/*/build.ts", "tools/**/*.ts"],
         rules: effectNodeBoundaryRules,
       },
       {

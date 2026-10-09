@@ -245,8 +245,9 @@ command builds the session-tools plugin needed by the disposable server first:
 pnpm test:integration
 ```
 
-For one scenario, build the plugin with
-`pnpm --filter @oc-ui/opencode-session-tools build`, then run
+For one scenario, build the plugins with
+`pnpm --filter @oc-ui/opencode-session-tools build` and
+`pnpm --filter @oc-ui/opencode-image-tools build`, then run
 `pnpm --filter desktop exec vp test run --project=web -t '<scenario>'`.
 The full tier runs in CI. Preserve the existing failure screenshot and profile
 handling; inspect those artifacts before reproducing a failure manually.

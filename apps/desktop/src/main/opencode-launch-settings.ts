@@ -22,7 +22,10 @@ export async function configureOpenCodeLaunch(userDataPath: string, env = proces
       directory,
       project: true,
       content: JSON.stringify({
-        plugins: [{ package: new URL("./session-tools/", import.meta.url).href }],
+        plugins: [
+          { package: new URL("./session-tools/", import.meta.url).href },
+          { package: new URL("./image-tools/", import.meta.url).href },
+        ],
       }),
     },
   };

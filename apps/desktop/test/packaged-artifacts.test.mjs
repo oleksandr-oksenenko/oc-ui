@@ -132,11 +132,12 @@ it("retains strict macOS codesign verification and arm64 validation of executabl
     "codesign",
     ["--verify", "--deep", "--strict", artifacts.appDirectory],
   ]);
-  const binaries = run.mock.calls.slice(1).map(([command, args]) => {
+  const binaries = run.mock.calls.slice(1, -1).map(([command, args]) => {
     expect(command).toBe("lipo");
     return args[1];
   });
   expect(new Set(binaries)).toEqual(new Set([...artifacts.executables, ...artifacts.bindings]));
+  expect(run.mock.calls.at(-1)[0]).toBe(process.execPath);
 });
 
 it("validates additional host-native and untagged bindings while skipping foreign and musl prebuilds", async () => {
@@ -200,6 +201,16 @@ it("rejects missing packaged ASAR, missing WASM, and a non-executable PTY before
   await expect(
     verifyPackagedApplication(artifacts, new AbortController().signal, run),
   ).rejects.toThrow("tree-sitter.wasm");
+});
+
+it("rejects a missing packaged core dependency even when the image plugin file exists", async () => {
+  const artifacts = await fixture();
+  await rm(join(artifacts.runtimePath, "node_modules/@opencode/core/package.json"));
+  const run = vi.fn();
+  await expect(
+    verifyPackagedApplication(artifacts, new AbortController().signal, run),
+  ).rejects.toThrow("package.json");
+  expect(run).not.toHaveBeenCalled();
 });
 
 it("rejects a packaged asset directory or invalid WASM module before native validation", async () => {

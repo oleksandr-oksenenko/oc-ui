@@ -7,6 +7,7 @@ import { defineConfig } from "electron-vite";
 import rendererConfig from "./vite.config.ts";
 import { bundleOpenCodeRuntime } from "./scripts/build-opencode-runtime.ts";
 import { buildSessionTools } from "../../packages/opencode-session-tools/build.ts";
+import { buildImageTools } from "../../packages/opencode-image-tools/build.ts";
 
 const configDirectory = dirname(fileURLToPath(import.meta.url));
 const rendererDirectory = resolve(configDirectory, "src/renderer");
@@ -23,6 +24,8 @@ const runtimeInputs = [
   "package.json",
   "../../pnpm-lock.yaml",
   "../../packages/opencode-session-tools/build.ts",
+  "../../packages/opencode-image-tools/build.ts",
+  "../../tools/build-opencode-plugin.ts",
   "../../tools/stage-opencode.mjs",
   "../../tools/opencode-runtime-packages.mjs",
 ];
@@ -53,6 +56,9 @@ export default defineConfig({
         name: "opencode-runtime",
         async buildStart() {
           for (const input of await buildSessionTools(resolve(runtimeDirectory, "session-tools"))) {
+            this.addWatchFile(input);
+          }
+          for (const input of await buildImageTools(resolve(runtimeDirectory, "image-tools"))) {
             this.addWatchFile(input);
           }
           for (const input of runtimeInputs) {
