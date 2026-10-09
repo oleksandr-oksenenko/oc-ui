@@ -239,7 +239,7 @@ function toolSurfaceCall(prompt) {
              throw new Error("Denied grep executed");`
           : `const catalog = search({limit: 100});
              const paths = catalog.items.map(item => item.path);
-             for (const name of ["glob", "grep", "webfetch", "websearch", "question", "skill", "subagent", "session_create"])
+             for (const name of ["glob", "grep", "webfetch", "websearch", "question", "skill", "subagent", "session.create"])
                if (!paths.includes("tools." + name)) throw new Error("Missing Code Mode tool: " + name);
              const files = await tools.glob({pattern: "working.txt"});
              const matches = await tools.grep({pattern: "working content", include: "working.txt"});
@@ -252,8 +252,84 @@ function toolSurfaceCall(prompt) {
   return undefined;
 }
 
+function sessionToolCall(prompt) {
+  if (prompt.includes("E2E_SESSION_NATIVE ")) {
+    const sessionID = prompt.split("E2E_SESSION_NATIVE ")[1].trim();
+    return {
+      name: "execute",
+      input: {
+        code: `
+      const target = await tools.session.get({sessionID: ${JSON.stringify(sessionID)}});
+      const admission = await tools.session.send({sessionID: target.id, text: "Packaged follow up"});
+      const settled = await tools.session.wait({sessionID: target.id, timeoutSeconds: 10});
+      const interrupted = await tools.session.interrupt({sessionID: target.id});
+      const deleted = await tools.session.delete({sessionID: target.id});
+      return {verified: "native-session-management", admission, settled, interrupted, deleted};
+    `,
+      },
+    };
+  }
+  if (prompt.includes("E2E_MANAGED_CHILD"))
+    return {
+      name: "execute",
+      input: {
+        code: 'return await tools.subagent({agent: "explore", description: "Managed child fixture", prompt: "Managed child fixture"});',
+      },
+    };
+  if (prompt.includes("E2E_SESSION_MANAGEMENT ")) {
+    const targets = JSON.parse(prompt.split("E2E_SESSION_MANAGEMENT ")[1]);
+    return {
+      name: "execute",
+      input: {
+        code: `const catalog = search({namespace: "session", limit: 100});
+          for (const name of ["create", "list", "messages", "get", "send", "wait", "interrupt", "delete", "rename", "move"])
+            if (!catalog.items.some(item => item.path === "tools.session." + name)) throw new Error("Missing " + name);
+          const caller = await tools.session.get({});
+          const rejected = [];
+          for (const name of ["wait", "interrupt", "delete"]) {
+            try { await tools.session[name]({sessionID: caller.id}); }
+            catch (error) { rejected.push(name); }
+          }
+          const target = await tools.session.get({sessionID: ${JSON.stringify(targets.targetID)}});
+          const blocked = await tools.session.wait({sessionID: target.id, timeoutSeconds: 1});
+          const admitted = await tools.session.send({sessionID: target.id, text: "Managed queued follow up"});
+          const retried = await tools.session.send({sessionID: target.id, text: "Retry must not replace the original", messageID: admitted.messageID, delivery: "steer"});
+          const interrupted = await tools.session.interrupt({sessionID: target.id});
+          const settled = await tools.session.wait({sessionID: target.id, timeoutSeconds: 10});
+          const completedAdmission = await tools.session.send({sessionID: ${JSON.stringify(targets.idleID)}, text: "Managed completed follow up", delivery: "steer"});
+          const completed = await tools.session.wait({sessionID: completedAdmission.sessionID, timeoutSeconds: 10});
+          const completedRetry = await tools.session.send({sessionID: completedAdmission.sessionID, messageID: completedAdmission.messageID, text: "Delivered retry must not replace the original", delivery: "queue"});
+          const deleted = await tools.session.delete({sessionID: ${JSON.stringify(targets.deleteID)}});
+          let failedAdmission;
+          try { await tools.session.send({sessionID: deleted.sessionID, text: "Cannot admit to a deleted session"}); }
+          catch (error) { failedAdmission = error.message; }
+          return {caller, target, blocked, admitted, retried, interrupted, settled, completedAdmission, completedRetry, completed, deleted, rejected, failedAdmission};`,
+      },
+    };
+  }
+  if (prompt.includes("E2E_SESSION_READS")) {
+    return {
+      name: "execute",
+      input: {
+        code: `const catalog = search({ namespace: "session", limit: 100 });
+          for (const name of ["create", "list", "messages", "rename", "move"])
+            if (!catalog.items.some(item => item.path === "tools.session." + name))
+              throw new Error("Session tool missing from catalog: " + name);
+          const first = await tools.session.list({ search: "Session read fixture", limit: 1, order: "asc" });
+          const second = await tools.session.list({ cursor: first.cursor.next, limit: 1 });
+          const messages = await tools.session.messages({ sessionID: first.data[0].id, limit: 1, order: "asc" });
+          const nextMessages = await tools.session.messages({ sessionID: first.data[0].id, cursor: messages.cursor.next, limit: 1 });
+          return { listedIDs: [first.data[0].id, second.data[0].id],
+            messages: [...messages.data, ...nextMessages.data],
+            timestampsAreNumbers: typeof first.data[0].time.updated === "number" };`,
+      },
+    };
+  }
+  return undefined;
+}
+
 function requestedTool(prompt) {
-  const surface = toolSurfaceCall(prompt);
+  const surface = toolSurfaceCall(prompt) ?? sessionToolCall(prompt);
   if (surface) return surface;
   if (prompt.includes("E2E_IMAGE")) {
     if (prompt.includes("permission"))
@@ -327,7 +403,7 @@ function requestedTool(prompt) {
     return { name: "read", input: { path } };
   }
   if (prompt.includes("E2E_CREATE_SESSION")) {
-    return { name: "session_create", input: { prompt: "Independent acceptance task" } };
+    return { name: "session.create", input: { prompt: "Independent acceptance task" } };
   }
   if (prompt.includes("E2E_SUBAGENT_BUBBLE")) {
     return {
@@ -489,7 +565,7 @@ function respondTool(prompt, toolReply, body, send, finish, requestID, response,
           : {
               name: "execute",
               input: {
-                code: `return await tools[${JSON.stringify(requested.name)}](${JSON.stringify(requested.input)});`,
+                code: `return await tools.${requested.name}(${JSON.stringify(requested.input)});`,
               },
             },
         requestID,
@@ -499,39 +575,39 @@ function respondTool(prompt, toolReply, body, send, finish, requestID, response,
     return true;
   }
   if (toolReply) {
-    const label = prompt.includes("E2E_TOOL_SURFACE")
-      ? "Acceptance tool surface resolved"
-      : prompt.includes("E2E_BACKGROUND_PROCESS")
-        ? "Acceptance background process started"
-        : prompt.includes("E2E_IMAGE")
-          ? `Acceptance image ${prompt.match(/E2E_IMAGE\s+(\w+)/)?.[1] ?? "generate"} completed`
-          : prompt.includes("E2E_CREATE_SESSION")
-            ? "Acceptance session created"
-            : prompt.includes("E2E_SUBAGENT_BUBBLE")
-              ? "Acceptance bubbling verified"
-              : "Acceptance question resolved";
-    let images = "";
-    if (prompt.includes("E2E_IMAGE") && !prompt.includes("edit")) {
-      try {
-        // The text-only fixture model receives a capability note after the JSON.
-        const output = JSON.parse(toolReply.content.split("\nERROR: Cannot read ")[0]);
-        images = (Array.isArray(output) ? output : [output])
-          .filter((result) => result.attachment)
-          .map(
-            (result, index) => `![Acceptance generated image ${index + 1}](${result.attachment})`,
-          )
-          .join("\n\n");
-      } catch {
-        // A post-generation Code Mode error deliberately exercises visible fallback.
-      }
-    }
-    send({
-      content: images
-        ? `${label}\n\n${images}\n\nImage shown inline.`
-        : `${label}: ${JSON.stringify(toolReply.content)}`,
-    });
+    send({ content: toolReplyText(prompt, toolReply.content) });
     finish();
     return true;
   }
   return false;
+}
+
+function toolReplyText(prompt, content) {
+  const label = prompt.includes("E2E_TOOL_SURFACE")
+    ? "Acceptance tool surface resolved"
+    : prompt.includes("E2E_BACKGROUND_PROCESS")
+      ? "Acceptance background process started"
+      : prompt.includes("E2E_IMAGE")
+        ? `Acceptance image ${prompt.match(/E2E_IMAGE\s+(\w+)/)?.[1] ?? "generate"} completed`
+        : prompt.includes("E2E_CREATE_SESSION")
+          ? "Acceptance session created"
+          : prompt.includes("E2E_SUBAGENT_BUBBLE")
+            ? "Acceptance bubbling verified"
+            : "Acceptance question resolved";
+  let images = "";
+  if (prompt.includes("E2E_IMAGE") && !prompt.includes("edit")) {
+    try {
+      // The text-only fixture model receives a capability note after the JSON.
+      const output = JSON.parse(content.split("\nERROR: Cannot read ")[0]);
+      images = (Array.isArray(output) ? output : [output])
+        .filter((result) => result.attachment)
+        .map((result, index) => `![Acceptance generated image ${index + 1}](${result.attachment})`)
+        .join("\n\n");
+    } catch {
+      // A post-generation Code Mode error deliberately exercises visible fallback.
+    }
+  }
+  return images
+    ? `${label}\n\n${images}\n\nImage shown inline.`
+    : `${label}: ${JSON.stringify(content)}`;
 }
