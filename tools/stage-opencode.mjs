@@ -29,15 +29,25 @@ const build = JSON.parse(readFileSync(join(runtimeDirectory, "build.json"), "utf
 
 // These Node loaders use createRequire, package-relative WASM paths, or a binary
 // environment override rather than static imports. They are not in esbuild's graph.
-stagePackageClosure([...build.dependencies, ...imports], runtimeDirectory);
+stagePackageClosure(
+  [
+    ...build.dependencies,
+    ...imports,
+    // Image tools consume the host's core services; the worker bundles core.
+    { specifier: "@opencode/core", from: serverDirectory },
+  ],
+  runtimeDirectory,
+);
 // Lighthouse dynamically reads its own assets. Main imports the intact package.
 stagePackageClosure(
   [{ specifier: "lighthouse", from: desktopDirectory }],
   join(desktopDirectory, "out", "main"),
 );
 
-if (!statSync(join(runtimeDirectory, "session-tools/index.js")).isFile()) {
-  throw new Error("OpenCode session tools plugin is missing");
+for (const plugin of ["session-tools", "image-tools"]) {
+  if (!statSync(join(runtimeDirectory, plugin, "index.js")).isFile()) {
+    throw new Error(`OpenCode ${plugin} plugin is missing`);
+  }
 }
 for (const asset of assets) {
   if (!statSync(join(runtimeDirectory, "node_modules", asset)).isFile()) {

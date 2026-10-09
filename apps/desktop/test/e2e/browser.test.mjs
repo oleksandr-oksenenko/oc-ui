@@ -18,6 +18,11 @@ import {
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { startScriptedProvider } from "./scripted-provider.mjs";
+import {
+  createImageToolsFixture,
+  imageFixtureBase64,
+  imageFixtureWidth,
+} from "./image-tools-fixture.mjs";
 import { git, prepareProjectFixture } from "./project-fixture.ts";
 import { startServer, startTlsProxy, testCertificate } from "./browser-fixture.mjs";
 import { ownTerminalPage, withTerminalFixture } from "./terminal-fixture.mjs";
@@ -140,6 +145,7 @@ beforeAll(async () => {
   });
   const globalConfig = join(profile.paths.config, "opencode");
   await mkdir(globalConfig, { recursive: true });
+  const imageFixture = await createImageToolsFixture(globalConfig, provider.url);
   await writeFile(
     join(globalConfig, "opencode.json"),
     JSON.stringify({
@@ -149,6 +155,10 @@ beforeAll(async () => {
           package: new URL("../../../../packages/opencode-session-tools/dist/", import.meta.url)
             .href,
         },
+        {
+          package: new URL("../../../../packages/opencode-image-tools/dist/", import.meta.url).href,
+        },
+        { package: imageFixture },
       ],
     }),
   );
@@ -327,6 +337,13 @@ async function sendCompleted(text) {
 async function idle() {
   await page.getByRole("button", { name: "Send", exact: true }).waitFor();
   await page.locator(".transcript-working").waitFor({ state: "hidden" });
+}
+
+async function expandImageTools() {
+  await page.locator(".transcript-activity-trigger").first().waitFor();
+  for (const selector of [".transcript-activity-trigger", ".transcript-tool-header"])
+    for (const trigger of await page.locator(selector).all())
+      if ((await trigger.getAttribute("aria-expanded")) === "false") await trigger.click();
 }
 
 async function withHeldProviderResponse(action) {
@@ -2636,6 +2653,243 @@ describe.sequential("production browser app", () => {
       ),
     ).toBe(false);
     expect(errors).toEqual([]);
+  });
+
+  it("generates and edits images only through Code Mode, persists results, and renders previews", async () => {
+    await ensureConnected();
+    const location = { directory: await realpath(project) };
+    const plugins = await api.plugin.list({ location });
+    expect(
+      plugins.data
+        .filter((plugin) => plugin.source.type !== "builtin")
+        .map((plugin) => ({ id: plugin.id, state: plugin.state })),
+    ).toEqual(
+      expect.arrayContaining([
+        { id: "acceptance.image-transport", state: expect.objectContaining({ status: "active" }) },
+      ]),
+    );
+    expect(
+      plugins.data.some(
+        (plugin) => plugin.id === "oc-ui.image-tools" && plugin.state.status === "active",
+      ),
+    ).toBe(true);
+    const attempt = await api.integration.oauth.connect({
+      location,
+      integrationID: "openai",
+      methodID: "chatgpt-browser",
+    });
+    await expect
+      .poll(
+        async () =>
+          (
+            await api.integration.oauth.status({
+              location,
+              integrationID: "openai",
+              attemptID: attempt.data.attemptID,
+            })
+          ).data.status,
+      )
+      .toBe("complete");
+    try {
+      const session = await api.session.create({
+        title: "Generated image preview",
+        location,
+        model: { providerID: "acceptance", id: "stream" },
+      });
+      await selectSession(session.title);
+      for (const operation of ["generate", "edit", "batch", "collision", "url", "error"]) {
+        await send(`E2E_IMAGE ${operation}`);
+        await transcript(`Acceptance image ${operation} completed`);
+        await idle();
+      }
+      const messages = (await api.message.list({ sessionID: session.id, order: "asc" })).data;
+      const tools = messages
+        .filter((message) => message.type === "assistant")
+        .flatMap((message) => message.content)
+        .filter((part) => part.type === "tool" && part.name === "execute");
+      expect(tools).toHaveLength(6);
+      const paths = [];
+      for (const tool of tools) {
+        expect(tool.state.status).toBe("completed");
+        const text = tool.state.content.find((part) => part.type === "text").text;
+        const originals = tool.state.content.filter(
+          (part) => part.type === "file" && part.mime === "application/octet-stream",
+        );
+        for (const original of originals)
+          expect(original.uri).toBe(`data:application/octet-stream;base64,${imageFixtureBase64}`);
+        if (tool.state.metadata.error) {
+          const urlOnly = text.includes("https://example.invalid/retained-image.png");
+          expect(text).toContain(urlOnly ? "do not regenerate" : "Intentional post-image failure");
+          expect(text).not.toContain("Unreachable after URL-only failure");
+          expect(originals).toHaveLength(urlOnly ? 0 : 1);
+          expect(tool.state.metadata.toolCalls).toEqual([
+            expect.objectContaining({
+              tool: "image_generate",
+              status: urlOnly ? "error" : "completed",
+            }),
+          ]);
+          continue;
+        }
+        const output = JSON.parse(text);
+        const results = Array.isArray(output) ? output : [output];
+        expect(originals).toHaveLength(results.length);
+        expect(tool.state.metadata.toolCalls).toEqual(
+          results.map(() =>
+            expect.objectContaining({ tool: "image_generate", status: "completed" }),
+          ),
+        );
+        for (const result of results) {
+          if (!result.saved) {
+            expect(result).not.toHaveProperty("imageUri");
+            expect(text).not.toContain(imageFixtureBase64);
+            expect((await readFile(result.partialPath)).toString("base64")).toBe(
+              imageFixtureBase64,
+            );
+            expect(await readFile(result.requestedPath, "utf8")).toBe("unrelated content");
+            continue;
+          }
+          expect(result.saved).toBe(true);
+          expect((await readFile(result.path)).toString("base64")).toBe(imageFixtureBase64);
+          paths.push(result.path);
+        }
+        expect(
+          tool.state.content.some(
+            (part) => part.type === "file" && part.uri.startsWith("data:image/png;base64,"),
+          ),
+        ).toBe(true);
+      }
+      expect(new Set(paths).size).toBe(4);
+      const image = page.locator(".transcript-tool-image").first();
+      await expandImageTools();
+      await expect.poll(() => page.locator(".transcript-tool-image").count()).toBe(6);
+      await image.scrollIntoViewIfNeeded();
+      await expect
+        .poll(() => image.evaluate((element) => element.complete && element.naturalWidth > 0))
+        .toBe(true);
+      expect(await image.evaluate((element) => element.naturalWidth)).toBeLessThan(
+        imageFixtureWidth,
+      );
+      await page.locator(".transcript-tool-image-thumbnail").first().click();
+      const fullImage = page.locator(".image-preview-image");
+      await expect
+        .poll(() => fullImage.evaluate((element) => element.naturalWidth))
+        .toBe(imageFixtureWidth);
+      expect(await fullImage.getAttribute("src")).toBe(
+        `data:image/png;base64,${imageFixtureBase64}`,
+      );
+      await page.getByRole("button", { name: "Close image preview" }).click();
+      await page.reload();
+      await ensureConnected();
+      await selectSession(session.title);
+      await expandImageTools();
+      await expect.poll(() => page.locator(".transcript-tool-image").count()).toBe(6);
+      // The final invocation produced an image and then threw, so its original
+      // must come from the collected attachment rather than the returned value.
+      await page.locator(".transcript-tool-image-thumbnail").last().click();
+      await expect
+        .poll(() => fullImage.evaluate((element) => element.naturalWidth))
+        .toBe(imageFixtureWidth);
+      expect(await fullImage.getAttribute("src")).toBe(
+        `data:image/png;base64,${imageFixtureBase64}`,
+      );
+      await page.getByRole("button", { name: "Close image preview" }).click();
+      const state = await fetch(`${provider.url}/_state`).then((response) => response.json());
+      expect(
+        state.requests
+          .filter((request) => request.kind === "image")
+          .map((request) => request.operation),
+      ).toEqual([
+        "generations",
+        "edits",
+        "generations",
+        "generations",
+        "generations",
+        "generations",
+        "generations",
+      ]);
+      const imageRequestCount = async () =>
+        (await fetch(`${provider.url}/_state`).then((response) => response.json())).requests.filter(
+          (request) => request.kind === "image",
+        ).length;
+      const authorized = await api.session.create({
+        title: "Image authorization",
+        location,
+        model: { providerID: "acceptance", id: "stream" },
+        permissions: [
+          { action: "*", resource: "*", effect: "allow" },
+          { action: "image_generate", resource: "*", effect: "ask" },
+        ],
+      });
+      await selectSession(authorized.title);
+      await send("E2E_IMAGE permission");
+      await expect
+        .poll(async () => (await api.permission.list({ sessionID: authorized.id })).length)
+        .toBe(1);
+      const [approval] = await api.permission.list({ sessionID: authorized.id });
+      expect(approval.action).toBe("image_generate");
+      expect(await imageRequestCount()).toBe(7);
+      await expect(access(join(project, "authorized"))).rejects.toMatchObject({ code: "ENOENT" });
+      await permissionCard(approval.id)
+        .getByRole("button", { name: "Allow once", exact: true })
+        .click();
+      await transcript("Acceptance image permission completed");
+      await idle();
+      expect(await imageRequestCount()).toBe(8);
+      expect((await readFile(join(project, "authorized/otter.png"))).toString("base64")).toBe(
+        imageFixtureBase64,
+      );
+
+      await send("E2E_IMAGE permission");
+      await expect
+        .poll(async () => (await api.permission.list({ sessionID: authorized.id })).length)
+        .toBe(1);
+      await page.getByRole("button", { name: "Stop", exact: true }).click();
+      await expect
+        .poll(async () => (await api.permission.list({ sessionID: authorized.id })).length)
+        .toBe(0);
+      await idle();
+      expect(await imageRequestCount()).toBe(8);
+
+      const external = join(profile.paths.app, "external-reference.png");
+      await writeFile(external, Buffer.from(imageFixtureBase64, "base64"));
+      for (const [action, prompt] of [
+        ["edit", "E2E_IMAGE permission"],
+        ["read", "E2E_IMAGE read"],
+        ["external_directory", `E2E_IMAGE external ${external}`],
+      ]) {
+        const denied = await api.session.create({
+          title: `Image denied ${action}`,
+          location,
+          model: { providerID: "acceptance", id: "stream" },
+          permissions: [
+            { action: "*", resource: "*", effect: "allow" },
+            { action, resource: "*", effect: "deny" },
+          ],
+        });
+        await selectSession(denied.title);
+        await send(prompt);
+        await transcript(`Acceptance image ${prompt.split(" ")[1]} completed`);
+        await idle();
+        const settled = (await api.message.list({ sessionID: denied.id })).data
+          .filter((message) => message.type === "assistant")
+          .flatMap((message) => message.content)
+          .find((part) => part.type === "tool" && part.name === "execute");
+        expect(settled.state.content.find((part) => part.type === "text").text).toContain(action);
+        expect(await imageRequestCount()).toBe(8);
+      }
+      await expect(access(join(project, "read-edit.png"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      await expect(access(join(project, "external-edit.png"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      expect(errors).toEqual([]);
+    } finally {
+      const integration = await api.integration.get({ location, integrationID: "openai" });
+      for (const connection of integration.data.connections)
+        if (connection.type === "credential")
+          await api.credential.remove({ location, credentialID: connection.id });
+    }
   });
 
   it("creates an independent session through the plugin and admits it to the session catalog", async () => {

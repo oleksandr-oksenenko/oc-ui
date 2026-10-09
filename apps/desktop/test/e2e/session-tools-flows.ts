@@ -26,6 +26,11 @@ export async function verifySessionTools(project: string): Promise<void> {
     ),
     JSON.stringify(plugins.data.filter((plugin) => plugin.source.type !== "builtin")),
   );
+  assert.ok(
+    plugins.data.some(
+      (plugin) => plugin.id === "oc-ui.image-tools" && plugin.state.status === "active",
+    ),
+  );
   const caller = await api.session.create({
     title: "Packaged session tool caller",
     location: { directory },

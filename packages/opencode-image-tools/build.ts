@@ -5,9 +5,8 @@ import { buildOpenCodePlugin } from "../../tools/build-opencode-plugin.ts";
 
 const directory = dirname(fileURLToPath(import.meta.url));
 
-// One bundle recipe for remote installation and the built-in server.
-export async function buildSessionTools(outdir = join(directory, "dist")) {
+export async function buildImageTools(outdir = join(directory, "dist")) {
   return buildOpenCodePlugin(directory, outdir);
 }
 
-if (import.meta.main) await buildSessionTools();
+if (import.meta.main) await buildImageTools();

@@ -34,7 +34,7 @@
     "test": "vp test run --project=unit",
     "test:unit": "pnpm test",
     "test:components": "vp test run --project=storage --project=storybook",
-    "test:integration": "tsc -p tsconfig.renderer.json && pnpm --filter @oc-ui/opencode-session-tools build && vp test run --project=web"
+    "test:integration": "tsc -p tsconfig.renderer.json && pnpm --filter @oc-ui/opencode-session-tools build && pnpm --filter @oc-ui/opencode-image-tools build && vp test run --project=web"
   },
   "dependencies": {
     "@effect/atom-solid": "catalog:",

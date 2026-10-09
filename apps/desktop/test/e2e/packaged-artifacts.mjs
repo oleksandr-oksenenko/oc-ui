@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { access, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 
 const execFileAsync = promisify(execFile);
 
@@ -60,6 +61,8 @@ export function packagedArtifacts(desktopRoot, platform, arch, glibcVersion) {
       join(resources, "app.asar"),
       join(runtimePath, "opencode-worker.mjs"),
       join(runtimePath, "session-tools", "index.js"),
+      join(runtimePath, "image-tools", "index.js"),
+      join(modules, "@opencode", "core", "package.json"),
       join(modules, "@silvia-odwyer", "photon-node", "photon_rs_bg.wasm"),
       join(modules, "web-tree-sitter", "tree-sitter.wasm"),
       join(modules, "tree-sitter-bash", "tree-sitter-bash.wasm"),
@@ -154,4 +157,22 @@ export async function verifyPackagedApplication(artifacts, signal, runCommand = 
       assertElfX64(stdout, path);
     }
   }
+  const imagePlugin = pathToFileURL(join(artifacts.runtimePath, "image-tools", "index.js")).href;
+  await runCommand(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `
+      for (const specifier of ["@opencode/core/permission", "@opencode/core/file-access", "effect", "@silvia-odwyer/photon-node"]) {
+        const resolved = import.meta.resolve(specifier);
+        if (!resolved.startsWith(${JSON.stringify(pathToFileURL(join(artifacts.runtimePath, "node_modules") + "/").href)})) {
+        throw new Error("Packaged image plugin dependency escaped its runtime: " + specifier);
+      }
+    }
+    await import(${JSON.stringify(imagePlugin)});
+  `,
+    ],
+    { signal, timeout: 30_000, cwd: join(artifacts.runtimePath, "image-tools") },
+  );
 }

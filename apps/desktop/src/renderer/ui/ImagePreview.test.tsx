@@ -62,7 +62,13 @@ describe("ImagePreview", () => {
   });
 
   it("enlarges a thumbnail, moves focus into the dialog, and restores it when closed", async () => {
-    const mounted = mount(() => <ImagePreview src="data:image/png;base64,AAAA" alt="photo.png" />);
+    const mounted = mount(() => (
+      <ImagePreview
+        src="data:image/png;base64,AAAA"
+        fullSrc="data:image/png;base64,BBBB"
+        alt="photo.png"
+      />
+    ));
     const thumbnail = mounted.host.querySelector<HTMLButtonElement>(".image-preview-thumbnail");
     expect(thumbnail).not.toBeNull();
     expect(thumbnail?.getAttribute("aria-label")).toBe("Enlarge photo.png");
@@ -74,7 +80,7 @@ describe("ImagePreview", () => {
     expect(dialog).not.toBeNull();
     expect(dialog?.textContent).toContain("Preview of photo.png");
     expect(dialog?.querySelector(".image-preview-image")?.getAttribute("src")).toBe(
-      "data:image/png;base64,AAAA",
+      "data:image/png;base64,BBBB",
     );
 
     await new Promise((resolve) => setTimeout(resolve, 0));
