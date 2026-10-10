@@ -168,11 +168,32 @@ try {
   }
   process.off("SIGINT", requestStop);
   process.off("SIGTERM", requestStop);
-  // Do not keep the process alive or force exit: expose resource types only if
-  // something survives completed cleanup, without dumping paths or credentials.
-  setTimeout(() => {
+  // Every owned resource has settled above. The dev-server dependency can leak a
+  // file-watcher handle when close() races its initial scan, so report surviving
+  // resource types without dumping paths or credentials, then finish with the
+  // recorded status instead of hanging the test's shutdown window.
+  let reportedPending = false;
+  const reportPending = () => {
+    if (reportedPending) return;
+    reportedPending = true;
     console.error(
       JSON.stringify({ status: "exit-pending", resources: process.getActiveResourcesInfo() }),
     );
-  }, 1_000).unref();
+  };
+  setTimeout(reportPending, 1_000).unref();
+  setTimeout(() => {
+    reportPending();
+    const code = process.exitCode ?? 0;
+    const fallback = setTimeout(() => process.exit(code), 500);
+    let pendingFlushes = 2;
+    const flush = () => {
+      if (--pendingFlushes === 0) {
+        clearTimeout(fallback);
+        // Queued diagnostics must reach the pipes; process.exit can truncate stdio.
+        process.exit(code);
+      }
+    };
+    process.stdout.write("", flush);
+    process.stderr.write("", flush);
+  }, 2_000).unref();
 }
