@@ -39,7 +39,7 @@ catalog:
   "@wdio/mocha-framework": 9.30.1
   "@wdio/spec-reporter": 9.30.1
   "@wdio/types": 9.30.1
-  dompurify: 3.4.16
+  dompurify: 3.4.17
   electron: 42.3.3
   playwright: 1.62.1
   electron-vite: 6.0.0-beta.1
